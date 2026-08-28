@@ -1,17 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AboutDialog } from '@/components/shared/AboutDialog'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
+import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { EditorLayout } from '@/components/layout/EditorLayout'
 import { Toaster } from '@/components/ui/sonner'
+import { useAutoSave } from '@/hooks/useAutoSave'
 import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import type { AppError } from '@shared/errors'
 
 function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [lastError, setLastError] = useState<AppError | null>(null)
   const theme = useEditorUiStore((state) => state.theme)
+  const autoSaveEnabled = useAppSettingsStore((state) => state.autoSaveEnabled)
+  const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
+  const recentFiles = useAppSettingsStore((state) => state.recentFiles)
   const { data: appMeta } = useAppMeta()
 
   const {
@@ -27,6 +34,7 @@ function App() {
     openFile,
     openFolder,
     openFileFromTree,
+    openRecentFile,
     saveFile,
     saveFileAs,
     quitApp,
@@ -35,11 +43,38 @@ function App() {
     saveUnsavedChanges,
   } = useFileOperations((error) => setLastError(error))
 
+  const handleAutoSave = useCallback(async () => {
+    if (!filePath || !isDirty || isFileBusy) return
+    await saveFile({ silent: true })
+  }, [filePath, isDirty, isFileBusy, saveFile])
+
+  useAutoSave({
+    enabled: autoSaveEnabled,
+    intervalMs: autoSaveIntervalMs,
+    isDirty,
+    filePath,
+    isSaving: isFileBusy,
+    onAutoSave: handleAutoSave,
+  })
+
   useEffect(() => {
     if (appMeta?.error) {
       setLastError(appMeta.error)
     }
   }, [appMeta?.error])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
+      if (event.key === ',') {
+        event.preventDefault()
+        setSettingsOpen(true)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   if (!window.electronAPI) {
     const isElectron = navigator.userAgent.includes('Electron')
@@ -64,12 +99,15 @@ function App() {
         content={content}
         workspaceRoot={workspaceRoot}
         fileTree={fileTree}
+        recentFiles={recentFiles}
         onContentChange={setContent}
         onOpenFile={() => void openFile()}
         onOpenFolder={() => void openFolder()}
         onSelectFile={(path) => void openFileFromTree(path)}
+        onOpenRecentFile={(path) => void openRecentFile(path)}
         onSave={() => void saveFile()}
         onSaveAs={() => void saveFileAs()}
+        onOpenSettings={() => setSettingsOpen(true)}
         onAbout={() => setAboutOpen(true)}
         onQuit={quitApp}
       />
@@ -80,6 +118,8 @@ function App() {
         version={appMeta?.version || '…'}
         platform={appMeta?.platform || ''}
       />
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       <UnsavedChangesDialog
         open={unsavedPromptOpen}

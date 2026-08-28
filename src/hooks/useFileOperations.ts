@@ -6,6 +6,7 @@ import { queryKeys } from '@/api/query-keys'
 import { isCancelled, type AppError } from '@shared/errors'
 import type { FileTreeNode, OpenFolderResult } from '@shared/file-types'
 import { isOk } from '@shared/result'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 
 function getFileName(filePath?: string): string {
   if (!filePath) return '未命名'
@@ -58,6 +59,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setContent(result.content)
       setSavedContent(result.content)
       syncTitle(result.filePath, false)
+      useAppSettingsStore.getState().addRecentFile(result.filePath)
     },
     [syncTitle],
   )
@@ -86,8 +88,11 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   const readFileMutation = useMutation({
     mutationFn: (path: string) => fileApi.readFile(path),
-    onSuccess: (result) => {
+    onSuccess: (result, path) => {
       if (!isOk(result)) {
+        if (result.error.code === 'FILE_NOT_FOUND') {
+          useAppSettingsStore.getState().removeRecentFile(path)
+        }
         reportError(result.error)
         return
       }
@@ -96,7 +101,8 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   })
 
   const saveFileMutation = useMutation({
-    mutationFn: (payload: { filePath?: string; content: string }) => fileApi.saveFile(payload),
+    mutationFn: (payload: { filePath?: string; content: string; silent?: boolean }) =>
+      fileApi.saveFile(payload),
     onSuccess: (result, variables) => {
       if (!isOk(result)) {
         reportError(result.error)
@@ -105,12 +111,15 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setFilePath(result.value.filePath)
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
-      toast.success('已保存')
+      useAppSettingsStore.getState().addRecentFile(result.value.filePath)
+      if (!variables.silent) {
+        toast.success('已保存')
+      }
     },
   })
 
   const saveFileAsMutation = useMutation({
-    mutationFn: (payload: { content: string }) => fileApi.saveFileAs(payload),
+    mutationFn: (payload: { content: string; silent?: boolean }) => fileApi.saveFileAs(payload),
     onSuccess: (result, variables) => {
       if (!isOk(result)) {
         reportError(result.error)
@@ -119,7 +128,10 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setFilePath(result.value.filePath)
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
-      toast.success('已保存')
+      useAppSettingsStore.getState().addRecentFile(result.value.filePath)
+      if (!variables.silent) {
+        toast.success('已保存')
+      }
     },
   })
 
@@ -161,8 +173,15 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     [promptIfDirty, readFileMutation],
   )
 
+  const openRecentFile = useCallback(
+    (path: string) =>
+      promptIfDirty({ kind: 'open-tree', path }, () => void readFileMutation.mutateAsync(path)),
+    [promptIfDirty, readFileMutation],
+  )
+
   const saveFile = useCallback(
-    () => saveFileMutation.mutateAsync({ filePath, content }),
+    (options?: { silent?: boolean }) =>
+      saveFileMutation.mutateAsync({ filePath, content, silent: options?.silent }),
     [content, filePath, saveFileMutation],
   )
 
@@ -258,6 +277,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     openFile,
     openFolder,
     openFileFromTree,
+    openRecentFile,
     saveFile,
     saveFileAs,
     quitApp,

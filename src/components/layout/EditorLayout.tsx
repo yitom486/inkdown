@@ -31,12 +31,15 @@ interface EditorLayoutProps {
   content: string
   workspaceRoot?: string
   fileTree: FileTreeNode[]
+  recentFiles: string[]
   onContentChange: (value: string) => void
   onOpenFile: () => void
   onOpenFolder: () => void
   onSelectFile: (path: string) => void
+  onOpenRecentFile: (path: string) => void
   onSave: () => void
   onSaveAs: () => void
+  onOpenSettings: () => void
   onAbout: () => void
   onQuit: () => void
 }
@@ -47,12 +50,15 @@ export function EditorLayout({
   content,
   workspaceRoot,
   fileTree,
+  recentFiles,
   onContentChange,
   onOpenFile,
   onOpenFolder,
   onSelectFile,
+  onOpenRecentFile,
   onSave,
   onSaveAs,
+  onOpenSettings,
   onAbout,
   onQuit,
 }: EditorLayoutProps) {
@@ -198,11 +204,14 @@ export function EditorLayout({
     <div className="flex h-screen flex-col bg-background text-foreground">
       <TitleBar
         theme={theme}
+        recentFiles={recentFiles}
         onToggleTheme={toggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
+        onOpenRecentFile={onOpenRecentFile}
         onSave={onSave}
         onSaveAs={onSaveAs}
+        onOpenSettings={onOpenSettings}
         onAbout={onAbout}
         onQuit={onQuit}
       />

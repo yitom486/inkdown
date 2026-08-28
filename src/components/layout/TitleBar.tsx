@@ -1,4 +1,14 @@
-import { FileText, FolderOpen, HelpCircle, LogOut, Moon, Save, SaveAll, Sun } from 'lucide-react'
+import {
+  FileText,
+  FolderOpen,
+  HelpCircle,
+  LogOut,
+  Moon,
+  Save,
+  SaveAll,
+  Settings,
+  Sun,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -6,27 +16,40 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+function getRecentFileLabel(filePath: string): string {
+  return filePath.split(/[/\\]/).pop() ?? filePath
+}
+
 interface TitleBarProps {
   theme: 'dark' | 'light'
+  recentFiles: string[]
   onToggleTheme: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
+  onOpenRecentFile: (path: string) => void
   onSave: () => void
   onSaveAs: () => void
+  onOpenSettings: () => void
   onAbout: () => void
   onQuit: () => void
 }
 
 export function TitleBar({
   theme,
+  recentFiles,
   onToggleTheme,
   onOpenFile,
   onOpenFolder,
+  onOpenRecentFile,
   onSave,
   onSaveAs,
+  onOpenSettings,
   onAbout,
   onQuit,
 }: TitleBarProps) {
@@ -42,7 +65,22 @@ export function TitleBar({
             文件
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuContent align="start" className="w-56">
+          {recentFiles.length > 0 && (
+            <>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>最近打开</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-w-sm">
+                  {recentFiles.map((path) => (
+                    <DropdownMenuItem key={path} onClick={() => onOpenRecentFile(path)} title={path}>
+                      <span className="truncate">{getRecentFileLabel(path)}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onClick={onOpenFile}>
             <FileText className="size-4" />
             打开文件
@@ -83,6 +121,11 @@ export function TitleBar({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
+          <DropdownMenuItem onClick={onOpenSettings}>
+            <Settings className="size-4" />
+            设置
+            <DropdownMenuShortcut>Ctrl+,</DropdownMenuShortcut>
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={onAbout}>
             <HelpCircle className="size-4" />
             关于
