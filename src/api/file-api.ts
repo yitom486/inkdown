@@ -1,4 +1,4 @@
-import type { AppError } from '@shared/errors'
+import type { AppError } from '@shared/core/errors'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
@@ -12,9 +12,9 @@ import type {
   SaveFileResult,
   SavePastedImagePayload,
   SavePastedImageResult,
-} from '@shared/file-types'
-import { err, ok, type Result } from '@shared/result'
-import type { ElectronAPI } from '@shared/electron-api.types'
+} from '@shared/types/file'
+import { err, ok, type Result } from '@shared/core/result'
+import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 
 function requireElectronAPI(): Result<ElectronAPI, AppError> {
   if (!window.electronAPI) {

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ePub from 'epubjs'
 import type Book from 'epubjs/types/book'
-import { ChevronLeft, ChevronRight, List, Loader2 } from 'lucide-react'
+import { Bookmark, ChevronLeft, ChevronRight, List, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
+import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
 import { EpubChapterOutline } from '@/components/reader/EpubChapterOutline'
+import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
+import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { useReadingMarks } from '@/hooks/useReadingMarks'
 import {
   flattenEpubToc,
   pickInitialChapter,
@@ -19,10 +23,21 @@ import {
   EPUB_LOCATIONS_CHUNK_SIZE,
 } from '@/lib/epub-locations-cache'
 import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/epub-themes'
+import {
+  applyAllEpubMarksToRendition,
+  applyEpubMarkToRendition,
+  injectReadingMarkStyles,
+  removeEpubMarkFromRendition,
+} from '@/lib/epub-reading-marks'
+import { copyTextToClipboard, readEpubSelection, type EpubSelectionSnapshot } from '@/lib/epub-selection'
+import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { cn } from '@/lib/utils'
-import type { AppError } from '@shared/errors'
+import type { AppError } from '@shared/core/errors'
+import type { ReadingMark } from '@shared/types/reading-mark'
+import { isOk } from '@shared/core/result'
+import { toast } from 'sonner'
 import '@/styles/epub-viewer.css'
 
 interface EpubLocation {
@@ -72,13 +87,24 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     currentIndex: -1,
   })
   const [tocOpen, setTocOpen] = useState(false)
+  const [marksOpen, setMarksOpen] = useState(false)
   const [ready, setReady] = useState(false)
   const [globalProgress, setGlobalProgress] = useState(0)
+  const [selectionSnapshot, setSelectionSnapshot] = useState<EpubSelectionSnapshot | null>(null)
+  const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
+    null,
+  )
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const scrollCleanupRef = useRef<(() => void) | null>(null)
+  const selectionCleanupRef = useRef<(() => void) | null>(null)
   const reportLocationTimerRef = useRef<number | null>(null)
   const saveProgressTimerRef = useRef<number | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
+  const { marks, createMark, deleteMark } = useReadingMarks(filePath)
+  const fileFingerprint = data
+    ? buildReadingFileFingerprint(filePath, data.data.byteLength)
+    : ''
 
   const applyTheme = useCallback(
     (rendition: NonNullable<typeof renditionRef.current>) => {
@@ -148,6 +174,86 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     [],
   )
 
+  const syncVisualMarks = useCallback(() => {
+    const rendition = renditionRef.current
+    if (!rendition) return
+    applyAllEpubMarksToRendition(rendition, marks)
+  }, [marks])
+
+  const addBookmarkAtCurrent = useCallback(async () => {
+    const rendition = renditionRef.current
+    if (!rendition || !fileFingerprint) return
+
+    const location = rendition.currentLocation() as EpubLocation | null
+    const cfi = location?.start?.cfi
+    if (!cfi) {
+      toast.error('无法获取当前阅读位置')
+      return
+    }
+
+    const result = await createMark({
+      filePath,
+      fileFingerprint,
+      kind: 'bookmark',
+      anchor: {
+        format: 'epub',
+        cfi,
+        href: location?.start?.href,
+      },
+      label: chapterNav.current?.label ?? '书签',
+    })
+    if (isOk(result)) {
+      toast.success('已添加书签')
+    }
+  }, [chapterNav, createMark, fileFingerprint, filePath])
+
+  const handleSaveAnnotation = useCallback(
+    async (note: string) => {
+      if (!selectionSnapshot || !fileFingerprint) return
+
+      const result = await createMark({
+        filePath,
+        fileFingerprint,
+        kind: note ? 'note' : 'highlight',
+        anchor: {
+          format: 'epub',
+          cfi: selectionSnapshot.cfiRange,
+          cfiRange: selectionSnapshot.cfiRange,
+          href: chapterNav.current?.href,
+          selectedText: selectionSnapshot.text,
+        },
+        excerpt: selectionSnapshot.text,
+        note: note || undefined,
+      })
+
+      if (isOk(result) && renditionRef.current) {
+        applyEpubMarkToRendition(renditionRef.current, result.value)
+        toast.success(note ? '已保存批注' : '已添加高亮')
+      }
+
+      setSelectionSnapshot(null)
+      setSelectionToolbarPos(null)
+    },
+    [chapterNav, createMark, fileFingerprint, filePath, selectionSnapshot],
+  )
+
+  const handleSelectMark = useCallback((mark: ReadingMark) => {
+    if (mark.anchor.format !== 'epub' || !renditionRef.current) return
+    const cfi = mark.anchor.cfiRange ?? mark.anchor.cfi
+    void renditionRef.current.display(cfi)
+  }, [])
+
+  const handleDeleteMark = useCallback(
+    async (mark: ReadingMark) => {
+      if (renditionRef.current) {
+        removeEpubMarkFromRendition(renditionRef.current, mark)
+      }
+      await deleteMark(mark.id)
+      toast.success('已删除')
+    },
+    [deleteMark],
+  )
+
   const applyReadingLayout = useCallback(
     (rendition: NonNullable<typeof renditionRef.current>) => {
       applyEpubReadingLayoutToRendition(rendition, theme)
@@ -159,12 +265,14 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     (rendition: NonNullable<typeof renditionRef.current>) => {
       scrollCleanupRef.current?.()
 
-      const handler = (contents: { document: Document; window: Window }) => {
+      const handler = (contents: { document: Document; window: Window; cfiFromRange?: (range: Range) => string }) => {
+        injectReadingMarkStyles(contents.document, theme)
         applyEpubReadingLayout(contents.document, theme)
         requestAnimationFrame(() => {
           applyEpubReadingLayout(contents.document, theme)
         })
         scrollCleanupRef.current?.()
+        selectionCleanupRef.current?.()
 
         const onScroll = () => {
           scheduleReportLocation(rendition)
@@ -177,12 +285,41 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           contents.document.removeEventListener('scroll', onScroll)
           contents.window.removeEventListener('scroll', onScroll)
         }
+
+        const onMouseUp = () => {
+          window.setTimeout(() => {
+            const snapshot = readEpubSelection(contents)
+            if (!snapshot) {
+              setSelectionSnapshot(null)
+              setSelectionToolbarPos(null)
+              return
+            }
+
+            const frame = contents.window.frameElement as HTMLElement | null
+            const frameRect = frame?.getBoundingClientRect()
+            setSelectionSnapshot(snapshot)
+            setSelectionToolbarPos({
+              x: (frameRect?.left ?? 0) + snapshot.rect.left + snapshot.rect.width / 2,
+              y: (frameRect?.top ?? 0) + snapshot.rect.top,
+            })
+          }, 10)
+        }
+
+        contents.document.addEventListener('mouseup', onMouseUp)
+        selectionCleanupRef.current = () => {
+          contents.document.removeEventListener('mouseup', onMouseUp)
+        }
       }
 
       rendition.hooks.content.register(handler)
     },
     [scheduleReportLocation, theme],
   )
+
+  useEffect(() => {
+    if (!ready) return
+    syncVisualMarks()
+  }, [marks, ready, syncVisualMarks])
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -230,6 +367,9 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     const onRendered = () => {
       requestAnimationFrame(() => {
         applyReadingLayout(rendition)
+        requestAnimationFrame(() => {
+          applyReadingLayout(rendition)
+        })
       })
     }
     rendition.on('rendered', onRendered)
@@ -342,6 +482,8 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       }
       scrollCleanupRef.current?.()
       scrollCleanupRef.current = null
+      selectionCleanupRef.current?.()
+      selectionCleanupRef.current = null
       rendition.off('relocated', onRelocated)
       rendition.off('rendered', onRendered)
       book.destroy()
@@ -412,10 +554,35 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           size="sm"
           className="h-7 gap-1 text-xs"
           disabled={!ready || chapters.length === 0}
-          onClick={() => setTocOpen((value) => !value)}
+          onClick={() => {
+            setMarksOpen(false)
+            setTocOpen((value) => !value)
+          }}
         >
           <List className="size-3.5" />
           目录
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          disabled={!ready}
+          onClick={() => {
+            setTocOpen(false)
+            setMarksOpen((value) => !value)
+          }}
+        >
+          <Bookmark className="size-3.5" />
+          书签
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          disabled={!ready}
+          onClick={() => void addBookmarkAtCurrent()}
+        >
+          添加书签
         </Button>
         <span className="ml-2 min-w-0 truncate text-xs text-muted-foreground">{currentTitle}</span>
         <div className="ml-auto flex items-center gap-2">
@@ -429,6 +596,14 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
+        {marksOpen ? (
+          <ReadingMarkPanel
+            marks={marks}
+            onSelect={handleSelectMark}
+            onDelete={(mark) => void handleDeleteMark(mark)}
+            onClose={() => setMarksOpen(false)}
+          />
+        ) : null}
         {tocOpen && chapters.length > 0 ? (
           <aside className="flex w-[min(28%,320px)] min-w-[180px] shrink-0 flex-col border-r border-border/60">
             <EpubChapterOutline
@@ -482,6 +657,35 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           <ChevronRight className="size-4 shrink-0" />
         </Button>
       </footer>
+
+      {selectionToolbarPos && selectionSnapshot ? (
+        <SelectionToolbar
+          x={selectionToolbarPos.x}
+          y={selectionToolbarPos.y}
+          readOnly
+          onCopy={() => {
+            void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
+              if (ok) toast.success('已复制')
+            })
+            setSelectionToolbarPos(null)
+          }}
+          onAnnotate={() => {
+            setNoteDialogOpen(true)
+            setSelectionToolbarPos(null)
+          }}
+          onDismiss={() => {
+            setSelectionToolbarPos(null)
+            setSelectionSnapshot(null)
+          }}
+        />
+      ) : null}
+
+      <AnnotationNoteDialog
+        open={noteDialogOpen}
+        excerpt={selectionSnapshot?.text}
+        onOpenChange={setNoteDialogOpen}
+        onSave={(note) => void handleSaveAnnotation(note)}
+      />
     </div>
   )
 }
