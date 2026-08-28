@@ -30,6 +30,8 @@ describe('markdownParser', () => {
     expect(html).toContain('class="hljs"')
     expect(html).toContain('hljs-number')
     expect(html).toContain('code-block-copy')
+    expect(html).toContain('code-block-lines')
+    expect(html).toContain('code-block-line-number')
   })
 
   it('为代码块添加语言标签与复制按钮', () => {

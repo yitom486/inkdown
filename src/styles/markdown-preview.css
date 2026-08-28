@@ -121,6 +121,31 @@
   color: var(--primary);
 }
 
+.markdown-preview .code-block-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.markdown-preview .code-block-lines {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 80%, var(--background));
+  padding: 1rem 0.625rem;
+  user-select: none;
+  text-align: right;
+}
+
+.markdown-preview .code-block-line-number {
+  display: block;
+  min-width: 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
 .markdown-preview .code-block pre {
   margin: 0;
   border: none;

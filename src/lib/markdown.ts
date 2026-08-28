@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it'
 import markdownItKatexImport from '@vscode/markdown-it-katex'
 import markdownItTaskLists from 'markdown-it-task-lists'
 import { highlightCode } from '@/lib/code-highlight'
+import { wrapHighlightedCodeBlock } from '@/lib/code-block-lines'
 import { slugifyHeading } from '@/lib/markdown-headings'
 
 // CJS 包在 Vite ESM 下可能导出为 { default: fn }，需兼容处理
@@ -30,12 +31,7 @@ markdownParser.renderer.rules.fence = (tokens, index, _options, _environment, _s
 
   const langLabel = rawLang || 'text'
   const highlighted = highlightCode(token.content, langLabel)
-  const codeHtml = [
-    '<pre class="hljs">',
-    `<code class="language-${markdownParser.utils.escapeHtml(langLabel)}">`,
-    highlighted,
-    '</code></pre>',
-  ].join('')
+  const codeHtml = wrapHighlightedCodeBlock(token.content, highlighted, langLabel)
 
   return [
     '<div class="code-block">',

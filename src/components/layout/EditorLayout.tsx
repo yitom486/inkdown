@@ -8,6 +8,7 @@ import {
   MarkdownEditor,
   type MarkdownEditorHandle,
 } from '@/components/editor/MarkdownEditor'
+import { FindReplaceBar } from '@/components/editor/FindReplaceBar'
 import { PreviewPane, type PreviewPaneHandle } from '@/components/preview/PreviewPane'
 import {
   ResizableHandle,
@@ -69,6 +70,10 @@ export function EditorLayout({
   const previewHtml = useMarkdownPreview(content, filePath)
   const headings = useMemo(() => parseMarkdownHeadings(content), [content])
   const [activeHeadingId, setActiveHeadingId] = useState<string>()
+  const [findReplace, setFindReplace] = useState<{ open: boolean; mode: 'find' | 'replace' }>({
+    open: false,
+    mode: 'find',
+  })
 
   const showEditor = viewMode === 'editor' || viewMode === 'split'
   const showPreview = viewMode === 'preview' || viewMode === 'split'
@@ -161,6 +166,18 @@ export function EditorLayout({
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
 
+      const key = event.key.toLowerCase()
+      if (key === 'f') {
+        event.preventDefault()
+        setFindReplace({ open: true, mode: 'find' })
+        return
+      }
+      if (key === 'h') {
+        event.preventDefault()
+        setFindReplace({ open: true, mode: 'replace' })
+        return
+      }
+
       const shortcuts: Record<string, EditorViewMode> = {
         '1': 'editor',
         '2': 'split',
@@ -242,14 +259,22 @@ export function EditorLayout({
                     minSize={showPreview ? '28%' : '100%'}
                     className="min-w-0"
                   >
-                    <MarkdownEditor
-                      ref={editorRef}
-                      value={content}
-                      filePath={filePath}
-                      theme={theme}
-                      onChange={onContentChange}
-                      onScroll={handleEditorScroll}
-                    />
+                    <div className="relative h-full min-h-0">
+                      <FindReplaceBar
+                        open={findReplace.open}
+                        mode={findReplace.mode}
+                        editorView={editorRef.current?.getView() ?? null}
+                        onClose={() => setFindReplace((state) => ({ ...state, open: false }))}
+                      />
+                      <MarkdownEditor
+                        ref={editorRef}
+                        value={content}
+                        filePath={filePath}
+                        theme={theme}
+                        onChange={onContentChange}
+                        onScroll={handleEditorScroll}
+                      />
+                    </div>
                   </ResizablePanel>
                 )}
 

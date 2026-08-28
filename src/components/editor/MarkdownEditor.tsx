@@ -13,6 +13,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language'
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
+import { highlightSelectionMatches, search } from '@codemirror/search'
 import { Compartment, EditorState } from '@codemirror/state'
 import {
   drawSelection,
@@ -204,6 +205,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           drawSelection(),
           dropCursor(),
           markdown({ base: markdownLanguage }),
+          search({ top: false }),
+          highlightSelectionMatches(),
           themeCompartment.of(buildThemeExtensions(theme)),
           keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
           placeholder('在此输入 Markdown 内容…'),
