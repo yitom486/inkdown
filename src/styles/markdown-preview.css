@@ -117,6 +117,16 @@
   border: none;
   border-radius: 0;
   background: transparent;
+  padding: 1rem;
+}
+
+.markdown-preview .code-block pre code.hljs {
+  display: block;
+  overflow-x: auto;
+  background: transparent;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .markdown-preview pre code {
@@ -155,6 +165,29 @@
 
 .markdown-preview th {
   background: var(--muted);
+  font-weight: 600;
+}
+
+.markdown-preview tbody tr:nth-child(even) {
+  background: color-mix(in oklch, var(--muted) 35%, transparent);
+}
+
+.markdown-preview ul.contains-task-list {
+  padding-left: 0.25rem;
+  list-style: none;
+}
+
+.markdown-preview li.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  list-style: none;
+}
+
+.markdown-preview li.task-list-item input[type='checkbox'] {
+  margin-top: 0.35rem;
+  accent-color: var(--primary);
+  pointer-events: none;
 }
 
 .markdown-preview .katex-display {

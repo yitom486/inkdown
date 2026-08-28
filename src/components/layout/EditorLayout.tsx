@@ -219,6 +219,7 @@ export function EditorLayout({
                       <PreviewPane
                         ref={previewRef}
                         html={previewHtml}
+                        theme={theme}
                         onScroll={onPreviewScroll}
                       />
                     </ResizablePanel>
@@ -230,6 +231,7 @@ export function EditorLayout({
                     <PreviewPane
                       ref={previewRef}
                       html={previewHtml}
+                      theme={theme}
                       onScroll={onPreviewScroll}
                     />
                   </ResizablePanel>

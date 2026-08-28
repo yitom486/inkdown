@@ -1,8 +1,27 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Eye } from 'lucide-react'
 import { toast } from 'sonner'
+import githubTheme from 'highlight.js/styles/github.min.css?url'
+import githubDarkTheme from 'highlight.js/styles/github-dark.min.css?url'
 import { applyScrollRatio, scrollRatio } from '@/lib/markdown-headings'
+import type { AppTheme } from '@/stores/editor-ui-store'
 import '@/styles/markdown-preview.css'
+
+const HIGHLIGHT_THEME_LINK_ID = 'markdown-preview-hljs-theme'
+
+function useHighlightTheme(theme: AppTheme) {
+  useEffect(() => {
+    let link = document.getElementById(HIGHLIGHT_THEME_LINK_ID) as HTMLLinkElement | null
+    if (!link) {
+      link = document.createElement('link')
+      link.id = HIGHLIGHT_THEME_LINK_ID
+      link.rel = 'stylesheet'
+      document.head.appendChild(link)
+    }
+
+    link.href = theme === 'dark' ? githubDarkTheme : githubTheme
+  }, [theme])
+}
 
 export interface PreviewPaneHandle {
   scrollToHeading: (id: string) => void
@@ -13,15 +32,19 @@ export interface PreviewPaneHandle {
 
 interface PreviewPaneProps {
   html: string
+  theme?: AppTheme
   onScroll?: () => void
 }
 
 let mermaidInitialized = false
+let mermaidTheme: AppTheme = 'dark'
 
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
-  function PreviewPane({ html, onScroll }, ref) {
+  function PreviewPane({ html, theme = 'dark', onScroll }, ref) {
     const previewRef = useRef<HTMLDivElement>(null)
     const onScrollRef = useRef(onScroll)
+
+    useHighlightTheme(theme)
 
     onScrollRef.current = onScroll
 
@@ -65,13 +88,14 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
           const { default: mermaid } = await import('mermaid')
           if (cancelled) return
 
-          if (!mermaidInitialized) {
+          if (!mermaidInitialized || mermaidTheme !== theme) {
             mermaid.initialize({
               startOnLoad: false,
               securityLevel: 'strict',
-              theme: 'dark',
+              theme: theme === 'dark' ? 'dark' : 'neutral',
             })
             mermaidInitialized = true
+            mermaidTheme = theme
           }
 
           await mermaid.run({ nodes: diagrams, suppressErrors: true })
@@ -85,7 +109,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
       return () => {
         cancelled = true
       }
-    }, [html])
+    }, [html, theme])
 
     useEffect(() => {
       const container = previewRef.current
@@ -142,6 +166,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
     return (
       <div
         ref={previewRef}
+        data-theme={theme}
         className="markdown-preview h-full overflow-auto bg-preview p-6"
         dangerouslySetInnerHTML={{ __html: html }}
       />

@@ -12,6 +12,8 @@ import { isOk } from '@shared/result'
 const PREVIEW_SANITIZE_OPTIONS: Config = {
   ALLOWED_URI_REGEXP:
     /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  ADD_TAGS: ['input'],
+  ADD_ATTR: ['type', 'checked', 'disabled'],
 }
 
 async function resolveLocalImagesInHtml(

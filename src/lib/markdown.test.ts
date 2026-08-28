@@ -23,24 +23,38 @@ describe('markdownParser', () => {
     expect(html).not.toContain('language-mermaid')
   })
 
-  it('保留普通代码块的默认渲染', () => {
-    const html = markdownParser.render([
-      '```ts',
-      'const answer = 42',
-      '```',
-    ].join('\n'))
+  it('为代码块添加语法高亮与工具栏', () => {
+    const html = markdownParser.render(['```ts', 'const answer = 42', '```'].join('\n'))
 
-    expect(html).toContain('<code class="language-ts">')
-    expect(html).toContain('const answer = 42')
+    expect(html).toContain('code-block-toolbar')
+    expect(html).toContain('class="hljs"')
+    expect(html).toContain('hljs-number')
+    expect(html).toContain('code-block-copy')
   })
 
   it('为代码块添加语言标签与复制按钮', () => {
     const html = markdownParser.render(['```typescript', 'const x = 1', '```'].join('\n'))
 
-    expect(html).toContain('code-block-toolbar')
     expect(html).toContain('code-block-lang')
     expect(html).toContain('typescript')
-    expect(html).toContain('code-block-copy')
     expect(html).toContain('aria-label="复制代码"')
+  })
+
+  it('渲染 GFM 表格', () => {
+    const html = markdownParser.render(
+      ['| 列 A | 列 B |', '| --- | --- |', '| 1 | 2 |'].join('\n'),
+    )
+
+    expect(html).toContain('<table')
+    expect(html).toContain('<th')
+    expect(html).toContain('列 A')
+  })
+
+  it('渲染 GFM 任务列表', () => {
+    const html = markdownParser.render(['- [x] 已完成', '- [ ] 待办'].join('\n'))
+
+    expect(html).toContain('task-list-item')
+    expect(html).toContain('type="checkbox"')
+    expect(html).toContain('checked')
   })
 })
