@@ -1,5 +1,14 @@
 @import 'katex/dist/katex.min.css';
 
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  scroll-margin-top: 1rem;
+}
+
 .markdown-preview h1 {
   margin: 1.25rem 0 0.75rem;
   font-size: 1.875rem;

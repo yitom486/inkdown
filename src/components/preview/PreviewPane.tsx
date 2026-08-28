@@ -3,7 +3,7 @@ import { Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import githubTheme from 'highlight.js/styles/github.min.css?url'
 import githubDarkTheme from 'highlight.js/styles/github-dark.min.css?url'
-import { applyScrollRatio, scrollRatio } from '@/lib/markdown-headings'
+import { applyScrollRatio, collectPreviewHeadingPositions, scrollRatio } from '@/lib/markdown-headings'
 import type { AppTheme } from '@/stores/editor-ui-store'
 import '@/styles/markdown-preview.css'
 
@@ -25,6 +25,7 @@ function useHighlightTheme(theme: AppTheme) {
 
 export interface PreviewPaneHandle {
   scrollToHeading: (id: string) => void
+  getActiveHeadingId: () => string | undefined
   getScrollRatio: () => number
   setScrollRatio: (ratio: number) => void
   getScrollElement: () => HTMLElement | null
@@ -34,34 +35,59 @@ interface PreviewPaneProps {
   html: string
   theme?: AppTheme
   onScroll?: () => void
+  onHeadingActivate?: (headingId: string) => void
 }
 
 let mermaidInitialized = false
 let mermaidTheme: AppTheme = 'dark'
 
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
-  function PreviewPane({ html, theme = 'dark', onScroll }, ref) {
+  function PreviewPane({ html, theme = 'dark', onScroll, onHeadingActivate }, ref) {
     const previewRef = useRef<HTMLDivElement>(null)
     const onScrollRef = useRef(onScroll)
+    const onHeadingActivateRef = useRef(onHeadingActivate)
 
     useHighlightTheme(theme)
 
     onScrollRef.current = onScroll
+    onHeadingActivateRef.current = onHeadingActivate
+
+    const scrollToHeading = (id: string) => {
+      const container = previewRef.current
+      if (!container) return
+
+      const heading = container.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+      if (!heading) return
+
+      const top =
+        heading.getBoundingClientRect().top -
+        container.getBoundingClientRect().top +
+        container.scrollTop -
+        16
+      container.scrollTop = Math.max(0, top)
+    }
 
     useImperativeHandle(ref, () => ({
-      scrollToHeading: (id) => {
+      scrollToHeading,
+      getActiveHeadingId: () => {
         const container = previewRef.current
-        if (!container) return
+        if (!container) return undefined
 
-        const heading = container.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
-        if (!heading) return
+        const positions = collectPreviewHeadingPositions(container)
+        if (positions.length === 0) return undefined
 
-        const top =
-          heading.getBoundingClientRect().top -
-          container.getBoundingClientRect().top +
-          container.scrollTop -
-          16
-        container.scrollTop = Math.max(0, top)
+        const threshold = container.scrollTop + 32
+        let activeId: string | undefined
+
+        for (const position of positions) {
+          if (position.top <= threshold) {
+            activeId = position.id
+          } else {
+            break
+          }
+        }
+
+        return activeId
       },
       getScrollRatio: () => {
         const container = previewRef.current
@@ -124,6 +150,31 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
       const container = previewRef.current
       if (!container) return
 
+      const handleClick = (event: MouseEvent) => {
+        const target = event.target
+        if (!(target instanceof Element)) return
+
+        const copyButton = target.closest<HTMLButtonElement>('.code-block-copy')
+        if (copyButton) return
+
+        const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]')
+        if (anchor) {
+          const rawHref = anchor.getAttribute('href')
+          if (!rawHref || rawHref === '#') return
+
+          event.preventDefault()
+          const headingId = decodeURIComponent(rawHref.slice(1))
+          scrollToHeading(headingId)
+          onHeadingActivateRef.current?.(headingId)
+          return
+        }
+
+        const heading = target.closest<HTMLElement>('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]')
+        if (heading?.id) {
+          onHeadingActivateRef.current?.(heading.id)
+        }
+      }
+
       const handleCopy = async (event: MouseEvent) => {
         const target = event.target
         if (!(target instanceof Element)) return
@@ -150,8 +201,12 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
         }
       }
 
+      container.addEventListener('click', handleClick)
       container.addEventListener('click', handleCopy)
-      return () => container.removeEventListener('click', handleCopy)
+      return () => {
+        container.removeEventListener('click', handleClick)
+        container.removeEventListener('click', handleCopy)
+      }
     }, [html])
 
     if (!html) {

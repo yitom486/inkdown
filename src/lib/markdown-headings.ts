@@ -79,6 +79,47 @@ export function findActiveHeading(
   return active
 }
 
+/** 根据预览区标题位置与 scrollTop，找到当前应对齐的标题 */
+export function findActiveHeadingByPositions(
+  headings: MarkdownHeading[],
+  positions: Array<{ id: string; top: number }>,
+  scrollTop: number,
+  offset = 32,
+): MarkdownHeading | undefined {
+  const threshold = scrollTop + offset
+  let activeId: string | undefined
+
+  for (const position of positions) {
+    if (position.top <= threshold) {
+      activeId = position.id
+    } else {
+      break
+    }
+  }
+
+  if (!activeId) return undefined
+  return headings.find((heading) => heading.id === activeId)
+}
+
+export function collectPreviewHeadingPositions(
+  container: HTMLElement,
+): Array<{ id: string; top: number }> {
+  const containerTop = container.getBoundingClientRect().top
+  const positions: Array<{ id: string; top: number }> = []
+
+  for (const element of container.querySelectorAll<HTMLElement>(
+    'h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]',
+  )) {
+    if (!element.id) continue
+    positions.push({
+      id: element.id,
+      top: element.getBoundingClientRect().top - containerTop + container.scrollTop,
+    })
+  }
+
+  return positions
+}
+
 export function scrollRatio(element: HTMLElement): number {
   const max = element.scrollHeight - element.clientHeight
   if (max <= 0) return 0

@@ -105,8 +105,35 @@ export function EditorLayout({
 
   const handleEditorScroll = useCallback(() => {
     onEditorScroll()
-    updateActiveHeading()
-  }, [onEditorScroll, updateActiveHeading])
+    if (viewMode !== 'preview') {
+      updateActiveHeading()
+    }
+  }, [onEditorScroll, updateActiveHeading, viewMode])
+
+  const updateActiveHeadingFromPreview = useCallback(() => {
+    const activeId = previewRef.current?.getActiveHeadingId()
+    if (activeId) {
+      setActiveHeadingId(activeId)
+    }
+  }, [])
+
+  const handlePreviewScroll = useCallback(() => {
+    onPreviewScroll()
+    if (viewMode !== 'editor') {
+      updateActiveHeadingFromPreview()
+    }
+  }, [onPreviewScroll, updateActiveHeadingFromPreview, viewMode])
+
+  const handlePreviewHeadingActivate = useCallback(
+    (headingId: string) => {
+      setActiveHeadingId(headingId)
+      const heading = headings.find((item) => item.id === headingId)
+      if (!heading || viewMode === 'preview') return
+
+      editorRef.current?.scrollToLine(heading.line)
+    },
+    [headings, viewMode],
+  )
 
   const handleSelectHeading = useCallback(
     (heading: MarkdownHeading) => {
@@ -115,6 +142,20 @@ export function EditorLayout({
     },
     [jumpToHeading],
   )
+
+  useEffect(() => {
+    if (viewMode === 'preview' && previewHtml) {
+      requestAnimationFrame(() => {
+        updateActiveHeadingFromPreview()
+      })
+    }
+  }, [previewHtml, updateActiveHeadingFromPreview, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== 'preview') {
+      updateActiveHeading()
+    }
+  }, [headings, updateActiveHeading, viewMode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -220,7 +261,8 @@ export function EditorLayout({
                         ref={previewRef}
                         html={previewHtml}
                         theme={theme}
-                        onScroll={onPreviewScroll}
+                        onScroll={handlePreviewScroll}
+                        onHeadingActivate={handlePreviewHeadingActivate}
                       />
                     </ResizablePanel>
                   </>
@@ -232,7 +274,8 @@ export function EditorLayout({
                       ref={previewRef}
                       html={previewHtml}
                       theme={theme}
-                      onScroll={onPreviewScroll}
+                      onScroll={handlePreviewScroll}
+                      onHeadingActivate={handlePreviewHeadingActivate}
                     />
                   </ResizablePanel>
                 )}

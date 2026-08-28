@@ -133,12 +133,18 @@ export function useScrollSync({
   const jumpToHeading = useCallback(
     (heading: MarkdownHeading) => {
       syncingRef.current = 'editor'
-      editorRef.current?.scrollToLine(heading.line)
-      previewRef.current?.scrollToHeading(heading.id)
+
+      if (viewMode !== 'preview') {
+        editorRef.current?.scrollToLine(heading.line)
+      }
+      if (viewMode !== 'editor') {
+        previewRef.current?.scrollToHeading(heading.id)
+      }
+
       persistScroll()
       releaseSyncLock('editor')
     },
-    [editorRef, persistScroll, previewRef, releaseSyncLock],
+    [editorRef, persistScroll, previewRef, releaseSyncLock, viewMode],
   )
 
   return {
