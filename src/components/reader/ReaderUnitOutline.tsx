@@ -1,5 +1,11 @@
+import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, ListTree } from 'lucide-react'
 import type { ReaderUnit } from '@/lib/reader-navigation'
+import {
+  buildReaderUnitTree,
+  shouldExpandReaderUnitNode,
+  type ReaderUnitTreeNode,
+} from '@/lib/reader-unit-tree'
 import { cn } from '@/lib/utils'
 
 interface ReaderUnitOutlineProps {
@@ -10,6 +16,66 @@ interface ReaderUnitOutlineProps {
   onSelectUnit: (unit: ReaderUnit) => void
 }
 
+function OutlineTreeNode({
+  node,
+  depth,
+  currentUnitId,
+  onSelectUnit,
+}: {
+  node: ReaderUnitTreeNode
+  depth: number
+  currentUnitId?: string
+  onSelectUnit: (unit: ReaderUnit) => void
+}) {
+  const hasChildren = node.children.length > 0
+  const [expanded, setExpanded] = useState(() => shouldExpandReaderUnitNode(depth))
+  const isActive = currentUnitId === node.unit.href
+
+  return (
+    <li>
+      <div className="flex items-center gap-0.5">
+        {hasChildren ? (
+          <button
+            type="button"
+            className="flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            aria-label={expanded ? '折叠' : '展开'}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          </button>
+        ) : (
+          <span className="size-5 shrink-0" />
+        )}
+        <button
+          type="button"
+          className={cn(
+            'min-w-0 flex-1 truncate rounded-md py-1 pr-2 text-left text-xs transition-colors hover:bg-accent/50 hover:text-foreground',
+            isActive ? 'bg-primary/15 text-primary' : 'text-muted-foreground',
+          )}
+          style={{ paddingLeft: `${depth * 10 + 4}px` }}
+          title={node.unit.label}
+          onClick={() => onSelectUnit(node.unit)}
+        >
+          {node.unit.label}
+        </button>
+      </div>
+      {hasChildren && expanded ? (
+        <ul className="space-y-0.5">
+          {node.children.map((child) => (
+            <OutlineTreeNode
+              key={`${child.unit.href}-${child.unit.label}-${child.unit.level}`}
+              node={child}
+              depth={depth + 1}
+              currentUnitId={currentUnitId}
+              onSelectUnit={onSelectUnit}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  )
+}
+
 export function ReaderUnitOutline({
   units,
   currentUnitId,
@@ -17,6 +83,8 @@ export function ReaderUnitOutline({
   onToggle,
   onSelectUnit,
 }: ReaderUnitOutlineProps) {
+  const tree = useMemo(() => buildReaderUnitTree(units), [units])
+
   return (
     <section
       className={cn(
@@ -50,23 +118,14 @@ export function ReaderUnitOutline({
             <p className="px-4 py-3 text-xs text-muted-foreground">暂无目录</p>
           ) : (
             <ul className="space-y-0.5 p-2">
-              {units.map((item) => (
-                <li key={`${item.href}-${item.label}-${item.level}`}>
-                  <button
-                    type="button"
-                    className={cn(
-                      'w-full truncate rounded-md py-1 pr-2 text-left text-xs transition-colors hover:bg-accent/50 hover:text-foreground',
-                      currentUnitId === item.href
-                        ? 'bg-primary/15 text-primary'
-                        : 'text-muted-foreground',
-                    )}
-                    style={{ paddingLeft: `${item.level * 10 + 8}px` }}
-                    title={item.label}
-                    onClick={() => onSelectUnit(item)}
-                  >
-                    {item.label}
-                  </button>
-                </li>
+              {tree.map((node) => (
+                <OutlineTreeNode
+                  key={`${node.unit.href}-${node.unit.label}-${node.unit.level}`}
+                  node={node}
+                  depth={0}
+                  currentUnitId={currentUnitId}
+                  onSelectUnit={onSelectUnit}
+                />
               ))}
             </ul>
           )}

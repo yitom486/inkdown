@@ -8,6 +8,7 @@ import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { useReaderWheelNavigation } from '@/hooks/useReaderWheelNavigation'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import type { ReaderUnit } from '@/lib/reader-navigation'
 import { buildMobiChapterHtml } from '@/lib/mobi-chapter-html'
@@ -20,6 +21,7 @@ import {
 } from '@/lib/mobi-navigation'
 import {
   copyTextToClipboard,
+  getSelectionToolbarPosition,
   readPdfSelection,
   type PdfSelectionSnapshot,
 } from '@/lib/pdf-selection'
@@ -38,6 +40,7 @@ interface MobiViewerProps {
 
 export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const mobiRef = useRef<Mobi | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [chapters, setChapters] = useState<MobiChapterItem[]>([])
   const [currentChapterId, setCurrentChapterId] = useState<string>()
@@ -154,10 +157,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       }
 
       setSelectionSnapshot(snapshot)
-      setSelectionToolbarPos({
-        x: snapshot.rect.left + snapshot.rect.width / 2,
-        y: snapshot.rect.top,
-      })
+      setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
     }, 10)
   }, [currentChapterId])
 
@@ -219,7 +219,25 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     [deleteMark],
   )
 
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0 })
+  }, [currentChapterId, filePath])
+
   const currentTitle = chapterNav.current?.label ?? '—'
+
+  const goPrevChapter = useCallback(() => {
+    if (chapterNav.previous) loadChapter(chapterNav.previous.id)
+  }, [chapterNav.previous, loadChapter])
+
+  const goNextChapter = useCallback(() => {
+    if (chapterNav.next) loadChapter(chapterNav.next.id)
+  }, [chapterNav.next, loadChapter])
+
+  useReaderWheelNavigation(scrollContainerRef, {
+    enabled: ready && !isLoading,
+    onPrev: goPrevChapter,
+    onNext: goNextChapter,
+  })
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -255,7 +273,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         onCloseToc={() => setTocOpen(false)}
         onSelectUnit={(unit) => loadChapter(unit.href)}
       >
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+        <div ref={scrollContainerRef} className="h-full min-h-0 overflow-auto">
           <PaneErrorBoundary name="MOBI 阅读" filePath={filePath}>
             {isLoading ? (
               <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -282,8 +300,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         nextTitle={chapterNav.next?.label ?? '—'}
         previousDisabled={!chapterNav.previous}
         nextDisabled={!chapterNav.next}
-        onPrevious={() => chapterNav.previous && loadChapter(chapterNav.previous.id)}
-        onNext={() => chapterNav.next && loadChapter(chapterNav.next.id)}
+        onPrevious={goPrevChapter}
+        onNext={goNextChapter}
       />
 
       {selectionToolbarPos && selectionSnapshot ? (

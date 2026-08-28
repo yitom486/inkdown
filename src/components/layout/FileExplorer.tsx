@@ -1,6 +1,16 @@
 import { useState } from 'react'
 import { SUPPORTED_WORKSPACE_EXTENSION_LABEL } from '@shared/constants/extensions'
-import { ChevronDown, ChevronRight, BookOpen, FileText, Folder, FolderOpen, RefreshCw } from 'lucide-react'
+import {
+  BookMarked,
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  FileType,
+  Folder,
+  FolderOpen,
+  RefreshCw,
+} from 'lucide-react'
 import type { FileTreeNode } from '@shared/types/file'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -16,10 +26,18 @@ interface FileExplorerProps {
 }
 
 function FileIcon({ documentKind }: { documentKind?: FileTreeNode['documentKind'] }) {
-  if (documentKind === 'pdf' || documentKind === 'epub') {
-    return <BookOpen className="size-3.5 shrink-0 text-sky-500/90" />
+  switch (documentKind) {
+    case 'pdf':
+      return <FileType className="size-3.5 shrink-0 text-red-500/90" />
+    case 'epub':
+      return <BookOpen className="size-3.5 shrink-0 text-sky-500/90" />
+    case 'mobi':
+      return <BookMarked className="size-3.5 shrink-0 text-amber-500/90" />
+    case 'markdown':
+      return <FileText className="size-3.5 shrink-0 text-emerald-500/80" />
+    default:
+      return <FileText className="size-3.5 shrink-0" />
   }
-  return <FileText className="size-3.5 shrink-0" />
 }
 
 function TreeNode({

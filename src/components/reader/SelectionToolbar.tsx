@@ -23,8 +23,8 @@ export function SelectionToolbar({
     <>
       <div className="fixed inset-0 z-40" onMouseDown={onDismiss} aria-hidden />
       <div
-        className="fixed z-50 flex items-center gap-0.5 rounded-md border border-border/80 bg-popover p-1 shadow-md"
-        style={{ left: x, top: Math.max(8, y - 44) }}
+        className="fixed z-50 flex -translate-x-1/2 items-center gap-0.5 rounded-md border border-border/80 bg-popover p-1 shadow-md"
+        style={{ left: x, top: Math.max(8, y - 48) }}
         role="toolbar"
         aria-label="选区操作"
       >

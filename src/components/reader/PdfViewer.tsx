@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
-import { TextLayer } from 'pdfjs-dist'
+import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
+import { PdfPageView } from '@/components/reader/PdfPageView'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
@@ -12,12 +12,18 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
+import {
+  estimatePageOffsetTop,
+  PDF_PAGE_GAP_PX,
+  scalePdfPageCssSize,
+  type PdfPageCssSize,
+} from '@/lib/pdf-page-metrics'
 import { pdfjsLib } from '@/lib/pdf-worker'
-import { renderPdfMarkOverlays } from '@/lib/pdf-reading-marks'
-import { isPdfRenderCancelled } from '@/lib/pdf-render'
+import { shouldRenderPdfPage } from '@/lib/pdf-render'
 import { resolveUnitNav, type ReaderUnit } from '@/lib/reader-navigation'
 import {
   copyTextToClipboard,
+  getSelectionToolbarPosition,
   readPdfSelection,
   type PdfSelectionSnapshot,
 } from '@/lib/pdf-selection'
@@ -35,19 +41,17 @@ interface PdfViewerProps {
 }
 
 export function PdfViewer({ filePath, theme }: PdfViewerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const pageWrapperRef = useRef<HTMLDivElement>(null)
-  const textLayerRef = useRef<HTMLDivElement>(null)
-  const marksLayerRef = useRef<HTMLDivElement>(null)
-  const textLayerInstanceRef = useRef<TextLayer | null>(null)
-  const pageRenderTaskRef = useRef<RenderTask | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const pageAnchorRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null)
   const loadingTaskRef = useRef<ReturnType<typeof pdfjsLib.getDocument> | null>(null)
+  const ignoreScrollSyncRef = useRef(false)
+  const pendingJumpPageRef = useRef<number | null>(null)
   const [pageNum, setPageNum] = useState(1)
   const [numPages, setNumPages] = useState(0)
   const [scale, setScale] = useState(1.2)
-  const [rendering, setRendering] = useState(false)
+  const [pageCssSize, setPageCssSize] = useState<PdfPageCssSize>({ width: 612, height: 792 })
+  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null)
   const [tocOpen, setTocOpen] = useState(false)
   const [marksOpen, setMarksOpen] = useState(false)
   const [outlineUnits, setOutlineUnits] = useState<ReaderUnit[]>([])
@@ -63,7 +67,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
 
-  const ready = numPages > 0
+  const ready = numPages > 0 && pdfDoc !== null
 
   const unitNav = useMemo(
     () => resolveUnitNav(outlineUnits, String(pageNum)),
@@ -71,6 +75,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   )
 
   const currentTitle = unitNav.current?.label ?? (numPages > 0 ? `第 ${pageNum} 页` : '—')
+
+  const pageNumbers = useMemo(
+    () => Array.from({ length: numPages }, (_, index) => index + 1),
+    [numPages],
+  )
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -84,10 +93,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     let cancelled = false
     pdfDocRef.current = null
     loadingTaskRef.current = null
+    setPdfDoc(null)
     setPageNum(1)
     setNumPages(0)
     setOutlineUnits([])
     setTocOpen(false)
+    pageAnchorRefs.current.clear()
 
     void (async () => {
       try {
@@ -98,8 +109,17 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           void loadingTask.destroy()
           return
         }
+
         pdfDocRef.current = pdf
+        setPdfDoc(pdf)
         setNumPages(pdf.numPages)
+
+        const firstPage = await pdf.getPage(1)
+        if (!cancelled) {
+          const viewport = firstPage.getViewport({ scale: 1 })
+          setPageCssSize({ width: viewport.width, height: viewport.height })
+        }
+
         const units = await loadPdfOutlineUnits(pdf)
         if (!cancelled) setOutlineUnits(units)
       } catch (cause) {
@@ -117,91 +137,23 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       void loadingTaskRef.current?.destroy()
       pdfDocRef.current = null
       loadingTaskRef.current = null
+      setPdfDoc(null)
     }
   }, [data, filePath])
-
-  useEffect(() => {
-    const pdf = pdfDocRef.current
-    const canvas = canvasRef.current
-    const textLayerContainer = textLayerRef.current
-    if (!pdf || !canvas || !textLayerContainer || pageNum < 1 || numPages === 0) {
-      return
-    }
-
-    let cancelled = false
-    setRendering(true)
-    pageRenderTaskRef.current?.cancel()
-    pageRenderTaskRef.current = null
-    textLayerInstanceRef.current?.cancel()
-    textLayerInstanceRef.current = null
-
-    void (async () => {
-      try {
-        const page = await pdf.getPage(pageNum)
-        if (cancelled) return
-
-        const viewport = page.getViewport({ scale })
-        canvas.width = viewport.width
-        canvas.height = viewport.height
-        const context = canvas.getContext('2d')
-        if (!context) return
-
-        const renderTask = page.render({ canvasContext: context, viewport, canvas })
-        pageRenderTaskRef.current = renderTask
-        await renderTask.promise
-        if (cancelled) return
-
-        textLayerContainer.replaceChildren()
-        textLayerContainer.style.width = `${viewport.width}px`
-        textLayerContainer.style.height = `${viewport.height}px`
-
-        const textLayer = new TextLayer({
-          textContentSource: page.streamTextContent(),
-          container: textLayerContainer,
-          viewport,
-        })
-        textLayerInstanceRef.current = textLayer
-        await textLayer.render()
-      } catch (cause) {
-        if (!cancelled && !isPdfRenderCancelled(cause)) {
-          reportAppError({
-            code: 'FILE_READ_ERROR',
-            message: cause instanceof Error ? cause.message : 'PDF 渲染失败',
-          })
-        }
-      } finally {
-        pageRenderTaskRef.current = null
-        if (!cancelled) setRendering(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      pageRenderTaskRef.current?.cancel()
-      pageRenderTaskRef.current = null
-      textLayerInstanceRef.current?.cancel()
-      textLayerInstanceRef.current = null
-    }
-  }, [numPages, pageNum, scale])
-
-  useEffect(() => {
-    const marksLayer = marksLayerRef.current
-    if (!marksLayer || pageNum < 1 || numPages === 0) return
-    renderPdfMarkOverlays(marksLayer, marks, pageNum, theme)
-  }, [marks, numPages, pageNum, theme])
 
   const fitWidth = useCallback(() => {
     const pdf = pdfDocRef.current
     const container = containerRef.current
-    if (!pdf || !container || pageNum < 1) return
+    if (!pdf || !container) return
 
     void (async () => {
-      const page = await pdf.getPage(pageNum)
+      const page = await pdf.getPage(1)
       const viewport = page.getViewport({ scale: 1 })
-      const nextScale = Math.max(0.5, (container.clientWidth - 32) / viewport.width)
+      const nextScale = Math.max(0.5, (container.clientWidth - 48) / viewport.width)
       setScale(Number(nextScale.toFixed(2)))
+      setPageCssSize({ width: viewport.width, height: viewport.height })
     })()
-  }, [pageNum])
+  }, [])
 
   useEffect(() => {
     fitWidth()
@@ -210,14 +162,116 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   useEffect(() => {
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
-  }, [pageNum, filePath])
+  }, [filePath])
 
-  const handlePageMouseUp = useCallback(() => {
+  const scaledPageSize = useMemo(
+    () => scalePdfPageCssSize(pageCssSize, scale),
+    [pageCssSize, scale],
+  )
+
+  const applyScrollToPage = useCallback(
+    (targetPage: number, behavior: ScrollBehavior = 'auto') => {
+      const container = containerRef.current
+      if (!container) return
+
+      ignoreScrollSyncRef.current = true
+      const anchor = pageAnchorRefs.current.get(targetPage)
+      const estimatedTop = estimatePageOffsetTop(targetPage, scaledPageSize.height, PDF_PAGE_GAP_PX)
+      const top = anchor ? Math.max(0, anchor.offsetTop - 16) : estimatedTop
+
+      if (behavior === 'auto') {
+        container.scrollTop = top
+      } else {
+        container.scrollTo({ top, behavior })
+      }
+
+      window.setTimeout(() => {
+        ignoreScrollSyncRef.current = false
+      }, behavior === 'smooth' ? 420 : 80)
+    },
+    [scaledPageSize.height],
+  )
+
+  const scrollToPage = useCallback(
+    (targetPage: number, behavior: ScrollBehavior = 'smooth') => {
+      setPageNum(targetPage)
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          applyScrollToPage(targetPage, behavior)
+        })
+      })
+    },
+    [applyScrollToPage],
+  )
+
+  /** 跨页导航：目录、书签、节标题 — 先更新渲染窗口，再 instant 跳转 */
+  const jumpToPage = useCallback((targetPage: number) => {
+    pendingJumpPageRef.current = targetPage
+    setPageNum(targetPage)
+  }, [])
+
+  useLayoutEffect(() => {
+    const targetPage = pendingJumpPageRef.current
+    if (targetPage === null) return
+
+    applyScrollToPage(targetPage, 'auto')
+    pendingJumpPageRef.current = null
+
+    // 目标页渲染完成后用真实高度再校准一次
+    window.requestAnimationFrame(() => {
+      applyScrollToPage(targetPage, 'auto')
+    })
+  }, [applyScrollToPage, pageNum, scaledPageSize.height, scale])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || numPages === 0) return
+
+    const updateCurrentPage = () => {
+      if (ignoreScrollSyncRef.current) return
+
+      const midpoint = container.scrollTop + container.clientHeight * 0.35
+      let closestPage = 1
+      let closestDistance = Number.POSITIVE_INFINITY
+
+      for (const [page, element] of pageAnchorRefs.current) {
+        const center = element.offsetTop + element.offsetHeight / 2
+        const distance = Math.abs(center - midpoint)
+        if (distance < closestDistance) {
+          closestDistance = distance
+          closestPage = page
+        }
+      }
+
+      setPageNum((current) => (current === closestPage ? current : closestPage))
+    }
+
+    updateCurrentPage()
+    container.addEventListener('scroll', updateCurrentPage, { passive: true })
+    return () => container.removeEventListener('scroll', updateCurrentPage)
+  }, [numPages, scale])
+
+  const goPrev = useCallback(() => {
+    scrollToPage(Math.max(1, pageNum - 1), 'smooth')
+  }, [pageNum, scrollToPage])
+
+  const goNext = useCallback(() => {
+    scrollToPage(Math.min(numPages, pageNum + 1), 'smooth')
+  }, [numPages, pageNum, scrollToPage])
+
+  const goToUnit = useCallback(
+    (unit: ReaderUnit) => {
+      const nextPage = Number.parseInt(unit.href, 10)
+      if (Number.isFinite(nextPage) && nextPage >= 1) {
+        jumpToPage(nextPage)
+      }
+    },
+    [jumpToPage],
+  )
+
+  const handlePageMouseUp = useCallback((pageNumber: number, pageElement: HTMLElement) => {
     window.setTimeout(() => {
-      const pageElement = pageWrapperRef.current
-      if (!pageElement) return
-
-      const snapshot = readPdfSelection(pageElement, pageNum)
+      const snapshot = readPdfSelection(pageElement, pageNumber)
       if (!snapshot) {
         setSelectionSnapshot(null)
         setSelectionToolbarPos(null)
@@ -225,21 +279,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       }
 
       setSelectionSnapshot(snapshot)
-      setSelectionToolbarPos({
-        x: snapshot.rect.left + snapshot.rect.width / 2,
-        y: snapshot.rect.top,
-      })
+      setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
     }, 10)
-  }, [pageNum])
-
-  const goPrev = () => setPageNum((value) => Math.max(1, value - 1))
-  const goNext = () => setPageNum((value) => Math.min(numPages, value + 1))
-
-  const goToUnit = useCallback((unit: ReaderUnit) => {
-    const nextPage = Number.parseInt(unit.href, 10)
-    if (Number.isFinite(nextPage) && nextPage >= 1) {
-      setPageNum(nextPage)
-    }
   }, [])
 
   const addPageBookmark = useCallback(async () => {
@@ -249,12 +290,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       fileFingerprint,
       kind: 'bookmark',
       anchor: { format: 'pdf', page: pageNum },
-      label: `第 ${pageNum} 页`,
+      label: unitNav.current?.label ?? `第 ${pageNum} 页`,
     })
     if (isOk(result)) {
       toast.success('已添加书签')
     }
-  }, [createMark, fileFingerprint, filePath, numPages, pageNum])
+  }, [createMark, fileFingerprint, filePath, numPages, pageNum, unitNav.current?.label])
 
   const handleSaveAnnotation = useCallback(
     async (note: string) => {
@@ -285,11 +326,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     [createMark, fileFingerprint, filePath, selectionSnapshot],
   )
 
-  const handleSelectMark = useCallback((mark: ReadingMark) => {
-    if (mark.anchor.format === 'pdf') {
-      setPageNum(mark.anchor.page)
-    }
-  }, [])
+  const handleSelectMark = useCallback(
+    (mark: ReadingMark) => {
+      if (mark.anchor.format === 'pdf') {
+        jumpToPage(mark.anchor.page)
+      }
+    },
+    [jumpToPage],
+  )
 
   const handleDeleteMark = useCallback(
     async (mark: ReadingMark) => {
@@ -298,6 +342,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     },
     [deleteMark],
   )
+
+  const estimatedPageHeight = Math.max(120, scaledPageSize.height)
+  const estimatedPageWidth = Math.max(120, scaledPageSize.width)
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -348,11 +395,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             </Button>
           </>
         }
-        trailing={
-          (isLoading || rendering) ? (
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          ) : null
-        }
+        trailing={isLoading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
       />
 
       <ReaderContentShell
@@ -372,27 +415,53 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       >
         <div
           ref={containerRef}
-          className={`min-h-0 flex-1 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
+          className={`h-full min-h-0 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
         >
           <PaneErrorBoundary name="PDF 阅读" filePath={filePath}>
-            <div className="flex min-h-full justify-center p-4">
-              {isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  正在加载 PDF…
-                </div>
-              ) : (
-                <div
-                  ref={pageWrapperRef}
-                  className="pdf-page-wrapper shadow-md"
-                  onMouseUp={handlePageMouseUp}
-                >
-                  <canvas ref={canvasRef} />
-                  <div ref={textLayerRef} className="textLayer" aria-hidden="false" />
-                  <div ref={marksLayerRef} className="pdf-marks-layer" />
-                </div>
-              )}
-            </div>
+            {isLoading || !pdfDoc ? (
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                正在加载 PDF…
+              </div>
+            ) : (
+              <div className="mx-auto flex w-full max-w-full flex-col items-center gap-4 px-4 py-4">
+                {pageNumbers.map((page) => {
+                  const active = shouldRenderPdfPage(page, pageNum, numPages)
+                  return (
+                    <div
+                      key={page}
+                      ref={(node) => {
+                        if (node) pageAnchorRefs.current.set(page, node)
+                        else pageAnchorRefs.current.delete(page)
+                      }}
+                      className="w-fit max-w-full"
+                      style={{ minHeight: active ? undefined : estimatedPageHeight }}
+                      data-page={page}
+                    >
+                      {active ? (
+                        <PdfPageView
+                          pdf={pdfDoc}
+                          pageNumber={page}
+                          scale={scale}
+                          theme={theme}
+                          marks={marks}
+                          onMouseUp={handlePageMouseUp}
+                        />
+                      ) : (
+                        <div
+                          className="rounded-sm bg-white/80 shadow-md dark:bg-zinc-800/80"
+                          style={{
+                            width: estimatedPageWidth,
+                            height: estimatedPageHeight,
+                          }}
+                          aria-hidden
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </PaneErrorBoundary>
         </div>
       </ReaderContentShell>
@@ -429,6 +498,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           onDismiss={() => {
             setSelectionToolbarPos(null)
             setSelectionSnapshot(null)
+            window.getSelection()?.removeAllRanges()
           }}
         />
       ) : null}
