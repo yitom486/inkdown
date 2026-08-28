@@ -30,7 +30,7 @@
 | 服务端状态 | **TanStack Query v5** | IPC / 后端数据：mutations + query cache |
 | 客户端 UI 状态 | **Zustand** | 视图模式、滚动进度、侧栏折叠等本地持久化 |
 | 布局 | **react-resizable-panels** | 可拖拽分屏（经 shadcn Resizable 封装） |
-| 测试 | **Vitest** | 单元测试（`src/**/*.test.ts`） |
+| 测试 | **Vitest** + **Playwright** | 单元/集成（`*.test.ts`）；E2E（`e2e/*.spec.ts`） |
 | 打包发布 | **electron-builder** | 生成 Windows `.exe` 安装包 |
 
 ## Bun 使用准则
@@ -52,6 +52,8 @@
     "preview": "electron-vite preview",
     "pack": "bun run build && electron-builder",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:all": "bun run typecheck && bun run test && bun run build && bun run test:e2e",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json"
   }
 }
@@ -66,22 +68,41 @@ start/
 ├── package.json
 ├── bun.lock
 ├── vitest.config.ts          # Vitest 配置
+├── playwright.config.ts      # Playwright E2E 配置
+├── e2e/                      # Electron E2E（需先 bun run build）
+│   ├── helpers/launch-app.ts
+│   ├── app-smoke.spec.ts
+│   └── export-pdf.spec.ts
+├── .github/workflows/ci.yml  # CI：typecheck + test + E2E
 ├── electron.vite.config.ts   # electron-vite 配置
 ├── electron-builder.yml      # 打包配置
 ├── tsconfig.json
 ├── components.json           # shadcn/ui 配置
-├── shared/                   # 跨进程共享契约
-│   ├── ipc-channels.ts       # IPC 通道名
-│   ├── file-types.ts         # 数据传输类型（DTO）
-│   ├── constants.ts          # 跨进程常量
-│   ├── errors.ts             # AppError 错误码与工具
-│   ├── result.ts             # Result<T, E> 类型与 ok/err
-│   └── electron-api.types.ts # preload 暴露的 API 类型
+├── shared/                   # 跨进程共享契约（与 src/components/shared/ 无关）
+│   ├── ipc/                  # IPC 通道名 + preload API 类型
+│   ├── types/                # 跨进程 DTO 与文档/编辑器类型
+│   ├── core/                 # Result、AppError
+│   ├── constants/            # 扩展名、对话框、工作区等常量
+│   └── utils/                # 跨进程路径工具
 ├── electron/
-│   ├── main.ts               # 窗口、生命周期、IPC 注册
-│   ├── preload.ts            # contextBridge 桥接
-│   ├── file-service.ts       # 文件 dialog + fs（返回 Result）
-│   └── workspace.ts          # 工作区目录扫描
+│   ├── main.ts                    # 应用生命周期入口（whenReady / activate / quit）
+│   ├── preload.ts                 # contextBridge 桥接
+│   ├── ipc/
+│   │   └── register-handlers.ts   # ipcMain 集中注册
+│   ├── window/
+│   │   ├── create-window.ts       # BrowserWindow 创建与 session 绑定
+│   │   ├── window-session.ts      # 多窗口 session 映射
+│   │   ├── window-close.ts        # 关闭前未保存确认
+│   │   ├── close-gate.ts          # 关闭决策状态机
+│   │   └── window-title.ts        # 窗口标题格式化
+│   └── services/
+│       ├── file-service.ts        # 文件 dialog + fs（返回 Result）
+│       ├── workspace.ts           # 工作区目录扫描
+│       ├── reading-marks-service.ts  # 书签/批注持久化
+│       ├── error-log-service.ts   # 渲染端错误日志
+│       ├── app-service.ts         # 应用元信息
+│       ├── app-paths.ts           # 图标等资源路径
+│       └── runtime-state.ts       # 主进程运行时开关（如 verbose 日志）
 ├── src/
 │   ├── index.html
 │   ├── main.tsx              # React 入口（含 QueryProvider）
@@ -134,11 +155,11 @@ webPreferences: {
 新增跨进程能力时，按以下顺序改动：
 
 ```
-shared/errors.ts + shared/result.ts   → 错误码与 Result 类型
-shared/file-types.ts                  → DTO（纯数据，不含 Result 包装）
-electron/file-service.ts              → 业务实现，返回 Result
-electron/main.ts                      → ipcMain.handle 注册
-shared/electron-api.types.ts          → ElectronAPI 接口
+shared/core/errors.ts + shared/core/result.ts → 错误码与 Result 类型
+shared/types/file.ts                          → DTO（纯数据，不含 Result 包装）
+electron/services/file-service.ts             → 业务实现，返回 Result
+electron/ipc/register-handlers.ts             → ipcMain.handle 注册
+shared/ipc/electron-api.types.ts              → ElectronAPI 接口
 electron/preload.ts                   → contextBridge 暴露
 src/api/*.ts                          → 渲染端 API 封装
 src/hooks/                            → useMutation / useQuery 消费
@@ -344,6 +365,8 @@ bunx shadcn@latest init
 bun run dev
 bun run build
 bun run test
+bun run build && bun run test:e2e
+bun run test:all
 bun run typecheck
 bun run pack
 
