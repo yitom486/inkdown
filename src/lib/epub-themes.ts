@@ -5,15 +5,38 @@ const EPUB_CONTENT_VERTICAL_PADDING = '1.75rem'
 
 const READER_LAYOUT_STYLE_ID = 'reader-layout-styles'
 
+const EPUB_PALETTE = {
+  dark: {
+    pageBackground: '#18181b',
+    text: '#d4d4d8',
+    link: '#a1a1aa',
+    linkHover: '#e4e4e7',
+    h1: '#fafafa',
+    h2: '#f4f4f5',
+    h3: '#e4e4e7',
+  },
+  light: {
+    pageBackground: '#fafafa',
+    text: '#3f3f46',
+    link: '#71717a',
+    linkHover: '#27272a',
+    h1: '#18181b',
+    h2: '#27272a',
+    h3: '#3f3f46',
+  },
+} as const
+
+export type EpubThemeMode = keyof typeof EPUB_PALETTE
+
 /** epub.js themes 规则：覆盖书内默认蓝链与字体 */
-export function getEpubThemeRules(mode: 'dark' | 'light'): Record<string, Record<string, string>> {
+export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<string, string>> {
   const serif = '"Source Han Serif SC", "Noto Serif SC", "Songti SC", Georgia, serif'
   const sans = '"Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif'
   const horizontalPadding = EPUB_CONTENT_HORIZONTAL_PADDING
-  const pageBackground = mode === 'dark' ? '#18181b' : '#fafafa'
+  const palette = EPUB_PALETTE[mode]
 
   const sharedBody = {
-    background: pageBackground,
+    background: `${palette.pageBackground} !important`,
     'font-family': serif,
     'font-size': '18px',
     'line-height': '1.85',
@@ -28,10 +51,11 @@ export function getEpubThemeRules(mode: 'dark' | 'light'): Record<string, Record
     'max-width': '100% !important',
     'box-sizing': 'border-box',
     margin: '0 !important',
+    color: `${palette.text} !important`,
   }
 
   const sharedHtml = {
-    background: pageBackground,
+    background: `${palette.pageBackground} !important`,
     'overflow-y': 'auto !important',
     'overflow-x': 'hidden !important',
     height: '100%',
@@ -39,87 +63,63 @@ export function getEpubThemeRules(mode: 'dark' | 'light'): Record<string, Record
     'scrollbar-gutter': 'stable',
   }
 
-  if (mode === 'dark') {
-    return {
-      body: {
-        ...sharedBody,
-        color: '#d4d4d8',
-      },
-      html: sharedHtml,
-      p: {
-        'margin-bottom': '1em',
-        'text-align': 'justify',
-      },
-      a: {
-        color: '#a1a1aa !important',
-        'text-decoration': 'none !important',
-        border: 'none !important',
-      },
-      'a:hover': {
-        color: '#e4e4e7 !important',
-      },
-      h1: {
-        color: '#fafafa',
-        'font-family': sans,
-        'font-size': '1.6em',
-        'font-weight': '600',
-        'margin-bottom': '0.75em',
-      },
-      h2: {
-        color: '#f4f4f5',
-        'font-family': sans,
-        'font-size': '1.35em',
-        'font-weight': '600',
-      },
-      h3: {
-        color: '#e4e4e7',
-        'font-family': sans,
-        'font-size': '1.15em',
-        'font-weight': '600',
-      },
-      li: {
-        'margin-bottom': '0.35em',
-      },
-      nav: {
-        display: 'none !important',
-      },
-    }
-  }
-
   return {
-    body: {
-      ...sharedBody,
-      color: '#3f3f46',
-    },
+    body: sharedBody,
     html: sharedHtml,
     p: {
+      color: `${palette.text} !important`,
       'margin-bottom': '1em',
       'text-align': 'justify',
     },
+    span: {
+      color: `${palette.text} !important`,
+    },
+    div: {
+      color: `${palette.text} !important`,
+    },
+    li: {
+      color: `${palette.text} !important`,
+      'margin-bottom': '0.35em',
+    },
+    td: {
+      color: `${palette.text} !important`,
+    },
+    th: {
+      color: `${palette.text} !important`,
+    },
+    blockquote: {
+      color: `${palette.text} !important`,
+    },
     a: {
-      color: '#71717a !important',
+      color: `${palette.link} !important`,
       'text-decoration': 'none !important',
       border: 'none !important',
     },
     'a:hover': {
-      color: '#27272a !important',
+      color: `${palette.linkHover} !important`,
     },
     h1: {
-      color: '#18181b',
+      color: `${palette.h1} !important`,
       'font-family': sans,
       'font-size': '1.6em',
       'font-weight': '600',
+      'margin-bottom': '0.75em',
     },
     h2: {
-      color: '#27272a',
+      color: `${palette.h2} !important`,
       'font-family': sans,
       'font-size': '1.35em',
       'font-weight': '600',
     },
     h3: {
-      color: '#3f3f46',
+      color: `${palette.h3} !important`,
       'font-family': sans,
       'font-size': '1.15em',
+      'font-weight': '600',
+    },
+    h4: {
+      color: `${palette.h3} !important`,
+      'font-family': sans,
       'font-weight': '600',
     },
     nav: {
@@ -128,9 +128,10 @@ export function getEpubThemeRules(mode: 'dark' | 'light'): Record<string, Record
   }
 }
 
-function buildReaderLayoutCss(): string {
+function buildReaderLayoutCss(mode: EpubThemeMode): string {
   const h = EPUB_CONTENT_HORIZONTAL_PADDING
   const v = EPUB_CONTENT_VERTICAL_PADDING
+  const palette = EPUB_PALETTE[mode]
 
   return `
     html {
@@ -141,6 +142,7 @@ function buildReaderLayoutCss(): string {
       overflow-y: auto !important;
       scrollbar-gutter: stable;
       box-sizing: border-box !important;
+      background-color: ${palette.pageBackground} !important;
     }
     body {
       width: 100% !important;
@@ -151,6 +153,35 @@ function buildReaderLayoutCss(): string {
       padding-left: ${h} !important;
       padding-right: ${h} !important;
       box-sizing: border-box !important;
+      background-color: ${palette.pageBackground} !important;
+      color: ${palette.text} !important;
+    }
+    body p,
+    body span,
+    body div,
+    body li,
+    body td,
+    body th,
+    body blockquote,
+    body em,
+    body strong,
+    body i,
+    body b,
+    body figcaption {
+      color: ${palette.text} !important;
+      background-color: transparent !important;
+    }
+    body h1 { color: ${palette.h1} !important; background-color: transparent !important; }
+    body h2 { color: ${palette.h2} !important; background-color: transparent !important; }
+    body h3, body h4, body h5, body h6 {
+      color: ${palette.h3} !important;
+      background-color: transparent !important;
+    }
+    body a {
+      color: ${palette.link} !important;
+    }
+    body a:hover {
+      color: ${palette.linkHover} !important;
     }
     body > div,
     body > section,
@@ -166,6 +197,7 @@ function buildReaderLayoutCss(): string {
       padding-right: 0 !important;
       float: none !important;
       box-sizing: border-box !important;
+      background-color: transparent !important;
     }
     img, svg, video {
       max-width: 100% !important;
@@ -174,11 +206,24 @@ function buildReaderLayoutCss(): string {
   `
 }
 
-function syncEpubReadingInlineStyles(doc: Document): void {
+function stripPublisherInlineColors(doc: Document): void {
+  if (!doc.body) return
+
+  doc.body.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
+    element.style.removeProperty('color')
+    const bg = element.style.backgroundColor
+    if (bg && (bg === 'white' || bg === '#fff' || bg === '#ffffff' || bg === 'rgb(255, 255, 255)')) {
+      element.style.removeProperty('background-color')
+    }
+  })
+}
+
+function syncEpubReadingInlineStyles(doc: Document, mode: EpubThemeMode): void {
   const html = doc.documentElement
   const body = doc.body
   if (!body) return
 
+  const palette = EPUB_PALETTE[mode]
   const important = (el: HTMLElement, prop: string, value: string) => {
     el.style.setProperty(prop, value, 'important')
   }
@@ -189,6 +234,7 @@ function syncEpubReadingInlineStyles(doc: Document): void {
   important(html, 'overflow-x', 'hidden')
   important(html, 'overflow-y', 'auto')
   important(html, 'scrollbar-gutter', 'stable')
+  important(html, 'background-color', palette.pageBackground)
 
   important(body, 'width', '100%')
   important(body, 'max-width', '100%')
@@ -198,18 +244,22 @@ function syncEpubReadingInlineStyles(doc: Document): void {
   important(body, 'padding-bottom', EPUB_CONTENT_VERTICAL_PADDING)
   important(body, 'padding-left', EPUB_CONTENT_HORIZONTAL_PADDING)
   important(body, 'padding-right', EPUB_CONTENT_HORIZONTAL_PADDING)
+  important(body, 'background-color', palette.pageBackground)
+  important(body, 'color', palette.text)
+
+  stripPublisherInlineColors(doc)
 }
 
-/** 覆盖 epub.js / 书内样式，强制左右各 5% 对称边距 */
-export function applyEpubReadingLayout(doc: Document): void {
+/** 覆盖 epub.js / 书内样式，强制左右各 5% 对称边距与主题色 */
+export function applyEpubReadingLayout(doc: Document, mode: EpubThemeMode): void {
   let style = doc.getElementById(READER_LAYOUT_STYLE_ID) as HTMLStyleElement | null
   if (!style) {
     style = doc.createElement('style')
     style.id = READER_LAYOUT_STYLE_ID
     doc.head.appendChild(style)
   }
-  style.textContent = buildReaderLayoutCss()
-  syncEpubReadingInlineStyles(doc)
+  style.textContent = buildReaderLayoutCss(mode)
+  syncEpubReadingInlineStyles(doc, mode)
 }
 
 interface EpubContentsLike {
@@ -217,14 +267,15 @@ interface EpubContentsLike {
 }
 
 /** 对 rendition 内所有章节 iframe 重新应用阅读布局 */
-export function applyEpubReadingLayoutToRendition(rendition: {
-  getContents: () => unknown
-}): void {
+export function applyEpubReadingLayoutToRendition(
+  rendition: { getContents: () => unknown },
+  mode: EpubThemeMode,
+): void {
   const raw = rendition.getContents()
   const contentsList = (Array.isArray(raw) ? raw : raw ? [raw] : []) as EpubContentsLike[]
   for (const contents of contentsList) {
     if (contents?.document) {
-      applyEpubReadingLayout(contents.document)
+      applyEpubReadingLayout(contents.document, mode)
     }
   }
 }

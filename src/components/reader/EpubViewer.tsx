@@ -14,8 +14,13 @@ import {
   type EpubChapter,
   type EpubChapterNavState,
 } from '@/lib/epub-navigation'
+import {
+  buildEpubFileFingerprint,
+  EPUB_LOCATIONS_CHUNK_SIZE,
+} from '@/lib/epub-locations-cache'
 import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/epub-themes'
 import { reportAppError } from '@/lib/report-error'
+import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/errors'
 import '@/styles/epub-viewer.css'
@@ -32,6 +37,9 @@ interface EpubViewerProps {
   filePath: string
   theme: 'dark' | 'light'
 }
+
+/** 全书位置索引粒度：越大进度越细，但首次生成越慢 */
+const READING_PROGRESS_SAVE_MS = 400
 
 function resolveGlobalProgress(book: Book | null, location: EpubLocation): number | null {
   const start = location.start
@@ -68,6 +76,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const [globalProgress, setGlobalProgress] = useState(0)
   const scrollCleanupRef = useRef<(() => void) | null>(null)
   const reportLocationTimerRef = useRef<number | null>(null)
+  const saveProgressTimerRef = useRef<number | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
 
@@ -93,6 +102,34 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     }
   }, [])
 
+  const persistReadingProgress = useCallback(
+    (location: EpubLocation) => {
+      const cfi = location.start?.cfi
+      if (!cfi) return
+
+      const percentage = resolveGlobalProgress(bookRef.current, location) ?? undefined
+      useReadingProgressStore.getState().saveEpubProgress(filePath, {
+        cfi,
+        href: location.start?.href,
+        percentage,
+      })
+    },
+    [filePath],
+  )
+
+  const schedulePersistReadingProgress = useCallback(
+    (location: EpubLocation) => {
+      if (saveProgressTimerRef.current !== null) {
+        window.clearTimeout(saveProgressTimerRef.current)
+      }
+      saveProgressTimerRef.current = window.setTimeout(() => {
+        saveProgressTimerRef.current = null
+        persistReadingProgress(location)
+      }, READING_PROGRESS_SAVE_MS)
+    },
+    [persistReadingProgress],
+  )
+
   const scheduleReportLocation = useCallback((rendition: NonNullable<typeof renditionRef.current>) => {
     if (reportLocationTimerRef.current !== null) {
       window.clearTimeout(reportLocationTimerRef.current)
@@ -111,18 +148,21 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     [],
   )
 
-  const applyReadingLayout = useCallback((rendition: NonNullable<typeof renditionRef.current>) => {
-    applyEpubReadingLayoutToRendition(rendition)
-  }, [])
+  const applyReadingLayout = useCallback(
+    (rendition: NonNullable<typeof renditionRef.current>) => {
+      applyEpubReadingLayoutToRendition(rendition, theme)
+    },
+    [theme],
+  )
 
   const bindScrollReporting = useCallback(
     (rendition: NonNullable<typeof renditionRef.current>) => {
       scrollCleanupRef.current?.()
 
       const handler = (contents: { document: Document; window: Window }) => {
-        applyEpubReadingLayout(contents.document)
+        applyEpubReadingLayout(contents.document, theme)
         requestAnimationFrame(() => {
-          applyEpubReadingLayout(contents.document)
+          applyEpubReadingLayout(contents.document, theme)
         })
         scrollCleanupRef.current?.()
 
@@ -141,7 +181,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
       rendition.hooks.content.register(handler)
     },
-    [scheduleReportLocation],
+    [scheduleReportLocation, theme],
   )
 
   useEffect(() => {
@@ -183,6 +223,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     const onRelocated = (location: EpubLocation) => {
       syncChapterNav(location.start?.href)
       updateGlobalProgress(location)
+      schedulePersistReadingProgress(location)
     }
     rendition.on('relocated', onRelocated)
 
@@ -200,8 +241,10 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         await book.ready
         if (cancelled) return
 
-        await book.locations.generate(1600)
-        if (cancelled) return
+        const savedProgress = useReadingProgressStore.getState().getEpubProgress(filePath)
+        if (savedProgress?.percentage != null) {
+          setGlobalProgress(savedProgress.percentage)
+        }
 
         const navigation = await book.loaded.navigation
         const flatChapters = flattenEpubToc(
@@ -218,18 +261,57 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         chaptersRef.current = flatChapters
         setChapters(flatChapters)
 
-        const initial = pickInitialChapter(flatChapters)
-        if (initial) {
-          await rendition.display(initial.href)
-          syncChapterNav(initial.href)
-        } else {
-          await rendition.display()
-          syncChapterNav()
+        let displayed = false
+        if (savedProgress?.cfi) {
+          try {
+            await rendition.display(savedProgress.cfi)
+            syncChapterNav(savedProgress.href)
+            displayed = true
+          } catch {
+            displayed = false
+          }
+        }
+
+        if (!displayed) {
+          const initial = pickInitialChapter(flatChapters)
+          if (initial) {
+            await rendition.display(initial.href)
+            syncChapterNav(initial.href)
+          } else {
+            await rendition.display()
+            syncChapterNav()
+          }
         }
 
         rendition.reportLocation()
         applyReadingLayout(rendition)
         if (!cancelled) setReady(true)
+
+        const fingerprint = buildEpubFileFingerprint(filePath, data.data.byteLength)
+        const cachedLocations = useReadingProgressStore.getState().getEpubLocations(filePath)
+        const canUseCachedLocations =
+          cachedLocations?.fingerprint === fingerprint &&
+          cachedLocations.chunkSize === EPUB_LOCATIONS_CHUNK_SIZE &&
+          cachedLocations.locationsJson.length > 0
+
+        if (canUseCachedLocations) {
+          book.locations.load(cachedLocations.locationsJson)
+          rendition.reportLocation()
+          return
+        }
+
+        void book.locations.generate(EPUB_LOCATIONS_CHUNK_SIZE).then(() => {
+          if (cancelled) return
+          const locationsJson = book.locations.save()
+          if (locationsJson && locationsJson !== 'null') {
+            useReadingProgressStore.getState().saveEpubLocations(filePath, {
+              fingerprint,
+              chunkSize: EPUB_LOCATIONS_CHUNK_SIZE,
+              locationsJson,
+            })
+          }
+          rendition.reportLocation()
+        })
       } catch (cause) {
         if (!cancelled) {
           reportAppError({
@@ -246,6 +328,18 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         window.clearTimeout(reportLocationTimerRef.current)
         reportLocationTimerRef.current = null
       }
+      if (saveProgressTimerRef.current !== null) {
+        window.clearTimeout(saveProgressTimerRef.current)
+        saveProgressTimerRef.current = null
+      }
+      try {
+        const current = rendition.currentLocation() as EpubLocation | null
+        if (current) {
+          persistReadingProgress(current)
+        }
+      } catch {
+        // rendition 已销毁时忽略
+      }
       scrollCleanupRef.current?.()
       scrollCleanupRef.current = null
       rendition.off('relocated', onRelocated)
@@ -254,7 +348,17 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       bookRef.current = null
       renditionRef.current = null
     }
-  }, [applyReadingLayout, applyTheme, bindScrollReporting, data, filePath, syncChapterNav, updateGlobalProgress])
+  }, [
+    applyReadingLayout,
+    applyTheme,
+    bindScrollReporting,
+    data,
+    filePath,
+    persistReadingProgress,
+    schedulePersistReadingProgress,
+    syncChapterNav,
+    updateGlobalProgress,
+  ])
 
   useEffect(() => {
     if (!renditionRef.current || !ready) return
