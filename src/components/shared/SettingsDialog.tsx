@@ -26,10 +26,12 @@ import { useEditorUiStore } from '@/stores/editor-ui-store'
 import type { AppTheme } from '@shared/editor-types'
 import type { EditorViewMode } from '@shared/editor-types'
 import { cn } from '@/lib/utils'
+import { appApi } from '@/api/app-api'
 
 interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onOpenErrorLog: () => void
 }
 
 function SettingRow({
@@ -109,7 +111,7 @@ function OptionButtons<T extends string | number>({
   )
 }
 
-export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
+export function SettingsDialog({ open, onOpenChange, onOpenErrorLog }: SettingsDialogProps) {
   const theme = useEditorUiStore((state) => state.theme)
   const setTheme = useEditorUiStore((state) => state.setTheme)
 
@@ -131,6 +133,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
   const setTabSize = useAppSettingsStore((state) => state.setTabSize)
   const setEditorFontSize = useAppSettingsStore((state) => state.setEditorFontSize)
+  const verboseRendererLogs = useAppSettingsStore((state) => state.verboseRendererLogs)
+  const setVerboseRendererLogs = useAppSettingsStore((state) => state.setVerboseRendererLogs)
 
   const themeOptions: Array<{ value: AppTheme; label: string }> = [
     { value: 'dark', label: '深色' },
@@ -235,6 +239,40 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 onChange={setRestoreLastFileOnStartup}
                 label="启动时恢复上次文件"
               />
+            </SettingRow>
+          </section>
+
+          <Separator className="my-2" />
+
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">调试</h3>
+            <SettingRow
+              title="详细控制台日志"
+              description="将渲染进程 Console 转发到启动应用的终端（用于排查黑屏）。"
+            >
+              <ToggleSwitch
+                checked={verboseRendererLogs}
+                onChange={setVerboseRendererLogs}
+                label="详细控制台日志"
+              />
+            </SettingRow>
+            <SettingRow title="开发者工具" description="快捷键 Ctrl+Shift+I。">
+              <Button type="button" size="xs" variant="outline" onClick={() => appApi.toggleDevTools()}>
+                打开
+              </Button>
+            </SettingRow>
+            <SettingRow title="错误日志" description="查看本会话错误与磁盘日志路径。">
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false)
+                  onOpenErrorLog()
+                }}
+              >
+                查看
+              </Button>
             </SettingRow>
           </section>
         </div>

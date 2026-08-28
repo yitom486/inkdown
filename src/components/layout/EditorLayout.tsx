@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { reportRuntimeError } from '@/lib/error-reporter'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -10,6 +11,7 @@ import {
 } from '@/components/editor/MarkdownEditor'
 import { FindReplaceBar } from '@/components/editor/FindReplaceBar'
 import { PreviewPane, type PreviewPaneHandle } from '@/components/preview/PreviewPane'
+import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import {
   ResizableHandle,
   ResizablePanel,
@@ -23,7 +25,7 @@ import {
   parseMarkdownHeadings,
   type MarkdownHeading,
 } from '@/lib/markdown-headings'
-import { useEditorUiStore, type EditorViewMode } from '@/stores/editor-ui-store'
+import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import type { FileTreeNode } from '@shared/file-types'
 
@@ -44,6 +46,8 @@ interface EditorLayoutProps {
   onExportHtml: () => void
   onExportPdf: () => void
   onOpenSettings: () => void
+  onOpenErrorLog: () => void
+  onOpenDevTools: () => void
   onAbout: () => void
   onQuit: () => void
 }
@@ -65,13 +69,15 @@ export function EditorLayout({
   onExportHtml,
   onExportPdf,
   onOpenSettings,
+  onOpenErrorLog,
+  onOpenDevTools,
   onAbout,
   onQuit,
 }: EditorLayoutProps) {
   const editorRef = useRef<MarkdownEditorHandle>(null)
   const previewRef = useRef<PreviewPaneHandle>(null)
 
-  const fileState = useEditorUiStore((state) => state.getFileState(filePath))
+  const fileState = useFileUiState(filePath)
   const setViewMode = useEditorUiStore((state) => state.setViewMode)
   const theme = useEditorUiStore((state) => state.theme)
   const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
@@ -84,7 +90,14 @@ export function EditorLayout({
   const viewMode = fileState.viewMode
   const previewHtml = useMarkdownPreview(content, filePath, previewDebounceMs)
   const { handlePasteImage } = usePasteImage(filePath)
-  const headings = useMemo(() => parseMarkdownHeadings(content), [content])
+  const headings = useMemo(() => {
+    try {
+      return parseMarkdownHeadings(content)
+    } catch (error) {
+      reportRuntimeError(error, { source: 'outline', filePath, silentToast: true })
+      return []
+    }
+  }, [content, filePath])
   const [activeHeadingId, setActiveHeadingId] = useState<string>()
   const [findReplace, setFindReplace] = useState<{ open: boolean; mode: 'find' | 'replace' }>({
     open: false,
@@ -224,6 +237,8 @@ export function EditorLayout({
         onExportHtml={onExportHtml}
         onExportPdf={onExportPdf}
         onOpenSettings={onOpenSettings}
+        onOpenErrorLog={onOpenErrorLog}
+        onOpenDevTools={onOpenDevTools}
         onAbout={onAbout}
         onQuit={onQuit}
       />
@@ -287,17 +302,19 @@ export function EditorLayout({
                         editorView={editorRef.current?.getView() ?? null}
                         onClose={() => setFindReplace((state) => ({ ...state, open: false }))}
                       />
-                      <MarkdownEditor
-                        ref={editorRef}
-                        value={content}
-                        filePath={filePath}
-                        theme={theme}
-                        tabSize={tabSize}
-                        fontSize={editorFontSize}
-                        onChange={onContentChange}
-                        onScroll={handleEditorScroll}
-                        onPasteImage={handlePasteImage}
-                      />
+                      <PaneErrorBoundary name="编辑器" filePath={filePath}>
+                        <MarkdownEditor
+                          ref={editorRef}
+                          value={content}
+                          filePath={filePath}
+                          theme={theme}
+                          tabSize={tabSize}
+                          fontSize={editorFontSize}
+                          onChange={onContentChange}
+                          onScroll={handleEditorScroll}
+                          onPasteImage={handlePasteImage}
+                        />
+                      </PaneErrorBoundary>
                     </div>
                   </ResizablePanel>
                 )}
@@ -306,6 +323,22 @@ export function EditorLayout({
                   <>
                     <ResizableHandle withHandle />
                     <ResizablePanel id="preview" defaultSize="50%" minSize="28%" className="min-w-0">
+                      <PaneErrorBoundary name="预览" filePath={filePath}>
+                        <PreviewPane
+                          ref={previewRef}
+                          html={previewHtml}
+                          theme={theme}
+                          onScroll={handlePreviewScroll}
+                          onHeadingActivate={handlePreviewHeadingActivate}
+                        />
+                      </PaneErrorBoundary>
+                    </ResizablePanel>
+                  </>
+                )}
+
+                {!showEditor && showPreview && (
+                  <ResizablePanel id="preview-full" defaultSize="100%" className="min-w-0">
+                    <PaneErrorBoundary name="预览" filePath={filePath}>
                       <PreviewPane
                         ref={previewRef}
                         html={previewHtml}
@@ -313,19 +346,7 @@ export function EditorLayout({
                         onScroll={handlePreviewScroll}
                         onHeadingActivate={handlePreviewHeadingActivate}
                       />
-                    </ResizablePanel>
-                  </>
-                )}
-
-                {!showEditor && showPreview && (
-                  <ResizablePanel id="preview-full" defaultSize="100%" className="min-w-0">
-                    <PreviewPane
-                      ref={previewRef}
-                      html={previewHtml}
-                      theme={theme}
-                      onScroll={handlePreviewScroll}
-                      onHeadingActivate={handlePreviewHeadingActivate}
-                    />
+                    </PaneErrorBoundary>
                   </ResizablePanel>
                 )}
               </ResizablePanelGroup>

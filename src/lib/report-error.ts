@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { isCancelled, type AppError } from '@shared/errors'
+import { reportRuntimeError } from '@/lib/error-reporter'
 
 /** 非 CANCELLED 错误统一以 Sonner Toast 提示 */
 export function reportAppError(error: AppError): void {
@@ -18,11 +19,5 @@ export function isAppError(value: unknown): value is AppError {
 }
 
 export function reportUnknownError(reason: unknown): void {
-  if (isAppError(reason)) {
-    reportAppError(reason)
-    return
-  }
-
-  const message = reason instanceof Error ? reason.message : '发生未预期的错误'
-  toast.error('发生未预期的错误', { description: message })
+  reportRuntimeError(reason, { source: 'unknown' })
 }

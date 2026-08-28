@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type { ExportDocumentPayload, SaveFilePayload, SavePastedImagePayload } from '@shared/file-types'
+import type { RendererErrorPayload } from '@shared/error-log-types'
 import type { ElectronAPI } from '@shared/electron-api.types'
 
 const electronAPI: ElectronAPI = {
@@ -35,6 +36,15 @@ const electronAPI: ElectronAPI = {
   },
   quit: () => {
     ipcRenderer.send(IPC.APP_QUIT)
+  },
+  toggleDevTools: () => {
+    ipcRenderer.send(IPC.APP_TOGGLE_DEVTOOLS)
+  },
+  logRendererError: (payload: RendererErrorPayload) =>
+    ipcRenderer.invoke(IPC.APP_LOG_RENDERER_ERROR, payload),
+  getErrorLogPath: () => ipcRenderer.invoke(IPC.APP_GET_ERROR_LOG_PATH),
+  setVerboseLogs: (enabled: boolean) => {
+    ipcRenderer.send(IPC.APP_SET_VERBOSE_LOGS, enabled)
   },
 }
 

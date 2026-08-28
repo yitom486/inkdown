@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage } from 'electron'
 import { basename, join } from 'path'
 import { IPC } from '@shared/ipc-channels'
 import { APP_TITLE } from '@shared/constants'
@@ -15,10 +15,14 @@ import {
 } from './file-service'
 import { getAppVersion } from './app-service'
 import { resolveAppIconPath } from './app-paths'
+import { appendRendererErrorLog, getErrorLogFilePath } from './error-log-service'
+import type { RendererErrorPayload } from '@shared/error-log-types'
+import { ok } from '@shared/result'
 
 let mainWindow: BrowserWindow | null = null
 let allowClose = false
 let documentDirty = false
+let verboseRendererLogs = false
 
 function updateWindowTitle(filePath?: string, isDirty = false): void {
   if (!mainWindow) return
@@ -62,6 +66,44 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[render-process-gone]', details.reason, details.exitCode)
+    const win = mainWindow
+    if (!win || win.isDestroyed()) return
+
+    void dialog
+      .showMessageBox(win, {
+        type: 'error',
+        title: '界面进程异常',
+        message: '编辑器渲染进程已崩溃或异常退出',
+        detail: `原因：${details.reason}（exitCode ${details.exitCode}）\n\n可尝试重新加载；若反复出现，请用 Ctrl+Shift+I 查看 Console，或在 帮助 → 错误日志 中查看记录。`,
+        buttons: ['重新加载', '关闭窗口'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0 && !win.isDestroyed()) {
+          win.reload()
+        }
+      })
+  })
+
+  mainWindow.webContents.on('responsive', () => {
+    console.info('[renderer-responsive] 渲染进程已恢复响应')
+  })
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.error('[renderer-unresponsive] 渲染进程无响应，可能正在处理大文件或发生死循环')
+  })
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      mainWindow?.webContents.toggleDevTools()
+      event.preventDefault()
+    }
+  })
+
   mainWindow.on('close', (event) => {
     if (allowClose || !documentDirty) return
     event.preventDefault()
@@ -80,8 +122,9 @@ function createWindow(): void {
     console.error('[did-fail-load]', errorCode, errorDescription, validatedURL)
   })
 
-  mainWindow.webContents.on('console-message', (_event, _level, message, line, sourceId) => {
-    if (message.includes('Error') || message.includes('error')) {
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const isErrorLike = level >= 3 || /error|exception|uncaught/i.test(message)
+    if (isErrorLike || verboseRendererLogs) {
       console.error('[renderer]', message, `(${sourceId}:${line})`)
     }
   })
@@ -126,6 +169,23 @@ function registerIpcHandlers(): void {
   ipcMain.on(IPC.APP_QUIT, () => {
     mainWindow?.close()
   })
+  ipcMain.on(IPC.APP_TOGGLE_DEVTOOLS, () => {
+    mainWindow?.webContents.toggleDevTools()
+  })
+  ipcMain.on(IPC.APP_SET_VERBOSE_LOGS, (_event, enabled: boolean) => {
+    verboseRendererLogs = enabled
+  })
+  ipcMain.handle(IPC.APP_LOG_RENDERER_ERROR, async (_event, payload: RendererErrorPayload) => {
+    try {
+      const logPath = await appendRendererErrorLog(payload)
+      console.error('[renderer-error-log]', payload.source, payload.message)
+      return ok(logPath)
+    } catch (error) {
+      console.error('[renderer-error-log] 写入失败', error)
+      return ok(getErrorLogFilePath())
+    }
+  })
+  ipcMain.handle(IPC.APP_GET_ERROR_LOG_PATH, () => ok(getErrorLogFilePath()))
 }
 
 app.whenReady().then(() => {

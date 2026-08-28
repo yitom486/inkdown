@@ -10,6 +10,7 @@ import type {
   SavePastedImageResult,
 } from '@shared/file-types'
 import type { AppError } from '@shared/errors'
+import type { RendererErrorPayload } from '@shared/error-log-types'
 import type { Result } from '@shared/result'
 
 export interface ElectronAPI {
@@ -31,4 +32,8 @@ export interface ElectronAPI {
   exportPdf: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void
   quit: () => void
+  toggleDevTools: () => void
+  logRendererError: (payload: RendererErrorPayload) => Promise<Result<string, AppError>>
+  getErrorLogPath: () => Promise<Result<string, AppError>>
+  setVerboseLogs: (enabled: boolean) => void
 }

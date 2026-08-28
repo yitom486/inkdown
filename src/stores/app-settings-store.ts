@@ -51,6 +51,7 @@ export interface AppSettingsState {
   lastOpenedFilePath?: string
   tabSize: EditorTabSize
   editorFontSize: EditorFontSize
+  verboseRendererLogs: boolean
 }
 
 interface AppSettingsStore extends AppSettingsState {
@@ -63,6 +64,7 @@ interface AppSettingsStore extends AppSettingsState {
   setLastOpenedFilePath: (filePath?: string) => void
   setTabSize: (tabSize: EditorTabSize) => void
   setEditorFontSize: (fontSize: EditorFontSize) => void
+  setVerboseRendererLogs: (enabled: boolean) => void
   addRecentFile: (filePath: string) => void
   removeRecentFile: (filePath: string) => void
   clearRecentFiles: () => void
@@ -85,6 +87,7 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       lastOpenedFilePath: undefined,
       tabSize: 2,
       editorFontSize: 15,
+      verboseRendererLogs: false,
 
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
 
@@ -101,6 +104,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       setTabSize: (tabSize) => set({ tabSize }),
 
       setEditorFontSize: (fontSize) => set({ editorFontSize: fontSize }),
+
+      setVerboseRendererLogs: (enabled) => set({ verboseRendererLogs: enabled }),
 
       setMaxRecentFiles: (limit) =>
         set((state) => ({
@@ -139,6 +144,7 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         lastOpenedFilePath: state.lastOpenedFilePath,
         tabSize: state.tabSize,
         editorFontSize: state.editorFontSize,
+        verboseRendererLogs: state.verboseRendererLogs,
       }),
     },
   ),

@@ -19,6 +19,7 @@ import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
 import { highlightSelectionMatches, search } from '@codemirror/search'
 import { markdownFormattingKeymap } from '@/lib/markdown-editor-commands'
 import { markdownLintGutter, markdownSyntaxLinter } from '@/lib/codemirror-syntax-linter'
+import { reportRuntimeError } from '@/lib/error-reporter'
 import { Compartment, EditorState } from '@codemirror/state'
 import {
   drawSelection,
@@ -339,9 +340,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       const current = view.state.doc.toString()
       if (value === current) return
 
-      view.dispatch({
-        changes: { from: 0, to: current.length, insert: value },
-      })
+      try {
+        view.dispatch({
+          changes: { from: 0, to: current.length, insert: value },
+        })
+      } catch (error) {
+        reportRuntimeError(error, { source: 'editor', filePath, silentToast: true })
+      }
     }, [value])
 
     useEffect(() => {

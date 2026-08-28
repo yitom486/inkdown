@@ -7,6 +7,7 @@ import {
   replaceImageSrcInHtml,
 } from '@/lib/markdown-images'
 import { markdownParser } from '@/lib/markdown'
+import { reportRuntimeError } from '@/lib/error-reporter'
 import { isOk } from '@shared/result'
 
 const PREVIEW_SANITIZE_OPTIONS: Config = {
@@ -47,14 +48,22 @@ export function useMarkdownPreview(content: string, filePath?: string, delay = 3
 
     const timer = window.setTimeout(() => {
       void (async () => {
-        const env: { headingSlugCounts: Map<string, number> } = {
-          headingSlugCounts: new Map(),
-        }
-        const raw = markdownParser.render(content, env)
-        const withImages = await resolveLocalImagesInHtml(raw, filePath)
+        try {
+          const env: { headingSlugCounts: Map<string, number> } = {
+            headingSlugCounts: new Map(),
+          }
+          const raw = markdownParser.render(content, env)
+          const withImages = await resolveLocalImagesInHtml(raw, filePath)
 
-        if (!cancelled) {
-          setHtml(String(DOMPurify.sanitize(withImages, PREVIEW_SANITIZE_OPTIONS)))
+          if (!cancelled) {
+            setHtml(String(DOMPurify.sanitize(withImages, PREVIEW_SANITIZE_OPTIONS)))
+          }
+        } catch (error) {
+          console.error('[useMarkdownPreview]', error)
+          if (!cancelled) {
+            setHtml('')
+          }
+          reportRuntimeError(error, { source: 'preview', filePath })
         }
       })()
     }, delay)

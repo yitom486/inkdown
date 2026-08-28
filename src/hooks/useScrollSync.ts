@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react'
 import type { MarkdownEditorHandle } from '@/components/editor/MarkdownEditor'
 import type { PreviewPaneHandle } from '@/components/preview/PreviewPane'
 import type { MarkdownHeading } from '@/lib/markdown-headings'
-import { useEditorUiStore, type EditorViewMode } from '@/stores/editor-ui-store'
+import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
 
 const SYNC_LOCK_MS = 120
 
@@ -23,7 +23,7 @@ export function useScrollSync({
   previewRef,
 }: UseScrollSyncOptions) {
   const saveScrollState = useEditorUiStore((state) => state.saveScrollState)
-  const fileState = useEditorUiStore((state) => state.getFileState(filePath))
+  const fileState = useFileUiState(filePath)
   const syncingRef = useRef<'editor' | 'preview' | null>(null)
   const persistTimerRef = useRef<number | undefined>(undefined)
 

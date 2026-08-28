@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AboutDialog } from '@/components/shared/AboutDialog'
 import { DraftRecoveryDialog } from '@/components/shared/DraftRecoveryDialog'
+import { ErrorLogDialog } from '@/components/shared/ErrorLogDialog'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { EditorLayout } from '@/components/layout/EditorLayout'
@@ -13,6 +14,7 @@ import { useGlobalErrorHandlers } from '@/hooks/useGlobalErrorHandlers'
 import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
 import { pickLatestRecoverableDraft } from '@/lib/draft-utils'
 import { reportAppError, reportUnknownError } from '@/lib/report-error'
+import { appApi } from '@/api/app-api'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
@@ -20,6 +22,7 @@ import { useEditorUiStore } from '@/stores/editor-ui-store'
 function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [errorLogOpen, setErrorLogOpen] = useState(false)
   const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
   const autoSaveEnabled = useAppSettingsStore((state) => state.autoSaveEnabled)
@@ -61,7 +64,7 @@ function App() {
   const { exportHtml, exportPdf } = useExportDocument(content, filePath)
 
   useDraftPersistence({ filePath, content, savedContent, isDirty })
-  useGlobalErrorHandlers()
+  useGlobalErrorHandlers(filePath)
 
   const handleAutoSave = useCallback(async () => {
     if (!filePath || !isDirty || isFileBusy) return
@@ -164,6 +167,8 @@ function App() {
         onExportHtml={handleExportHtml}
         onExportPdf={handleExportPdf}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenErrorLog={() => setErrorLogOpen(true)}
+        onOpenDevTools={() => appApi.toggleDevTools()}
         onAbout={() => setAboutOpen(true)}
         onQuit={quitApp}
       />
@@ -175,7 +180,13 @@ function App() {
         platform={appMeta?.platform || ''}
       />
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onOpenErrorLog={() => setErrorLogOpen(true)}
+      />
+
+      <ErrorLogDialog open={errorLogOpen} onOpenChange={setErrorLogOpen} />
 
       <DraftRecoveryDialog
         open={recoveryDraftKey !== null}

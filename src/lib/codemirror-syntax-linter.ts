@@ -84,35 +84,40 @@ function isLeafErrorNode(ref: SyntaxNodeRef): boolean {
 }
 
 function collectDiagnostics(view: EditorView): Diagnostic[] {
-  const diagnostics: Diagnostic[] = []
-  const state = view.state
-  const doc = state.doc.toString()
+  try {
+    const diagnostics: Diagnostic[] = []
+    const state = view.state
+    const doc = state.doc.toString()
 
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (isLeafErrorNode(node)) {
-        diagnostics.push({
-          from: node.from,
-          to: Math.max(node.from + 1, node.to),
-          severity: 'error',
-          message: '语法错误（可能存在未闭合的括号或非法符号）',
-          source: 'syntax',
-        })
-        return
-      }
+    syntaxTree(state).iterate({
+      enter(node) {
+        if (isLeafErrorNode(node)) {
+          diagnostics.push({
+            from: node.from,
+            to: Math.max(node.from + 1, node.to),
+            severity: 'error',
+            message: '语法错误（可能存在未闭合的括号或非法符号）',
+            source: 'syntax',
+          })
+          return
+        }
 
-      if (node.name !== 'CodeText') return
+        if (node.name !== 'CodeText') return
 
-      const parent = node.node.parent
-      if (!parent || parent.name !== 'FencedCode') return
-      if (fencedCodeHasLanguage(state, parent.from, parent.to)) return
+        const parent = node.node.parent
+        if (!parent || parent.name !== 'FencedCode') return
+        if (fencedCodeHasLanguage(state, parent.from, parent.to)) return
 
-      const code = doc.slice(node.from, node.to)
-      diagnostics.push(...findUnbalancedBrackets(code, node.from))
-    },
-  })
+        const code = doc.slice(node.from, node.to)
+        diagnostics.push(...findUnbalancedBrackets(code, node.from))
+      },
+    })
 
-  return diagnostics
+    return diagnostics
+  } catch (error) {
+    console.error('[markdownSyntaxLinter]', error)
+    return []
+  }
 }
 
 /** 解析器语法错误 + 无语言标记代码块的括号检查 */

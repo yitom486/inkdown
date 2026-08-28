@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useShallow } from 'zustand/react/shallow'
 import type { AppTheme, EditorViewMode } from '@shared/editor-types'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 
@@ -97,3 +98,17 @@ export const useEditorUiStore = create<EditorUiStore>()(
     },
   ),
 )
+
+/** 读取单文件 UI 状态；须用 useShallow，避免 getFileState 每次返回新对象导致无限重渲染 */
+export function useFileUiState(filePath?: string): FileUiState {
+  const defaultViewMode = useAppSettingsStore((state) => state.defaultViewMode)
+
+  return useEditorUiStore(
+    useShallow((state) => {
+      const key = resolveFileKey(filePath)
+      const stored = state.fileStates[key]
+      if (stored) return stored
+      return { ...DEFAULT_FILE_STATE, viewMode: defaultViewMode }
+    }),
+  )
+}

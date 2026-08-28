@@ -1,4 +1,5 @@
 import {
+  Bug,
   FileCode2,
   FileText,
   FolderOpen,
@@ -39,6 +40,8 @@ interface TitleBarProps {
   onExportHtml: () => void
   onExportPdf: () => void
   onOpenSettings: () => void
+  onOpenErrorLog: () => void
+  onOpenDevTools: () => void
   onAbout: () => void
   onQuit: () => void
 }
@@ -55,6 +58,8 @@ export function TitleBar({
   onExportHtml,
   onExportPdf,
   onOpenSettings,
+  onOpenErrorLog,
+  onOpenDevTools,
   onAbout,
   onQuit,
 }: TitleBarProps) {
@@ -140,6 +145,16 @@ export function TitleBar({
             设置
             <DropdownMenuShortcut>Ctrl+,</DropdownMenuShortcut>
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenDevTools}>
+            <Bug className="size-4" />
+            开发者工具
+            <DropdownMenuShortcut>Ctrl+Shift+I</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenErrorLog}>
+            <FileText className="size-4" />
+            错误日志
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onAbout}>
             <HelpCircle className="size-4" />
             关于
