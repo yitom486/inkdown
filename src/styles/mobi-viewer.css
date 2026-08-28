@@ -1,20 +1,21 @@
-.mobi-chapter-content {
-  position: relative;
-  max-width: 48rem;
-  margin: 0 auto;
-  padding: 1.75rem 5%;
-  line-height: 1.85;
-  font-size: 18px;
+.mobi-viewer-host {
+  height: 100%;
+  overflow: hidden;
 }
 
-.mobi-chapter-content[data-theme='dark'] {
-  color: #d4d4d8;
+.mobi-viewer-host[data-theme='dark'] {
   background: #18181b;
 }
 
-.mobi-chapter-content[data-theme='light'] {
-  color: #3f3f46;
+.mobi-viewer-host[data-theme='light'] {
   background: #fafafa;
+}
+
+.mobi-viewer-host iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
 }
 
 .mobi-mark-highlight {
@@ -30,13 +31,13 @@
 
 .mobi-mark-note {
   position: absolute;
-  border-radius: 2px;
-  background: rgba(59, 130, 246, 0.12);
-  border-bottom: 1px dashed #2563eb;
-  pointer-events: none;
+  border-radius: 0;
+  background: transparent !important;
+  border-bottom: 2px dashed #d97706;
+  pointer-events: auto;
+  cursor: default;
 }
 
 .mobi-mark-note[data-theme='dark'] {
-  background: rgba(122, 162, 247, 0.18);
-  border-bottom-color: #7aa2f7;
+  border-bottom-color: #fbbf24;
 }
