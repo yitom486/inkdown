@@ -1,68 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
-import { readFile, writeFile } from 'fs/promises'
+import { app, BrowserWindow, ipcMain, Menu } from 'electron'
 import { basename, join } from 'path'
 import { IPC } from '@shared/ipc-channels'
+import { APP_TITLE } from '@shared/constants'
+import type { SaveFilePayload } from '@shared/file-types'
 import {
-  APP_TITLE,
-  DEFAULT_SAVE_FILENAME,
-  MARKDOWN_DIALOG_FILTERS,
-} from '@shared/constants'
-import type { OpenFileResult, OpenFolderResult, SaveFilePayload, SaveFileResult } from '@shared/file-types'
-import { scanWorkspace } from './workspace'
+  openFileDialog,
+  openFolderDialog,
+  readFileByPath,
+  saveFileDialog,
+} from './file-service'
 
 let mainWindow: BrowserWindow | null = null
-
-const markdownFilters = MARKDOWN_DIALOG_FILTERS
-
-async function openFileDialog(): Promise<OpenFileResult | null> {
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    title: '打开 Markdown 文件',
-    filters: markdownFilters,
-    properties: ['openFile'],
-  })
-
-  if (canceled || filePaths.length === 0) return null
-
-  const filePath = filePaths[0]!
-  const content = await readFile(filePath, 'utf-8')
-  return { filePath, content }
-}
-
-async function openFolderDialog(): Promise<OpenFolderResult | null> {
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    title: '打开文件夹',
-    properties: ['openDirectory'],
-  })
-
-  if (canceled || filePaths.length === 0) return null
-
-  const rootPath = filePaths[0]!
-  const tree = await scanWorkspace(rootPath)
-  return { rootPath, tree }
-}
-
-async function readFileByPath(filePath: string): Promise<OpenFileResult> {
-  const content = await readFile(filePath, 'utf-8')
-  return { filePath, content }
-}
-
-async function saveFileDialog(payload: SaveFilePayload): Promise<SaveFileResult | null> {
-  let filePath = payload.filePath
-
-  if (!filePath) {
-    const { canceled, filePath: selectedPath } = await dialog.showSaveDialog({
-      title: '保存 Markdown 文件',
-      filters: markdownFilters,
-      defaultPath: DEFAULT_SAVE_FILENAME,
-    })
-
-    if (canceled || !selectedPath) return null
-    filePath = selectedPath
-  }
-
-  await writeFile(filePath, payload.content, 'utf-8')
-  return { filePath }
-}
 
 function updateWindowTitle(filePath?: string, isDirty = false): void {
   if (!mainWindow) return
@@ -119,9 +67,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC.FILE_OPEN, () => openFileDialog())
   ipcMain.handle(IPC.FILE_OPEN_FOLDER, () => openFolderDialog())
   ipcMain.handle(IPC.FILE_READ, (_event, filePath: string) => readFileByPath(filePath))
-  ipcMain.handle(IPC.FILE_SAVE, (_event, payload: SaveFilePayload) =>
-    saveFileDialog(payload),
-  )
+  ipcMain.handle(IPC.FILE_SAVE, (_event, payload: SaveFilePayload) => saveFileDialog(payload))
   ipcMain.handle(IPC.FILE_SAVE_AS, (_event, payload: SaveFilePayload) =>
     saveFileDialog({ ...payload, filePath: undefined }),
   )

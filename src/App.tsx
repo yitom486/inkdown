@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { AboutDialog } from '@/components/shared/AboutDialog'
+import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { EditorLayout } from '@/components/layout/EditorLayout'
-import { useFileOperations } from '@/hooks/useFileOperations'
+import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
+import type { AppError } from '@shared/errors'
 
 function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
-  const [version, setVersion] = useState('')
-  const [platform, setPlatform] = useState('')
+  const [lastError, setLastError] = useState<AppError | null>(null)
+  const { data: appMeta } = useAppMeta()
 
   const {
     content,
@@ -21,15 +23,13 @@ function App() {
     saveFile,
     saveFileAs,
     quitApp,
-  } = useFileOperations()
+  } = useFileOperations((error) => setLastError(error))
 
   useEffect(() => {
-    const api = window.electronAPI
-    if (!api) return
-
-    setPlatform(api.platform)
-    api.getVersion().then(setVersion)
-  }, [])
+    if (appMeta?.error) {
+      setLastError(appMeta.error)
+    }
+  }, [appMeta?.error])
 
   if (!window.electronAPI) {
     const isElectron = navigator.userAgent.includes('Electron')
@@ -46,6 +46,7 @@ function App() {
 
   return (
     <>
+      <ErrorBanner error={lastError} onDismiss={() => setLastError(null)} />
       <EditorLayout
         filePath={filePath}
         isDirty={isDirty}
@@ -65,8 +66,8 @@ function App() {
       <AboutDialog
         open={aboutOpen}
         onOpenChange={setAboutOpen}
-        version={version || '…'}
-        platform={platform}
+        version={appMeta?.version || '…'}
+        platform={appMeta?.platform || ''}
       />
     </>
   )

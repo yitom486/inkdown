@@ -26,7 +26,11 @@
 | 样式 | **Tailwind CSS** | 与 shadcn/ui 配套 |
 | 图标 | **lucide-react** | shadcn 默认图标库 |
 | Markdown 解析 | **markdown-it** | 预览渲染（后续引入） |
-| 编辑器 | **CodeMirror 6** | Markdown 语法高亮（后续引入） |
+| 编辑器 | **CodeMirror 6** | Markdown 语法高亮 |
+| 服务端状态 | **TanStack Query v5** | IPC / 后端数据：mutations + query cache |
+| 客户端 UI 状态 | **Zustand** | 视图模式、滚动进度、侧栏折叠等本地持久化 |
+| 布局 | **react-resizable-panels** | 可拖拽分屏（经 shadcn Resizable 封装） |
+| 测试 | **Vitest** | 单元测试（`src/**/*.test.ts`） |
 | 打包发布 | **electron-builder** | 生成 Windows `.exe` 安装包 |
 
 ## Bun 使用准则
@@ -47,7 +51,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "pack": "bun run build && electron-builder",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json"
   }
 }
 ```
@@ -59,27 +64,43 @@ start/
 ├── AGENTS.md                 # 本文件：项目准则
 ├── package.json
 ├── bun.lock
+├── vitest.config.ts          # Vitest 配置
 ├── electron.vite.config.ts   # electron-vite 配置
 ├── electron-builder.yml      # 打包配置
 ├── tsconfig.json
 ├── components.json           # shadcn/ui 配置
-├── tailwind.config.ts
+├── shared/                   # 跨进程共享契约
+│   ├── ipc-channels.ts       # IPC 通道名
+│   ├── file-types.ts         # 数据传输类型（DTO）
+│   ├── constants.ts          # 跨进程常量
+│   ├── errors.ts             # AppError 错误码与工具
+│   ├── result.ts             # Result<T, E> 类型与 ok/err
+│   └── electron-api.types.ts # preload 暴露的 API 类型
 ├── electron/
-│   ├── main.ts               # 主进程：窗口、菜单、文件 IO
-│   └── preload.ts            # contextBridge 暴露安全 API
-├── src/                      # 渲染进程（React 应用）
+│   ├── main.ts               # 窗口、生命周期、IPC 注册
+│   ├── preload.ts            # contextBridge 桥接
+│   ├── file-service.ts       # 文件 dialog + fs（返回 Result）
+│   └── workspace.ts          # 工作区目录扫描
+├── src/
 │   ├── index.html
-│   ├── main.tsx              # React 入口
+│   ├── main.tsx              # React 入口（含 QueryProvider）
 │   ├── App.tsx
+│   ├── api/                  # 渲染进程 API 层（封装 IPC，返回 Result）
+│   │   ├── file-api.ts
+│   │   └── query-keys.ts
+│   ├── providers/
+│   │   └── QueryProvider.tsx
+│   ├── stores/               # Zustand 本地 UI 状态
 │   ├── components/
-│   │   ├── ui/               # shadcn/ui 生成组件（勿手改结构）
-│   │   └── ...               # 业务组件
-│   ├── hooks/                # 自定义 Hooks
+│   │   ├── ui/               # shadcn/ui 原子组件
+│   │   ├── editor/
+│   │   ├── preview/
+│   │   ├── layout/
+│   │   └── shared/           # ErrorBanner、AboutDialog 等
+│   ├── hooks/
 │   ├── lib/
-│   │   └── utils.ts          # cn() 等 shadcn 工具函数
 │   └── styles/
-│       └── globals.css       # Tailwind 指令 + 全局样式
-└── resources/                # 应用图标等静态资源
+└── resources/
 ```
 
 ## Electron 架构准则
@@ -103,13 +124,66 @@ webPreferences: {
 ```
 
 - 渲染进程不得 `require('fs')` 或使用 `@electron/remote`
-- 所有文件操作经 IPC：renderer → preload → main
+- 所有文件操作经 IPC：renderer → `src/api/` → preload → main
 - IPC channel 命名：`模块:动作`（如 `file:open`、`file:save`）
+- **有返回值的 IPC 统一返回 `Result<T, AppError>`**，禁止用 `null` 表示失败（用户取消用 `CANCELLED` 错误码）
+
+### IPC 与 Result 约定
+
+新增跨进程能力时，按以下顺序改动：
+
+```
+shared/errors.ts + shared/result.ts   → 错误码与 Result 类型
+shared/file-types.ts                  → DTO（纯数据，不含 Result 包装）
+electron/file-service.ts              → 业务实现，返回 Result
+electron/main.ts                      → ipcMain.handle 注册
+shared/electron-api.types.ts          → ElectronAPI 接口
+electron/preload.ts                   → contextBridge 暴露
+src/api/*.ts                          → 渲染端 API 封装
+src/hooks/                            → useMutation / useQuery 消费
+```
+
+```typescript
+// 主进程 / API 层标准形态
+async function readFileByPath(path: string): Promise<Result<OpenFileResult, AppError>> {
+  try {
+    const content = await readFile(path, 'utf-8')
+    return ok({ filePath: path, content })
+  } catch (error) {
+    return err(toAppError(error, '读取文件失败'))
+  }
+}
+
+// 渲染进程消费
+const result = await fileApi.readFile(path)
+if (!isOk(result)) {
+  if (!isCancelled(result.error)) reportError(result.error)
+  return
+}
+loadFile(result.value)
+```
+
+- `CANCELLED`：用户关闭对话框，**不弹错误提示**
+- 其他错误码：通过 `ErrorBanner` 或后续 Sonner 提示用户
+- 主进程非预期异常：记录 `console.error` 并返回 `err(...)`
+
+## 状态管理准则
+
+| 状态类型 | 工具 | 示例 |
+|----------|------|------|
+| IPC / 后端数据 | **TanStack Query** | 工作区树、应用版本；文件操作用 `useMutation` |
+| 本地 UI 偏好 | **Zustand + persist** | 视图模式、滚动进度、目录折叠 |
+| 编辑器即时内容 | **useState** | 当前文档 content、dirty 标记 |
+
+- 渲染进程 **禁止** 在组件/hook 中直接调用 `window.electronAPI` 的文件方法；统一走 `src/api/file-api.ts`
+- 例外：`updateTitle`、`quit` 等 fire-and-forget 操作可在 hook 内直连 preload API
+- Query Key 集中定义在 `src/api/query-keys.ts`
+- 工作区等「仅用户操作触发、无自动 refetch」的数据：mutation 成功后 `setQueryData`
 
 ## React 准则
 
 - 仅使用函数组件，禁止 class 组件
-- 状态优先用 `useState` / `useReducer`；跨组件共享用 Context 或后续引入的状态库
+- 跨组件共享：Query cache（服务端态）、Zustand（UI 态）、必要时 Context
 - 副作用集中在 `useEffect`，注意 Electron 环境下的清理
 - 组件文件命名：`PascalCase.tsx`（如 `EditorPane.tsx`）
 - Hook 文件命名：`use*.ts`（如 `useFileOperations.ts`）
@@ -168,9 +242,9 @@ src/components/
 ## 代码风格
 
 - TypeScript 严格模式，`noImplicitAny: true`
-- 路径别名：`@/` → `src/`（与 shadcn 默认一致）
-- 优先 `async/await`，IPC 调用返回 Promise
-- 错误处理：主进程记录日志；渲染进程用 toast（shadcn Sonner）提示用户
+- 路径别名：`@/` → `src/`，`@shared/` → `shared/`（与 shadcn 默认一致）
+- 优先 `async/await`，IPC 调用返回 `Promise<Result<T, AppError>>`
+- 错误处理：主进程 `try/catch` → `Result`；渲染进程 `isOk()` 分支 + `ErrorBanner`（后续可换 Sonner）
 - 注释仅解释非显而易见的业务逻辑，避免赘述
 
 ## Git 提交规范
@@ -202,8 +276,8 @@ chore: 使用 bun 初始化项目依赖
 | 0 | Bun + electron-vite + React + shadcn 脚手架 | `bun run dev` 打开空白 Electron 窗口 |
 | 1 | IPC 基础 + 应用菜单 | 菜单可触发 about 对话框 |
 | 2 | 文件打开 / 保存 | 可读写 `.md` 文件 |
-| 3 | CodeMirror 编辑 + markdown-it 预览 | 分屏实时预览 |
-| 4 | 快捷键、主题、未保存提示 | 完整编辑体验 |
+| 3 | CodeMirror 编辑 + markdown-it 预览 | 分屏实时预览、KaTeX/Mermaid |
+| 4 | 快捷键、主题、未保存提示、Result + Query | 完整编辑体验与服务端状态管理 |
 | 5 | electron-builder 打包 | 生成可安装 `.exe` |
 
 ## 参考命令速查
@@ -218,6 +292,8 @@ bunx shadcn@latest init
 # 日常开发
 bun run dev
 bun run build
+bun run test
+bun run typecheck
 bun run pack
 
 # 添加 shadcn 组件

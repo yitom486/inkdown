@@ -1,20 +1,40 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { FileTreeNode } from '@shared/file-types'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { appApi, fileApi } from '@/api/file-api'
+import { queryKeys } from '@/api/query-keys'
+import { isCancelled, type AppError } from '@shared/errors'
+import type { FileTreeNode, OpenFolderResult } from '@shared/file-types'
+import { isOk } from '@shared/result'
 
 function getFileName(filePath?: string): string {
   if (!filePath) return '未命名'
   return filePath.split(/[/\\]/).pop() ?? filePath
 }
 
-export function useFileOperations() {
+export function useFileOperations(onError?: (error: AppError) => void) {
+  const queryClient = useQueryClient()
   const [content, setContent] = useState('')
   const [filePath, setFilePath] = useState<string>()
   const [savedContent, setSavedContent] = useState('')
-  const [workspaceRoot, setWorkspaceRoot] = useState<string>()
-  const [fileTree, setFileTree] = useState<FileTreeNode[]>([])
 
   const isDirty = content !== savedContent
   const fileName = getFileName(filePath)
+
+  const { data: workspace = null } = useQuery<OpenFolderResult | null>({
+    queryKey: queryKeys.workspace,
+    queryFn: async () => null,
+    enabled: false,
+    initialData: null,
+  })
+
+  const reportError = useCallback(
+    (error: AppError) => {
+      if (!isCancelled(error)) {
+        onError?.(error)
+      }
+    },
+    [onError],
+  )
 
   const syncTitle = useCallback((path?: string, dirty = false) => {
     window.electronAPI?.updateTitle({ filePath: path, isDirty: dirty })
@@ -30,48 +50,79 @@ export function useFileOperations() {
     [syncTitle],
   )
 
-  const openFile = useCallback(async () => {
-    const result = await window.electronAPI?.openFile()
-    if (!result) return
-    loadFile(result)
-  }, [loadFile])
-
-  const openFolder = useCallback(async () => {
-    const result = await window.electronAPI?.openFolder()
-    if (!result) return
-    setWorkspaceRoot(result.rootPath)
-    setFileTree(result.tree)
-  }, [])
-
-  const openFileFromTree = useCallback(
-    async (path: string) => {
-      const result = await window.electronAPI?.readFile(path)
-      if (!result) return
-      loadFile(result)
+  const openFileMutation = useMutation({
+    mutationFn: () => fileApi.openFile(),
+    onSuccess: (result) => {
+      if (!isOk(result)) {
+        reportError(result.error)
+        return
+      }
+      loadFile(result.value)
     },
-    [loadFile],
+  })
+
+  const openFolderMutation = useMutation({
+    mutationFn: () => fileApi.openFolder(),
+    onSuccess: (result) => {
+      if (!isOk(result)) {
+        reportError(result.error)
+        return
+      }
+      queryClient.setQueryData(queryKeys.workspace, result.value)
+    },
+  })
+
+  const readFileMutation = useMutation({
+    mutationFn: (path: string) => fileApi.readFile(path),
+    onSuccess: (result) => {
+      if (!isOk(result)) {
+        reportError(result.error)
+        return
+      }
+      loadFile(result.value)
+    },
+  })
+
+  const saveFileMutation = useMutation({
+    mutationFn: (payload: { filePath?: string; content: string }) => fileApi.saveFile(payload),
+    onSuccess: (result, variables) => {
+      if (!isOk(result)) {
+        reportError(result.error)
+        return
+      }
+      setFilePath(result.value.filePath)
+      setSavedContent(variables.content)
+      syncTitle(result.value.filePath, false)
+    },
+  })
+
+  const saveFileAsMutation = useMutation({
+    mutationFn: (payload: { content: string }) => fileApi.saveFileAs(payload),
+    onSuccess: (result, variables) => {
+      if (!isOk(result)) {
+        reportError(result.error)
+        return
+      }
+      setFilePath(result.value.filePath)
+      setSavedContent(variables.content)
+      syncTitle(result.value.filePath, false)
+    },
+  })
+
+  const openFile = useCallback(() => openFileMutation.mutateAsync(), [openFileMutation])
+  const openFolder = useCallback(() => openFolderMutation.mutateAsync(), [openFolderMutation])
+  const openFileFromTree = useCallback(
+    (path: string) => readFileMutation.mutateAsync(path),
+    [readFileMutation],
   )
-
-  const saveFile = useCallback(async () => {
-    const result = await window.electronAPI?.saveFile({
-      filePath,
-      content,
-    })
-    if (!result) return
-
-    setFilePath(result.filePath)
-    setSavedContent(content)
-    syncTitle(result.filePath, false)
-  }, [content, filePath, syncTitle])
-
-  const saveFileAs = useCallback(async () => {
-    const result = await window.electronAPI?.saveFileAs({ content })
-    if (!result) return
-
-    setFilePath(result.filePath)
-    setSavedContent(content)
-    syncTitle(result.filePath, false)
-  }, [content, syncTitle])
+  const saveFile = useCallback(
+    () => saveFileMutation.mutateAsync({ filePath, content }),
+    [content, filePath, saveFileMutation],
+  )
+  const saveFileAs = useCallback(
+    () => saveFileAsMutation.mutateAsync({ content }),
+    [content, saveFileAsMutation],
+  )
 
   const quitApp = useCallback(() => {
     window.electronAPI?.quit()
@@ -111,8 +162,14 @@ export function useFileOperations() {
     filePath,
     fileName,
     isDirty,
-    workspaceRoot,
-    fileTree,
+    workspaceRoot: workspace?.rootPath,
+    fileTree: workspace?.tree ?? ([] as FileTreeNode[]),
+    isFileBusy:
+      openFileMutation.isPending ||
+      openFolderMutation.isPending ||
+      readFileMutation.isPending ||
+      saveFileMutation.isPending ||
+      saveFileAsMutation.isPending,
     openFile,
     openFolder,
     openFileFromTree,
@@ -120,6 +177,27 @@ export function useFileOperations() {
     saveFileAs,
     quitApp,
   }
+}
+
+export function useAppMeta() {
+  return useQuery({
+    queryKey: queryKeys.appMeta,
+    queryFn: async () => {
+      const platformResult = appApi.getPlatform()
+      const versionResult = await appApi.getVersion()
+
+      return {
+        platform: isOk(platformResult) ? platformResult.value : '',
+        version: isOk(versionResult) ? versionResult.value : '',
+        error: !isOk(platformResult)
+          ? platformResult.error
+          : !isOk(versionResult)
+            ? versionResult.error
+            : null,
+      }
+    },
+    staleTime: Infinity,
+  })
 }
 
 export type { FileTreeNode }
