@@ -1,5 +1,6 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { getReadingMarkKindLabel, getReadingMarkLabel } from './epub-reading-marks'
+import { getEpubAnnotationType, getReadingMarkKindLabel, getReadingMarkLabel, isPointInMarkGroup } from './epub-reading-marks'
 import type { ReadingMark } from '@shared/types/reading-mark'
 
 const baseMark: ReadingMark = {
@@ -23,6 +24,22 @@ describe('getReadingMarkLabel', () => {
 
   it('fallback 到类型名', () => {
     expect(getReadingMarkLabel({ ...baseMark, kind: 'bookmark', excerpt: undefined })).toBe('书签')
+  })
+})
+
+describe('isPointInMarkGroup', () => {
+  it('检测点是否落在标注区域内', () => {
+    const group = document.createElement('g')
+    group.getClientRects = () => [new DOMRect(10, 10, 40, 12)] as unknown as DOMRectList
+    expect(isPointInMarkGroup(group, 20, 16)).toBe(true)
+    expect(isPointInMarkGroup(group, 100, 100)).toBe(false)
+  })
+})
+
+describe('getEpubAnnotationType', () => {
+  it('批注使用 underline，高亮使用 highlight', () => {
+    expect(getEpubAnnotationType({ ...baseMark, kind: 'note' })).toBe('underline')
+    expect(getEpubAnnotationType({ ...baseMark, kind: 'highlight' })).toBe('highlight')
   })
 })
 

@@ -2,7 +2,12 @@ import type { ReadingMark } from '@shared/types/reading-mark'
 
 const MARK_STYLE_ID = 'reader-mark-styles'
 
-/** 注入 EPUB iframe：高亮底色 + 批注虚线下划线 */
+export interface EpubMarkHoverHandlers {
+  onEnter: (mark: ReadingMark, anchor: DOMRect) => void
+  onLeave: () => void
+}
+
+/** 注入 EPUB iframe 内联样式（补充 marks-pane SVG 无法覆盖的场景） */
 export function injectReadingMarkStyles(doc: Document, theme: 'dark' | 'light'): void {
   if (doc.getElementById(MARK_STYLE_ID)) return
 
@@ -12,12 +17,6 @@ export function injectReadingMarkStyles(doc: Document, theme: 'dark' | 'light'):
     .reader-mark-highlight {
       background: ${theme === 'dark' ? 'rgba(122, 162, 247, 0.28)' : 'rgba(59, 130, 246, 0.22)'} !important;
       border-radius: 2px;
-    }
-    .reader-mark-note {
-      background: ${theme === 'dark' ? 'rgba(122, 162, 247, 0.18)' : 'rgba(59, 130, 246, 0.12)'} !important;
-      border-bottom: 1px dashed ${theme === 'dark' ? '#7aa2f7' : '#2563eb'} !important;
-      border-radius: 2px;
-      padding-bottom: 1px;
     }
   `
   doc.head.appendChild(style)
@@ -50,6 +49,18 @@ export function getReadingMarkKindLabel(kind: ReadingMark['kind']): string {
   }
 }
 
+export function getEpubAnnotationType(mark: ReadingMark): 'highlight' | 'underline' {
+  return mark.kind === 'note' ? 'underline' : 'highlight'
+}
+
+function getHighlightFill(theme: 'dark' | 'light'): string {
+  return theme === 'dark' ? 'rgba(122, 162, 247, 0.28)' : 'rgba(59, 130, 246, 0.22)'
+}
+
+function getNoteStroke(theme: 'dark' | 'light'): string {
+  return theme === 'dark' ? '#fbbf24' : '#d97706'
+}
+
 export interface EpubRenditionMarks {
   annotations: {
     add: (
@@ -59,20 +70,87 @@ export interface EpubRenditionMarks {
       cb?: (event: MouseEvent) => void,
       className?: string,
       styles?: Record<string, string>,
-    ) => void
+    ) => unknown
     remove: (cfiRange: string, type: string) => void
   }
+}
+
+function removeEpubMarkBothTypes(rendition: EpubRenditionMarks, cfiRange: string): void {
+  for (const type of ['highlight', 'underline'] as const) {
+    try {
+      rendition.annotations.remove(cfiRange, type)
+    } catch {
+      // rendition 已销毁或标注不存在
+    }
+  }
+}
+
+export function isPointInMarkGroup(group: Element, clientX: number, clientY: number): boolean {
+  for (const rect of group.getClientRects()) {
+    if (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+export function findEpubNoteMarkAtPoint(
+  host: HTMLElement,
+  clientX: number,
+  clientY: number,
+): { element: Element; markId: string } | null {
+  const groups = host.querySelectorAll<HTMLElement>('svg g.reader-mark-note[data-id]')
+  for (const group of groups) {
+    const markId = group.dataset.id
+    if (!markId) continue
+    if (isPointInMarkGroup(group, clientX, clientY)) {
+      return { element: group, markId }
+    }
+  }
+  return null
 }
 
 export function applyEpubMarkToRendition(
   rendition: EpubRenditionMarks,
   mark: ReadingMark,
+  theme: 'dark' | 'light',
 ): void {
   const cfiRange = getEpubMarkCfiRange(mark)
   if (!cfiRange || mark.kind === 'bookmark') return
 
+  removeEpubMarkBothTypes(rendition, cfiRange)
+
+  const type = getEpubAnnotationType(mark)
   const className = mark.kind === 'note' ? 'reader-mark-note' : 'reader-mark-highlight'
-  rendition.annotations.add('highlight', cfiRange, { id: mark.id }, () => undefined, className, {})
+  const styles: Record<string, string> =
+    type === 'underline'
+      ? {
+          stroke: getNoteStroke(theme),
+          'stroke-opacity': '1',
+          fill: 'none',
+        }
+      : {
+          fill: getHighlightFill(theme),
+          'fill-opacity': '1',
+        }
+
+  rendition.annotations.add(
+    type,
+    cfiRange,
+    {
+      id: mark.id,
+      note: mark.note ?? '',
+      excerpt: mark.excerpt ?? '',
+    },
+    undefined,
+    className,
+    styles,
+  )
 }
 
 export function removeEpubMarkFromRendition(
@@ -81,20 +159,31 @@ export function removeEpubMarkFromRendition(
 ): void {
   const cfiRange = getEpubMarkCfiRange(mark)
   if (!cfiRange) return
-  try {
-    rendition.annotations.remove(cfiRange, 'highlight')
-  } catch {
-    // rendition 已销毁
-  }
+  removeEpubMarkBothTypes(rendition, cfiRange)
 }
 
 export function applyAllEpubMarksToRendition(
   rendition: EpubRenditionMarks,
   marks: ReadingMark[],
+  theme: 'dark' | 'light',
 ): void {
   for (const mark of marks) {
     if (mark.anchor.format === 'epub') {
-      applyEpubMarkToRendition(rendition, mark)
+      applyEpubMarkToRendition(rendition, mark, theme)
     }
   }
+}
+
+/** 先清除再重绘，避免 highlight/underline 叠加或旧类型残留 */
+export function replaceAllEpubMarksOnRendition(
+  rendition: EpubRenditionMarks,
+  marks: ReadingMark[],
+  theme: 'dark' | 'light',
+): void {
+  for (const mark of marks) {
+    if (mark.anchor.format !== 'epub') continue
+    const cfiRange = getEpubMarkCfiRange(mark)
+    if (cfiRange) removeEpubMarkBothTypes(rendition, cfiRange)
+  }
+  applyAllEpubMarksToRendition(rendition, marks, theme)
 }

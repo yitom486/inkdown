@@ -3,6 +3,7 @@ import ePub from 'epubjs'
 import type Book from 'epubjs/types/book'
 import { Loader2 } from 'lucide-react'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
+import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
@@ -24,10 +25,12 @@ import {
 } from '@/lib/epub-locations-cache'
 import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/epub-themes'
 import {
-  applyAllEpubMarksToRendition,
   applyEpubMarkToRendition,
+  findEpubNoteMarkAtPoint,
   injectReadingMarkStyles,
   removeEpubMarkFromRendition,
+  replaceAllEpubMarksOnRendition,
+  type EpubMarkHoverHandlers,
 } from '@/lib/epub-reading-marks'
 import { copyTextToClipboard, readEpubSelection, type EpubSelectionSnapshot } from '@/lib/epub-selection'
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
@@ -95,13 +98,19 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     null,
   )
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
+  const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
   const scrollCleanupRef = useRef<(() => void) | null>(null)
   const selectionCleanupRef = useRef<(() => void) | null>(null)
+  const markHoverCleanupRef = useRef<(() => void) | null>(null)
+  const marksRef = useRef<ReadingMark[]>([])
+  const hoveredMarkIdRef = useRef<string | null>(null)
   const reportLocationTimerRef = useRef<number | null>(null)
   const saveProgressTimerRef = useRef<number | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, deleteMark } = useReadingMarks(filePath)
+  marksRef.current = marks
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
@@ -174,11 +183,27 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     [],
   )
 
+  const markHoverHandlers = useCallback((): EpubMarkHoverHandlers => {
+    return {
+      onEnter: (mark, anchor) => {
+        setHoveredMark(mark)
+        setMarkTooltipPos({
+          x: anchor.left + anchor.width / 2,
+          y: anchor.top,
+        })
+      },
+      onLeave: () => {
+        setHoveredMark(null)
+        setMarkTooltipPos(null)
+      },
+    }
+  }, [])
+
   const syncVisualMarks = useCallback(() => {
     const rendition = renditionRef.current
     if (!rendition) return
-    applyAllEpubMarksToRendition(rendition, marks)
-  }, [marks])
+    replaceAllEpubMarksOnRendition(rendition, marksRef.current, theme)
+  }, [theme])
 
   const addBookmarkAtCurrent = useCallback(async () => {
     const rendition = renditionRef.current
@@ -227,14 +252,14 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       })
 
       if (isOk(result) && renditionRef.current) {
-        applyEpubMarkToRendition(renditionRef.current, result.value)
+        applyEpubMarkToRendition(renditionRef.current, result.value, theme)
         toast.success(note ? '已保存批注' : '已添加高亮')
       }
 
       setSelectionSnapshot(null)
       setSelectionToolbarPos(null)
     },
-    [chapterNav, createMark, fileFingerprint, filePath, selectionSnapshot],
+    [chapterNav, createMark, fileFingerprint, filePath, selectionSnapshot, theme],
   )
 
   const handleSelectMark = useCallback((mark: ReadingMark) => {
@@ -264,6 +289,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const bindScrollReporting = useCallback(
     (rendition: NonNullable<typeof renditionRef.current>) => {
       scrollCleanupRef.current?.()
+      markHoverCleanupRef.current?.()
 
       const handler = (contents: { document: Document; window: Window; cfiFromRange?: (range: Range) => string }) => {
         injectReadingMarkStyles(contents.document, theme)
@@ -273,6 +299,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         })
         scrollCleanupRef.current?.()
         selectionCleanupRef.current?.()
+        markHoverCleanupRef.current?.()
 
         const onScroll = () => {
           scheduleReportLocation(rendition)
@@ -309,11 +336,57 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         selectionCleanupRef.current = () => {
           contents.document.removeEventListener('mouseup', onMouseUp)
         }
+
+        let hoverRaf = 0
+        const onMouseMove = (event: MouseEvent) => {
+          if (hoverRaf !== 0) return
+          hoverRaf = window.requestAnimationFrame(() => {
+            hoverRaf = 0
+            const host = containerRef.current
+            if (!host) return
+
+            const frame = contents.window.frameElement as HTMLElement | null
+            const frameRect = frame?.getBoundingClientRect()
+            const clientX = (frameRect?.left ?? 0) + event.clientX
+            const clientY = (frameRect?.top ?? 0) + event.clientY
+
+            const hit = findEpubNoteMarkAtPoint(host, clientX, clientY)
+            if (!hit) {
+              if (hoveredMarkIdRef.current !== null) {
+                hoveredMarkIdRef.current = null
+                markHoverHandlers().onLeave()
+              }
+              return
+            }
+
+            if (hoveredMarkIdRef.current === hit.markId) return
+
+            const mark = marksRef.current.find((item) => item.id === hit.markId)
+            if (!mark?.note?.trim()) return
+
+            hoveredMarkIdRef.current = hit.markId
+            markHoverHandlers().onEnter(mark, hit.element.getBoundingClientRect())
+          })
+        }
+
+        contents.document.addEventListener('mousemove', onMouseMove, { passive: true })
+        contents.document.addEventListener('mouseleave', () => {
+          hoveredMarkIdRef.current = null
+          markHoverHandlers().onLeave()
+        })
+
+        markHoverCleanupRef.current = () => {
+          contents.document.removeEventListener('mousemove', onMouseMove)
+          if (hoverRaf !== 0) {
+            window.cancelAnimationFrame(hoverRaf)
+            hoverRaf = 0
+          }
+        }
       }
 
       rendition.hooks.content.register(handler)
     },
-    [scheduleReportLocation, theme],
+    [markHoverHandlers, scheduleReportLocation, theme],
   )
 
   useEffect(() => {
@@ -367,6 +440,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     const onRendered = () => {
       requestAnimationFrame(() => {
         applyReadingLayout(rendition)
+        syncVisualMarks()
         requestAnimationFrame(() => {
           applyReadingLayout(rendition)
         })
@@ -535,6 +609,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           'epub-viewer-host relative h-full min-h-0 overflow-hidden',
           theme === 'dark' ? 'bg-[#18181b]' : 'bg-[#fafafa]',
         )}
+        data-theme={theme}
       >
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -598,6 +673,10 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         onPrevious={() => goToChapter(chapterNav.previous)}
         onNext={() => goToChapter(chapterNav.next)}
       />
+
+      {markTooltipPos && hoveredMark ? (
+        <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
+      ) : null}
 
       {selectionToolbarPos && selectionSnapshot ? (
         <SelectionToolbar
