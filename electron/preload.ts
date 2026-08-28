@@ -28,6 +28,21 @@ const electronAPI: ElectronAPI = {
   openFile: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN, options),
   openFolder: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN_FOLDER, options),
   scanWorkspace: (rootPath: string) => ipcRenderer.invoke(IPC.FILE_SCAN_WORKSPACE, rootPath),
+  watchWorkspace: (rootPath: string) => {
+    ipcRenderer.send(IPC.WORKSPACE_WATCH, rootPath)
+  },
+  unwatchWorkspace: () => {
+    ipcRenderer.send(IPC.WORKSPACE_UNWATCH)
+  },
+  onWorkspaceChanged: (callback: (payload: { rootPath: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { rootPath: string }) => {
+      callback(payload)
+    }
+    ipcRenderer.on(IPC.WORKSPACE_CHANGED, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.WORKSPACE_CHANGED, handler)
+    }
+  },
   readFile: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ, filePath),
   readBinaryFile: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ_BINARY, filePath),
   readImage: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ_IMAGE, filePath),

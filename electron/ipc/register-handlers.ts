@@ -36,6 +36,7 @@ import {
   updateReadingMark,
 } from '../services/reading-marks-service'
 import { getWindowSessionByWebContents } from '../window/window-session'
+import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
 
 /** 集中注册 IPC；文件/书签等耗时操作均为 async，不阻塞主进程事件循环 */
 export function registerIpcHandlers(): void {
@@ -61,6 +62,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.FILE_SCAN_WORKSPACE, (_event, rootPath: string) =>
     scanWorkspaceFolder(rootPath),
   )
+
+  ipcMain.on(IPC.WORKSPACE_WATCH, (event, rootPath: string) => {
+    if (typeof rootPath !== 'string' || rootPath.length === 0) return
+    setWorkspaceWatch(event.sender, rootPath)
+  })
+
+  ipcMain.on(IPC.WORKSPACE_UNWATCH, (event) => {
+    stopWorkspaceWatch(event.sender.id)
+  })
   ipcMain.handle(IPC.FILE_READ, (_event, filePath: string) => readFileByPath(filePath))
   ipcMain.handle(IPC.FILE_READ_BINARY, (_event, filePath: string) =>
     readBinaryFileByPath(filePath),

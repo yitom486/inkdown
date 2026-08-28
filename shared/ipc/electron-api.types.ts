@@ -32,6 +32,9 @@ export interface ElectronAPI {
   openFile: (options?: OpenDialogOptions) => Promise<Result<OpenDocumentResult, AppError>>
   openFolder: (options?: OpenDialogOptions) => Promise<Result<OpenFolderResult, AppError>>
   scanWorkspace: (rootPath: string) => Promise<Result<OpenFolderResult, AppError>>
+  watchWorkspace: (rootPath: string) => void
+  unwatchWorkspace: () => void
+  onWorkspaceChanged: (callback: (payload: { rootPath: string }) => void) => () => void
   readFile: (filePath: string) => Promise<Result<OpenFileResult, AppError>>
   readBinaryFile: (filePath: string) => Promise<Result<ReadBinaryResult, AppError>>
   readImage: (filePath: string) => Promise<Result<ReadImageResult, AppError>>

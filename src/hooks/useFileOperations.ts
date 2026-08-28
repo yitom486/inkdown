@@ -336,6 +336,26 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     void restoreWorkspaceOnStartup()
   }, [restoreWorkspaceOnStartup])
 
+  const rescanWorkspaceRef = useRef(rescanWorkspaceMutation.mutateAsync)
+  rescanWorkspaceRef.current = rescanWorkspaceMutation.mutateAsync
+
+  useEffect(() => {
+    const rootPath = workspace?.rootPath
+    const api = window.electronAPI
+    if (!rootPath || !api?.watchWorkspace || !api.onWorkspaceChanged) return
+
+    api.watchWorkspace(rootPath)
+    const unsubscribe = api.onWorkspaceChanged((payload) => {
+      if (payload.rootPath !== rootPath) return
+      void rescanWorkspaceRef.current(rootPath)
+    })
+
+    return () => {
+      unsubscribe()
+      api.unwatchWorkspace?.()
+    }
+  }, [workspace?.rootPath])
+
   useEffect(() => {
     syncTitle(filePath, isDirty)
   }, [filePath, isDirty, syncTitle])
