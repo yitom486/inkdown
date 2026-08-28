@@ -1,11 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC } from '@shared/ipc-channels'
-import type { ExportDocumentPayload, OpenDialogOptions, SaveFilePayload, SavePastedImagePayload } from '@shared/file-types'
-import type { RendererErrorPayload } from '@shared/error-log-types'
-import type { ElectronAPI } from '@shared/electron-api.types'
+import { IPC } from '@shared/ipc/channels'
+import type { ExportDocumentPayload, OpenDialogOptions, SaveFilePayload, SavePastedImagePayload } from '@shared/types/file'
+import type { RendererErrorPayload } from '@shared/types/error-log'
+import type { WindowInit } from '@shared/types/window'
+import type { ElectronAPI } from '@shared/ipc/electron-api.types'
+
+const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
+const isFreshWindow = windowInit?.isFreshWindow ?? false
 
 const electronAPI: ElectronAPI = {
   platform: process.platform,
+  isFreshWindow,
   getVersion: () => ipcRenderer.invoke(IPC.APP_GET_VERSION),
   setDirty: (isDirty: boolean) => {
     ipcRenderer.send(IPC.APP_SET_DIRTY, isDirty)
@@ -39,6 +44,9 @@ const electronAPI: ElectronAPI = {
   quit: () => {
     ipcRenderer.send(IPC.APP_QUIT)
   },
+  newWindow: () => {
+    ipcRenderer.send(IPC.APP_NEW_WINDOW)
+  },
   toggleDevTools: () => {
     ipcRenderer.send(IPC.APP_TOGGLE_DEVTOOLS)
   },
@@ -48,6 +56,10 @@ const electronAPI: ElectronAPI = {
   setVerboseLogs: (enabled: boolean) => {
     ipcRenderer.send(IPC.APP_SET_VERBOSE_LOGS, enabled)
   },
+  listReadingMarks: (filePath: string) => ipcRenderer.invoke(IPC.MARKS_LIST, filePath),
+  createReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_CREATE, payload),
+  updateReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_UPDATE, payload),
+  deleteReadingMark: (id: string) => ipcRenderer.invoke(IPC.MARKS_DELETE, id),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

@@ -1,18 +1,18 @@
 import { dialog, BrowserWindow } from 'electron'
 import { dirname, extname, join } from 'path'
 import { mkdir, readFile, writeFile } from 'fs/promises'
+import { DEFAULT_SAVE_FILENAME } from '@shared/constants/app'
 import {
-  DEFAULT_SAVE_FILENAME,
   DOCUMENT_DIALOG_FILTERS,
   HTML_DIALOG_FILTERS,
   MARKDOWN_DIALOG_FILTERS,
   PASTED_IMAGE_ASSETS_DIR,
   PDF_DIALOG_FILTERS,
-} from '@shared/constants'
-import { getDocumentKind } from '@shared/document-types'
-import { IMAGE_EXTENSION_BY_MIME, IMAGE_MIME_BY_EXTENSION } from '@shared/image-constants'
-import { toAppError, type AppError } from '@shared/errors'
-import { err, ok, type Result } from '@shared/result'
+} from '@shared/constants/dialog-filters'
+import { getDocumentKind } from '@shared/types/document'
+import { IMAGE_EXTENSION_BY_MIME, IMAGE_MIME_BY_EXTENSION } from '@shared/constants/images'
+import { toAppError, type AppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@shared/core/result'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
@@ -26,8 +26,9 @@ import type {
   SaveFileResult,
   SavePastedImagePayload,
   SavePastedImageResult,
-} from '@shared/file-types'
+} from '@shared/types/file'
 import { scanWorkspace } from './workspace'
+import { resolveExportSavePath } from './export-save-path'
 
 const markdownFilters = MARKDOWN_DIALOG_FILTERS
 
@@ -54,13 +55,13 @@ export async function openDocumentDialog(
       return ok({ filePath, kind: 'markdown', content })
     }
 
-    if (kind === 'pdf' || kind === 'epub') {
+    if (kind === 'pdf' || kind === 'epub' || kind === 'mobi') {
       return ok({ filePath, kind })
     }
 
     return err({
       code: 'UNSUPPORTED_FORMAT',
-      message: '不支持的文件格式，请选择 Markdown、PDF 或 EPUB',
+      message: '不支持的文件格式，请选择 Markdown、PDF、EPUB 或 MOBI',
     })
   } catch (error) {
     return err(toAppError(error, '打开文件失败'))
@@ -228,7 +229,7 @@ export async function exportHtmlDocument(
   payload: ExportDocumentPayload,
 ): Promise<Result<ExportDocumentResult, AppError>> {
   try {
-    const { canceled, filePath } = await dialog.showSaveDialog({
+    const { canceled, filePath } = await resolveExportSavePath({
       title: '导出 HTML',
       filters: HTML_DIALOG_FILTERS,
       defaultPath: payload.suggestedName ?? 'export.html',
@@ -251,7 +252,7 @@ export async function exportPdfDocument(
   let exportWindow: BrowserWindow | null = null
 
   try {
-    const { canceled, filePath } = await dialog.showSaveDialog({
+    const { canceled, filePath } = await resolveExportSavePath({
       title: '导出 PDF',
       filters: PDF_DIALOG_FILTERS,
       defaultPath: payload.suggestedName ?? 'export.pdf',

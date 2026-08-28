@@ -3,9 +3,9 @@ import { join, extname } from 'path'
 import {
   WORKSPACE_IGNORED_DIR_NAMES,
   WORKSPACE_MAX_DEPTH,
-} from '@shared/constants'
-import { getDocumentKind, isWorkspaceFileExtension } from '@shared/document-types'
-import type { FileTreeNode } from '@shared/file-types'
+} from '@shared/constants/workspace'
+import { getDocumentKind, isWorkspaceFileExtension } from '@shared/types/document'
+import type { FileTreeNode } from '@shared/types/file'
 
 /** 移除不含支持文档的空目录，便于侧栏发现有效文件 */
 export function pruneEmptyDirectories(nodes: FileTreeNode[]): FileTreeNode[] {

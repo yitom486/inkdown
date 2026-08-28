@@ -3,10 +3,10 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { scanWorkspace } from './workspace'
-import type { FileTreeNode } from '@shared/file-types'
+import type { FileTreeNode } from '@shared/types/file'
 
 describe('scanWorkspace', () => {
-  it('发现 Markdown、PDF 与 EPUB 文件', async () => {
+  it('发现 Markdown、PDF、EPUB 与 MOBI 文件', async () => {
     const root = await mkdtemp(join(tmpdir(), 'reader-workspace-'))
 
     await writeFile(join(root, 'notes.md'), '# hi')
@@ -29,6 +29,6 @@ describe('scanWorkspace', () => {
     expect(fileNames).toContain('book.pdf')
     expect(fileNames).toContain('novel.epub')
     expect(fileNames).toContain('chapter.txt')
-    expect(fileNames).not.toContain('ignored.mobi')
+    expect(fileNames).toContain('ignored.mobi')
   })
 })
