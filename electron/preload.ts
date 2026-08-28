@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc-channels'
-import type { SaveFilePayload } from '@shared/file-types'
+import type { ExportDocumentPayload, SaveFilePayload, SavePastedImagePayload } from '@shared/file-types'
 import type { ElectronAPI } from '@shared/electron-api.types'
 
 const electronAPI: ElectronAPI = {
@@ -25,6 +25,11 @@ const electronAPI: ElectronAPI = {
   readImage: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ_IMAGE, filePath),
   saveFile: (payload: SaveFilePayload) => ipcRenderer.invoke(IPC.FILE_SAVE, payload),
   saveFileAs: (payload: SaveFilePayload) => ipcRenderer.invoke(IPC.FILE_SAVE_AS, payload),
+  savePastedImage: (payload: SavePastedImagePayload) =>
+    ipcRenderer.invoke(IPC.FILE_SAVE_PASTED_IMAGE, payload),
+  exportHtml: (payload: ExportDocumentPayload) =>
+    ipcRenderer.invoke(IPC.FILE_EXPORT_HTML, payload),
+  exportPdf: (payload: ExportDocumentPayload) => ipcRenderer.invoke(IPC.FILE_EXPORT_PDF, payload),
   updateTitle: (payload) => {
     ipcRenderer.send(IPC.FILE_UPDATE_TITLE, payload)
   },

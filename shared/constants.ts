@@ -21,3 +21,10 @@ export const MARKDOWN_DIALOG_FILTERS = [
   { name: 'Markdown', extensions: [...MARKDOWN_EXTENSIONS] },
   { name: 'All Files', extensions: ['*'] },
 ]
+
+export const HTML_DIALOG_FILTERS = [{ name: 'HTML', extensions: ['html', 'htm'] }]
+
+export const PDF_DIALOG_FILTERS = [{ name: 'PDF', extensions: ['pdf'] }]
+
+/** 粘贴图片默认保存到 Markdown 文件同级的 assets 目录 */
+export const PASTED_IMAGE_ASSETS_DIR = 'assets'

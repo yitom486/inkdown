@@ -10,6 +10,9 @@ export const IPC = {
   FILE_SAVE: 'file:save',
   FILE_SAVE_AS: 'file:save-as',
   FILE_READ_IMAGE: 'file:read-image',
+  FILE_SAVE_PASTED_IMAGE: 'file:save-pasted-image',
+  FILE_EXPORT_HTML: 'file:export-html',
+  FILE_EXPORT_PDF: 'file:export-pdf',
   FILE_UPDATE_TITLE: 'file:update-title',
 } as const
 

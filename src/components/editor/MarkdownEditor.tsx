@@ -52,6 +52,7 @@ interface MarkdownEditorProps {
   theme?: AppTheme
   onChange: (value: string) => void
   onScroll?: () => void
+  onPasteImage?: (blob: Blob, mimeType: string) => Promise<string | null>
 }
 
 const themeCompartment = new Compartment()
@@ -115,14 +116,16 @@ function buildThemeExtensions(theme: AppTheme) {
 }
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, filePath, theme = 'dark', onChange, onScroll }, ref) {
+  function MarkdownEditor({ value, filePath, theme = 'dark', onChange, onScroll, onPasteImage }, ref) {
     const containerRef = useRef<HTMLDivElement>(null)
     const viewRef = useRef<EditorView | null>(null)
     const onChangeRef = useRef(onChange)
     const onScrollRef = useRef(onScroll)
+    const onPasteImageRef = useRef(onPasteImage)
 
     onChangeRef.current = onChange
     onScrollRef.current = onScroll
+    onPasteImageRef.current = onPasteImage
 
     useImperativeHandle(ref, () => ({
       getView: () => viewRef.current,
@@ -213,6 +216,36 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           placeholder('在此输入 Markdown 内容…'),
           updateListener,
           EditorView.lineWrapping,
+          EditorView.domEventHandlers({
+            paste(event, view) {
+              const pasteImage = onPasteImageRef.current
+              if (!pasteImage) return false
+
+              const items = event.clipboardData?.items
+              if (!items) return false
+
+              for (const item of items) {
+                if (!item.type.startsWith('image/')) continue
+
+                event.preventDefault()
+                const file = item.getAsFile()
+                if (!file) return true
+
+                void pasteImage(file, item.type).then((markdown) => {
+                  if (!markdown) return
+                  const range = view.state.selection.main
+                  view.dispatch({
+                    changes: { from: range.from, to: range.to, insert: markdown },
+                    selection: { anchor: range.from + markdown.length },
+                  })
+                  view.focus()
+                })
+                return true
+              }
+
+              return false
+            },
+          }),
         ],
       })
 

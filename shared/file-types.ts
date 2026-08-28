@@ -27,3 +27,22 @@ export interface OpenFolderResult {
   rootPath: string
   tree: FileTreeNode[]
 }
+
+export interface SavePastedImagePayload {
+  markdownFilePath: string
+  base64: string
+  mimeType: string
+}
+
+export interface SavePastedImageResult {
+  relativePath: string
+}
+
+export interface ExportDocumentPayload {
+  html: string
+  suggestedName?: string
+}
+
+export interface ExportDocumentResult {
+  filePath: string
+}

@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AboutDialog } from '@/components/shared/AboutDialog'
+import { DraftRecoveryDialog } from '@/components/shared/DraftRecoveryDialog'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { EditorLayout } from '@/components/layout/EditorLayout'
 import { Toaster } from '@/components/ui/sonner'
 import { useAutoSave } from '@/hooks/useAutoSave'
+import { useDraftPersistence, clearDraftForFile } from '@/hooks/useDraftPersistence'
+import { useDraftRecoveryPrompt } from '@/hooks/useDraftRecovery'
+import { useExportDocument } from '@/hooks/useExportDocument'
 import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
+import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import type { AppError } from '@shared/errors'
 
@@ -20,12 +25,18 @@ function App() {
   const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
   const recentFiles = useAppSettingsStore((state) => state.recentFiles)
   const { data: appMeta } = useAppMeta()
+  const { recoveryDraftKey, dismissRecovery } = useDraftRecoveryPrompt()
+  const recoveryDraft = useDraftStore((state) =>
+    recoveryDraftKey ? state.drafts[recoveryDraftKey] : null,
+  )
+  const removeDraft = useDraftStore((state) => state.removeDraft)
 
   const {
     content,
     setContent,
     filePath,
     fileName,
+    savedContent,
     isDirty,
     workspaceRoot,
     fileTree,
@@ -37,11 +48,16 @@ function App() {
     openRecentFile,
     saveFile,
     saveFileAs,
+    restoreDraft,
     quitApp,
     cancelUnsavedPrompt,
     discardUnsavedChanges,
     saveUnsavedChanges,
   } = useFileOperations((error) => setLastError(error))
+
+  const { exportHtml, exportPdf } = useExportDocument(content, filePath)
+
+  useDraftPersistence({ filePath, content, savedContent, isDirty })
 
   const handleAutoSave = useCallback(async () => {
     if (!filePath || !isDirty || isFileBusy) return
@@ -56,6 +72,28 @@ function App() {
     isSaving: isFileBusy,
     onAutoSave: handleAutoSave,
   })
+
+  const handleExportHtml = useCallback(() => {
+    void exportHtml().catch((error: AppError) => setLastError(error))
+  }, [exportHtml])
+
+  const handleExportPdf = useCallback(() => {
+    void exportPdf().catch((error: AppError) => setLastError(error))
+  }, [exportPdf])
+
+  const handleRestoreDraft = useCallback(() => {
+    if (!recoveryDraft || !recoveryDraftKey) return
+    restoreDraft(recoveryDraft)
+    clearDraftForFile(recoveryDraft.filePath)
+    dismissRecovery()
+  }, [dismissRecovery, recoveryDraft, recoveryDraftKey, restoreDraft])
+
+  const handleDiscardDraft = useCallback(() => {
+    if (recoveryDraftKey) {
+      removeDraft(recoveryDraftKey)
+    }
+    dismissRecovery()
+  }, [dismissRecovery, recoveryDraftKey, removeDraft])
 
   useEffect(() => {
     if (appMeta?.error) {
@@ -107,6 +145,8 @@ function App() {
         onOpenRecentFile={(path) => void openRecentFile(path)}
         onSave={() => void saveFile()}
         onSaveAs={() => void saveFileAs()}
+        onExportHtml={handleExportHtml}
+        onExportPdf={handleExportPdf}
         onOpenSettings={() => setSettingsOpen(true)}
         onAbout={() => setAboutOpen(true)}
         onQuit={quitApp}
@@ -120,6 +160,13 @@ function App() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      <DraftRecoveryDialog
+        open={recoveryDraftKey !== null}
+        draft={recoveryDraft}
+        onRestore={handleRestoreDraft}
+        onDiscard={handleDiscardDraft}
+      />
 
       <UnsavedChangesDialog
         open={unsavedPromptOpen}

@@ -1,10 +1,14 @@
 import type { AppError } from '@shared/errors'
 import type {
+  ExportDocumentPayload,
+  ExportDocumentResult,
   OpenFileResult,
   OpenFolderResult,
   ReadImageResult,
   SaveFilePayload,
   SaveFileResult,
+  SavePastedImagePayload,
+  SavePastedImageResult,
 } from '@shared/file-types'
 import { err, ok, type Result } from '@shared/result'
 import type { ElectronAPI } from '@shared/electron-api.types'
@@ -55,6 +59,28 @@ export const fileApi = {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.saveFileAs(payload)
+  },
+
+  async savePastedImage(
+    payload: SavePastedImagePayload,
+  ): Promise<Result<SavePastedImageResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.savePastedImage(payload)
+  },
+
+  async exportHtml(
+    payload: ExportDocumentPayload,
+  ): Promise<Result<ExportDocumentResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.exportHtml(payload)
+  },
+
+  async exportPdf(payload: ExportDocumentPayload): Promise<Result<ExportDocumentResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.exportPdf(payload)
   },
 }
 

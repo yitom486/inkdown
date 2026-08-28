@@ -1,4 +1,5 @@
 import {
+  FileCode2,
   FileText,
   FolderOpen,
   HelpCircle,
@@ -35,6 +36,8 @@ interface TitleBarProps {
   onOpenRecentFile: (path: string) => void
   onSave: () => void
   onSaveAs: () => void
+  onExportHtml: () => void
+  onExportPdf: () => void
   onOpenSettings: () => void
   onAbout: () => void
   onQuit: () => void
@@ -49,6 +52,8 @@ export function TitleBar({
   onOpenRecentFile,
   onSave,
   onSaveAs,
+  onExportHtml,
+  onExportPdf,
   onOpenSettings,
   onAbout,
   onQuit,
@@ -101,6 +106,15 @@ export function TitleBar({
             <SaveAll className="size-4" />
             另存为
             <DropdownMenuShortcut>Ctrl+Shift+S</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onExportHtml}>
+            <FileCode2 className="size-4" />
+            导出 HTML
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onExportPdf}>
+            <FileText className="size-4" />
+            导出 PDF
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={onQuit}>

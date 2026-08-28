@@ -7,6 +7,8 @@ import { isCancelled, type AppError } from '@shared/errors'
 import type { FileTreeNode, OpenFolderResult } from '@shared/file-types'
 import { isOk } from '@shared/result'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
+import { clearDraftForFile } from '@/hooks/useDraftPersistence'
+import type { DocumentDraft } from '@/lib/draft-utils'
 
 function getFileName(filePath?: string): string {
   if (!filePath) return '未命名'
@@ -112,6 +114,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.value.filePath)
+      clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')
       }
@@ -129,6 +132,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.value.filePath)
+      clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')
       }
@@ -188,6 +192,16 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   const saveFileAs = useCallback(
     () => saveFileAsMutation.mutateAsync({ content }),
     [content, saveFileAsMutation],
+  )
+
+  const restoreDraft = useCallback(
+    (draft: DocumentDraft) => {
+      setFilePath(draft.filePath)
+      setContent(draft.content)
+      setSavedContent(draft.baselineContent)
+      syncTitle(draft.filePath, draft.content !== draft.baselineContent)
+    },
+    [syncTitle],
   )
 
   const cancelUnsavedPrompt = useCallback(() => {
@@ -264,6 +278,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     setContent,
     filePath,
     fileName,
+    savedContent,
     isDirty,
     workspaceRoot: workspace?.rootPath,
     fileTree: workspace?.tree ?? ([] as FileTreeNode[]),
@@ -280,6 +295,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     openRecentFile,
     saveFile,
     saveFileAs,
+    restoreDraft,
     quitApp,
     cancelUnsavedPrompt,
     discardUnsavedChanges,

@@ -1,9 +1,13 @@
 import type {
+  ExportDocumentPayload,
+  ExportDocumentResult,
   OpenFileResult,
   OpenFolderResult,
   ReadImageResult,
   SaveFilePayload,
   SaveFileResult,
+  SavePastedImagePayload,
+  SavePastedImageResult,
 } from '@shared/file-types'
 import type { AppError } from '@shared/errors'
 import type { Result } from '@shared/result'
@@ -20,6 +24,11 @@ export interface ElectronAPI {
   readImage: (filePath: string) => Promise<Result<ReadImageResult, AppError>>
   saveFile: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>
   saveFileAs: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>
+  savePastedImage: (
+    payload: SavePastedImagePayload,
+  ) => Promise<Result<SavePastedImageResult, AppError>>
+  exportHtml: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
+  exportPdf: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void
   quit: () => void
 }

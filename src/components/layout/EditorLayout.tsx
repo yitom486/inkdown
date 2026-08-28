@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/resizable'
 import { useScrollSync } from '@/hooks/useScrollSync'
 import { useMarkdownPreview } from '@/hooks/useMarkdownPreview'
+import { usePasteImage } from '@/hooks/usePasteImage'
 import {
   findActiveHeading,
   parseMarkdownHeadings,
@@ -39,6 +40,8 @@ interface EditorLayoutProps {
   onOpenRecentFile: (path: string) => void
   onSave: () => void
   onSaveAs: () => void
+  onExportHtml: () => void
+  onExportPdf: () => void
   onOpenSettings: () => void
   onAbout: () => void
   onQuit: () => void
@@ -58,6 +61,8 @@ export function EditorLayout({
   onOpenRecentFile,
   onSave,
   onSaveAs,
+  onExportHtml,
+  onExportPdf,
   onOpenSettings,
   onAbout,
   onQuit,
@@ -74,6 +79,7 @@ export function EditorLayout({
 
   const viewMode = fileState.viewMode
   const previewHtml = useMarkdownPreview(content, filePath)
+  const { handlePasteImage } = usePasteImage(filePath)
   const headings = useMemo(() => parseMarkdownHeadings(content), [content])
   const [activeHeadingId, setActiveHeadingId] = useState<string>()
   const [findReplace, setFindReplace] = useState<{ open: boolean; mode: 'find' | 'replace' }>({
@@ -211,6 +217,8 @@ export function EditorLayout({
         onOpenRecentFile={onOpenRecentFile}
         onSave={onSave}
         onSaveAs={onSaveAs}
+        onExportHtml={onExportHtml}
+        onExportPdf={onExportPdf}
         onOpenSettings={onOpenSettings}
         onAbout={onAbout}
         onQuit={onQuit}
@@ -282,6 +290,7 @@ export function EditorLayout({
                         theme={theme}
                         onChange={onContentChange}
                         onScroll={handleEditorScroll}
+                        onPasteImage={handlePasteImage}
                       />
                     </div>
                   </ResizablePanel>

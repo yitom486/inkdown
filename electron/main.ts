@@ -2,13 +2,16 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage } from 'electron'
 import { basename, join } from 'path'
 import { IPC } from '@shared/ipc-channels'
 import { APP_TITLE } from '@shared/constants'
-import type { SaveFilePayload } from '@shared/file-types'
+import type { ExportDocumentPayload, SaveFilePayload, SavePastedImagePayload } from '@shared/file-types'
 import {
+  exportHtmlDocument,
+  exportPdfDocument,
   openFileDialog,
   openFolderDialog,
   readFileByPath,
   readImageAsDataUrl,
   saveFileDialog,
+  savePastedImage,
 } from './file-service'
 import { getAppVersion } from './app-service'
 import { resolveAppIconPath } from './app-paths'
@@ -97,6 +100,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC.FILE_SAVE, (_event, payload: SaveFilePayload) => saveFileDialog(payload))
   ipcMain.handle(IPC.FILE_SAVE_AS, (_event, payload: SaveFilePayload) =>
     saveFileDialog({ ...payload, filePath: undefined }),
+  )
+  ipcMain.handle(IPC.FILE_SAVE_PASTED_IMAGE, (_event, payload: SavePastedImagePayload) =>
+    savePastedImage(payload),
+  )
+  ipcMain.handle(IPC.FILE_EXPORT_HTML, (_event, payload: ExportDocumentPayload) =>
+    exportHtmlDocument(payload),
+  )
+  ipcMain.handle(IPC.FILE_EXPORT_PDF, (_event, payload: ExportDocumentPayload) =>
+    exportPdfDocument(payload),
   )
   ipcMain.on(IPC.FILE_UPDATE_TITLE, (_event, payload: { filePath?: string; isDirty: boolean }) => {
     updateWindowTitle(payload.filePath, payload.isDirty)
