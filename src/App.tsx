@@ -5,11 +5,13 @@ import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { EditorLayout } from '@/components/layout/EditorLayout'
 import { Toaster } from '@/components/ui/sonner'
 import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
+import { useEditorUiStore } from '@/stores/editor-ui-store'
 import type { AppError } from '@shared/errors'
 
 function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [lastError, setLastError] = useState<AppError | null>(null)
+  const theme = useEditorUiStore((state) => state.theme)
   const { data: appMeta } = useAppMeta()
 
   const {
@@ -54,7 +56,7 @@ function App() {
 
   return (
     <>
-      <Toaster richColors closeButton position="top-right" />
+      <Toaster theme={theme} richColors closeButton position="top-right" />
       <ErrorBanner error={lastError} onDismiss={() => setLastError(null)} />
       <EditorLayout
         filePath={filePath}

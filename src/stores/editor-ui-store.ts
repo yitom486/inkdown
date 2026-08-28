@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export type EditorViewMode = 'editor' | 'preview' | 'split'
+export type AppTheme = 'dark' | 'light'
 
 export interface FileUiState {
   viewMode: EditorViewMode
@@ -22,8 +23,11 @@ function resolveFileKey(filePath?: string): string {
 }
 
 interface EditorUiStore {
+  theme: AppTheme
   outlineExpanded: boolean
   fileStates: Record<string, FileUiState>
+  setTheme: (theme: AppTheme) => void
+  toggleTheme: () => void
   setOutlineExpanded: (expanded: boolean) => void
   getFileState: (filePath?: string) => FileUiState
   setViewMode: (filePath: string | undefined, mode: EditorViewMode) => void
@@ -37,8 +41,13 @@ interface EditorUiStore {
 export const useEditorUiStore = create<EditorUiStore>()(
   persist(
     (set, get) => ({
+      theme: 'dark',
       outlineExpanded: false,
       fileStates: {},
+
+      setTheme: (theme) => set({ theme }),
+      toggleTheme: () =>
+        set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
 
       setOutlineExpanded: (expanded) => set({ outlineExpanded: expanded }),
 
@@ -77,6 +86,7 @@ export const useEditorUiStore = create<EditorUiStore>()(
     {
       name: 'markdown-editor-ui',
       partialize: (state) => ({
+        theme: state.theme,
         outlineExpanded: state.outlineExpanded,
         fileStates: state.fileStates,
       }),

@@ -7,12 +7,13 @@ import {
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import {
   bracketMatching,
+  defaultHighlightStyle,
   foldGutter,
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language'
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import {
   drawSelection,
   dropCursor,
@@ -24,6 +25,7 @@ import {
   placeholder,
 } from '@codemirror/view'
 import { applyScrollRatio, scrollRatio } from '@/lib/markdown-headings'
+import type { AppTheme } from '@/stores/editor-ui-store'
 import {
   forwardRef,
   useEffect,
@@ -45,12 +47,73 @@ export interface MarkdownEditorHandle {
 interface MarkdownEditorProps {
   value: string
   filePath?: string
+  theme?: AppTheme
   onChange: (value: string) => void
   onScroll?: () => void
 }
 
+const themeCompartment = new Compartment()
+
+function buildThemeExtensions(theme: AppTheme) {
+  const isDark = theme === 'dark'
+
+  return [
+    syntaxHighlighting(isDark ? oneDarkHighlightStyle : defaultHighlightStyle, {
+      fallback: true,
+    }),
+    EditorView.theme({
+      '&': {
+        height: '100%',
+        fontSize: '15px',
+        backgroundColor: 'var(--editor)',
+        color: isDark ? '#d4d4d4' : 'var(--foreground)',
+      },
+      '.cm-scroller': {
+        overflow: 'auto',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        lineHeight: '1.65',
+      },
+      '.cm-content': {
+        padding: '20px 0',
+        caretColor: isDark ? '#7aa2f7' : 'var(--primary)',
+      },
+      '.cm-line': {
+        padding: '0 20px',
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: isDark ? '#7aa2f7' : 'var(--primary)',
+      },
+      '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
+        {
+          backgroundColor: 'color-mix(in oklch, var(--primary) 35%, transparent)',
+        },
+      '.cm-gutters': {
+        backgroundColor: 'var(--editor)',
+        color: isDark ? '#6b7280' : 'var(--muted-foreground)',
+        borderRight: '1px solid var(--border)',
+        paddingRight: '4px',
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'color-mix(in oklch, var(--accent) 40%, transparent)',
+        color: isDark ? '#d4d4d4' : 'var(--foreground)',
+      },
+      '.cm-activeLine': {
+        backgroundColor: 'color-mix(in oklch, var(--accent) 25%, transparent)',
+      },
+      '.cm-foldGutter span': {
+        color: isDark ? '#6b7280' : 'var(--muted-foreground)',
+        cursor: 'pointer',
+      },
+      '.cm-placeholder': {
+        color: isDark ? '#6b7280' : 'var(--muted-foreground)',
+        fontStyle: 'italic',
+      },
+    }),
+  ]
+}
+
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, filePath, onChange, onScroll }, ref) {
+  function MarkdownEditor({ value, filePath, theme = 'dark', onChange, onScroll }, ref) {
     const containerRef = useRef<HTMLDivElement>(null)
     const viewRef = useRef<EditorView | null>(null)
     const onChangeRef = useRef(onChange)
@@ -141,60 +204,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           drawSelection(),
           dropCursor(),
           markdown({ base: markdownLanguage }),
-          syntaxHighlighting(oneDarkHighlightStyle, { fallback: true }),
+          themeCompartment.of(buildThemeExtensions(theme)),
           keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
           placeholder('在此输入 Markdown 内容…'),
           updateListener,
           EditorView.lineWrapping,
-          EditorView.theme({
-            '&': {
-              height: '100%',
-              fontSize: '15px',
-              backgroundColor: 'var(--editor)',
-              color: '#d4d4d4',
-            },
-            '.cm-scroller': {
-              overflow: 'auto',
-              fontFamily:
-                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              lineHeight: '1.65',
-            },
-            '.cm-content': {
-              padding: '20px 0',
-              caretColor: '#7aa2f7',
-            },
-            '.cm-line': {
-              padding: '0 20px',
-            },
-            '.cm-cursor, .cm-dropCursor': {
-              borderLeftColor: '#7aa2f7',
-            },
-            '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
-              {
-                backgroundColor: 'color-mix(in oklch, var(--primary) 35%, transparent)',
-              },
-            '.cm-gutters': {
-              backgroundColor: 'var(--editor)',
-              color: '#6b7280',
-              borderRight: '1px solid var(--border)',
-              paddingRight: '4px',
-            },
-            '.cm-activeLineGutter': {
-              backgroundColor: 'color-mix(in oklch, var(--accent) 40%, transparent)',
-              color: '#d4d4d4',
-            },
-            '.cm-activeLine': {
-              backgroundColor: 'color-mix(in oklch, var(--accent) 25%, transparent)',
-            },
-            '.cm-foldGutter span': {
-              color: '#6b7280',
-              cursor: 'pointer',
-            },
-            '.cm-placeholder': {
-              color: '#6b7280',
-              fontStyle: 'italic',
-            },
-          }),
         ],
       })
 
@@ -214,6 +228,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         viewRef.current = null
       }
     }, [])
+
+    useEffect(() => {
+      const view = viewRef.current
+      if (!view) return
+
+      view.dispatch({
+        effects: themeCompartment.reconfigure(buildThemeExtensions(theme)),
+      })
+    }, [theme])
 
     useEffect(() => {
       const view = viewRef.current

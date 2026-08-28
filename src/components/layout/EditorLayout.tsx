@@ -60,6 +60,8 @@ export function EditorLayout({
 
   const fileState = useEditorUiStore((state) => state.getFileState(filePath))
   const setViewMode = useEditorUiStore((state) => state.setViewMode)
+  const theme = useEditorUiStore((state) => state.theme)
+  const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
   const outlineExpanded = useEditorUiStore((state) => state.outlineExpanded)
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
 
@@ -115,8 +117,10 @@ export function EditorLayout({
   )
 
   return (
-    <div className="dark flex h-screen flex-col bg-background text-foreground">
+    <div className="flex h-screen flex-col bg-background text-foreground">
       <TitleBar
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
         onSave={onSave}
@@ -181,6 +185,7 @@ export function EditorLayout({
                       ref={editorRef}
                       value={content}
                       filePath={filePath}
+                      theme={theme}
                       onChange={onContentChange}
                       onScroll={handleEditorScroll}
                     />

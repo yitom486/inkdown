@@ -1,4 +1,4 @@
-import { FileText, FolderOpen, HelpCircle, LogOut, Save, SaveAll } from 'lucide-react'
+import { FileText, FolderOpen, HelpCircle, LogOut, Moon, Save, SaveAll, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 interface TitleBarProps {
+  theme: 'dark' | 'light'
+  onToggleTheme: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
   onSave: () => void
@@ -19,6 +21,8 @@ interface TitleBarProps {
 }
 
 export function TitleBar({
+  theme,
+  onToggleTheme,
   onOpenFile,
   onOpenFolder,
   onSave,
@@ -85,6 +89,17 @@ export function TitleBar({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="ml-auto text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+        aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
+        title={theme === 'dark' ? '浅色主题' : '深色主题'}
+        onClick={onToggleTheme}
+      >
+        {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      </Button>
     </header>
   )
 }

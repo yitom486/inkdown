@@ -1,3 +1,4 @@
+import type { ComponentProps, CSSProperties } from 'react'
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -5,12 +6,17 @@ import {
   OctagonXIcon,
   TriangleAlertIcon,
 } from 'lucide-react'
-import { Toaster as Sonner, type ToasterProps } from 'sonner'
+import { Toaster as Sonner, type ToasterProps as SonnerToasterProps } from 'sonner'
+import type { AppTheme } from '@/stores/editor-ui-store'
 
-const Toaster = ({ ...props }: ToasterProps) => {
+type AppToasterProps = ComponentProps<typeof Sonner> & {
+  theme?: AppTheme
+}
+
+const Toaster = ({ theme = 'dark', ...props }: AppToasterProps) => {
   return (
     <Sonner
-      theme="dark"
+      theme={theme as SonnerToasterProps['theme']}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
@@ -25,7 +31,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           '--normal-text': 'var(--popover-foreground)',
           '--normal-border': 'var(--border)',
           '--border-radius': 'var(--radius)',
-        } as React.CSSProperties
+        } as CSSProperties
       }
       {...props}
     />
