@@ -10,7 +10,7 @@ import type { Result } from '@shared/result'
 
 export interface ElectronAPI {
   platform: string
-  getVersion: () => Promise<string>
+  getVersion: () => Promise<Result<string, AppError>>
   setDirty: (isDirty: boolean) => void
   confirmClose: (decision: 'proceed' | 'cancel') => void
   onRequestClose: (callback: () => void) => () => void

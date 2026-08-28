@@ -62,16 +62,7 @@ export const appApi = {
   async getVersion(): Promise<Result<string, AppError>> {
     const api = requireElectronAPI()
     if (!api.ok) return api
-
-    try {
-      const version = await api.value.getVersion()
-      return ok(version)
-    } catch (error) {
-      return err({
-        code: 'UNKNOWN',
-        message: error instanceof Error ? error.message : '获取版本信息失败',
-      })
-    }
+    return api.value.getVersion()
   },
 
   getPlatform(): Result<string, AppError> {

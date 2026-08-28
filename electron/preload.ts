@@ -5,7 +5,7 @@ import type { ElectronAPI } from '@shared/electron-api.types'
 
 const electronAPI: ElectronAPI = {
   platform: process.platform,
-  getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.APP_GET_VERSION),
+  getVersion: () => ipcRenderer.invoke(IPC.APP_GET_VERSION),
   setDirty: (isDirty: boolean) => {
     ipcRenderer.send(IPC.APP_SET_DIRTY, isDirty)
   },

@@ -10,6 +10,7 @@ import {
   readImageAsDataUrl,
   saveFileDialog,
 } from './file-service'
+import { getAppVersion } from './app-service'
 
 let mainWindow: BrowserWindow | null = null
 let allowClose = false
@@ -75,7 +76,7 @@ function createWindow(): void {
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion())
+  ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())
   ipcMain.on(IPC.APP_SET_DIRTY, (_event, isDirty: boolean) => {
     documentDirty = isDirty
   })
