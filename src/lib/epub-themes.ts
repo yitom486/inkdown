@@ -42,8 +42,8 @@ export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<st
     'line-height': '1.85',
     'padding-top': `${EPUB_CONTENT_VERTICAL_PADDING} !important`,
     'padding-bottom': `${EPUB_CONTENT_VERTICAL_PADDING} !important`,
-    'padding-left': `${horizontalPadding} !important`,
-    'padding-right': `${horizontalPadding} !important`,
+    'padding-left': '0 !important',
+    'padding-right': '0 !important',
     'letter-spacing': '0.02em',
     'overflow-y': 'visible',
     'min-height': '100%',
@@ -61,6 +61,9 @@ export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<st
     height: '100%',
     width: '100% !important',
     'scrollbar-gutter': 'stable',
+    'padding-left': `${horizontalPadding} !important`,
+    'padding-right': `${horizontalPadding} !important`,
+    'box-sizing': 'border-box',
   }
 
   return {
@@ -138,6 +141,10 @@ function buildReaderLayoutCss(mode: EpubThemeMode): string {
       width: 100% !important;
       max-width: 100% !important;
       margin: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      padding-left: ${h} !important;
+      padding-right: ${h} !important;
       overflow-x: hidden !important;
       overflow-y: auto !important;
       scrollbar-gutter: stable;
@@ -150,9 +157,10 @@ function buildReaderLayoutCss(mode: EpubThemeMode): string {
       margin: 0 !important;
       padding-top: ${v} !important;
       padding-bottom: ${v} !important;
-      padding-left: ${h} !important;
-      padding-right: ${h} !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
       box-sizing: border-box !important;
+      position: relative !important;
       background-color: ${palette.pageBackground} !important;
       color: ${palette.text} !important;
     }
@@ -196,8 +204,16 @@ function buildReaderLayoutCss(mode: EpubThemeMode): string {
       padding-left: 0 !important;
       padding-right: 0 !important;
       float: none !important;
+      position: static !important;
+      left: auto !important;
+      right: auto !important;
+      inset: auto !important;
       box-sizing: border-box !important;
       background-color: transparent !important;
+    }
+    body * {
+      max-width: 100% !important;
+      box-sizing: border-box !important;
     }
     img, svg, video {
       max-width: 100% !important;
@@ -218,6 +234,27 @@ function stripPublisherInlineColors(doc: Document): void {
   })
 }
 
+/** 去掉书内全宽/绝对定位等会破坏左右边距的内联布局 */
+function stripPublisherLayoutOverrides(doc: Document): void {
+  if (!doc.body) return
+
+  for (const element of doc.body.querySelectorAll<HTMLElement>('[style]')) {
+    if (element === doc.body || element === doc.documentElement) continue
+
+    element.style.removeProperty('width')
+    element.style.removeProperty('max-width')
+    element.style.removeProperty('min-width')
+    element.style.removeProperty('margin-left')
+    element.style.removeProperty('margin-right')
+    element.style.removeProperty('padding-left')
+    element.style.removeProperty('padding-right')
+    element.style.removeProperty('position')
+    element.style.removeProperty('left')
+    element.style.removeProperty('right')
+    element.style.removeProperty('inset')
+  }
+}
+
 function syncEpubReadingInlineStyles(doc: Document, mode: EpubThemeMode): void {
   const html = doc.documentElement
   const body = doc.body
@@ -235,18 +272,23 @@ function syncEpubReadingInlineStyles(doc: Document, mode: EpubThemeMode): void {
   important(html, 'overflow-y', 'auto')
   important(html, 'scrollbar-gutter', 'stable')
   important(html, 'background-color', palette.pageBackground)
+  important(html, 'box-sizing', 'border-box')
+  important(html, 'padding-left', EPUB_CONTENT_HORIZONTAL_PADDING)
+  important(html, 'padding-right', EPUB_CONTENT_HORIZONTAL_PADDING)
 
   important(body, 'width', '100%')
   important(body, 'max-width', '100%')
   important(body, 'margin', '0')
   important(body, 'box-sizing', 'border-box')
+  important(body, 'position', 'relative')
   important(body, 'padding-top', EPUB_CONTENT_VERTICAL_PADDING)
   important(body, 'padding-bottom', EPUB_CONTENT_VERTICAL_PADDING)
-  important(body, 'padding-left', EPUB_CONTENT_HORIZONTAL_PADDING)
-  important(body, 'padding-right', EPUB_CONTENT_HORIZONTAL_PADDING)
+  important(body, 'padding-left', '0')
+  important(body, 'padding-right', '0')
   important(body, 'background-color', palette.pageBackground)
   important(body, 'color', palette.text)
 
+  stripPublisherLayoutOverrides(doc)
   stripPublisherInlineColors(doc)
 }
 

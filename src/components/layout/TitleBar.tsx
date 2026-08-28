@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   Bug,
   FileCode2,
   FileText,
@@ -44,6 +45,7 @@ interface TitleBarProps {
   onOpenErrorLog: () => void
   onOpenDevTools: () => void
   onAbout: () => void
+  onNewWindow: () => void
   onQuit: () => void
 }
 
@@ -63,6 +65,7 @@ export function TitleBar({
   onOpenErrorLog,
   onOpenDevTools,
   onAbout,
+  onNewWindow,
   onQuit,
 }: TitleBarProps) {
   return (
@@ -102,6 +105,11 @@ export function TitleBar({
             <FolderOpen className="size-4" />
             打开文件夹
             <DropdownMenuShortcut>Ctrl+Shift+O</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onNewWindow}>
+            <AppWindow className="size-4" />
+            新建窗口
+            <DropdownMenuShortcut>Ctrl+N</DropdownMenuShortcut>
           </DropdownMenuItem>
           {!readOnly && (
             <>

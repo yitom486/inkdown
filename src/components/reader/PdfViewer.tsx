@@ -1,12 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
+import { Bookmark, ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import { TextLayer } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
+import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
+import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
+import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { pdfjsLib } from '@/lib/pdf-worker'
+import { renderPdfMarkOverlays } from '@/lib/pdf-reading-marks'
+import {
+  copyTextToClipboard,
+  readPdfSelection,
+  type PdfSelectionSnapshot,
+} from '@/lib/pdf-selection'
+import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
-import type { AppError } from '@shared/errors'
+import type { AppError } from '@shared/core/errors'
+import type { ReadingMark } from '@shared/types/reading-mark'
+import { isOk } from '@shared/core/result'
+import { toast } from 'sonner'
+import '@/styles/pdf-viewer.css'
 
 interface PdfViewerProps {
   filePath: string
@@ -15,6 +31,10 @@ interface PdfViewerProps {
 
 export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const pageWrapperRef = useRef<HTMLDivElement>(null)
+  const textLayerRef = useRef<HTMLDivElement>(null)
+  const marksLayerRef = useRef<HTMLDivElement>(null)
+  const textLayerInstanceRef = useRef<TextLayer | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null)
   const loadingTaskRef = useRef<ReturnType<typeof pdfjsLib.getDocument> | null>(null)
@@ -22,8 +42,18 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0)
   const [scale, setScale] = useState(1.2)
   const [rendering, setRendering] = useState(false)
+  const [marksOpen, setMarksOpen] = useState(false)
+  const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
+  const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
+    null,
+  )
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
+  const { marks, createMark, deleteMark } = useReadingMarks(filePath)
+  const fileFingerprint = data
+    ? buildReadingFileFingerprint(filePath, data.data.byteLength)
+    : ''
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -72,10 +102,16 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   useEffect(() => {
     const pdf = pdfDocRef.current
     const canvas = canvasRef.current
-    if (!pdf || !canvas || pageNum < 1 || numPages === 0) return
+    const textLayerContainer = textLayerRef.current
+    const marksLayer = marksLayerRef.current
+    if (!pdf || !canvas || !textLayerContainer || !marksLayer || pageNum < 1 || numPages === 0) {
+      return
+    }
 
     let cancelled = false
     setRendering(true)
+    textLayerInstanceRef.current?.cancel()
+    textLayerInstanceRef.current = null
 
     void (async () => {
       try {
@@ -89,6 +125,23 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         if (!context) return
 
         await page.render({ canvasContext: context, viewport, canvas }).promise
+        if (cancelled) return
+
+        textLayerContainer.replaceChildren()
+        textLayerContainer.style.width = `${viewport.width}px`
+        textLayerContainer.style.height = `${viewport.height}px`
+
+        const textLayer = new TextLayer({
+          textContentSource: page.streamTextContent(),
+          container: textLayerContainer,
+          viewport,
+        })
+        textLayerInstanceRef.current = textLayer
+        await textLayer.render()
+
+        if (!cancelled) {
+          renderPdfMarkOverlays(marksLayer, marks, pageNum, theme)
+        }
       } catch (cause) {
         if (!cancelled) {
           reportAppError({
@@ -103,8 +156,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
     return () => {
       cancelled = true
+      textLayerInstanceRef.current?.cancel()
+      textLayerInstanceRef.current = null
     }
-  }, [numPages, pageNum, scale])
+  }, [marks, numPages, pageNum, scale, theme])
 
   const fitWidth = useCallback(() => {
     const pdf = pdfDocRef.current
@@ -123,8 +178,90 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     fitWidth()
   }, [fitWidth, filePath, numPages])
 
+  useEffect(() => {
+    setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+  }, [pageNum, filePath])
+
+  const handlePageMouseUp = useCallback(() => {
+    window.setTimeout(() => {
+      const pageElement = pageWrapperRef.current
+      if (!pageElement) return
+
+      const snapshot = readPdfSelection(pageElement, pageNum)
+      if (!snapshot) {
+        setSelectionSnapshot(null)
+        setSelectionToolbarPos(null)
+        return
+      }
+
+      setSelectionSnapshot(snapshot)
+      setSelectionToolbarPos({
+        x: snapshot.rect.left + snapshot.rect.width / 2,
+        y: snapshot.rect.top,
+      })
+    }, 10)
+  }, [pageNum])
+
   const goPrev = () => setPageNum((value) => Math.max(1, value - 1))
   const goNext = () => setPageNum((value) => Math.min(numPages, value + 1))
+
+  const addPageBookmark = useCallback(async () => {
+    if (!fileFingerprint || numPages === 0) return
+    const result = await createMark({
+      filePath,
+      fileFingerprint,
+      kind: 'bookmark',
+      anchor: { format: 'pdf', page: pageNum },
+      label: `第 ${pageNum} 页`,
+    })
+    if (isOk(result)) {
+      toast.success('已添加书签')
+    }
+  }, [createMark, fileFingerprint, filePath, numPages, pageNum])
+
+  const handleSaveAnnotation = useCallback(
+    async (note: string) => {
+      if (!selectionSnapshot || !fileFingerprint) return
+
+      const result = await createMark({
+        filePath,
+        fileFingerprint,
+        kind: note ? 'note' : 'highlight',
+        anchor: {
+          format: 'pdf',
+          page: selectionSnapshot.page,
+          selectedText: selectionSnapshot.text,
+          rects: selectionSnapshot.rects,
+        },
+        excerpt: selectionSnapshot.text,
+        note: note || undefined,
+      })
+
+      if (isOk(result)) {
+        toast.success(note ? '已保存批注' : '已添加高亮')
+      }
+
+      setSelectionSnapshot(null)
+      setSelectionToolbarPos(null)
+      window.getSelection()?.removeAllRanges()
+    },
+    [createMark, fileFingerprint, filePath, selectionSnapshot],
+  )
+
+  const handleSelectMark = useCallback((mark: ReadingMark) => {
+    if (mark.anchor.format === 'pdf') {
+      setPageNum(mark.anchor.page)
+    }
+  }, [])
+
+  const handleDeleteMark = useCallback(
+    async (mark: ReadingMark) => {
+      await deleteMark(mark.id)
+      toast.success('已删除')
+    },
+    [deleteMark],
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -149,26 +286,93 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         <Button variant="ghost" size="sm" className="ml-1 h-7 text-xs" onClick={fitWidth}>
           适合宽度
         </Button>
+        <div className="mx-2 h-4 w-px bg-border/60" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          disabled={numPages === 0}
+          onClick={() => setMarksOpen((value) => !value)}
+        >
+          <Bookmark className="size-3.5" />
+          书签
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs"
+          disabled={numPages === 0}
+          onClick={() => void addPageBookmark()}
+        >
+          添加书签
+        </Button>
         {(isLoading || rendering) && <Loader2 className="ml-auto size-4 animate-spin text-muted-foreground" />}
       </div>
 
-      <div
-        ref={containerRef}
-        className={`min-h-0 flex-1 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
-      >
-        <PaneErrorBoundary name="PDF 阅读" filePath={filePath}>
-          <div className="flex min-h-full justify-center p-4">
-            {isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                正在加载 PDF…
-              </div>
-            ) : (
-              <canvas ref={canvasRef} className="shadow-md" />
-            )}
-          </div>
-        </PaneErrorBoundary>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {marksOpen ? (
+          <ReadingMarkPanel
+            marks={marks}
+            onSelect={handleSelectMark}
+            onDelete={(mark) => void handleDeleteMark(mark)}
+            onClose={() => setMarksOpen(false)}
+          />
+        ) : null}
+        <div
+          ref={containerRef}
+          className={`min-h-0 flex-1 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
+        >
+          <PaneErrorBoundary name="PDF 阅读" filePath={filePath}>
+            <div className="flex min-h-full justify-center p-4">
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  正在加载 PDF…
+                </div>
+              ) : (
+                <div
+                  ref={pageWrapperRef}
+                  className="pdf-page-wrapper shadow-md"
+                  onMouseUp={handlePageMouseUp}
+                >
+                  <canvas ref={canvasRef} />
+                  <div ref={textLayerRef} className="textLayer" aria-hidden="false" />
+                  <div ref={marksLayerRef} className="pdf-marks-layer" />
+                </div>
+              )}
+            </div>
+          </PaneErrorBoundary>
+        </div>
       </div>
+
+      {selectionToolbarPos && selectionSnapshot ? (
+        <SelectionToolbar
+          x={selectionToolbarPos.x}
+          y={selectionToolbarPos.y}
+          readOnly
+          onCopy={() => {
+            void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
+              if (ok) toast.success('已复制')
+            })
+            setSelectionToolbarPos(null)
+          }}
+          onAnnotate={() => {
+            setNoteDialogOpen(true)
+            setSelectionToolbarPos(null)
+          }}
+          onDismiss={() => {
+            setSelectionToolbarPos(null)
+            setSelectionSnapshot(null)
+          }}
+        />
+      ) : null}
+
+      <AnnotationNoteDialog
+        open={noteDialogOpen}
+        excerpt={selectionSnapshot?.text}
+        onOpenChange={setNoteDialogOpen}
+        onSave={(note) => void handleSaveAnnotation(note)}
+      />
     </div>
   )
 }

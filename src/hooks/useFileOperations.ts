@@ -3,16 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { appApi, fileApi } from '@/api/file-api'
 import { queryKeys } from '@/api/query-keys'
-import { isCancelled, type AppError } from '@shared/errors'
-import { DEFAULT_SAVE_FILENAME } from '@shared/constants'
+import { isCancelled, type AppError } from '@shared/core/errors'
+import { DEFAULT_SAVE_FILENAME } from '@shared/constants/app'
 import {
   getDocumentKind,
   isReaderDocumentKind,
   type ReaderDocumentKind,
-} from '@shared/document-types'
-import type { FileTreeNode, OpenDocumentResult, OpenFolderResult } from '@shared/file-types'
-import { dirname, joinPath } from '@shared/path-utils'
-import { err, isOk, ok, type Result } from '@shared/result'
+} from '@shared/types/document'
+import type { FileTreeNode, OpenDocumentResult, OpenFolderResult } from '@shared/types/file'
+import { dirname, joinPath } from '@shared/utils/path'
+import { err, isOk, ok, type Result } from '@shared/core/result'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { clearDraftForFile } from '@/hooks/useDraftPersistence'
 import { getOpenDialogDefaultPath } from '@/lib/dialog-default-path'
@@ -332,6 +332,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   }, [])
 
   useEffect(() => {
+    if (window.electronAPI?.isFreshWindow) return
     void restoreWorkspaceOnStartup()
   }, [restoreWorkspaceOnStartup])
 

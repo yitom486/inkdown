@@ -3,14 +3,15 @@ import { TitleBar } from '@/components/layout/TitleBar'
 import { FileExplorer } from '@/components/layout/FileExplorer'
 import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
 import { EpubViewer } from '@/components/reader/EpubViewer'
+import { MobiViewer } from '@/components/reader/MobiViewer'
 import { PdfViewer } from '@/components/reader/PdfViewer'
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
-import type { ReaderDocumentKind } from '@shared/document-types'
-import type { FileTreeNode } from '@shared/file-types'
+import type { ReaderDocumentKind } from '@shared/types/document'
+import type { FileTreeNode } from '@shared/types/file'
 
 interface ReaderLayoutProps {
   filePath: string
@@ -30,6 +31,7 @@ interface ReaderLayoutProps {
   onOpenErrorLog: () => void
   onOpenDevTools: () => void
   onAbout: () => void
+  onNewWindow: () => void
   onQuit: () => void
 }
 
@@ -51,6 +53,7 @@ export function ReaderLayout({
   onOpenErrorLog,
   onOpenDevTools,
   onAbout,
+  onNewWindow,
   onQuit,
 }: ReaderLayoutProps) {
   const sidebarLayout = useDefaultLayout({
@@ -76,6 +79,7 @@ export function ReaderLayout({
         onOpenErrorLog={onOpenErrorLog}
         onOpenDevTools={onOpenDevTools}
         onAbout={onAbout}
+        onNewWindow={onNewWindow}
         onQuit={onQuit}
       />
 
@@ -106,6 +110,8 @@ export function ReaderLayout({
             <main className="min-h-0 flex-1 bg-editor">
               {documentKind === 'pdf' ? (
                 <PdfViewer filePath={filePath} theme={theme} />
+              ) : documentKind === 'mobi' ? (
+                <MobiViewer filePath={filePath} theme={theme} />
               ) : (
                 <EpubViewer filePath={filePath} theme={theme} />
               )}

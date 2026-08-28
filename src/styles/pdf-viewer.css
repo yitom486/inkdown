@@ -1,0 +1,59 @@
+@import 'pdfjs-dist/web/pdf_viewer.css';
+
+.pdf-page-wrapper {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+}
+
+.pdf-page-wrapper canvas {
+  display: block;
+}
+
+.pdf-page-wrapper .textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+  user-select: text;
+  pointer-events: auto;
+}
+
+.pdf-page-wrapper .textLayer span,
+.pdf-page-wrapper .textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+
+.pdf-marks-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.pdf-mark-highlight {
+  position: absolute;
+  border-radius: 2px;
+  background: rgba(59, 130, 246, 0.22);
+}
+
+.pdf-mark-highlight[data-theme='dark'] {
+  background: rgba(122, 162, 247, 0.28);
+}
+
+.pdf-mark-note {
+  position: absolute;
+  border-radius: 2px;
+  background: rgba(59, 130, 246, 0.12);
+  border-bottom: 1px dashed #2563eb;
+}
+
+.pdf-mark-note[data-theme='dark'] {
+  background: rgba(122, 162, 247, 0.18);
+  border-bottom-color: #7aa2f7;
+}

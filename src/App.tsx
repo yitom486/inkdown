@@ -33,7 +33,9 @@ function App() {
   const restoreLastFileOnStartup = useAppSettingsStore((state) => state.restoreLastFileOnStartup)
   const lastOpenedFilePath = useAppSettingsStore((state) => state.lastOpenedFilePath)
   const { data: appMeta } = useAppMeta()
-  const { recoveryDraftKey, dismissRecovery } = useDraftRecoveryPrompt()
+  const { recoveryDraftKey, dismissRecovery } = useDraftRecoveryPrompt({
+    enabled: !window.electronAPI?.isFreshWindow,
+  })
   const recoveryDraft = useDraftStore((state) =>
     recoveryDraftKey ? state.drafts[recoveryDraftKey] : null,
   )
@@ -119,6 +121,7 @@ function App() {
   }, [appMeta?.error])
 
   useEffect(() => {
+    if (window.electronAPI?.isFreshWindow) return
     if (startupRestoreDoneRef.current) return
     startupRestoreDoneRef.current = true
 
@@ -137,6 +140,10 @@ function App() {
       if (event.key === ',') {
         event.preventDefault()
         setSettingsOpen(true)
+      }
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault()
+        appApi.newWindow()
       }
     }
 
@@ -171,6 +178,7 @@ function App() {
     onOpenErrorLog: () => setErrorLogOpen(true),
     onOpenDevTools: () => appApi.toggleDevTools(),
     onAbout: () => setAboutOpen(true),
+    onNewWindow: () => appApi.newWindow(),
     onQuit: quitApp,
   }
 

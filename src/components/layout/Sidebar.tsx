@@ -7,7 +7,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import type { MarkdownHeading } from '@/lib/markdown-headings'
-import type { FileTreeNode } from '@shared/file-types'
+import type { FileTreeNode } from '@shared/types/file'
 
 interface SidebarProps {
   workspaceRoot?: string

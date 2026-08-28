@@ -1,0 +1,42 @@
+.mobi-chapter-content {
+  position: relative;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1.75rem 5%;
+  line-height: 1.85;
+  font-size: 18px;
+}
+
+.mobi-chapter-content[data-theme='dark'] {
+  color: #d4d4d8;
+  background: #18181b;
+}
+
+.mobi-chapter-content[data-theme='light'] {
+  color: #3f3f46;
+  background: #fafafa;
+}
+
+.mobi-mark-highlight {
+  position: absolute;
+  border-radius: 2px;
+  background: rgba(59, 130, 246, 0.22);
+  pointer-events: none;
+}
+
+.mobi-mark-highlight[data-theme='dark'] {
+  background: rgba(122, 162, 247, 0.28);
+}
+
+.mobi-mark-note {
+  position: absolute;
+  border-radius: 2px;
+  background: rgba(59, 130, 246, 0.12);
+  border-bottom: 1px dashed #2563eb;
+  pointer-events: none;
+}
+
+.mobi-mark-note[data-theme='dark'] {
+  background: rgba(122, 162, 247, 0.18);
+  border-bottom-color: #7aa2f7;
+}

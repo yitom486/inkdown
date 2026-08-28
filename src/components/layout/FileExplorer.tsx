@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { SUPPORTED_WORKSPACE_EXTENSION_LABEL } from '@shared/constants'
+import { SUPPORTED_WORKSPACE_EXTENSION_LABEL } from '@shared/constants/extensions'
 import { ChevronDown, ChevronRight, BookOpen, FileText, Folder, FolderOpen, RefreshCw } from 'lucide-react'
-import type { FileTreeNode } from '@shared/file-types'
+import type { FileTreeNode } from '@shared/types/file'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 

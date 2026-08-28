@@ -27,7 +27,7 @@ import {
 } from '@/lib/markdown-headings'
 import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
-import type { FileTreeNode } from '@shared/file-types'
+import type { FileTreeNode } from '@shared/types/file'
 
 interface EditorLayoutProps {
   filePath?: string
@@ -51,6 +51,7 @@ interface EditorLayoutProps {
   onOpenErrorLog: () => void
   onOpenDevTools: () => void
   onAbout: () => void
+  onNewWindow: () => void
   onQuit: () => void
 }
 
@@ -76,6 +77,7 @@ export function EditorLayout({
   onOpenErrorLog,
   onOpenDevTools,
   onAbout,
+  onNewWindow,
   onQuit,
 }: EditorLayoutProps) {
   const editorRef = useRef<MarkdownEditorHandle>(null)
@@ -244,6 +246,7 @@ export function EditorLayout({
         onOpenErrorLog={onOpenErrorLog}
         onOpenDevTools={onOpenDevTools}
         onAbout={onAbout}
+        onNewWindow={onNewWindow}
         onQuit={onQuit}
       />
 
