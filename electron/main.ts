@@ -11,8 +11,10 @@ import type {
 import {
   exportHtmlDocument,
   exportPdfDocument,
-  openFileDialog,
+  openDocumentDialog,
   openFolderDialog,
+  scanWorkspaceFolder,
+  readBinaryFileByPath,
   readFileByPath,
   readImageAsDataUrl,
   saveFileDialog,
@@ -23,11 +25,18 @@ import { resolveAppIconPath } from './app-paths'
 import { appendRendererErrorLog, getErrorLogFilePath } from './error-log-service'
 import type { RendererErrorPayload } from '@shared/error-log-types'
 import { ok } from '@shared/result'
+import {
+  createWindowCloseController,
+  type WindowCloseController,
+} from './window-close'
+import type { RendererHealth } from './close-gate'
 
 let mainWindow: BrowserWindow | null = null
 let allowClose = false
 let documentDirty = false
 let verboseRendererLogs = false
+let rendererHealth: RendererHealth = 'ok'
+let windowCloseController: WindowCloseController | null = null
 
 function updateWindowTitle(filePath?: string, isDirty = false): void {
   if (!mainWindow) return
@@ -40,9 +49,26 @@ function updateWindowTitle(filePath?: string, isDirty = false): void {
   }
 }
 
+function createWindowCloseHandlers(): WindowCloseController {
+  return createWindowCloseController({
+    getMainWindow: () => mainWindow,
+    getAllowClose: () => allowClose,
+    setAllowClose: (value) => {
+      allowClose = value
+    },
+    getDocumentDirty: () => documentDirty,
+    getRendererHealth: () => rendererHealth,
+    onRequestRendererClose: (win) => {
+      win.webContents.send(IPC.APP_REQUEST_CLOSE)
+    },
+  })
+}
+
 function createWindow(): void {
   allowClose = false
   documentDirty = false
+  rendererHealth = 'ok'
+  windowCloseController = createWindowCloseHandlers()
 
   const iconPath = resolveAppIconPath()
   const windowIcon = iconPath ? nativeImage.createFromPath(iconPath) : undefined
@@ -73,6 +99,9 @@ function createWindow(): void {
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[render-process-gone]', details.reason, details.exitCode)
+    rendererHealth = 'crashed'
+    windowCloseController?.clearPendingCloseTimeout()
+
     const win = mainWindow
     if (!win || win.isDestroyed()) return
 
@@ -87,17 +116,27 @@ function createWindow(): void {
         cancelId: 1,
       })
       .then(({ response }) => {
-        if (response === 0 && !win.isDestroyed()) {
+        if (win.isDestroyed()) return
+        if (response === 0) {
+          rendererHealth = 'ok'
           win.reload()
+          return
         }
+        windowCloseController?.forceCloseWindow(win)
       })
   })
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    rendererHealth = 'ok'
+  })
+
   mainWindow.webContents.on('responsive', () => {
+    rendererHealth = 'ok'
     console.info('[renderer-responsive] 渲染进程已恢复响应')
   })
 
   mainWindow.webContents.on('unresponsive', () => {
+    rendererHealth = 'unresponsive'
     console.error('[renderer-unresponsive] 渲染进程无响应，可能正在处理大文件或发生死循环')
   })
 
@@ -110,12 +149,11 @@ function createWindow(): void {
   })
 
   mainWindow.on('close', (event) => {
-    if (allowClose || !documentDirty) return
-    event.preventDefault()
-    mainWindow?.webContents.send(IPC.APP_REQUEST_CLOSE)
+    windowCloseController?.handleWindowClose(event)
   })
 
   mainWindow.on('closed', () => {
+    windowCloseController?.clearPendingCloseTimeout()
     mainWindow = null
   })
 
@@ -147,15 +185,21 @@ function registerIpcHandlers(): void {
     documentDirty = isDirty
   })
   ipcMain.on(IPC.APP_CLOSE_DECISION, (_event, decision: 'proceed' | 'cancel') => {
-    if (decision === 'cancel') return
-    allowClose = true
-    mainWindow?.close()
+    windowCloseController?.handleRendererCloseDecision(decision)
   })
-  ipcMain.handle(IPC.FILE_OPEN, (_event, options?: OpenDialogOptions) => openFileDialog(options))
+  ipcMain.handle(IPC.FILE_OPEN, (_event, options?: OpenDialogOptions) =>
+    openDocumentDialog(options),
+  )
   ipcMain.handle(IPC.FILE_OPEN_FOLDER, (_event, options?: OpenDialogOptions) =>
     openFolderDialog(options),
   )
+  ipcMain.handle(IPC.FILE_SCAN_WORKSPACE, (_event, rootPath: string) =>
+    scanWorkspaceFolder(rootPath),
+  )
   ipcMain.handle(IPC.FILE_READ, (_event, filePath: string) => readFileByPath(filePath))
+  ipcMain.handle(IPC.FILE_READ_BINARY, (_event, filePath: string) =>
+    readBinaryFileByPath(filePath),
+  )
   ipcMain.handle(IPC.FILE_READ_IMAGE, (_event, filePath: string) => readImageAsDataUrl(filePath))
   ipcMain.handle(IPC.FILE_SAVE, (_event, payload: SaveFilePayload) => saveFileDialog(payload))
   ipcMain.handle(IPC.FILE_SAVE_AS, (_event, payload: SaveFilePayload) =>

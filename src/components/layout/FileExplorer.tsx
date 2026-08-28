@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react'
+import { SUPPORTED_WORKSPACE_EXTENSION_LABEL } from '@shared/constants'
+import { ChevronDown, ChevronRight, BookOpen, FileText, Folder, FolderOpen, RefreshCw } from 'lucide-react'
 import type { FileTreeNode } from '@shared/file-types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -9,7 +10,16 @@ interface FileExplorerProps {
   tree: FileTreeNode[]
   activeFilePath?: string
   onOpenFolder: () => void
+  onRescanWorkspace?: () => void
+  isRescanning?: boolean
   onSelectFile: (path: string) => void
+}
+
+function FileIcon({ documentKind }: { documentKind?: FileTreeNode['documentKind'] }) {
+  if (documentKind === 'pdf' || documentKind === 'epub') {
+    return <BookOpen className="size-3.5 shrink-0 text-sky-500/90" />
+  }
+  return <FileText className="size-3.5 shrink-0" />
 }
 
 function TreeNode({
@@ -70,7 +80,7 @@ function TreeNode({
       style={{ paddingLeft: `${depth * 12 + 24}px` }}
       onClick={() => onSelectFile(node.path)}
     >
-      <FileText className="size-3.5 shrink-0" />
+      <FileIcon documentKind={node.documentKind} />
       <span className="truncate">{node.name}</span>
     </button>
   )
@@ -81,6 +91,8 @@ export function FileExplorer({
   tree,
   activeFilePath,
   onOpenFolder,
+  onRescanWorkspace,
+  isRescanning = false,
   onSelectFile,
 }: FileExplorerProps) {
   const rootName = workspaceRoot?.split(/[/\\]/).pop() ?? '工作区'
@@ -92,21 +104,35 @@ export function FileExplorer({
           <FolderOpen className="size-3.5" />
           资源管理器
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground"
-          onClick={onOpenFolder}
-        >
-          打开
-        </Button>
+        <div className="flex items-center gap-1">
+          {workspaceRoot && onRescanWorkspace ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              disabled={isRescanning}
+              onClick={onRescanWorkspace}
+              title="重新扫描工作区"
+            >
+              <RefreshCw className={`size-3.5 ${isRescanning ? 'animate-spin' : ''}`} />
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground"
+            onClick={onOpenFolder}
+          >
+            打开
+          </Button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
         {!workspaceRoot ? (
           <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
             <FolderOpen className="size-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">打开文件夹以浏览 Markdown 文件</p>
+            <p className="text-sm text-muted-foreground">打开文件夹以浏览 Markdown 与电子书</p>
             <Button size="sm" onClick={onOpenFolder}>
               打开文件夹
             </Button>
@@ -117,7 +143,13 @@ export function FileExplorer({
               {rootName}
             </div>
             {tree.length === 0 ? (
-              <p className="px-2 py-4 text-xs text-muted-foreground">此文件夹中没有 Markdown 文件</p>
+              <p className="px-2 py-4 text-xs text-muted-foreground">
+                此文件夹中没有支持的文档
+                <br />
+                <span className="text-[11px] opacity-80">
+                  支持：{SUPPORTED_WORKSPACE_EXTENSION_LABEL}
+                </span>
+              </p>
             ) : (
               tree.map((node) => (
                 <TreeNode

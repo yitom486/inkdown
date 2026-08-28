@@ -2,8 +2,10 @@ import type {
   ExportDocumentPayload,
   ExportDocumentResult,
   OpenDialogOptions,
+  OpenDocumentResult,
   OpenFileResult,
   OpenFolderResult,
+  ReadBinaryResult,
   ReadImageResult,
   SaveFilePayload,
   SaveFileResult,
@@ -20,9 +22,11 @@ export interface ElectronAPI {
   setDirty: (isDirty: boolean) => void
   confirmClose: (decision: 'proceed' | 'cancel') => void
   onRequestClose: (callback: () => void) => () => void
-  openFile: (options?: OpenDialogOptions) => Promise<Result<OpenFileResult, AppError>>
+  openFile: (options?: OpenDialogOptions) => Promise<Result<OpenDocumentResult, AppError>>
   openFolder: (options?: OpenDialogOptions) => Promise<Result<OpenFolderResult, AppError>>
+  scanWorkspace: (rootPath: string) => Promise<Result<OpenFolderResult, AppError>>
   readFile: (filePath: string) => Promise<Result<OpenFileResult, AppError>>
+  readBinaryFile: (filePath: string) => Promise<Result<ReadBinaryResult, AppError>>
   readImage: (filePath: string) => Promise<Result<ReadImageResult, AppError>>
   saveFile: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>
   saveFileAs: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>

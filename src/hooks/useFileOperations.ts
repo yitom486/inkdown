@@ -5,9 +5,14 @@ import { appApi, fileApi } from '@/api/file-api'
 import { queryKeys } from '@/api/query-keys'
 import { isCancelled, type AppError } from '@shared/errors'
 import { DEFAULT_SAVE_FILENAME } from '@shared/constants'
-import type { FileTreeNode, OpenFolderResult } from '@shared/file-types'
+import {
+  getDocumentKind,
+  isReaderDocumentKind,
+  type ReaderDocumentKind,
+} from '@shared/document-types'
+import type { FileTreeNode, OpenDocumentResult, OpenFolderResult } from '@shared/file-types'
 import { dirname, joinPath } from '@shared/path-utils'
-import { isOk } from '@shared/result'
+import { err, isOk, ok, type Result } from '@shared/result'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { clearDraftForFile } from '@/hooks/useDraftPersistence'
 import { getOpenDialogDefaultPath } from '@/lib/dialog-default-path'
@@ -31,7 +36,12 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   const [unsavedAction, setUnsavedAction] = useState<UnsavedAction | null>(null)
   const unsavedActionRef = useRef<UnsavedAction | null>(null)
 
-  const isDirty = content !== savedContent
+  const documentKind = filePath ? getDocumentKind(filePath) : 'unknown'
+  const readerDocumentKind: ReaderDocumentKind | undefined = isReaderDocumentKind(documentKind)
+    ? documentKind
+    : undefined
+  const isMarkdownDocument = documentKind === 'markdown'
+  const isDirty = isMarkdownDocument && content !== savedContent
   const fileName = getFileName(filePath)
 
   useEffect(() => {
@@ -58,17 +68,32 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     window.electronAPI?.updateTitle({ filePath: path, isDirty: dirty })
   }, [])
 
+  const trackOpenedPath = useCallback((path: string) => {
+    useAppSettingsStore.getState().addRecentFile(path)
+    useAppSettingsStore.getState().setLastOpenedFilePath(path)
+    useAppSettingsStore.getState().setLastOpenedFolderPath(dirname(path))
+  }, [])
+
   const loadFile = useCallback(
     (result: { filePath: string; content: string }) => {
       setFilePath(result.filePath)
       setContent(result.content)
       setSavedContent(result.content)
       syncTitle(result.filePath, false)
-      useAppSettingsStore.getState().addRecentFile(result.filePath)
-      useAppSettingsStore.getState().setLastOpenedFilePath(result.filePath)
-      useAppSettingsStore.getState().setLastOpenedFolderPath(dirname(result.filePath))
+      trackOpenedPath(result.filePath)
     },
-    [syncTitle],
+    [syncTitle, trackOpenedPath],
+  )
+
+  const loadReader = useCallback(
+    (path: string) => {
+      setFilePath(path)
+      setContent('')
+      setSavedContent('')
+      syncTitle(path, false)
+      trackOpenedPath(path)
+    },
+    [syncTitle, trackOpenedPath],
   )
 
   const openFileMutation = useMutation({
@@ -81,7 +106,11 @@ export function useFileOperations(onError?: (error: AppError) => void) {
         reportError(result.error)
         return
       }
-      loadFile(result.value)
+      if (result.value.kind === 'markdown') {
+        loadFile({ filePath: result.value.filePath, content: result.value.content })
+        return
+      }
+      loadReader(result.value.filePath)
     },
   })
 
@@ -97,11 +126,42 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       }
       queryClient.setQueryData(queryKeys.workspace, result.value)
       useAppSettingsStore.getState().setLastOpenedFolderPath(result.value.rootPath)
+      useAppSettingsStore.getState().setLastWorkspaceRoot(result.value.rootPath)
     },
   })
 
-  const readFileMutation = useMutation({
-    mutationFn: (path: string) => fileApi.readFile(path),
+  const rescanWorkspaceMutation = useMutation({
+    mutationFn: (rootPath: string) => fileApi.scanWorkspace(rootPath),
+    onSuccess: (result) => {
+      if (!isOk(result)) {
+        reportError(result.error)
+        return
+      }
+      queryClient.setQueryData(queryKeys.workspace, result.value)
+      useAppSettingsStore.getState().setLastWorkspaceRoot(result.value.rootPath)
+    },
+  })
+
+  const openPathMutation = useMutation({
+    mutationFn: async (path: string): Promise<Result<OpenDocumentResult, AppError>> => {
+      const kind = getDocumentKind(path)
+      if (kind === 'markdown') {
+        const result = await fileApi.readFile(path)
+        if (!isOk(result)) return result
+        return ok({
+          filePath: result.value.filePath,
+          kind: 'markdown',
+          content: result.value.content,
+        })
+      }
+      if (isReaderDocumentKind(kind)) {
+        return ok({ filePath: path, kind })
+      }
+      return err({
+        code: 'UNSUPPORTED_FORMAT',
+        message: '不支持的文件格式',
+      })
+    },
     onSuccess: (result, path) => {
       if (!isOk(result)) {
         if (result.error.code === 'FILE_NOT_FOUND') {
@@ -110,7 +170,11 @@ export function useFileOperations(onError?: (error: AppError) => void) {
         reportError(result.error)
         return
       }
-      loadFile(result.value)
+      if (result.value.kind === 'markdown') {
+        loadFile({ filePath: result.value.filePath, content: result.value.content })
+        return
+      }
+      loadReader(result.value.filePath)
     },
   })
 
@@ -125,9 +189,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setFilePath(result.value.filePath)
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
-      useAppSettingsStore.getState().addRecentFile(result.value.filePath)
-      useAppSettingsStore.getState().setLastOpenedFilePath(result.value.filePath)
-      useAppSettingsStore.getState().setLastOpenedFolderPath(dirname(result.value.filePath))
+      trackOpenedPath(result.value.filePath)
       clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')
@@ -152,9 +214,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setFilePath(result.value.filePath)
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
-      useAppSettingsStore.getState().addRecentFile(result.value.filePath)
-      useAppSettingsStore.getState().setLastOpenedFilePath(result.value.filePath)
-      useAppSettingsStore.getState().setLastOpenedFolderPath(dirname(result.value.filePath))
+      trackOpenedPath(result.value.filePath)
       clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')
@@ -168,13 +228,13 @@ export function useFileOperations(onError?: (error: AppError) => void) {
         await openFileMutation.mutateAsync()
         break
       case 'open-tree':
-        await readFileMutation.mutateAsync(action.path)
+        await openPathMutation.mutateAsync(action.path)
         break
       case 'close-app':
         window.electronAPI?.confirmClose('proceed')
         break
     }
-  }, [openFileMutation, readFileMutation])
+  }, [openFileMutation, openPathMutation])
 
   const promptIfDirty = useCallback(
     (action: UnsavedAction, run: () => void | Promise<void>) => {
@@ -194,16 +254,29 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   const openFolder = useCallback(() => openFolderMutation.mutateAsync(), [openFolderMutation])
 
+  const rescanWorkspace = useCallback(async () => {
+    const rootPath =
+      workspace?.rootPath ?? useAppSettingsStore.getState().lastWorkspaceRoot ?? undefined
+    if (!rootPath) return
+    await rescanWorkspaceMutation.mutateAsync(rootPath)
+  }, [rescanWorkspaceMutation, workspace?.rootPath])
+
+  const restoreWorkspaceOnStartup = useCallback(async () => {
+    const rootPath = useAppSettingsStore.getState().lastWorkspaceRoot
+    if (!rootPath || workspace) return
+    await rescanWorkspaceMutation.mutateAsync(rootPath)
+  }, [rescanWorkspaceMutation, workspace])
+
   const openFileFromTree = useCallback(
     (path: string) =>
-      promptIfDirty({ kind: 'open-tree', path }, () => void readFileMutation.mutateAsync(path)),
-    [promptIfDirty, readFileMutation],
+      promptIfDirty({ kind: 'open-tree', path }, () => void openPathMutation.mutateAsync(path)),
+    [openPathMutation, promptIfDirty],
   )
 
   const openRecentFile = useCallback(
     (path: string) =>
-      promptIfDirty({ kind: 'open-tree', path }, () => void readFileMutation.mutateAsync(path)),
-    [promptIfDirty, readFileMutation],
+      promptIfDirty({ kind: 'open-tree', path }, () => void openPathMutation.mutateAsync(path)),
+    [openPathMutation, promptIfDirty],
   )
 
   const saveFile = useCallback(
@@ -259,6 +332,10 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   }, [])
 
   useEffect(() => {
+    void restoreWorkspaceOnStartup()
+  }, [restoreWorkspaceOnStartup])
+
+  useEffect(() => {
     syncTitle(filePath, isDirty)
   }, [filePath, isDirty, syncTitle])
 
@@ -268,9 +345,13 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   useEffect(() => {
     return window.electronAPI?.onRequestClose(() => {
-      setUnsavedAction({ kind: 'close-app' })
+      if (isDirty) {
+        setUnsavedAction({ kind: 'close-app' })
+        return
+      }
+      window.electronAPI?.confirmClose('proceed')
     })
-  }, [])
+  }, [isDirty])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -283,10 +364,10 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       } else if (key === 'o') {
         event.preventDefault()
         void openFile()
-      } else if (key === 's' && event.shiftKey) {
+      } else if (isMarkdownDocument && key === 's' && event.shiftKey) {
         event.preventDefault()
         void saveFileAs()
-      } else if (key === 's') {
+      } else if (isMarkdownDocument && key === 's') {
         event.preventDefault()
         void saveFile()
       }
@@ -294,7 +375,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openFile, openFolder, saveFile, saveFileAs])
+  }, [isMarkdownDocument, openFile, openFolder, saveFile, saveFileAs])
 
   return {
     content,
@@ -303,17 +384,22 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     fileName,
     savedContent,
     isDirty,
+    documentKind,
+    readerDocumentKind,
+    isMarkdownDocument,
     workspaceRoot: workspace?.rootPath,
     fileTree: workspace?.tree ?? ([] as FileTreeNode[]),
     unsavedPromptOpen: unsavedAction !== null,
     isFileBusy:
       openFileMutation.isPending ||
       openFolderMutation.isPending ||
-      readFileMutation.isPending ||
+      openPathMutation.isPending ||
+      rescanWorkspaceMutation.isPending ||
       saveFileMutation.isPending ||
       saveFileAsMutation.isPending,
     openFile,
     openFolder,
+    rescanWorkspace,
     openFileFromTree,
     openRecentFile,
     saveFile,

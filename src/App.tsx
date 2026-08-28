@@ -5,6 +5,7 @@ import { ErrorLogDialog } from '@/components/shared/ErrorLogDialog'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { EditorLayout } from '@/components/layout/EditorLayout'
+import { ReaderLayout } from '@/components/layout/ReaderLayout'
 import { Toaster } from '@/components/ui/sonner'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useDraftPersistence, clearDraftForFile } from '@/hooks/useDraftPersistence'
@@ -25,6 +26,7 @@ function App() {
   const [errorLogOpen, setErrorLogOpen] = useState(false)
   const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
+  const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
   const autoSaveEnabled = useAppSettingsStore((state) => state.autoSaveEnabled)
   const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
   const recentFiles = useAppSettingsStore((state) => state.recentFiles)
@@ -44,12 +46,15 @@ function App() {
     fileName,
     savedContent,
     isDirty,
+    readerDocumentKind,
+    isMarkdownDocument,
     workspaceRoot,
     fileTree,
     unsavedPromptOpen,
     isFileBusy,
     openFile,
     openFolder,
+    rescanWorkspace,
     openFileFromTree,
     openRecentFile,
     saveFile,
@@ -63,16 +68,21 @@ function App() {
 
   const { exportHtml, exportPdf } = useExportDocument(content, filePath)
 
-  useDraftPersistence({ filePath, content, savedContent, isDirty })
+  useDraftPersistence({
+    filePath: isMarkdownDocument ? filePath : undefined,
+    content,
+    savedContent,
+    isDirty,
+  })
   useGlobalErrorHandlers(filePath)
 
   const handleAutoSave = useCallback(async () => {
-    if (!filePath || !isDirty || isFileBusy) return
+    if (!isMarkdownDocument || !filePath || !isDirty || isFileBusy) return
     await saveFile({ silent: true })
-  }, [filePath, isDirty, isFileBusy, saveFile])
+  }, [filePath, isDirty, isFileBusy, isMarkdownDocument, saveFile])
 
   useAutoSave({
-    enabled: autoSaveEnabled,
+    enabled: autoSaveEnabled && isMarkdownDocument,
     intervalMs: autoSaveIntervalMs,
     isDirty,
     filePath,
@@ -147,31 +157,47 @@ function App() {
     )
   }
 
+  const layoutProps = {
+    workspaceRoot,
+    fileTree,
+    recentFiles,
+    onOpenFile: () => void openFile(),
+    onOpenFolder: () => void openFolder(),
+    onRescanWorkspace: () => void rescanWorkspace(),
+    isRescanningWorkspace: isFileBusy,
+    onSelectFile: (path: string) => void openFileFromTree(path),
+    onOpenRecentFile: (path: string) => void openRecentFile(path),
+    onOpenSettings: () => setSettingsOpen(true),
+    onOpenErrorLog: () => setErrorLogOpen(true),
+    onOpenDevTools: () => appApi.toggleDevTools(),
+    onAbout: () => setAboutOpen(true),
+    onQuit: quitApp,
+  }
+
   return (
     <>
       <Toaster theme={theme} richColors closeButton position="top-right" />
-      <EditorLayout
-        filePath={filePath}
-        isDirty={isDirty}
-        content={content}
-        workspaceRoot={workspaceRoot}
-        fileTree={fileTree}
-        recentFiles={recentFiles}
-        onContentChange={setContent}
-        onOpenFile={() => void openFile()}
-        onOpenFolder={() => void openFolder()}
-        onSelectFile={(path) => void openFileFromTree(path)}
-        onOpenRecentFile={(path) => void openRecentFile(path)}
-        onSave={() => void saveFile()}
-        onSaveAs={() => void saveFileAs()}
-        onExportHtml={handleExportHtml}
-        onExportPdf={handleExportPdf}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenErrorLog={() => setErrorLogOpen(true)}
-        onOpenDevTools={() => appApi.toggleDevTools()}
-        onAbout={() => setAboutOpen(true)}
-        onQuit={quitApp}
-      />
+      {readerDocumentKind && filePath ? (
+        <ReaderLayout
+          filePath={filePath}
+          documentKind={readerDocumentKind}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          {...layoutProps}
+        />
+      ) : (
+        <EditorLayout
+          filePath={filePath}
+          isDirty={isDirty}
+          content={content}
+          onContentChange={setContent}
+          onSave={() => void saveFile()}
+          onSaveAs={() => void saveFileAs()}
+          onExportHtml={handleExportHtml}
+          onExportPdf={handleExportPdf}
+          {...layoutProps}
+        />
+      )}
 
       <AboutDialog
         open={aboutOpen}

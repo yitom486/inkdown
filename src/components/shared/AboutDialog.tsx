@@ -23,13 +23,13 @@ export function AboutDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>关于 Markdown Editor</DialogTitle>
+          <DialogTitle>关于轻量阅读器</DialogTitle>
           <DialogDescription>
-            版本 {version} · {platform}
+            版本 {version} · {platform} · Markdown 编辑与 PDF / EPUB 轻量阅读
           </DialogDescription>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          基于 Electron + React + shadcn/ui 构建的 Markdown 编辑器。
+          基于 Electron + React + shadcn/ui 构建。
         </p>
       </DialogContent>
     </Dialog>

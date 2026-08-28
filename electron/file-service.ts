@@ -3,11 +3,13 @@ import { dirname, extname, join } from 'path'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import {
   DEFAULT_SAVE_FILENAME,
+  DOCUMENT_DIALOG_FILTERS,
   HTML_DIALOG_FILTERS,
   MARKDOWN_DIALOG_FILTERS,
   PASTED_IMAGE_ASSETS_DIR,
   PDF_DIALOG_FILTERS,
 } from '@shared/constants'
+import { getDocumentKind } from '@shared/document-types'
 import { IMAGE_EXTENSION_BY_MIME, IMAGE_MIME_BY_EXTENSION } from '@shared/image-constants'
 import { toAppError, type AppError } from '@shared/errors'
 import { err, ok, type Result } from '@shared/result'
@@ -15,8 +17,10 @@ import type {
   ExportDocumentPayload,
   ExportDocumentResult,
   OpenDialogOptions,
+  OpenDocumentResult,
   OpenFileResult,
   OpenFolderResult,
+  ReadBinaryResult,
   ReadImageResult,
   SaveFilePayload,
   SaveFileResult,
@@ -27,13 +31,13 @@ import { scanWorkspace } from './workspace'
 
 const markdownFilters = MARKDOWN_DIALOG_FILTERS
 
-export async function openFileDialog(
+export async function openDocumentDialog(
   options: OpenDialogOptions = {},
-): Promise<Result<OpenFileResult, AppError>> {
+): Promise<Result<OpenDocumentResult, AppError>> {
   try {
     const { canceled, filePaths } = await dialog.showOpenDialog({
-      title: '打开 Markdown 文件',
-      filters: markdownFilters,
+      title: '打开文件',
+      filters: DOCUMENT_DIALOG_FILTERS,
       properties: ['openFile'],
       ...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
     })
@@ -43,10 +47,49 @@ export async function openFileDialog(
     }
 
     const filePath = filePaths[0]!
-    const content = await readFile(filePath, 'utf-8')
-    return ok({ filePath, content })
+    const kind = getDocumentKind(filePath)
+
+    if (kind === 'markdown') {
+      const content = await readFile(filePath, 'utf-8')
+      return ok({ filePath, kind: 'markdown', content })
+    }
+
+    if (kind === 'pdf' || kind === 'epub') {
+      return ok({ filePath, kind })
+    }
+
+    return err({
+      code: 'UNSUPPORTED_FORMAT',
+      message: '不支持的文件格式，请选择 Markdown、PDF 或 EPUB',
+    })
   } catch (error) {
     return err(toAppError(error, '打开文件失败'))
+  }
+}
+
+/** @deprecated 使用 openDocumentDialog */
+export async function openFileDialog(
+  options: OpenDialogOptions = {},
+): Promise<Result<OpenFileResult, AppError>> {
+  const result = await openDocumentDialog(options)
+  if (!result.ok) return result
+  if (result.value.kind !== 'markdown') {
+    return err({
+      code: 'UNSUPPORTED_FORMAT',
+      message: '请选择 Markdown 文件',
+    })
+  }
+  return ok({ filePath: result.value.filePath, content: result.value.content })
+}
+
+export async function scanWorkspaceFolder(
+  rootPath: string,
+): Promise<Result<OpenFolderResult, AppError>> {
+  try {
+    const tree = await scanWorkspace(rootPath)
+    return ok({ rootPath, tree })
+  } catch (error) {
+    return err(toAppError(error, '扫描工作区失败'))
   }
 }
 
@@ -65,8 +108,7 @@ export async function openFolderDialog(
     }
 
     const rootPath = filePaths[0]!
-    const tree = await scanWorkspace(rootPath)
-    return ok({ rootPath, tree })
+    return scanWorkspaceFolder(rootPath)
   } catch (error) {
     return err(toAppError(error, '打开文件夹失败'))
   }
@@ -76,8 +118,35 @@ export async function readFileByPath(
   filePath: string,
 ): Promise<Result<OpenFileResult, AppError>> {
   try {
+    const kind = getDocumentKind(filePath)
+    if (kind !== 'markdown') {
+      return err({
+        code: 'UNSUPPORTED_FORMAT',
+        message: '该文件不是可编辑的 Markdown 文档',
+      })
+    }
+
     const content = await readFile(filePath, 'utf-8')
     return ok({ filePath, content })
+  } catch (error) {
+    return err(toAppError(error, '读取文件失败'))
+  }
+}
+
+export async function readBinaryFileByPath(
+  filePath: string,
+): Promise<Result<ReadBinaryResult, AppError>> {
+  try {
+    const kind = getDocumentKind(filePath)
+    if (kind !== 'pdf' && kind !== 'epub') {
+      return err({
+        code: 'UNSUPPORTED_FORMAT',
+        message: '该文件不是 PDF 或 EPUB 电子书',
+      })
+    }
+
+    const buffer = await readFile(filePath)
+    return ok({ filePath, data: new Uint8Array(buffer) })
   } catch (error) {
     return err(toAppError(error, '读取文件失败'))
   }

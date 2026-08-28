@@ -1,6 +1,18 @@
+import type { DocumentKind } from '@shared/document-types'
+
 export interface OpenFileResult {
   filePath: string
   content: string
+}
+
+export type OpenDocumentResult =
+  | { filePath: string; kind: 'markdown'; content: string }
+  | { filePath: string; kind: 'pdf' | 'epub' }
+
+export interface ReadBinaryResult {
+  filePath: string
+  /** IPC 传输后通常为 Uint8Array */
+  data: Uint8Array
 }
 
 export interface OpenDialogOptions {
@@ -26,6 +38,8 @@ export interface FileTreeNode {
   name: string
   path: string
   type: 'file' | 'directory'
+  /** 文件节点专用，用于侧栏图标区分 */
+  documentKind?: Exclude<DocumentKind, 'unknown'>
   children?: FileTreeNode[]
 }
 

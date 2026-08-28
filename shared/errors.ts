@@ -5,6 +5,7 @@ export type AppErrorCode =
   | 'FILE_WRITE_ERROR'
   | 'FILE_NOT_FOUND'
   | 'WORKSPACE_SCAN_ERROR'
+  | 'UNSUPPORTED_FORMAT'
   | 'UNKNOWN'
 
 export interface AppError {

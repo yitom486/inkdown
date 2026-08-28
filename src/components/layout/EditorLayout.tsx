@@ -39,6 +39,8 @@ interface EditorLayoutProps {
   onContentChange: (value: string) => void
   onOpenFile: () => void
   onOpenFolder: () => void
+  onRescanWorkspace?: () => void
+  isRescanningWorkspace?: boolean
   onSelectFile: (path: string) => void
   onOpenRecentFile: (path: string) => void
   onSave: () => void
@@ -62,6 +64,8 @@ export function EditorLayout({
   onContentChange,
   onOpenFile,
   onOpenFolder,
+  onRescanWorkspace,
+  isRescanningWorkspace,
   onSelectFile,
   onOpenRecentFile,
   onSave,
@@ -260,6 +264,8 @@ export function EditorLayout({
             outlineExpanded={outlineExpanded}
             onOutlineToggle={() => setOutlineExpanded(!outlineExpanded)}
             onOpenFolder={onOpenFolder}
+            onRescanWorkspace={onRescanWorkspace}
+            isRescanningWorkspace={isRescanningWorkspace}
             onSelectFile={onSelectFile}
             onSelectHeading={handleSelectHeading}
           />

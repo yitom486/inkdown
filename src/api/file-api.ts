@@ -3,8 +3,10 @@ import type {
   ExportDocumentPayload,
   ExportDocumentResult,
   OpenDialogOptions,
+  OpenDocumentResult,
   OpenFileResult,
   OpenFolderResult,
+  ReadBinaryResult,
   ReadImageResult,
   SaveFilePayload,
   SaveFileResult,
@@ -26,7 +28,7 @@ function requireElectronAPI(): Result<ElectronAPI, AppError> {
 }
 
 export const fileApi = {
-  async openFile(options?: OpenDialogOptions): Promise<Result<OpenFileResult, AppError>> {
+  async openFile(options?: OpenDialogOptions): Promise<Result<OpenDocumentResult, AppError>> {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.openFile(options)
@@ -38,10 +40,22 @@ export const fileApi = {
     return api.value.openFolder(options)
   },
 
+  async scanWorkspace(rootPath: string): Promise<Result<OpenFolderResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.scanWorkspace(rootPath)
+  },
+
   async readFile(filePath: string): Promise<Result<OpenFileResult, AppError>> {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.readFile(filePath)
+  },
+
+  async readBinaryFile(filePath: string): Promise<Result<ReadBinaryResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.readBinaryFile(filePath)
   },
 
   async readImage(filePath: string): Promise<Result<ReadImageResult, AppError>> {

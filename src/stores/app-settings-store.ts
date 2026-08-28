@@ -50,6 +50,7 @@ export interface AppSettingsState {
   restoreLastFileOnStartup: boolean
   lastOpenedFilePath?: string
   lastOpenedFolderPath?: string
+  lastWorkspaceRoot?: string
   tabSize: EditorTabSize
   editorFontSize: EditorFontSize
   verboseRendererLogs: boolean
@@ -64,6 +65,7 @@ interface AppSettingsStore extends AppSettingsState {
   setRestoreLastFileOnStartup: (enabled: boolean) => void
   setLastOpenedFilePath: (filePath?: string) => void
   setLastOpenedFolderPath: (folderPath?: string) => void
+  setLastWorkspaceRoot: (rootPath?: string) => void
   setTabSize: (tabSize: EditorTabSize) => void
   setEditorFontSize: (fontSize: EditorFontSize) => void
   setVerboseRendererLogs: (enabled: boolean) => void
@@ -88,6 +90,7 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       restoreLastFileOnStartup: false,
       lastOpenedFilePath: undefined,
       lastOpenedFolderPath: undefined,
+      lastWorkspaceRoot: undefined,
       tabSize: 2,
       editorFontSize: 15,
       verboseRendererLogs: false,
@@ -105,6 +108,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       setLastOpenedFilePath: (filePath) => set({ lastOpenedFilePath: filePath }),
 
       setLastOpenedFolderPath: (folderPath) => set({ lastOpenedFolderPath: folderPath }),
+
+      setLastWorkspaceRoot: (rootPath) => set({ lastWorkspaceRoot: rootPath }),
 
       setTabSize: (tabSize) => set({ tabSize }),
 
@@ -148,6 +153,7 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         restoreLastFileOnStartup: state.restoreLastFileOnStartup,
         lastOpenedFilePath: state.lastOpenedFilePath,
         lastOpenedFolderPath: state.lastOpenedFolderPath,
+        lastWorkspaceRoot: state.lastWorkspaceRoot,
         tabSize: state.tabSize,
         editorFontSize: state.editorFontSize,
         verboseRendererLogs: state.verboseRendererLogs,

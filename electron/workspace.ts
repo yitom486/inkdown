@@ -1,11 +1,23 @@
 import { readdir } from 'fs/promises'
 import { join, extname } from 'path'
 import {
-  MARKDOWN_EXTENSION_SET,
   WORKSPACE_IGNORED_DIR_NAMES,
   WORKSPACE_MAX_DEPTH,
 } from '@shared/constants'
+import { getDocumentKind, isWorkspaceFileExtension } from '@shared/document-types'
 import type { FileTreeNode } from '@shared/file-types'
+
+/** 移除不含支持文档的空目录，便于侧栏发现有效文件 */
+export function pruneEmptyDirectories(nodes: FileTreeNode[]): FileTreeNode[] {
+  return nodes.flatMap((node) => {
+    if (node.type === 'file') return [node]
+
+    const children = pruneEmptyDirectories(node.children ?? [])
+    if (children.length === 0) return []
+
+    return [{ ...node, children }]
+  })
+}
 
 export async function scanWorkspace(
   dirPath: string,
@@ -41,14 +53,18 @@ export async function scanWorkspace(
     if (!entry.isFile()) continue
 
     const extension = extname(entry.name).toLowerCase()
-    if (!MARKDOWN_EXTENSION_SET.has(extension)) continue
+    if (!isWorkspaceFileExtension(extension)) continue
+
+    const documentKind = getDocumentKind(fullPath)
+    if (documentKind === 'unknown') continue
 
     nodes.push({
       name: entry.name,
       path: fullPath,
       type: 'file',
+      documentKind,
     })
   }
 
-  return nodes
+  return pruneEmptyDirectories(nodes)
 }

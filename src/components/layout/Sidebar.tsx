@@ -18,6 +18,8 @@ interface SidebarProps {
   outlineExpanded: boolean
   onOutlineToggle: () => void
   onOpenFolder: () => void
+  onRescanWorkspace?: () => void
+  isRescanningWorkspace?: boolean
   onSelectFile: (path: string) => void
   onSelectHeading: (heading: MarkdownHeading) => void
 }
@@ -31,6 +33,8 @@ export function Sidebar({
   outlineExpanded,
   onOutlineToggle,
   onOpenFolder,
+  onRescanWorkspace,
+  isRescanningWorkspace,
   onSelectFile,
   onSelectHeading,
 }: SidebarProps) {
@@ -55,6 +59,8 @@ export function Sidebar({
               tree={fileTree}
               activeFilePath={activeFilePath}
               onOpenFolder={onOpenFolder}
+              onRescanWorkspace={onRescanWorkspace}
+              isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
             />
           </ResizablePanel>
@@ -76,6 +82,8 @@ export function Sidebar({
               tree={fileTree}
               activeFilePath={activeFilePath}
               onOpenFolder={onOpenFolder}
+              onRescanWorkspace={onRescanWorkspace}
+              isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
             />
           </div>

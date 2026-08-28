@@ -31,6 +31,7 @@ function getRecentFileLabel(filePath: string): string {
 interface TitleBarProps {
   theme: 'dark' | 'light'
   recentFiles: string[]
+  readOnly?: boolean
   onToggleTheme: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
@@ -49,6 +50,7 @@ interface TitleBarProps {
 export function TitleBar({
   theme,
   recentFiles,
+  readOnly = false,
   onToggleTheme,
   onOpenFile,
   onOpenFolder,
@@ -101,26 +103,30 @@ export function TitleBar({
             打开文件夹
             <DropdownMenuShortcut>Ctrl+Shift+O</DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onSave}>
-            <Save className="size-4" />
-            保存
-            <DropdownMenuShortcut>Ctrl+S</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onSaveAs}>
-            <SaveAll className="size-4" />
-            另存为
-            <DropdownMenuShortcut>Ctrl+Shift+S</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onExportHtml}>
-            <FileCode2 className="size-4" />
-            导出 HTML
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onExportPdf}>
-            <FileText className="size-4" />
-            导出 PDF
-          </DropdownMenuItem>
+          {!readOnly && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onSave}>
+                <Save className="size-4" />
+                保存
+                <DropdownMenuShortcut>Ctrl+S</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onSaveAs}>
+                <SaveAll className="size-4" />
+                另存为
+                <DropdownMenuShortcut>Ctrl+Shift+S</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onExportHtml}>
+                <FileCode2 className="size-4" />
+                导出 HTML
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onExportPdf}>
+                <FileText className="size-4" />
+                导出 PDF
+              </DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={onQuit}>
             <LogOut className="size-4" />

@@ -1,5 +1,5 @@
 appId: com.markdown.editor
-productName: Markdown Editor
+productName: 轻量阅读器
 directories:
   buildResources: resources
   output: release
