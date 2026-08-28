@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { appApi } from '@/api/app-api'
 import { formatErrorLogEntry } from '@/lib/error-reporter'
 import { useErrorLogStore } from '@/stores/error-log-store'
-import { isOk } from '@shared/result'
+import { isOk } from '@shared/core/result'
 
 interface ErrorLogDialogProps {
   open: boolean

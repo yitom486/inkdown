@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { useErrorLogStore } from '@/stores/error-log-store'
 import { isAppError, reportAppError } from '@/lib/report-error'
-import type { RendererErrorPayload } from '@shared/error-log-types'
+import type { RendererErrorPayload } from '@shared/types/error-log'
 
 export interface RuntimeErrorContext {
   source: string

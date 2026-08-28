@@ -1,4 +1,4 @@
-import type { DocumentKind } from '@shared/document-types'
+import type { DocumentKind } from '@shared/types/document'
 
 export interface OpenFileResult {
   filePath: string
@@ -7,7 +7,7 @@ export interface OpenFileResult {
 
 export type OpenDocumentResult =
   | { filePath: string; kind: 'markdown'; content: string }
-  | { filePath: string; kind: 'pdf' | 'epub' }
+  | { filePath: string; kind: 'pdf' | 'epub' | 'mobi' }
 
 export interface ReadBinaryResult {
   filePath: string

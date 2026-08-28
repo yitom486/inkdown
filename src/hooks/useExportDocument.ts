@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { fileApi } from '@/api/file-api'
 import { buildExportHtml, getSuggestedExportName } from '@/lib/export-document'
 import { reportAppError } from '@/lib/report-error'
-import { isOk } from '@shared/result'
+import { isOk } from '@shared/core/result'
 
 export function useExportDocument(content: string, filePath: string | undefined) {
   const exportHtml = useCallback(async () => {

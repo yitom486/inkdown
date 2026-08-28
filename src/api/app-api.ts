@@ -1,6 +1,6 @@
-import type { RendererErrorPayload } from '@shared/error-log-types'
-import { ok, type Result } from '@shared/result'
-import type { AppError } from '@shared/errors'
+import type { RendererErrorPayload } from '@shared/types/error-log'
+import { ok, type Result } from '@shared/core/result'
+import type { AppError } from '@shared/core/errors'
 
 function getElectronAPI() {
   return typeof window !== 'undefined' ? window.electronAPI : undefined
@@ -27,5 +27,9 @@ export const appApi = {
 
   setVerboseLogs(enabled: boolean): void {
     getElectronAPI()?.setVerboseLogs(enabled)
+  },
+
+  newWindow(): void {
+    getElectronAPI()?.newWindow()
   },
 }

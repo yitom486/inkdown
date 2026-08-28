@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { RendererErrorPayload } from '@shared/error-log-types'
+import type { RendererErrorPayload } from '@shared/types/error-log'
 
 const MAX_ENTRIES = 100
 

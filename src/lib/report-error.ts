@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { isCancelled, type AppError } from '@shared/errors'
+import { isCancelled, type AppError } from '@shared/core/errors'
 import { reportRuntimeError } from '@/lib/error-reporter'
 
 /** 非 CANCELLED 错误统一以 Sonner Toast 提示 */

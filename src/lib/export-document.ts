@@ -6,7 +6,7 @@ import {
   replaceImageSrcInHtml,
 } from '@/lib/markdown-images'
 import { markdownParser } from '@/lib/markdown'
-import { isOk } from '@shared/result'
+import { isOk } from '@shared/core/result'
 
 const PREVIEW_SANITIZE_OPTIONS: Config = {
   ALLOWED_URI_REGEXP:

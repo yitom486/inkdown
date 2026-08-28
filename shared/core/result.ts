@@ -1,4 +1,4 @@
-import type { AppError } from '@shared/errors'
+import type { AppError } from '@shared/core/errors'
 
 export type Result<T, E = AppError> =
   | { ok: true; value: T }

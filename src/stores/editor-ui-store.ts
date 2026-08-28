@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
-import type { AppTheme, EditorViewMode } from '@shared/editor-types'
+import type { AppTheme, EditorViewMode } from '@shared/types/editor'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 
 export type { AppTheme, EditorViewMode }

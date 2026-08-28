@@ -11,13 +11,20 @@ import type {
   SaveFileResult,
   SavePastedImagePayload,
   SavePastedImageResult,
-} from '@shared/file-types'
-import type { AppError } from '@shared/errors'
-import type { RendererErrorPayload } from '@shared/error-log-types'
-import type { Result } from '@shared/result'
+} from '@shared/types/file'
+import type { AppError } from '@shared/core/errors'
+import type { RendererErrorPayload } from '@shared/types/error-log'
+import type { Result } from '@shared/core/result'
+import type {
+  CreateReadingMarkPayload,
+  ReadingMark,
+  UpdateReadingMarkPayload,
+} from '@shared/types/reading-mark'
 
 export interface ElectronAPI {
   platform: string
+  /** 通过「新建窗口」打开时为 true，不恢复工作区/上次文件 */
+  isFreshWindow: boolean
   getVersion: () => Promise<Result<string, AppError>>
   setDirty: (isDirty: boolean) => void
   confirmClose: (decision: 'proceed' | 'cancel') => void
@@ -37,8 +44,13 @@ export interface ElectronAPI {
   exportPdf: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void
   quit: () => void
+  newWindow: () => void
   toggleDevTools: () => void
   logRendererError: (payload: RendererErrorPayload) => Promise<Result<string, AppError>>
   getErrorLogPath: () => Promise<Result<string, AppError>>
   setVerboseLogs: (enabled: boolean) => void
+  listReadingMarks: (filePath: string) => Promise<Result<ReadingMark[], AppError>>
+  createReadingMark: (payload: CreateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
+  updateReadingMark: (payload: UpdateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
+  deleteReadingMark: (id: string) => Promise<Result<void, AppError>>
 }

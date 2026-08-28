@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { fileApi } from '@/api/file-api'
 import { reportAppError } from '@/lib/report-error'
-import { isOk } from '@shared/result'
+import { isOk } from '@shared/core/result'
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {

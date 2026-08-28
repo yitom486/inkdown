@@ -23,8 +23,8 @@ import {
   type RecentFilesLimit,
 } from '@/stores/app-settings-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
-import type { AppTheme } from '@shared/editor-types'
-import type { EditorViewMode } from '@shared/editor-types'
+import type { AppTheme } from '@shared/types/editor'
+import type { EditorViewMode } from '@shared/types/editor'
 import { cn } from '@/lib/utils'
 import { appApi } from '@/api/app-api'
 

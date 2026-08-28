@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dirname, joinPath } from '@shared/path-utils'
+import { dirname, joinPath } from '@shared/utils/path'
 
 describe('path-utils', () => {
   it('dirname 支持 Windows 与 POSIX 路径', () => {

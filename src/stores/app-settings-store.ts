@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { EditorViewMode } from '@shared/editor-types'
+import type { EditorViewMode } from '@shared/types/editor'
 
 export type AutoSaveIntervalMs = 15000 | 30000 | 60000
 export type PreviewDebounceMs = 150 | 300 | 500

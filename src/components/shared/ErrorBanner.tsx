@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import type { AppError } from '@shared/errors'
+import type { AppError } from '@shared/core/errors'
 import { Button } from '@/components/ui/button'
 
 interface ErrorBannerProps {

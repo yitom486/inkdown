@@ -8,6 +8,8 @@ export const IPC = {
   APP_LOG_RENDERER_ERROR: 'app:log-renderer-error',
   APP_GET_ERROR_LOG_PATH: 'app:get-error-log-path',
   APP_SET_VERBOSE_LOGS: 'app:set-verbose-logs',
+  APP_NEW_WINDOW: 'app:new-window',
+  APP_GET_WINDOW_INIT: 'app:get-window-init',
   FILE_OPEN: 'file:open',
   FILE_OPEN_FOLDER: 'file:open-folder',
   FILE_SCAN_WORKSPACE: 'file:scan-workspace',
@@ -20,6 +22,10 @@ export const IPC = {
   FILE_EXPORT_HTML: 'file:export-html',
   FILE_EXPORT_PDF: 'file:export-pdf',
   FILE_UPDATE_TITLE: 'file:update-title',
+  MARKS_LIST: 'marks:list',
+  MARKS_CREATE: 'marks:create',
+  MARKS_UPDATE: 'marks:update',
+  MARKS_DELETE: 'marks:delete',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
