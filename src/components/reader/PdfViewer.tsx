@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bookmark, ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
-import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import { TextLayer } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
@@ -11,6 +11,7 @@ import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { pdfjsLib } from '@/lib/pdf-worker'
 import { renderPdfMarkOverlays } from '@/lib/pdf-reading-marks'
+import { isPdfRenderCancelled } from '@/lib/pdf-render'
 import {
   copyTextToClipboard,
   readPdfSelection,
@@ -35,6 +36,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const textLayerRef = useRef<HTMLDivElement>(null)
   const marksLayerRef = useRef<HTMLDivElement>(null)
   const textLayerInstanceRef = useRef<TextLayer | null>(null)
+  const pageRenderTaskRef = useRef<RenderTask | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null)
   const loadingTaskRef = useRef<ReturnType<typeof pdfjsLib.getDocument> | null>(null)
@@ -103,13 +105,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     const pdf = pdfDocRef.current
     const canvas = canvasRef.current
     const textLayerContainer = textLayerRef.current
-    const marksLayer = marksLayerRef.current
-    if (!pdf || !canvas || !textLayerContainer || !marksLayer || pageNum < 1 || numPages === 0) {
+    if (!pdf || !canvas || !textLayerContainer || pageNum < 1 || numPages === 0) {
       return
     }
 
     let cancelled = false
     setRendering(true)
+    pageRenderTaskRef.current?.cancel()
+    pageRenderTaskRef.current = null
     textLayerInstanceRef.current?.cancel()
     textLayerInstanceRef.current = null
 
@@ -124,7 +127,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         const context = canvas.getContext('2d')
         if (!context) return
 
-        await page.render({ canvasContext: context, viewport, canvas }).promise
+        const renderTask = page.render({ canvasContext: context, viewport, canvas })
+        pageRenderTaskRef.current = renderTask
+        await renderTask.promise
         if (cancelled) return
 
         textLayerContainer.replaceChildren()
@@ -138,28 +143,33 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         })
         textLayerInstanceRef.current = textLayer
         await textLayer.render()
-
-        if (!cancelled) {
-          renderPdfMarkOverlays(marksLayer, marks, pageNum, theme)
-        }
       } catch (cause) {
-        if (!cancelled) {
+        if (!cancelled && !isPdfRenderCancelled(cause)) {
           reportAppError({
             code: 'FILE_READ_ERROR',
             message: cause instanceof Error ? cause.message : 'PDF 渲染失败',
           })
         }
       } finally {
+        pageRenderTaskRef.current = null
         if (!cancelled) setRendering(false)
       }
     })()
 
     return () => {
       cancelled = true
+      pageRenderTaskRef.current?.cancel()
+      pageRenderTaskRef.current = null
       textLayerInstanceRef.current?.cancel()
       textLayerInstanceRef.current = null
     }
-  }, [marks, numPages, pageNum, scale, theme])
+  }, [numPages, pageNum, scale])
+
+  useEffect(() => {
+    const marksLayer = marksLayerRef.current
+    if (!marksLayer || pageNum < 1 || numPages === 0) return
+    renderPdfMarkOverlays(marksLayer, marks, pageNum, theme)
+  }, [marks, numPages, pageNum, theme])
 
   const fitWidth = useCallback(() => {
     const pdf = pdfDocRef.current

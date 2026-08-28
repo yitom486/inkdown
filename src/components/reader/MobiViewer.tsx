@@ -10,7 +10,8 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import type { EpubChapter } from '@/lib/epub-navigation'
-import { buildMobiChapterHtml, renderMobiMarkHighlights } from '@/lib/mobi-chapter-html'
+import { buildMobiChapterHtml } from '@/lib/mobi-chapter-html'
+import { renderMobiMarkOverlays } from '@/lib/mobi-reading-marks'
 import {
   flattenMobiToc,
   resolveMobiChapterNav,
@@ -137,22 +138,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   useEffect(() => {
     const container = contentRef.current
     if (!container || !currentChapterId) return
-
-    container.querySelectorAll('.mobi-mark-highlight, .mobi-mark-note').forEach((node) => {
-      node.remove()
-    })
-
-    for (const mark of marks) {
-      if (mark.anchor.format !== 'mobi') continue
-      if (mark.anchor.chapterId !== currentChapterId) continue
-      if (mark.kind === 'bookmark' || !mark.anchor.rects?.length) continue
-      renderMobiMarkHighlights(
-        container,
-        mark.anchor.rects,
-        mark.kind === 'note' ? 'note' : 'highlight',
-        theme,
-      )
-    }
+    renderMobiMarkOverlays(container, marks, currentChapterId, theme)
   }, [chapterHtml, currentChapterId, marks, theme])
 
   const handleContentMouseUp = useCallback(() => {
