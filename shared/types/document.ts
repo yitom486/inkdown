@@ -15,7 +15,7 @@ export function getDocumentKind(filePath: string): DocumentKind {
   if (MARKDOWN_EXTENSION_SET.has(extension)) return 'markdown'
   if (extension === '.pdf') return 'pdf'
   if (extension === '.epub') return 'epub'
-  if (extension === '.mobi') return 'mobi'
+  if (extension === '.mobi' || extension === '.azw3' || extension === '.azw') return 'mobi'
   return 'unknown'
 }
 

@@ -12,7 +12,7 @@ export const DOCUMENT_DIALOG_FILTERS = [
   { name: 'Markdown', extensions: [...MARKDOWN_EXTENSIONS] },
   { name: 'PDF', extensions: ['pdf'] },
   { name: 'EPUB', extensions: ['epub'] },
-  { name: 'MOBI', extensions: ['mobi'] },
+  { name: 'MOBI / Kindle', extensions: ['mobi', 'azw3', 'azw'] },
   { name: 'All Files', extensions: ['*'] },
 ]
 

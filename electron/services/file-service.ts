@@ -61,7 +61,7 @@ export async function openDocumentDialog(
 
     return err({
       code: 'UNSUPPORTED_FORMAT',
-      message: '不支持的文件格式，请选择 Markdown、PDF、EPUB 或 MOBI',
+      message: '不支持的文件格式，请选择 Markdown、PDF、EPUB、MOBI 或 AZW3',
     })
   } catch (error) {
     return err(toAppError(error, '打开文件失败'))
@@ -139,10 +139,10 @@ export async function readBinaryFileByPath(
 ): Promise<Result<ReadBinaryResult, AppError>> {
   try {
     const kind = getDocumentKind(filePath)
-    if (kind !== 'pdf' && kind !== 'epub') {
+    if (kind !== 'pdf' && kind !== 'epub' && kind !== 'mobi') {
       return err({
         code: 'UNSUPPORTED_FORMAT',
-        message: '该文件不是 PDF 或 EPUB 电子书',
+        message: '该文件不是支持的电子书格式（PDF / EPUB / MOBI / AZW3）',
       })
     }
 

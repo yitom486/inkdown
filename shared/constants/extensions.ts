@@ -2,7 +2,7 @@
 export const MARKDOWN_EXTENSIONS = ['md', 'markdown', 'txt'] as const
 
 /** 只读阅读器支持的扩展名（不含点） */
-export const READER_EXTENSIONS = ['pdf', 'epub', 'mobi'] as const
+export const READER_EXTENSIONS = ['pdf', 'epub', 'mobi', 'azw3', 'azw'] as const
 
 /** 带点号的扩展名集合，用于工作区扫描 */
 export const MARKDOWN_EXTENSION_SET = new Set<string>(
