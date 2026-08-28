@@ -1,0 +1,11 @@
+appId: com.markdown.editor
+productName: Markdown Editor
+directories:
+  buildResources: resources
+  output: release
+files:
+  - out/**/*
+  - package.json
+win:
+  target:
+    - nsis
