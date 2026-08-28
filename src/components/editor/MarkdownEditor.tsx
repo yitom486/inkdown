@@ -4,17 +4,21 @@ import {
   historyKeymap,
   indentWithTab,
 } from '@codemirror/commands'
+import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
+import { languages } from '@codemirror/language-data'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import {
   bracketMatching,
   defaultHighlightStyle,
   foldGutter,
   indentOnInput,
+  indentUnit,
   syntaxHighlighting,
 } from '@codemirror/language'
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
 import { highlightSelectionMatches, search } from '@codemirror/search'
 import { markdownFormattingKeymap } from '@/lib/markdown-editor-commands'
+import { markdownLintGutter, markdownSyntaxLinter } from '@/lib/codemirror-syntax-linter'
 import { Compartment, EditorState } from '@codemirror/state'
 import {
   drawSelection,
@@ -59,6 +63,7 @@ interface MarkdownEditorProps {
 
 const themeCompartment = new Compartment()
 const tabSizeCompartment = new Compartment()
+const indentUnitCompartment = new Compartment()
 
 function buildThemeExtensions(theme: AppTheme, fontSize: number) {
   const isDark = theme === 'dark'
@@ -113,6 +118,27 @@ function buildThemeExtensions(theme: AppTheme, fontSize: number) {
       '.cm-placeholder': {
         color: isDark ? '#6b7280' : 'var(--muted-foreground)',
         fontStyle: 'italic',
+      },
+      '.cm-lintRange-error': {
+        backgroundImage: `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='6' height='3'><path d='m0 3 l2 -2 l1 0 l2 2 l1 0' fill='%23ef4444' /></svg>")`,
+        backgroundRepeat: 'repeat-x',
+        backgroundPosition: 'left bottom',
+      },
+      '.cm-lintRange-warning': {
+        backgroundImage: `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='6' height='3'><path d='m0 3 l2 -2 l1 0 l2 2 l1 0' fill='%23f59e0b' /></svg>")`,
+        backgroundRepeat: 'repeat-x',
+        backgroundPosition: 'left bottom',
+      },
+      '.cm-gutter-lint': {
+        width: '1em',
+      },
+      '.cm-gutter-lint .cm-lintMarker-error': {
+        content: '"●"',
+        color: '#ef4444',
+      },
+      '.cm-gutter-lint .cm-lintMarker-warning': {
+        content: '"●"',
+        color: '#f59e0b',
       },
     }),
   ]
@@ -202,23 +228,36 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         doc: value,
         extensions: [
           tabSizeCompartment.of(EditorState.tabSize.of(tabSize)),
+          indentUnitCompartment.of(indentUnit.of(' '.repeat(tabSize))),
           lineNumbers(),
           highlightActiveLineGutter(),
           highlightActiveLine(),
           history(),
           indentOnInput(),
           bracketMatching(),
+          closeBrackets(),
+          markdownLintGutter(),
+          markdownSyntaxLinter(),
           foldGutter({
             openText: '▾',
             closedText: '▸',
           }),
           drawSelection(),
           dropCursor(),
-          markdown({ base: markdownLanguage }),
+          markdown({
+            base: markdownLanguage,
+            codeLanguages: languages,
+          }),
           search({ top: false }),
           highlightSelectionMatches(),
           themeCompartment.of(buildThemeExtensions(theme, fontSize)),
-          keymap.of([...markdownFormattingKeymap, indentWithTab, ...defaultKeymap, ...historyKeymap]),
+          keymap.of([
+            ...markdownFormattingKeymap,
+            ...closeBracketsKeymap,
+            indentWithTab,
+            ...defaultKeymap,
+            ...historyKeymap,
+          ]),
           placeholder('在此输入 Markdown 内容…'),
           updateListener,
           EditorView.lineWrapping,
@@ -286,7 +325,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       if (!view) return
 
       view.dispatch({
-        effects: tabSizeCompartment.reconfigure(EditorState.tabSize.of(tabSize)),
+        effects: [
+          tabSizeCompartment.reconfigure(EditorState.tabSize.of(tabSize)),
+          indentUnitCompartment.reconfigure(indentUnit.of(' '.repeat(tabSize))),
+        ],
       })
     }, [tabSize])
 

@@ -3,9 +3,14 @@ productName: Markdown Editor
 directories:
   buildResources: resources
   output: release
+# 渲染进程已由 Vite 打进 out/，主进程无 npm 依赖，无需整包 node_modules
 files:
   - out/**/*
   - package.json
+  - '!node_modules'
+electronLanguages:
+  - zh-CN
+  - en-US
 win:
   icon: resources/icon.ico
   target:

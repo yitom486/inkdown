@@ -2,9 +2,21 @@ import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import type { Plugin } from 'vite'
 
 const sharedAlias = {
   '@shared': resolve('shared'),
+}
+
+/** file:// 协议下 crossorigin 会导致 JS/CSS 静默加载失败（生产黑屏） */
+function removeCrossOriginPlugin(): Plugin {
+  return {
+    name: 'remove-crossorigin',
+    enforce: 'post',
+    transformIndexHtml(html) {
+      return html.replace(/ crossorigin/g, '')
+    },
+  }
 }
 
 export default defineConfig({
@@ -32,7 +44,9 @@ export default defineConfig({
   },
   renderer: {
     root: resolve('src'),
+    base: './',
     build: {
+      modulePreload: { polyfill: false },
       rollupOptions: {
         input: resolve('src/index.html'),
       },
@@ -43,6 +57,6 @@ export default defineConfig({
         ...sharedAlias,
       },
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), removeCrossOriginPlugin()],
   },
 })

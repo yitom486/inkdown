@@ -76,6 +76,16 @@ function createWindow(): void {
     console.error('[preload-error]', preloadPath, error)
   })
 
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('[did-fail-load]', errorCode, errorDescription, validatedURL)
+  })
+
+  mainWindow.webContents.on('console-message', (_event, _level, message, line, sourceId) => {
+    if (message.includes('Error') || message.includes('error')) {
+      console.error('[renderer]', message, `(${sourceId}:${line})`)
+    }
+  })
+
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
