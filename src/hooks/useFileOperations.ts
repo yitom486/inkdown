@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { FileTreeNode, OpenFolderResult } from '../../shared/file-types'
+import type { FileTreeNode } from '@shared/file-types'
 
 function getFileName(filePath?: string): string {
   if (!filePath) return '未命名'
@@ -46,6 +46,7 @@ export function useFileOperations() {
   const openFileFromTree = useCallback(
     async (path: string) => {
       const result = await window.electronAPI?.readFile(path)
+      if (!result) return
       loadFile(result)
     },
     [loadFile],
@@ -121,4 +122,4 @@ export function useFileOperations() {
   }
 }
 
-export type { OpenFolderResult, FileTreeNode }
+export type { FileTreeNode }

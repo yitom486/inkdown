@@ -1,16 +1,18 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
-import { IPC } from '../shared/ipc-channels'
-import type { OpenFileResult, OpenFolderResult, SaveFilePayload, SaveFileResult } from '../shared/file-types'
+import { IPC } from '@shared/ipc-channels'
+import {
+  APP_TITLE,
+  DEFAULT_SAVE_FILENAME,
+  MARKDOWN_DIALOG_FILTERS,
+} from '@shared/constants'
+import type { OpenFileResult, OpenFolderResult, SaveFilePayload, SaveFileResult } from '@shared/file-types'
 import { scanWorkspace } from './workspace'
 
 let mainWindow: BrowserWindow | null = null
 
-const markdownFilters = [
-  { name: 'Markdown', extensions: ['md', 'markdown', 'txt'] },
-  { name: 'All Files', extensions: ['*'] },
-]
+const markdownFilters = MARKDOWN_DIALOG_FILTERS
 
 async function openFileDialog(): Promise<OpenFileResult | null> {
   const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -51,7 +53,7 @@ async function saveFileDialog(payload: SaveFilePayload): Promise<SaveFileResult 
     const { canceled, filePath: selectedPath } = await dialog.showSaveDialog({
       title: '保存 Markdown 文件',
       filters: markdownFilters,
-      defaultPath: 'untitled.md',
+      defaultPath: DEFAULT_SAVE_FILENAME,
     })
 
     if (canceled || !selectedPath) return null
@@ -67,9 +69,9 @@ function updateWindowTitle(filePath?: string, isDirty = false): void {
 
   const dirtyMark = isDirty ? ' •' : ''
   if (filePath) {
-    mainWindow.setTitle(`${basename(filePath)}${dirtyMark} — Markdown Editor`)
+    mainWindow.setTitle(`${basename(filePath)}${dirtyMark} — ${APP_TITLE}`)
   } else {
-    mainWindow.setTitle(`未命名${dirtyMark} — Markdown Editor`)
+    mainWindow.setTitle(`未命名${dirtyMark} — ${APP_TITLE}`)
   }
 }
 
@@ -82,7 +84,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#1e1e1e',
-    title: 'Markdown Editor',
+    title: APP_TITLE,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
       contextIsolation: true,

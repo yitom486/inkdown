@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from 'lucide-react'
-import type { FileTreeNode } from '../../../shared/file-types'
+import type { FileTreeNode } from '@shared/file-types'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 
 interface FileExplorerProps {
@@ -87,8 +86,8 @@ export function FileExplorer({
   const rootName = workspaceRoot?.split(/[/\\]/).pop() ?? '工作区'
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-border/60 bg-sidebar">
-      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2.5">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-2.5">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <FolderOpen className="size-3.5" />
           资源管理器
@@ -103,7 +102,7 @@ export function FileExplorer({
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="min-h-0 flex-1 overflow-auto">
         {!workspaceRoot ? (
           <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
             <FolderOpen className="size-10 text-muted-foreground/40" />
@@ -132,7 +131,7 @@ export function FileExplorer({
             )}
           </div>
         )}
-      </ScrollArea>
-    </aside>
+      </div>
+    </div>
   )
 }

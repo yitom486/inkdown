@@ -1,11 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC } from '../shared/ipc-channels'
+import { IPC } from '@shared/ipc-channels'
 import type {
   OpenFileResult,
   OpenFolderResult,
   SaveFilePayload,
   SaveFileResult,
-} from '../shared/file-types'
+} from '@shared/file-types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,

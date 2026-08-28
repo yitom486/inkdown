@@ -1,14 +1,17 @@
 import { readdir } from 'fs/promises'
 import { join, extname } from 'path'
-import type { FileTreeNode } from '../shared/file-types'
-
-const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.txt'])
+import {
+  MARKDOWN_EXTENSION_SET,
+  WORKSPACE_IGNORED_DIR_NAMES,
+  WORKSPACE_MAX_DEPTH,
+} from '@shared/constants'
+import type { FileTreeNode } from '@shared/file-types'
 
 export async function scanWorkspace(
   dirPath: string,
   depth = 0,
 ): Promise<FileTreeNode[]> {
-  if (depth > 6) return []
+  if (depth > WORKSPACE_MAX_DEPTH) return []
 
   const entries = await readdir(dirPath, { withFileTypes: true })
   const nodes: FileTreeNode[] = []
@@ -20,7 +23,7 @@ export async function scanWorkspace(
   })
 
   for (const entry of sorted) {
-    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+    if (entry.name.startsWith('.') || WORKSPACE_IGNORED_DIR_NAMES.has(entry.name)) continue
 
     const fullPath = join(dirPath, entry.name)
 
@@ -38,7 +41,7 @@ export async function scanWorkspace(
     if (!entry.isFile()) continue
 
     const extension = extname(entry.name).toLowerCase()
-    if (!MARKDOWN_EXTENSIONS.has(extension)) continue
+    if (!MARKDOWN_EXTENSION_SET.has(extension)) continue
 
     nodes.push({
       name: entry.name,

@@ -7,7 +7,10 @@ export function useMarkdownPreview(content: string, delay = 300): string {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const raw = markdownParser.render(content)
+      const env: { headingSlugCounts: Map<string, number> } = {
+        headingSlugCounts: new Map(),
+      }
+      const raw = markdownParser.render(content, env)
       setHtml(DOMPurify.sanitize(raw))
     }, delay)
 

@@ -1,6 +1,5 @@
 export const IPC = {
   APP_GET_VERSION: 'app:get-version',
-  APP_SHOW_ABOUT: 'app:show-about',
   APP_QUIT: 'app:quit',
   FILE_OPEN: 'file:open',
   FILE_OPEN_FOLDER: 'file:open-folder',
