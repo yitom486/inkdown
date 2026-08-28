@@ -1,0 +1,74 @@
+/* epub.js 渲染容器：章内垂直滚动 + 对称布局 */
+.epub-viewer-host {
+  height: 100%;
+  overflow: hidden;
+}
+
+.epub-viewer-host .epub-container {
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+}
+
+.epub-viewer-host .epub-view {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+}
+
+.epub-viewer-host iframe {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  margin: 0 auto !important;
+  border: none !important;
+  display: block !important;
+}
+
+/* WebKit / Electron 下滚动条稍宽一些，便于拖拽 */
+.epub-viewer-host iframe::-webkit-scrollbar {
+  width: 10px;
+}
+
+.epub-viewer-host iframe::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: rgb(113 113 122 / 0.55);
+}
+
+.epub-viewer-host iframe::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.epub-progress-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgb(113 113 122 / 0.25);
+  outline: none;
+  cursor: pointer;
+}
+
+.epub-progress-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: rgb(59 130 246);
+  border: 2px solid rgb(24 24 27);
+}
+
+.epub-progress-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: rgb(59 130 246);
+  border: 2px solid rgb(24 24 27);
+}

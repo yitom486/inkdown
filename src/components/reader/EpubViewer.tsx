@@ -1,15 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ePub from 'epubjs'
+import type Book from 'epubjs/types/book'
 import { ChevronLeft, ChevronRight, List, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
+import { EpubChapterOutline } from '@/components/reader/EpubChapterOutline'
+import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import {
+  flattenEpubToc,
+  pickInitialChapter,
+  resolveChapterNav,
+  type EpubChapter,
+  type EpubChapterNavState,
+} from '@/lib/epub-navigation'
+import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/epub-themes'
 import { reportAppError } from '@/lib/report-error'
+import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/errors'
+import '@/styles/epub-viewer.css'
 
-interface TocItem {
-  label: string
-  href: string
+interface EpubLocation {
+  start?: {
+    href?: string
+    cfi?: string
+    percentage?: number
+  }
 }
 
 interface EpubViewerProps {
@@ -17,14 +33,116 @@ interface EpubViewerProps {
   theme: 'dark' | 'light'
 }
 
+function resolveGlobalProgress(book: Book | null, location: EpubLocation): number | null {
+  const start = location.start
+  if (!start) return null
+
+  if (typeof start.percentage === 'number' && Number.isFinite(start.percentage)) {
+    return Math.min(1, Math.max(0, start.percentage))
+  }
+
+  if (book && start.cfi) {
+    const fromCfi = book.locations.percentageFromCfi(start.cfi)
+    if (typeof fromCfi === 'number' && Number.isFinite(fromCfi)) {
+      return Math.min(1, Math.max(0, fromCfi))
+    }
+  }
+
+  return null
+}
+
 export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const bookRef = useRef<Book | null>(null)
   const renditionRef = useRef<ReturnType<ReturnType<typeof ePub>['renderTo']> | null>(null)
-  const [toc, setToc] = useState<TocItem[]>([])
+  const chaptersRef = useRef<EpubChapter[]>([])
+  const [chapters, setChapters] = useState<EpubChapter[]>([])
+  const [chapterNav, setChapterNav] = useState<EpubChapterNavState>({
+    current: null,
+    previous: null,
+    next: null,
+    currentIndex: -1,
+  })
   const [tocOpen, setTocOpen] = useState(false)
   const [ready, setReady] = useState(false)
+  const [globalProgress, setGlobalProgress] = useState(0)
+  const scrollCleanupRef = useRef<(() => void) | null>(null)
+  const reportLocationTimerRef = useRef<number | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
+
+  const applyTheme = useCallback(
+    (rendition: NonNullable<typeof renditionRef.current>) => {
+      rendition.themes.register('dark', getEpubThemeRules('dark'))
+      rendition.themes.register('light', getEpubThemeRules('light'))
+      rendition.themes.select(theme)
+      rendition.themes.fontSize('100%')
+    },
+    [theme],
+  )
+
+  const syncChapterNav = useCallback((href?: string) => {
+    const nextNav = resolveChapterNav(chaptersRef.current, href)
+    setChapterNav(nextNav)
+  }, [])
+
+  const updateGlobalProgress = useCallback((location: EpubLocation) => {
+    const next = resolveGlobalProgress(bookRef.current, location)
+    if (next !== null) {
+      setGlobalProgress(next)
+    }
+  }, [])
+
+  const scheduleReportLocation = useCallback((rendition: NonNullable<typeof renditionRef.current>) => {
+    if (reportLocationTimerRef.current !== null) {
+      window.clearTimeout(reportLocationTimerRef.current)
+    }
+    reportLocationTimerRef.current = window.setTimeout(() => {
+      reportLocationTimerRef.current = null
+      rendition.reportLocation()
+    }, 120)
+  }, [])
+
+  const goToChapter = useCallback(
+    (chapter: EpubChapter | null) => {
+      if (!chapter || !renditionRef.current) return
+      void renditionRef.current.display(chapter.href)
+    },
+    [],
+  )
+
+  const applyReadingLayout = useCallback((rendition: NonNullable<typeof renditionRef.current>) => {
+    applyEpubReadingLayoutToRendition(rendition)
+  }, [])
+
+  const bindScrollReporting = useCallback(
+    (rendition: NonNullable<typeof renditionRef.current>) => {
+      scrollCleanupRef.current?.()
+
+      const handler = (contents: { document: Document; window: Window }) => {
+        applyEpubReadingLayout(contents.document)
+        requestAnimationFrame(() => {
+          applyEpubReadingLayout(contents.document)
+        })
+        scrollCleanupRef.current?.()
+
+        const onScroll = () => {
+          scheduleReportLocation(rendition)
+        }
+
+        contents.document.addEventListener('scroll', onScroll, { passive: true })
+        contents.window.addEventListener('scroll', onScroll, { passive: true })
+
+        scrollCleanupRef.current = () => {
+          contents.document.removeEventListener('scroll', onScroll)
+          contents.window.removeEventListener('scroll', onScroll)
+        }
+      }
+
+      rendition.hooks.content.register(handler)
+    },
+    [scheduleReportLocation],
+  )
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -38,7 +156,11 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
     container.innerHTML = ''
     setReady(false)
-    setToc([])
+    setChapters([])
+    setGlobalProgress(0)
+    chaptersRef.current = []
+    bookRef.current = null
+    setChapterNav({ current: null, previous: null, next: null, currentIndex: -1 })
     renditionRef.current = null
 
     const arrayBuffer = data.data.buffer.slice(
@@ -46,19 +168,30 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       data.data.byteOffset + data.data.byteLength,
     ) as ArrayBuffer
     const book = ePub(arrayBuffer)
+    bookRef.current = book
+
     const rendition = book.renderTo(container, {
       width: '100%',
       height: '100%',
       spread: 'none',
+      flow: 'scrolled-doc',
     })
     renditionRef.current = rendition
+    applyTheme(rendition)
+    bindScrollReporting(rendition)
 
-    rendition.themes.register('dark', {
-      body: { color: '#e4e4e7 !important', background: '#18181b !important' },
-    })
-    rendition.themes.register('light', {
-      body: { color: '#18181b !important', background: '#ffffff !important' },
-    })
+    const onRelocated = (location: EpubLocation) => {
+      syncChapterNav(location.start?.href)
+      updateGlobalProgress(location)
+    }
+    rendition.on('relocated', onRelocated)
+
+    const onRendered = () => {
+      requestAnimationFrame(() => {
+        applyReadingLayout(rendition)
+      })
+    }
+    rendition.on('rendered', onRendered)
 
     let cancelled = false
 
@@ -67,14 +200,35 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         await book.ready
         if (cancelled) return
 
+        await book.locations.generate(1600)
+        if (cancelled) return
+
         const navigation = await book.loaded.navigation
-        setToc(
+        const flatChapters = flattenEpubToc(
           (navigation.toc ?? []).map((item) => ({
-            label: item.label.trim(),
+            label: item.label,
             href: item.href,
+            subitems: item.subitems?.map((sub) => ({
+              label: sub.label,
+              href: sub.href,
+              subitems: sub.subitems,
+            })),
           })),
         )
-        await rendition.display()
+        chaptersRef.current = flatChapters
+        setChapters(flatChapters)
+
+        const initial = pickInitialChapter(flatChapters)
+        if (initial) {
+          await rendition.display(initial.href)
+          syncChapterNav(initial.href)
+        } else {
+          await rendition.display()
+          syncChapterNav()
+        }
+
+        rendition.reportLocation()
+        applyReadingLayout(rendition)
         if (!cancelled) setReady(true)
       } catch (cause) {
         if (!cancelled) {
@@ -88,78 +242,142 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
     return () => {
       cancelled = true
+      if (reportLocationTimerRef.current !== null) {
+        window.clearTimeout(reportLocationTimerRef.current)
+        reportLocationTimerRef.current = null
+      }
+      scrollCleanupRef.current?.()
+      scrollCleanupRef.current = null
+      rendition.off('relocated', onRelocated)
+      rendition.off('rendered', onRendered)
       book.destroy()
+      bookRef.current = null
       renditionRef.current = null
     }
-  }, [data, filePath])
+  }, [applyReadingLayout, applyTheme, bindScrollReporting, data, filePath, syncChapterNav, updateGlobalProgress])
 
   useEffect(() => {
-    renditionRef.current?.themes.select(theme)
-  }, [theme, ready])
+    if (!renditionRef.current || !ready) return
+    applyTheme(renditionRef.current)
+    applyReadingLayout(renditionRef.current)
+  }, [applyReadingLayout, applyTheme, ready, theme])
 
-  const goPrev = () => {
-    void renditionRef.current?.prev()
-  }
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!ready) return
+      if (!(event.altKey || event.metaKey)) return
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        goToChapter(chapterNav.previous)
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        goToChapter(chapterNav.next)
+      }
+    }
 
-  const goNext = () => {
-    void renditionRef.current?.next()
-  }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [chapterNav.next, chapterNav.previous, goToChapter, ready])
 
-  const openChapter = (href: string) => {
-    void renditionRef.current?.display(href)
-    setTocOpen(false)
-  }
+  const currentTitle = chapterNav.current?.label ?? '—'
+
+  const readerHost = (
+    <PaneErrorBoundary name="EPUB 阅读" filePath={filePath}>
+      <div
+        ref={containerRef}
+        className={cn(
+          'epub-viewer-host relative h-full min-h-0 overflow-hidden',
+          theme === 'dark' ? 'bg-[#18181b]' : 'bg-[#fafafa]',
+        )}
+      >
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            正在加载 EPUB…
+          </div>
+        )}
+      </div>
+    </PaneErrorBoundary>
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-2">
-        <Button variant="ghost" size="icon-sm" disabled={!ready} onClick={goPrev}>
-          <ChevronLeft className="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" disabled={!ready} onClick={goNext}>
-          <ChevronRight className="size-4" />
-        </Button>
         <Button
           variant="ghost"
           size="sm"
           className="h-7 gap-1 text-xs"
-          disabled={!ready || toc.length === 0}
+          disabled={!ready || chapters.length === 0}
           onClick={() => setTocOpen((value) => !value)}
         >
           <List className="size-3.5" />
           目录
         </Button>
-        {isLoading && <Loader2 className="ml-auto size-4 animate-spin text-muted-foreground" />}
+        <span className="ml-2 min-w-0 truncate text-xs text-muted-foreground">{currentTitle}</span>
+        <div className="ml-auto flex items-center gap-2">
+          {ready ? (
+            <div className="relative text-muted-foreground">
+              <ReadingProgressRing progress={globalProgress} />
+            </div>
+          ) : null}
+          {isLoading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
+        </div>
       </div>
 
-      {tocOpen && toc.length > 0 && (
-        <div className="max-h-48 shrink-0 overflow-auto border-b border-border/60 bg-sidebar px-2 py-2">
-          {toc.map((item) => (
-            <button
-              key={`${item.href}-${item.label}`}
-              type="button"
-              className="block w-full truncate rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              onClick={() => openChapter(item.href)}
-            >
-              {item.label || '未命名章节'}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {tocOpen && chapters.length > 0 ? (
+          <aside className="flex w-[min(28%,320px)] min-w-[180px] shrink-0 flex-col border-r border-border/60">
+            <EpubChapterOutline
+              chapters={chapters}
+              currentHref={chapterNav.current?.href}
+              onToggle={() => setTocOpen(false)}
+              onSelectChapter={goToChapter}
+            />
+          </aside>
+        ) : null}
+        <div className="min-h-0 min-w-0 flex-1">{readerHost}</div>
+      </div>
 
-      <PaneErrorBoundary name="EPUB 阅读" filePath={filePath}>
-        <div
-          ref={containerRef}
-          className={`relative min-h-0 flex-1 overflow-hidden ${theme === 'dark' ? 'bg-zinc-900' : 'bg-white'}`}
+      <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border/60 bg-sidebar px-3 py-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto min-h-9 justify-start gap-1 px-2 py-1.5 text-left"
+          disabled={!ready || !chapterNav.previous}
+          onClick={() => goToChapter(chapterNav.previous)}
         >
-          {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              正在加载 EPUB…
-            </div>
-          )}
+          <ChevronLeft className="size-4 shrink-0" />
+          <span className="min-w-0">
+            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+              上一章
+            </span>
+            <span className="block truncate text-xs">{chapterNav.previous?.label ?? '—'}</span>
+          </span>
+        </Button>
+
+        <div className="px-2 text-center">
+          <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+            当前章节
+          </span>
+          <span className="block max-w-40 truncate text-xs font-medium">{currentTitle}</span>
         </div>
-      </PaneErrorBoundary>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto min-h-9 justify-end gap-1 px-2 py-1.5 text-right"
+          disabled={!ready || !chapterNav.next}
+          onClick={() => goToChapter(chapterNav.next)}
+        >
+          <span className="min-w-0">
+            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+              下一章
+            </span>
+            <span className="block truncate text-xs">{chapterNav.next?.label ?? '—'}</span>
+          </span>
+          <ChevronRight className="size-4 shrink-0" />
+        </Button>
+      </footer>
     </div>
   )
 }

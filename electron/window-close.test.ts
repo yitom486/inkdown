@@ -89,7 +89,7 @@ describe('window-close controller', () => {
   it('renderer 超时未回应且用户确认后强制关闭', async () => {
     vi.useFakeTimers()
     const { dialog } = await import('electron')
-    vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({ response: 0 })
+    vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({ response: 0, checkboxChecked: false })
 
     const harness = createHarness()
     const event = { preventDefault: vi.fn() }
