@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bookmark, ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import { TextLayer } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
-import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
+import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
+import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
+import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
+import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
 import { pdfjsLib } from '@/lib/pdf-worker'
 import { renderPdfMarkOverlays } from '@/lib/pdf-reading-marks'
 import { isPdfRenderCancelled } from '@/lib/pdf-render'
+import { resolveUnitNav, type ReaderUnit } from '@/lib/reader-navigation'
 import {
   copyTextToClipboard,
   readPdfSelection,
@@ -44,7 +48,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0)
   const [scale, setScale] = useState(1.2)
   const [rendering, setRendering] = useState(false)
+  const [tocOpen, setTocOpen] = useState(false)
   const [marksOpen, setMarksOpen] = useState(false)
+  const [outlineUnits, setOutlineUnits] = useState<ReaderUnit[]>([])
   const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
   const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
     null,
@@ -56,6 +62,15 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
+
+  const ready = numPages > 0
+
+  const unitNav = useMemo(
+    () => resolveUnitNav(outlineUnits, String(pageNum)),
+    [outlineUnits, pageNum],
+  )
+
+  const currentTitle = unitNav.current?.label ?? (numPages > 0 ? `第 ${pageNum} 页` : '—')
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -71,6 +86,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     loadingTaskRef.current = null
     setPageNum(1)
     setNumPages(0)
+    setOutlineUnits([])
+    setTocOpen(false)
 
     void (async () => {
       try {
@@ -83,6 +100,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         }
         pdfDocRef.current = pdf
         setNumPages(pdf.numPages)
+        const units = await loadPdfOutlineUnits(pdf)
+        if (!cancelled) setOutlineUnits(units)
       } catch (cause) {
         if (!cancelled) {
           reportAppError({
@@ -216,6 +235,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const goPrev = () => setPageNum((value) => Math.max(1, value - 1))
   const goNext = () => setPageNum((value) => Math.min(numPages, value + 1))
 
+  const goToUnit = useCallback((unit: ReaderUnit) => {
+    const nextPage = Number.parseInt(unit.href, 10)
+    if (Number.isFinite(nextPage) && nextPage >= 1) {
+      setPageNum(nextPage)
+    }
+  }, [])
+
   const addPageBookmark = useCallback(async () => {
     if (!fileFingerprint || numPages === 0) return
     const result = await createMark({
@@ -275,59 +301,75 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-2">
-        <Button variant="ghost" size="icon-sm" disabled={pageNum <= 1} onClick={goPrev}>
-          <ChevronLeft className="size-4" />
-        </Button>
-        <span className="min-w-24 text-center text-sm text-muted-foreground">
-          {numPages > 0 ? `${pageNum} / ${numPages}` : '—'}
-        </span>
-        <Button variant="ghost" size="icon-sm" disabled={pageNum >= numPages} onClick={goNext}>
-          <ChevronRight className="size-4" />
-        </Button>
-        <div className="mx-2 h-4 w-px bg-border/60" />
-        <Button variant="ghost" size="icon-sm" onClick={() => setScale((value) => Math.max(0.5, value - 0.1))}>
-          <Minus className="size-4" />
-        </Button>
-        <span className="w-12 text-center text-xs text-muted-foreground">{Math.round(scale * 100)}%</span>
-        <Button variant="ghost" size="icon-sm" onClick={() => setScale((value) => Math.min(3, value + 0.1))}>
-          <Plus className="size-4" />
-        </Button>
-        <Button variant="ghost" size="sm" className="ml-1 h-7 text-xs" onClick={fitWidth}>
-          适合宽度
-        </Button>
-        <div className="mx-2 h-4 w-px bg-border/60" />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          disabled={numPages === 0}
-          onClick={() => setMarksOpen((value) => !value)}
-        >
-          <Bookmark className="size-3.5" />
-          书签
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs"
-          disabled={numPages === 0}
-          onClick={() => void addPageBookmark()}
-        >
-          添加书签
-        </Button>
-        {(isLoading || rendering) && <Loader2 className="ml-auto size-4 animate-spin text-muted-foreground" />}
-      </div>
+      <ReaderToolbarShell
+        ready={ready}
+        tocDisabled={outlineUnits.length === 0}
+        onTocToggle={() => {
+          setMarksOpen(false)
+          setTocOpen((value) => !value)
+        }}
+        onMarksToggle={() => {
+          setTocOpen(false)
+          setMarksOpen((value) => !value)
+        }}
+        onAddBookmark={() => void addPageBookmark()}
+        currentTitle={currentTitle}
+        center={
+          <>
+            <Button variant="ghost" size="icon-sm" disabled={pageNum <= 1} onClick={goPrev}>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <span className="min-w-24 text-center text-sm text-muted-foreground">
+              {numPages > 0 ? `${pageNum} / ${numPages}` : '—'}
+            </span>
+            <Button variant="ghost" size="icon-sm" disabled={pageNum >= numPages} onClick={goNext}>
+              <ChevronRight className="size-4" />
+            </Button>
+            <div className="mx-2 h-4 w-px bg-border/60" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setScale((value) => Math.max(0.5, value - 0.1))}
+            >
+              <Minus className="size-4" />
+            </Button>
+            <span className="w-12 text-center text-xs text-muted-foreground">
+              {Math.round(scale * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setScale((value) => Math.min(3, value + 0.1))}
+            >
+              <Plus className="size-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="ml-1 h-7 text-xs" onClick={fitWidth}>
+              适合宽度
+            </Button>
+          </>
+        }
+        trailing={
+          (isLoading || rendering) ? (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          ) : null
+        }
+      />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {marksOpen ? (
-          <ReadingMarkPanel
-            marks={marks}
-            onSelect={handleSelectMark}
-            onDelete={(mark) => void handleDeleteMark(mark)}
-            onClose={() => setMarksOpen(false)}
-          />
-        ) : null}
+      <ReaderContentShell
+        marksOpen={marksOpen}
+        marks={marks}
+        onSelectMark={handleSelectMark}
+        onDeleteMark={(mark) => void handleDeleteMark(mark)}
+        onCloseMarks={() => setMarksOpen(false)}
+        tocOpen={tocOpen}
+        units={outlineUnits}
+        currentUnitId={unitNav.current?.href ?? String(pageNum)}
+        onCloseToc={() => setTocOpen(false)}
+        onSelectUnit={(unit) => {
+          goToUnit(unit)
+          setTocOpen(false)
+        }}
+      >
         <div
           ref={containerRef}
           className={`min-h-0 flex-1 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
@@ -353,7 +395,21 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             </div>
           </PaneErrorBoundary>
         </div>
-      </div>
+      </ReaderContentShell>
+
+      <ReaderFooterNav
+        ready={ready}
+        previousLabel="上一节"
+        nextLabel="下一节"
+        currentLabel="当前位置"
+        currentTitle={currentTitle}
+        previousTitle={unitNav.previous?.label ?? '—'}
+        nextTitle={unitNav.next?.label ?? '—'}
+        previousDisabled={!unitNav.previous}
+        nextDisabled={!unitNav.next}
+        onPrevious={() => unitNav.previous && goToUnit(unitNav.previous)}
+        onNext={() => unitNav.next && goToUnit(unitNav.next)}
+      />
 
       {selectionToolbarPos && selectionSnapshot ? (
         <SelectionToolbar

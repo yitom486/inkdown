@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { initMobiFile, type Mobi } from '@lingo-reader/mobi-parser'
-import { Bookmark, ChevronLeft, ChevronRight, List, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Loader2 } from 'lucide-react'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
-import { EpubChapterOutline } from '@/components/reader/EpubChapterOutline'
-import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
+import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
+import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
+import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
-import type { EpubChapter } from '@/lib/epub-navigation'
+import type { ReaderUnit } from '@/lib/reader-navigation'
 import { buildMobiChapterHtml } from '@/lib/mobi-chapter-html'
 import { renderMobiMarkOverlays } from '@/lib/mobi-reading-marks'
 import {
@@ -62,7 +62,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     [chapters, currentChapterId],
   )
 
-  const outlineChapters: EpubChapter[] = useMemo(
+  const outlineUnits: ReaderUnit[] = useMemo(
     () => chapters.map((chapter) => ({ label: chapter.label, href: chapter.id, level: 0 })),
     [chapters],
   )
@@ -223,67 +223,38 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          disabled={!ready || chapters.length === 0}
-          onClick={() => {
-            setMarksOpen(false)
-            setTocOpen((value) => !value)
-          }}
-        >
-          <List className="size-3.5" />
-          目录
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          disabled={!ready}
-          onClick={() => {
-            setTocOpen(false)
-            setMarksOpen((value) => !value)
-          }}
-        >
-          <Bookmark className="size-3.5" />
-          书签
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs"
-          disabled={!ready}
-          onClick={() => void addChapterBookmark()}
-        >
-          添加书签
-        </Button>
-        <span className="ml-2 min-w-0 truncate text-xs text-muted-foreground">{currentTitle}</span>
-        {(isLoading || !ready) && (
-          <Loader2 className="ml-auto size-4 animate-spin text-muted-foreground" />
-        )}
-      </div>
+      <ReaderToolbarShell
+        ready={ready}
+        tocDisabled={chapters.length === 0}
+        onTocToggle={() => {
+          setMarksOpen(false)
+          setTocOpen((value) => !value)
+        }}
+        onMarksToggle={() => {
+          setTocOpen(false)
+          setMarksOpen((value) => !value)
+        }}
+        onAddBookmark={() => void addChapterBookmark()}
+        currentTitle={currentTitle}
+        trailing={
+          (isLoading || !ready) ? (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          ) : null
+        }
+      />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {marksOpen ? (
-          <ReadingMarkPanel
-            marks={marks}
-            onSelect={handleSelectMark}
-            onDelete={(mark) => void handleDeleteMark(mark)}
-            onClose={() => setMarksOpen(false)}
-          />
-        ) : null}
-        {tocOpen && chapters.length > 0 ? (
-          <aside className="flex w-[min(28%,320px)] min-w-[180px] shrink-0 flex-col border-r border-border/60">
-            <EpubChapterOutline
-              chapters={outlineChapters}
-              currentHref={currentChapterId}
-              onToggle={() => setTocOpen(false)}
-              onSelectChapter={(chapter) => loadChapter(chapter.href)}
-            />
-          </aside>
-        ) : null}
+      <ReaderContentShell
+        marksOpen={marksOpen}
+        marks={marks}
+        onSelectMark={handleSelectMark}
+        onDeleteMark={(mark) => void handleDeleteMark(mark)}
+        onCloseMarks={() => setMarksOpen(false)}
+        tocOpen={tocOpen}
+        units={outlineUnits}
+        currentUnitId={currentChapterId}
+        onCloseToc={() => setTocOpen(false)}
+        onSelectUnit={(unit) => loadChapter(unit.href)}
+      >
         <div className="min-h-0 min-w-0 flex-1 overflow-auto">
           <PaneErrorBoundary name="MOBI 阅读" filePath={filePath}>
             {isLoading ? (
@@ -302,46 +273,18 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             )}
           </PaneErrorBoundary>
         </div>
-      </div>
+      </ReaderContentShell>
 
-      <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border/60 bg-sidebar px-3 py-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto min-h-9 justify-start gap-1 px-2 py-1.5 text-left"
-          disabled={!ready || !chapterNav.previous}
-          onClick={() => chapterNav.previous && loadChapter(chapterNav.previous.id)}
-        >
-          <ChevronLeft className="size-4 shrink-0" />
-          <span className="min-w-0">
-            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-              上一章
-            </span>
-            <span className="block truncate text-xs">{chapterNav.previous?.label ?? '—'}</span>
-          </span>
-        </Button>
-        <div className="px-2 text-center">
-          <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-            当前章节
-          </span>
-          <span className="block max-w-40 truncate text-xs font-medium">{currentTitle}</span>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto min-h-9 justify-end gap-1 px-2 py-1.5 text-right"
-          disabled={!ready || !chapterNav.next}
-          onClick={() => chapterNav.next && loadChapter(chapterNav.next.id)}
-        >
-          <span className="min-w-0">
-            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-              下一章
-            </span>
-            <span className="block truncate text-xs">{chapterNav.next?.label ?? '—'}</span>
-          </span>
-          <ChevronRight className="size-4 shrink-0" />
-        </Button>
-      </footer>
+      <ReaderFooterNav
+        ready={ready}
+        currentTitle={currentTitle}
+        previousTitle={chapterNav.previous?.label ?? '—'}
+        nextTitle={chapterNav.next?.label ?? '—'}
+        previousDisabled={!chapterNav.previous}
+        nextDisabled={!chapterNav.next}
+        onPrevious={() => chapterNav.previous && loadChapter(chapterNav.previous.id)}
+        onNext={() => chapterNav.next && loadChapter(chapterNav.next.id)}
+      />
 
       {selectionToolbarPos && selectionSnapshot ? (
         <SelectionToolbar
