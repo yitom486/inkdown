@@ -2,7 +2,12 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage } from 'electron
 import { basename, join } from 'path'
 import { IPC } from '@shared/ipc-channels'
 import { APP_TITLE } from '@shared/constants'
-import type { ExportDocumentPayload, SaveFilePayload, SavePastedImagePayload } from '@shared/file-types'
+import type {
+  ExportDocumentPayload,
+  OpenDialogOptions,
+  SaveFilePayload,
+  SavePastedImagePayload,
+} from '@shared/file-types'
 import {
   exportHtmlDocument,
   exportPdfDocument,
@@ -146,8 +151,10 @@ function registerIpcHandlers(): void {
     allowClose = true
     mainWindow?.close()
   })
-  ipcMain.handle(IPC.FILE_OPEN, () => openFileDialog())
-  ipcMain.handle(IPC.FILE_OPEN_FOLDER, () => openFolderDialog())
+  ipcMain.handle(IPC.FILE_OPEN, (_event, options?: OpenDialogOptions) => openFileDialog(options))
+  ipcMain.handle(IPC.FILE_OPEN_FOLDER, (_event, options?: OpenDialogOptions) =>
+    openFolderDialog(options),
+  )
   ipcMain.handle(IPC.FILE_READ, (_event, filePath: string) => readFileByPath(filePath))
   ipcMain.handle(IPC.FILE_READ_IMAGE, (_event, filePath: string) => readImageAsDataUrl(filePath))
   ipcMain.handle(IPC.FILE_SAVE, (_event, payload: SaveFilePayload) => saveFileDialog(payload))

@@ -14,6 +14,7 @@ import { err, ok, type Result } from '@shared/result'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
+  OpenDialogOptions,
   OpenFileResult,
   OpenFolderResult,
   ReadImageResult,
@@ -26,12 +27,15 @@ import { scanWorkspace } from './workspace'
 
 const markdownFilters = MARKDOWN_DIALOG_FILTERS
 
-export async function openFileDialog(): Promise<Result<OpenFileResult, AppError>> {
+export async function openFileDialog(
+  options: OpenDialogOptions = {},
+): Promise<Result<OpenFileResult, AppError>> {
   try {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       title: '打开 Markdown 文件',
       filters: markdownFilters,
       properties: ['openFile'],
+      ...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
     })
 
     if (canceled || filePaths.length === 0) {
@@ -46,11 +50,14 @@ export async function openFileDialog(): Promise<Result<OpenFileResult, AppError>
   }
 }
 
-export async function openFolderDialog(): Promise<Result<OpenFolderResult, AppError>> {
+export async function openFolderDialog(
+  options: OpenDialogOptions = {},
+): Promise<Result<OpenFolderResult, AppError>> {
   try {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       title: '打开文件夹',
       properties: ['openDirectory'],
+      ...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
     })
 
     if (canceled || filePaths.length === 0) {
@@ -107,7 +114,7 @@ export async function saveFileDialog(
       const { canceled, filePath: selectedPath } = await dialog.showSaveDialog({
         title: '保存 Markdown 文件',
         filters: markdownFilters,
-        defaultPath: DEFAULT_SAVE_FILENAME,
+        defaultPath: payload.defaultPath ?? DEFAULT_SAVE_FILENAME,
       })
 
       if (canceled || !selectedPath) {

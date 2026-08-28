@@ -4,10 +4,13 @@ import { toast } from 'sonner'
 import { appApi, fileApi } from '@/api/file-api'
 import { queryKeys } from '@/api/query-keys'
 import { isCancelled, type AppError } from '@shared/errors'
+import { DEFAULT_SAVE_FILENAME } from '@shared/constants'
 import type { FileTreeNode, OpenFolderResult } from '@shared/file-types'
+import { dirname, joinPath } from '@shared/path-utils'
 import { isOk } from '@shared/result'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { clearDraftForFile } from '@/hooks/useDraftPersistence'
+import { getOpenDialogDefaultPath } from '@/lib/dialog-default-path'
 import type { DocumentDraft } from '@/lib/draft-utils'
 
 function getFileName(filePath?: string): string {
@@ -63,12 +66,16 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       syncTitle(result.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.filePath)
       useAppSettingsStore.getState().setLastOpenedFilePath(result.filePath)
+      useAppSettingsStore.getState().setLastOpenedFolderPath(dirname(result.filePath))
     },
     [syncTitle],
   )
 
   const openFileMutation = useMutation({
-    mutationFn: () => fileApi.openFile(),
+    mutationFn: () =>
+      fileApi.openFile({
+        defaultPath: getOpenDialogDefaultPath(),
+      }),
     onSuccess: (result) => {
       if (!isOk(result)) {
         reportError(result.error)
@@ -79,13 +86,17 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   })
 
   const openFolderMutation = useMutation({
-    mutationFn: () => fileApi.openFolder(),
+    mutationFn: () =>
+      fileApi.openFolder({
+        defaultPath: getOpenDialogDefaultPath(),
+      }),
     onSuccess: (result) => {
       if (!isOk(result)) {
         reportError(result.error)
         return
       }
       queryClient.setQueryData(queryKeys.workspace, result.value)
+      useAppSettingsStore.getState().setLastOpenedFolderPath(result.value.rootPath)
     },
   })
 
@@ -116,6 +127,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       syncTitle(result.value.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.value.filePath)
       useAppSettingsStore.getState().setLastOpenedFilePath(result.value.filePath)
+      useAppSettingsStore.getState().setLastOpenedFolderPath(dirname(result.value.filePath))
       clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')
@@ -124,7 +136,14 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   })
 
   const saveFileAsMutation = useMutation({
-    mutationFn: (payload: { content: string; silent?: boolean }) => fileApi.saveFileAs(payload),
+    mutationFn: (payload: { content: string; silent?: boolean }) => {
+      const defaultDir = getOpenDialogDefaultPath()
+      const defaultPath = defaultDir
+        ? joinPath(defaultDir, DEFAULT_SAVE_FILENAME)
+        : DEFAULT_SAVE_FILENAME
+
+      return fileApi.saveFileAs({ content: payload.content, defaultPath })
+    },
     onSuccess: (result, variables) => {
       if (!isOk(result)) {
         reportError(result.error)
@@ -135,6 +154,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       syncTitle(result.value.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.value.filePath)
       useAppSettingsStore.getState().setLastOpenedFilePath(result.value.filePath)
+      useAppSettingsStore.getState().setLastOpenedFolderPath(dirname(result.value.filePath))
       clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')

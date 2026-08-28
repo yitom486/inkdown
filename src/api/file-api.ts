@@ -2,6 +2,7 @@ import type { AppError } from '@shared/errors'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
+  OpenDialogOptions,
   OpenFileResult,
   OpenFolderResult,
   ReadImageResult,
@@ -25,16 +26,16 @@ function requireElectronAPI(): Result<ElectronAPI, AppError> {
 }
 
 export const fileApi = {
-  async openFile(): Promise<Result<OpenFileResult, AppError>> {
+  async openFile(options?: OpenDialogOptions): Promise<Result<OpenFileResult, AppError>> {
     const api = requireElectronAPI()
     if (!api.ok) return api
-    return api.value.openFile()
+    return api.value.openFile(options)
   },
 
-  async openFolder(): Promise<Result<OpenFolderResult, AppError>> {
+  async openFolder(options?: OpenDialogOptions): Promise<Result<OpenFolderResult, AppError>> {
     const api = requireElectronAPI()
     if (!api.ok) return api
-    return api.value.openFolder()
+    return api.value.openFolder(options)
   },
 
   async readFile(filePath: string): Promise<Result<OpenFileResult, AppError>> {

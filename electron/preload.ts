@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc-channels'
-import type { ExportDocumentPayload, SaveFilePayload, SavePastedImagePayload } from '@shared/file-types'
+import type { ExportDocumentPayload, OpenDialogOptions, SaveFilePayload, SavePastedImagePayload } from '@shared/file-types'
 import type { RendererErrorPayload } from '@shared/error-log-types'
 import type { ElectronAPI } from '@shared/electron-api.types'
 
@@ -20,8 +20,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener(IPC.APP_REQUEST_CLOSE, handler)
     }
   },
-  openFile: () => ipcRenderer.invoke(IPC.FILE_OPEN),
-  openFolder: () => ipcRenderer.invoke(IPC.FILE_OPEN_FOLDER),
+  openFile: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN, options),
+  openFolder: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN_FOLDER, options),
   readFile: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ, filePath),
   readImage: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ_IMAGE, filePath),
   saveFile: (payload: SaveFilePayload) => ipcRenderer.invoke(IPC.FILE_SAVE, payload),
