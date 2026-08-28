@@ -1,5 +1,11 @@
 import type { ReadingMark } from '@shared/types/reading-mark'
 
+export {
+  filterVisualReadingMarks,
+  getReadingMarkKindLabel,
+  getReadingMarkLabel,
+} from '@/lib/reading-mark-labels'
+
 const MARK_STYLE_ID = 'reader-mark-styles'
 
 export interface EpubMarkHoverHandlers {
@@ -25,28 +31,6 @@ export function injectReadingMarkStyles(doc: Document, theme: 'dark' | 'light'):
 export function getEpubMarkCfiRange(mark: ReadingMark): string | null {
   if (mark.anchor.format !== 'epub') return null
   return mark.anchor.cfiRange ?? mark.anchor.cfi
-}
-
-export function getReadingMarkLabel(mark: ReadingMark): string {
-  if (mark.label?.trim()) return mark.label.trim()
-  if (mark.excerpt?.trim()) {
-    const text = mark.excerpt.trim()
-    return text.length > 48 ? `${text.slice(0, 48)}…` : text
-  }
-  if (mark.kind === 'bookmark') return '书签'
-  if (mark.kind === 'note') return '批注'
-  return '高亮'
-}
-
-export function getReadingMarkKindLabel(kind: ReadingMark['kind']): string {
-  switch (kind) {
-    case 'bookmark':
-      return '书签'
-    case 'highlight':
-      return '高亮'
-    case 'note':
-      return '批注'
-  }
 }
 
 export function getEpubAnnotationType(mark: ReadingMark): 'highlight' | 'underline' {

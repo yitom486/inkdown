@@ -41,6 +41,14 @@ async function writeStore(store: ReadingMarksFile): Promise<void> {
   await writeFile(filePath, `${JSON.stringify(store, null, 2)}\n`, 'utf-8')
 }
 
+function normalizeMarkFilePath(filePath: string): string {
+  const trimmed = filePath.trim()
+  if (process.platform === 'win32') {
+    return trimmed.toLowerCase()
+  }
+  return trimmed
+}
+
 export async function listReadingMarks(
   filePath?: string,
 ): Promise<Result<ReadingMark[], AppError>> {
@@ -48,7 +56,9 @@ export async function listReadingMarks(
     const store = await readStore()
     const normalized = filePath?.trim()
     const marks = normalized
-      ? store.marks.filter((mark) => mark.filePath === normalized)
+      ? store.marks.filter(
+          (mark) => normalizeMarkFilePath(mark.filePath) === normalizeMarkFilePath(normalized),
+        )
       : store.marks
     return ok(marks.sort((a, b) => b.updatedAt - a.updatedAt))
   } catch (error) {
