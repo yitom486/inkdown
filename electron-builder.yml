@@ -1,5 +1,6 @@
 appId: com.markdown.editor
 productName: 轻量阅读器
+publish: null
 directories:
   buildResources: resources
   output: release

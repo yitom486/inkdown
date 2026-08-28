@@ -1,4 +1,4 @@
-import { basename } from 'path'
+import { basename } from '@shared/utils/path'
 import type { BrowserWindow } from 'electron'
 import { APP_TITLE } from '@shared/constants/app'
 

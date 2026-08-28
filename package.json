@@ -9,7 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "pack": "bun run build && electron-builder",
+    "pack": "bun run build && electron-builder --publish never",
     "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icon.ps1 && bun run scripts/generate-icon.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
