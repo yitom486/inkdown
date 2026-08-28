@@ -45,7 +45,7 @@ export function ReaderToolbarShell({
         onClick={onMarksToggle}
       >
         <Bookmark className="size-3.5" />
-        书签
+        书签与批注
       </Button>
       <Button
         variant="ghost"

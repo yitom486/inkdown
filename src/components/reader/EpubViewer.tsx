@@ -11,6 +11,7 @@ import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import {
   flattenEpubToc,
@@ -89,8 +90,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     next: null,
     currentIndex: -1,
   })
-  const [tocOpen, setTocOpen] = useState(false)
-  const [marksOpen, setMarksOpen] = useState(false)
+  const { tocOpen, marksOpen, toggleToc, toggleMarks, closeToc, closeMarks } = useReaderSidePanels()
   const [ready, setReady] = useState(false)
   const [globalProgress, setGlobalProgress] = useState(0)
   const [selectionSnapshot, setSelectionSnapshot] = useState<EpubSelectionSnapshot | null>(null)
@@ -626,14 +626,8 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       <ReaderToolbarShell
         ready={ready}
         tocDisabled={chapters.length === 0}
-        onTocToggle={() => {
-          setMarksOpen(false)
-          setTocOpen((value) => !value)
-        }}
-        onMarksToggle={() => {
-          setTocOpen(false)
-          setMarksOpen((value) => !value)
-        }}
+        onTocToggle={toggleToc}
+        onMarksToggle={toggleMarks}
         onAddBookmark={() => void addBookmarkAtCurrent()}
         currentTitle={currentTitle}
         trailing={
@@ -653,11 +647,11 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         marks={marks}
         onSelectMark={handleSelectMark}
         onDeleteMark={(mark) => void handleDeleteMark(mark)}
-        onCloseMarks={() => setMarksOpen(false)}
+        onCloseMarks={closeMarks}
         tocOpen={tocOpen}
         units={chapters}
         currentUnitId={chapterNav.current?.href}
-        onCloseToc={() => setTocOpen(false)}
+        onCloseToc={closeToc}
         onSelectUnit={goToChapter}
       >
         {readerHost}

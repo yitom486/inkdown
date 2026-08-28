@@ -1,3 +1,5 @@
+import { resolveTopLevelChapterNav } from '@/lib/reader-chapter-nav'
+
 export interface EpubChapter {
   label: string
   href: string
@@ -54,7 +56,27 @@ function hrefMatches(currentHref: string, chapterHref: string): boolean {
   return current === target || current.endsWith(target) || target.endsWith(current)
 }
 
-/** 根据当前 location.href 解析上一章 / 当前 / 下一章 */
+/** 优先精确匹配（含 hash），否则取最长前缀匹配 */
+function findChapterFlatIndex(chapters: EpubChapter[], currentHref?: string): number {
+  if (!currentHref) return -1
+
+  const exactIndex = chapters.findIndex((chapter) => chapter.href === currentHref)
+  if (exactIndex >= 0) return exactIndex
+
+  let bestIndex = -1
+  let bestLength = -1
+  for (let i = 0; i < chapters.length; i += 1) {
+    const chapter = chapters[i]!
+    if (!hrefMatches(currentHref, chapter.href)) continue
+    if (chapter.href.length > bestLength) {
+      bestIndex = i
+      bestLength = chapter.href.length
+    }
+  }
+  return bestIndex
+}
+
+/** 根据当前 location.href 解析上一章 / 当前 / 下一章（仅一级标题间切换） */
 export function resolveChapterNav(
   chapters: EpubChapter[],
   currentHref?: string,
@@ -65,26 +87,12 @@ export function resolveChapterNav(
 
   if (!currentHref) {
     const initial = pickInitialChapter(chapters)
-    const index = initial ? chapters.findIndex((item) => item.href === initial.href) : 0
-    return {
-      current: chapters[index] ?? null,
-      previous: index > 0 ? chapters[index - 1]! : null,
-      next: index >= 0 && index < chapters.length - 1 ? chapters[index + 1]! : null,
-      currentIndex: index,
-    }
+    const flatIndex = initial ? chapters.findIndex((item) => item.href === initial.href) : 0
+    return resolveTopLevelChapterNav(chapters, flatIndex)
   }
 
-  let index = chapters.findIndex((chapter) => hrefMatches(currentHref, chapter.href))
-  if (index < 0) {
-    for (let i = chapters.length - 1; i >= 0; i -= 1) {
-      if (hrefMatches(currentHref, chapters[i]!.href)) {
-        index = i
-        break
-      }
-    }
-  }
-
-  if (index < 0) {
+  const flatIndex = findChapterFlatIndex(chapters, currentHref)
+  if (flatIndex < 0) {
     return {
       current: null,
       previous: null,
@@ -93,10 +101,5 @@ export function resolveChapterNav(
     }
   }
 
-  return {
-    current: chapters[index]!,
-    previous: index > 0 ? chapters[index - 1]! : null,
-    next: index < chapters.length - 1 ? chapters[index + 1]! : null,
-    currentIndex: index,
-  }
+  return resolveTopLevelChapterNav(chapters, flatIndex)
 }

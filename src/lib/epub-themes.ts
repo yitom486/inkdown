@@ -28,6 +28,8 @@ const EPUB_PALETTE = {
 
 export type EpubThemeMode = keyof typeof EPUB_PALETTE
 
+export { EPUB_PALETTE as READER_PALETTE }
+
 /** epub.js themes 规则：覆盖书内默认蓝链与字体 */
 export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<string, string>> {
   const serif = '"Source Han Serif SC", "Noto Serif SC", "Songti SC", Georgia, serif'
@@ -131,7 +133,8 @@ export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<st
   }
 }
 
-function buildReaderLayoutCss(mode: EpubThemeMode): string {
+/** 阅读区布局 CSS（EPUB iframe 与 MOBI 章节文档共用） */
+export function buildReaderLayoutCss(mode: EpubThemeMode): string {
   const h = EPUB_CONTENT_HORIZONTAL_PADDING
   const v = EPUB_CONTENT_VERTICAL_PADDING
   const palette = EPUB_PALETTE[mode]
@@ -166,7 +169,7 @@ function buildReaderLayoutCss(mode: EpubThemeMode): string {
     }
     body p,
     body span,
-    body div,
+    body div:not(.mobi-mark-highlight):not(.mobi-mark-note):not(#reader-mark-layer),
     body li,
     body td,
     body th,
@@ -191,7 +194,7 @@ function buildReaderLayoutCss(mode: EpubThemeMode): string {
     body a:hover {
       color: ${palette.linkHover} !important;
     }
-    body > div,
+    body > div:not(.mobi-mark-highlight):not(.mobi-mark-note):not(#reader-mark-layer),
     body > section,
     body > article,
     body > main,
@@ -218,6 +221,15 @@ function buildReaderLayoutCss(mode: EpubThemeMode): string {
     img, svg, video {
       max-width: 100% !important;
       height: auto !important;
+    }
+    pre, code {
+      color: ${palette.text} !important;
+      background-color: transparent !important;
+      white-space: pre-wrap !important;
+      word-break: break-word !important;
+    }
+    nav {
+      display: none !important;
     }
   `
 }

@@ -25,4 +25,14 @@ describe('epub-navigation', () => {
     expect(nav.previous?.label).toBe('第一章')
     expect(nav.next).toBeNull()
   })
+
+  it('位于二级小节时下一章仍跳到下一一级标题', () => {
+    const nested = flattenEpubToc([
+      { label: '第一章', href: 'ch1.xhtml', subitems: [{ label: '一、小引', href: 'ch1.xhtml#intro' }] },
+      { label: '第二章', href: 'ch2.xhtml' },
+    ])
+    const nav = resolveChapterNav(nested, 'ch1.xhtml#intro')
+    expect(nav.current?.label).toBe('第一章')
+    expect(nav.next?.label).toBe('第二章')
+  })
 })
