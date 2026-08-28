@@ -95,6 +95,39 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
       return () => container.removeEventListener('scroll', handleScroll)
     }, [html])
 
+    useEffect(() => {
+      const container = previewRef.current
+      if (!container) return
+
+      const handleCopy = async (event: MouseEvent) => {
+        const target = event.target
+        if (!(target instanceof Element)) return
+
+        const button = target.closest<HTMLButtonElement>('.code-block-copy')
+        if (!button) return
+
+        const code = button.closest('.code-block')?.querySelector('code')
+        const text = code?.textContent
+        if (!text) return
+
+        event.preventDefault()
+        try {
+          await navigator.clipboard.writeText(text)
+          button.classList.add('copied')
+          button.setAttribute('aria-label', '已复制')
+          window.setTimeout(() => {
+            button.classList.remove('copied')
+            button.setAttribute('aria-label', '复制代码')
+          }, 1500)
+        } catch (error) {
+          console.error('复制代码失败：', error)
+        }
+      }
+
+      container.addEventListener('click', handleCopy)
+      return () => container.removeEventListener('click', handleCopy)
+    }, [html])
+
     if (!html) {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 bg-preview p-6 text-center">

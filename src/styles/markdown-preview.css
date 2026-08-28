@@ -62,6 +62,63 @@
   padding: 1rem;
 }
 
+.markdown-preview .code-block {
+  margin: 0.75rem 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--muted);
+}
+
+.markdown-preview .code-block-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--muted) 70%, var(--background));
+  padding: 0.375rem 0.625rem;
+}
+
+.markdown-preview .code-block-lang {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-transform: lowercase;
+}
+
+.markdown-preview .code-block-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--background);
+  padding: 0.25rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.markdown-preview .code-block-copy:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 12%, var(--background));
+  color: var(--foreground);
+}
+
+.markdown-preview .code-block-copy.copied {
+  border-color: color-mix(in oklch, var(--primary) 50%, var(--border));
+  color: var(--primary);
+}
+
+.markdown-preview .code-block pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
 .markdown-preview pre code {
   background: transparent;
   padding: 0;

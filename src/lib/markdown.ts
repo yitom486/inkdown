@@ -17,18 +17,30 @@ export const markdownParser = new MarkdownIt({
 
 const defaultFenceRenderer = markdownParser.renderer.rules.fence
 
+const COPY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`
+
 markdownParser.renderer.rules.fence = (tokens, index, options, environment, self) => {
   const token = tokens[index]
+  const rawLang = token.info?.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
 
-  if (token.info?.trim().toLowerCase() === 'mermaid') {
+  if (rawLang === 'mermaid') {
     return `<pre class="mermaid">${markdownParser.utils.escapeHtml(token.content)}</pre>`
   }
 
-  if (defaultFenceRenderer) {
-    return defaultFenceRenderer(tokens, index, options, environment, self)
-  }
+  const langLabel = rawLang || 'text'
+  const codeBody = defaultFenceRenderer
+    ? defaultFenceRenderer(tokens, index, options, environment, self)
+    : self.renderToken(tokens, index, options)
 
-  return self.renderToken(tokens, index, options)
+  return [
+    '<div class="code-block">',
+    '<div class="code-block-toolbar">',
+    `<span class="code-block-lang">${markdownParser.utils.escapeHtml(langLabel)}</span>`,
+    `<button type="button" class="code-block-copy" aria-label="复制代码" title="复制代码">${COPY_ICON_SVG}</button>`,
+    '</div>',
+    codeBody,
+    '</div>',
+  ].join('')
 }
 
 markdownParser.renderer.rules.heading_open = (tokens, index, options, env, self) => {

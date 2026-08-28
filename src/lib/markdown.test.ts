@@ -33,4 +33,14 @@ describe('markdownParser', () => {
     expect(html).toContain('<code class="language-ts">')
     expect(html).toContain('const answer = 42')
   })
+
+  it('为代码块添加语言标签与复制按钮', () => {
+    const html = markdownParser.render(['```typescript', 'const x = 1', '```'].join('\n'))
+
+    expect(html).toContain('code-block-toolbar')
+    expect(html).toContain('code-block-lang')
+    expect(html).toContain('typescript')
+    expect(html).toContain('code-block-copy')
+    expect(html).toContain('aria-label="复制代码"')
+  })
 })
