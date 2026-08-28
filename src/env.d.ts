@@ -1,16 +1,20 @@
-import type { OpenFileResult, SaveFilePayload, SaveFileResult } from '../../shared/file-types'
+import type {
+  OpenFileResult,
+  OpenFolderResult,
+  SaveFilePayload,
+  SaveFileResult,
+} from '../../shared/file-types'
 
 export interface ElectronAPI {
   platform: NodeJS.Platform
   getVersion: () => Promise<string>
-  onShowAbout: (callback: () => void) => () => void
   openFile: () => Promise<OpenFileResult | null>
+  openFolder: () => Promise<OpenFolderResult | null>
+  readFile: (filePath: string) => Promise<OpenFileResult>
   saveFile: (payload: SaveFilePayload) => Promise<SaveFileResult | null>
   saveFileAs: (payload: SaveFilePayload) => Promise<SaveFileResult | null>
-  onMenuOpen: (callback: () => void) => () => void
-  onMenuSave: (callback: () => void) => () => void
-  onMenuSaveAs: (callback: () => void) => () => void
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void
+  quit: () => void
 }
 
 declare global {

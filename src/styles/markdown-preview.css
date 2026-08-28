@@ -1,3 +1,5 @@
+@import 'katex/dist/katex.min.css';
+
 .markdown-preview h1 {
   margin: 1.25rem 0 0.75rem;
   font-size: 1.875rem;
@@ -96,6 +98,27 @@
 
 .markdown-preview th {
   background: var(--muted);
+}
+
+.markdown-preview .katex-display {
+  margin: 1rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-preview .mermaid {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  background: var(--muted);
+  padding: 1rem;
+}
+
+.markdown-preview .mermaid svg {
+  max-width: 100%;
+  height: auto;
 }
 
 .markdown-preview-empty {

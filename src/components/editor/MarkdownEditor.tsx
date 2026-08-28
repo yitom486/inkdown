@@ -1,9 +1,7 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import {
-  defaultHighlightStyle,
-  syntaxHighlighting,
-} from '@codemirror/language'
+import { syntaxHighlighting } from '@codemirror/language'
+import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
 import { EditorState } from '@codemirror/state'
 import {
   EditorView,
@@ -41,7 +39,7 @@ export function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
         highlightActiveLine(),
         history(),
         markdown({ base: markdownLanguage }),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntaxHighlighting(oneDarkHighlightStyle, { fallback: true }),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         updateListener,
         EditorView.lineWrapping,
@@ -49,17 +47,36 @@ export function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
           '&': {
             height: '100%',
             fontSize: '14px',
+            backgroundColor: 'var(--editor)',
+            color: '#d4d4d4',
           },
           '.cm-scroller': {
             overflow: 'auto',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontFamily:
+              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
           },
           '.cm-content': {
             padding: '16px 0',
+            caretColor: '#7aa2f7',
           },
+          '.cm-cursor, .cm-dropCursor': {
+            borderLeftColor: '#7aa2f7',
+          },
+          '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
+            {
+              backgroundColor: 'color-mix(in oklch, var(--primary) 35%, transparent)',
+            },
           '.cm-gutters': {
-            backgroundColor: 'transparent',
+            backgroundColor: 'var(--editor)',
+            color: '#6b7280',
             borderRight: '1px solid var(--border)',
+          },
+          '.cm-activeLineGutter': {
+            backgroundColor: 'color-mix(in oklch, var(--accent) 40%, transparent)',
+            color: '#d4d4d4',
+          },
+          '.cm-activeLine': {
+            backgroundColor: 'color-mix(in oklch, var(--accent) 25%, transparent)',
           },
         }),
       ],
@@ -90,5 +107,5 @@ export function MarkdownEditor({ value, onChange }: MarkdownEditorProps) {
     })
   }, [value])
 
-  return <div ref={containerRef} className="h-full min-h-0 bg-background" />
+  return <div ref={containerRef} className="h-full min-h-0 bg-editor" />
 }

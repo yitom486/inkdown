@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { IPC } from '../shared/ipc-channels'
-import type { OpenFileResult, SaveFilePayload, SaveFileResult } from '../shared/file-types'
+import type { OpenFileResult, OpenFolderResult, SaveFilePayload, SaveFileResult } from '../shared/file-types'
+import { scanWorkspace } from './workspace'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -21,6 +22,24 @@ async function openFileDialog(): Promise<OpenFileResult | null> {
   if (canceled || filePaths.length === 0) return null
 
   const filePath = filePaths[0]!
+  const content = await readFile(filePath, 'utf-8')
+  return { filePath, content }
+}
+
+async function openFolderDialog(): Promise<OpenFolderResult | null> {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: '打开文件夹',
+    properties: ['openDirectory'],
+  })
+
+  if (canceled || filePaths.length === 0) return null
+
+  const rootPath = filePaths[0]!
+  const tree = await scanWorkspace(rootPath)
+  return { rootPath, tree }
+}
+
+async function readFileByPath(filePath: string): Promise<OpenFileResult> {
   const content = await readFile(filePath, 'utf-8')
   return { filePath, content }
 }
@@ -46,22 +65,23 @@ async function saveFileDialog(payload: SaveFilePayload): Promise<SaveFileResult 
 function updateWindowTitle(filePath?: string, isDirty = false): void {
   if (!mainWindow) return
 
-  const dirtyMark = isDirty ? ' *' : ''
+  const dirtyMark = isDirty ? ' •' : ''
   if (filePath) {
-    mainWindow.setTitle(`${basename(filePath)}${dirtyMark} - Markdown Editor`)
+    mainWindow.setTitle(`${basename(filePath)}${dirtyMark} — Markdown Editor`)
   } else {
-    mainWindow.setTitle(`未命名${dirtyMark} - Markdown Editor`)
+    mainWindow.setTitle(`未命名${dirtyMark} — Markdown Editor`)
   }
 }
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: 1280,
+    height: 860,
+    minWidth: 960,
+    minHeight: 640,
     show: false,
-    autoHideMenuBar: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#1e1e1e',
     title: 'Markdown Editor',
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
@@ -72,6 +92,8 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    mainWindow?.setMenu(null)
+    mainWindow?.setMenuBarVisibility(false)
     mainWindow?.show()
   })
 
@@ -90,49 +112,11 @@ function createWindow(): void {
   }
 }
 
-function createMenu(): void {
-  const template: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: '文件',
-      submenu: [
-        {
-          label: '打开',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => mainWindow?.webContents.send(IPC.FILE_MENU_OPEN),
-        },
-        {
-          label: '保存',
-          accelerator: 'CmdOrCtrl+S',
-          click: () => mainWindow?.webContents.send(IPC.FILE_MENU_SAVE),
-        },
-        {
-          label: '另存为',
-          accelerator: 'CmdOrCtrl+Shift+S',
-          click: () => mainWindow?.webContents.send(IPC.FILE_MENU_SAVE_AS),
-        },
-        { type: 'separator' },
-        { role: 'quit', label: '退出' },
-      ],
-    },
-    {
-      label: '帮助',
-      submenu: [
-        {
-          label: '关于 Markdown Editor',
-          click: () => {
-            mainWindow?.webContents.send(IPC.APP_SHOW_ABOUT)
-          },
-        },
-      ],
-    },
-  ]
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
-}
-
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion())
   ipcMain.handle(IPC.FILE_OPEN, () => openFileDialog())
+  ipcMain.handle(IPC.FILE_OPEN_FOLDER, () => openFolderDialog())
+  ipcMain.handle(IPC.FILE_READ, (_event, filePath: string) => readFileByPath(filePath))
   ipcMain.handle(IPC.FILE_SAVE, (_event, payload: SaveFilePayload) =>
     saveFileDialog(payload),
   )
@@ -142,11 +126,12 @@ function registerIpcHandlers(): void {
   ipcMain.on(IPC.FILE_UPDATE_TITLE, (_event, payload: { filePath?: string; isDirty: boolean }) => {
     updateWindowTitle(payload.filePath, payload.isDirty)
   })
+  ipcMain.on(IPC.APP_QUIT, () => app.quit())
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null)
   registerIpcHandlers()
-  createMenu()
   createWindow()
 
   app.on('activate', () => {

@@ -11,11 +11,16 @@ function App() {
   const {
     content,
     setContent,
-    fileName,
+    filePath,
     isDirty,
+    workspaceRoot,
+    fileTree,
     openFile,
+    openFolder,
+    openFileFromTree,
     saveFile,
     saveFileAs,
+    quitApp,
   } = useFileOperations()
 
   useEffect(() => {
@@ -24,8 +29,6 @@ function App() {
 
     setPlatform(api.platform)
     api.getVersion().then(setVersion)
-
-    return api.onShowAbout(() => setAboutOpen(true))
   }, [])
 
   if (!window.electronAPI) {
@@ -44,14 +47,19 @@ function App() {
   return (
     <>
       <EditorLayout
-        fileName={fileName}
+        filePath={filePath}
         isDirty={isDirty}
         content={content}
+        workspaceRoot={workspaceRoot}
+        fileTree={fileTree}
         onContentChange={setContent}
-        onOpen={() => void openFile()}
+        onOpenFile={() => void openFile()}
+        onOpenFolder={() => void openFolder()}
+        onSelectFile={(path) => void openFileFromTree(path)}
         onSave={() => void saveFile()}
         onSaveAs={() => void saveFileAs()}
         onAbout={() => setAboutOpen(true)}
+        onQuit={quitApp}
       />
 
       <AboutDialog
