@@ -78,6 +78,8 @@ export function EditorLayout({
   const outlineExpanded = useEditorUiStore((state) => state.outlineExpanded)
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
   const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
+  const tabSize = useAppSettingsStore((state) => state.tabSize)
+  const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
 
   const viewMode = fileState.viewMode
   const previewHtml = useMarkdownPreview(content, filePath, previewDebounceMs)
@@ -290,6 +292,8 @@ export function EditorLayout({
                         value={content}
                         filePath={filePath}
                         theme={theme}
+                        tabSize={tabSize}
+                        fontSize={editorFontSize}
                         onChange={onContentChange}
                         onScroll={handleEditorScroll}
                         onPasteImage={handlePasteImage}

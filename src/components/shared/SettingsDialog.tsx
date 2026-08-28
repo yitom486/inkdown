@@ -11,10 +11,14 @@ import { Separator } from '@/components/ui/separator'
 import {
   AUTO_SAVE_INTERVAL_OPTIONS,
   DEFAULT_VIEW_MODE_OPTIONS,
+  EDITOR_FONT_SIZE_OPTION_LABELS,
   PREVIEW_DEBOUNCE_OPTIONS,
   RECENT_FILES_LIMIT_OPTIONS,
+  TAB_SIZE_OPTION_LABELS,
   useAppSettingsStore,
   type AutoSaveIntervalMs,
+  type EditorFontSize,
+  type EditorTabSize,
   type PreviewDebounceMs,
   type RecentFilesLimit,
 } from '@/stores/app-settings-store'
@@ -123,6 +127,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const setDefaultViewMode = useAppSettingsStore((state) => state.setDefaultViewMode)
   const setPreviewDebounceMs = useAppSettingsStore((state) => state.setPreviewDebounceMs)
   const setRestoreLastFileOnStartup = useAppSettingsStore((state) => state.setRestoreLastFileOnStartup)
+  const tabSize = useAppSettingsStore((state) => state.tabSize)
+  const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
+  const setTabSize = useAppSettingsStore((state) => state.setTabSize)
+  const setEditorFontSize = useAppSettingsStore((state) => state.setEditorFontSize)
 
   const themeOptions: Array<{ value: AppTheme; label: string }> = [
     { value: 'dark', label: '深色' },
@@ -174,6 +182,20 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 value={previewDebounceMs}
                 options={PREVIEW_DEBOUNCE_OPTIONS}
                 onChange={setPreviewDebounceMs}
+              />
+            </SettingRow>
+            <SettingRow title="Tab 宽度" description="影响缩进显示与 Tab 键插入的空格数。">
+              <OptionButtons<EditorTabSize>
+                value={tabSize}
+                options={TAB_SIZE_OPTION_LABELS}
+                onChange={setTabSize}
+              />
+            </SettingRow>
+            <SettingRow title="编辑器字号" description="仅作用于 CodeMirror 编辑区。">
+              <OptionButtons<EditorFontSize>
+                value={editorFontSize}
+                options={EDITOR_FONT_SIZE_OPTION_LABELS}
+                onChange={setEditorFontSize}
               />
             </SettingRow>
           </section>

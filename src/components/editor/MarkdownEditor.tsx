@@ -50,14 +50,17 @@ interface MarkdownEditorProps {
   value: string
   filePath?: string
   theme?: AppTheme
+  tabSize?: number
+  fontSize?: number
   onChange: (value: string) => void
   onScroll?: () => void
   onPasteImage?: (blob: Blob, mimeType: string) => Promise<string | null>
 }
 
 const themeCompartment = new Compartment()
+const tabSizeCompartment = new Compartment()
 
-function buildThemeExtensions(theme: AppTheme) {
+function buildThemeExtensions(theme: AppTheme, fontSize: number) {
   const isDark = theme === 'dark'
 
   return [
@@ -67,7 +70,7 @@ function buildThemeExtensions(theme: AppTheme) {
     EditorView.theme({
       '&': {
         height: '100%',
-        fontSize: '15px',
+        fontSize: `${fontSize}px`,
         backgroundColor: 'var(--editor)',
         color: isDark ? '#d4d4d4' : 'var(--foreground)',
       },
@@ -116,7 +119,10 @@ function buildThemeExtensions(theme: AppTheme) {
 }
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, filePath, theme = 'dark', onChange, onScroll, onPasteImage }, ref) {
+  function MarkdownEditor(
+    { value, filePath, theme = 'dark', tabSize = 2, fontSize = 15, onChange, onScroll, onPasteImage },
+    ref,
+  ) {
     const containerRef = useRef<HTMLDivElement>(null)
     const viewRef = useRef<EditorView | null>(null)
     const onChangeRef = useRef(onChange)
@@ -195,7 +201,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       const state = EditorState.create({
         doc: value,
         extensions: [
-          EditorState.tabSize.of(2),
+          tabSizeCompartment.of(EditorState.tabSize.of(tabSize)),
           lineNumbers(),
           highlightActiveLineGutter(),
           highlightActiveLine(),
@@ -211,7 +217,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           markdown({ base: markdownLanguage }),
           search({ top: false }),
           highlightSelectionMatches(),
-          themeCompartment.of(buildThemeExtensions(theme)),
+          themeCompartment.of(buildThemeExtensions(theme, fontSize)),
           keymap.of([...markdownFormattingKeymap, indentWithTab, ...defaultKeymap, ...historyKeymap]),
           placeholder('在此输入 Markdown 内容…'),
           updateListener,
@@ -271,9 +277,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       if (!view) return
 
       view.dispatch({
-        effects: themeCompartment.reconfigure(buildThemeExtensions(theme)),
+        effects: themeCompartment.reconfigure(buildThemeExtensions(theme, fontSize)),
       })
-    }, [theme])
+    }, [theme, fontSize])
+
+    useEffect(() => {
+      const view = viewRef.current
+      if (!view) return
+
+      view.dispatch({
+        effects: tabSizeCompartment.reconfigure(EditorState.tabSize.of(tabSize)),
+      })
+    }, [tabSize])
 
     useEffect(() => {
       const view = viewRef.current

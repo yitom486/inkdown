@@ -23,6 +23,20 @@ export const DEFAULT_VIEW_MODE_OPTIONS: Array<{ value: EditorViewMode; label: st
   { value: 'preview', label: '预览' },
 ]
 
+export const TAB_SIZE_OPTIONS = [2, 4] as const
+export type EditorTabSize = (typeof TAB_SIZE_OPTIONS)[number]
+
+export const TAB_SIZE_OPTION_LABELS: Array<{ value: EditorTabSize; label: string }> = [
+  { value: 2, label: '2 空格' },
+  { value: 4, label: '4 空格' },
+]
+
+export const EDITOR_FONT_SIZE_OPTIONS = [13, 15, 17, 19] as const
+export type EditorFontSize = (typeof EDITOR_FONT_SIZE_OPTIONS)[number]
+
+export const EDITOR_FONT_SIZE_OPTION_LABELS: Array<{ value: EditorFontSize; label: string }> =
+  EDITOR_FONT_SIZE_OPTIONS.map((value) => ({ value, label: `${value}px` }))
+
 export const RECENT_FILES_LIMIT_OPTIONS = [5, 10, 20] as const
 export type RecentFilesLimit = (typeof RECENT_FILES_LIMIT_OPTIONS)[number]
 
@@ -35,6 +49,8 @@ export interface AppSettingsState {
   previewDebounceMs: PreviewDebounceMs
   restoreLastFileOnStartup: boolean
   lastOpenedFilePath?: string
+  tabSize: EditorTabSize
+  editorFontSize: EditorFontSize
 }
 
 interface AppSettingsStore extends AppSettingsState {
@@ -45,6 +61,8 @@ interface AppSettingsStore extends AppSettingsState {
   setPreviewDebounceMs: (ms: PreviewDebounceMs) => void
   setRestoreLastFileOnStartup: (enabled: boolean) => void
   setLastOpenedFilePath: (filePath?: string) => void
+  setTabSize: (tabSize: EditorTabSize) => void
+  setEditorFontSize: (fontSize: EditorFontSize) => void
   addRecentFile: (filePath: string) => void
   removeRecentFile: (filePath: string) => void
   clearRecentFiles: () => void
@@ -65,6 +83,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       previewDebounceMs: 300,
       restoreLastFileOnStartup: false,
       lastOpenedFilePath: undefined,
+      tabSize: 2,
+      editorFontSize: 15,
 
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
 
@@ -77,6 +97,10 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       setRestoreLastFileOnStartup: (enabled) => set({ restoreLastFileOnStartup: enabled }),
 
       setLastOpenedFilePath: (filePath) => set({ lastOpenedFilePath: filePath }),
+
+      setTabSize: (tabSize) => set({ tabSize }),
+
+      setEditorFontSize: (fontSize) => set({ editorFontSize: fontSize }),
 
       setMaxRecentFiles: (limit) =>
         set((state) => ({
@@ -113,6 +137,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         previewDebounceMs: state.previewDebounceMs,
         restoreLastFileOnStartup: state.restoreLastFileOnStartup,
         lastOpenedFilePath: state.lastOpenedFilePath,
+        tabSize: state.tabSize,
+        editorFontSize: state.editorFontSize,
       }),
     },
   ),
