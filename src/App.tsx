@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AboutDialog } from '@/components/shared/AboutDialog'
 import { DraftRecoveryDialog } from '@/components/shared/DraftRecoveryDialog'
-import { ErrorBanner } from '@/components/shared/ErrorBanner'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { EditorLayout } from '@/components/layout/EditorLayout'
@@ -10,20 +9,24 @@ import { useAutoSave } from '@/hooks/useAutoSave'
 import { useDraftPersistence, clearDraftForFile } from '@/hooks/useDraftPersistence'
 import { useDraftRecoveryPrompt } from '@/hooks/useDraftRecovery'
 import { useExportDocument } from '@/hooks/useExportDocument'
+import { useGlobalErrorHandlers } from '@/hooks/useGlobalErrorHandlers'
 import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
+import { pickLatestRecoverableDraft } from '@/lib/draft-utils'
+import { reportAppError, reportUnknownError } from '@/lib/report-error'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
-import type { AppError } from '@shared/errors'
 
 function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [lastError, setLastError] = useState<AppError | null>(null)
+  const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
   const autoSaveEnabled = useAppSettingsStore((state) => state.autoSaveEnabled)
   const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
   const recentFiles = useAppSettingsStore((state) => state.recentFiles)
+  const restoreLastFileOnStartup = useAppSettingsStore((state) => state.restoreLastFileOnStartup)
+  const lastOpenedFilePath = useAppSettingsStore((state) => state.lastOpenedFilePath)
   const { data: appMeta } = useAppMeta()
   const { recoveryDraftKey, dismissRecovery } = useDraftRecoveryPrompt()
   const recoveryDraft = useDraftStore((state) =>
@@ -53,11 +56,12 @@ function App() {
     cancelUnsavedPrompt,
     discardUnsavedChanges,
     saveUnsavedChanges,
-  } = useFileOperations((error) => setLastError(error))
+  } = useFileOperations(reportAppError)
 
   const { exportHtml, exportPdf } = useExportDocument(content, filePath)
 
   useDraftPersistence({ filePath, content, savedContent, isDirty })
+  useGlobalErrorHandlers()
 
   const handleAutoSave = useCallback(async () => {
     if (!filePath || !isDirty || isFileBusy) return
@@ -74,11 +78,11 @@ function App() {
   })
 
   const handleExportHtml = useCallback(() => {
-    void exportHtml().catch((error: AppError) => setLastError(error))
+    void exportHtml().catch(reportUnknownError)
   }, [exportHtml])
 
   const handleExportPdf = useCallback(() => {
-    void exportPdf().catch((error: AppError) => setLastError(error))
+    void exportPdf().catch(reportUnknownError)
   }, [exportPdf])
 
   const handleRestoreDraft = useCallback(() => {
@@ -97,9 +101,22 @@ function App() {
 
   useEffect(() => {
     if (appMeta?.error) {
-      setLastError(appMeta.error)
+      reportAppError(appMeta.error)
     }
   }, [appMeta?.error])
+
+  useEffect(() => {
+    if (startupRestoreDoneRef.current) return
+    startupRestoreDoneRef.current = true
+
+    const hadRecoverableDraft =
+      pickLatestRecoverableDraft(useDraftStore.getState().drafts) !== null
+    if (hadRecoverableDraft) return
+
+    if (restoreLastFileOnStartup && lastOpenedFilePath) {
+      void openRecentFile(lastOpenedFilePath)
+    }
+  }, [lastOpenedFilePath, openRecentFile, restoreLastFileOnStartup])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -130,7 +147,6 @@ function App() {
   return (
     <>
       <Toaster theme={theme} richColors closeButton position="top-right" />
-      <ErrorBanner error={lastError} onDismiss={() => setLastError(null)} />
       <EditorLayout
         filePath={filePath}
         isDirty={isDirty}

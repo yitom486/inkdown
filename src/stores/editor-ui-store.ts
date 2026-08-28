@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { AppTheme, EditorViewMode } from '@shared/editor-types'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 
-export type EditorViewMode = 'editor' | 'preview' | 'split'
-export type AppTheme = 'dark' | 'light'
+export type { AppTheme, EditorViewMode }
 
 export interface FileUiState {
   viewMode: EditorViewMode
@@ -53,7 +54,10 @@ export const useEditorUiStore = create<EditorUiStore>()(
 
       getFileState: (filePath) => {
         const key = resolveFileKey(filePath)
-        return get().fileStates[key] ?? DEFAULT_FILE_STATE
+        const stored = get().fileStates[key]
+        if (stored) return stored
+        const defaultViewMode = useAppSettingsStore.getState().defaultViewMode
+        return { ...DEFAULT_FILE_STATE, viewMode: defaultViewMode }
       },
 
       setViewMode: (filePath, mode) => {

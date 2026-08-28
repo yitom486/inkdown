@@ -24,6 +24,7 @@ import {
   type MarkdownHeading,
 } from '@/lib/markdown-headings'
 import { useEditorUiStore, type EditorViewMode } from '@/stores/editor-ui-store'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 import type { FileTreeNode } from '@shared/file-types'
 
 interface EditorLayoutProps {
@@ -76,9 +77,10 @@ export function EditorLayout({
   const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
   const outlineExpanded = useEditorUiStore((state) => state.outlineExpanded)
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
+  const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
 
   const viewMode = fileState.viewMode
-  const previewHtml = useMarkdownPreview(content, filePath)
+  const previewHtml = useMarkdownPreview(content, filePath, previewDebounceMs)
   const { handlePasteImage } = usePasteImage(filePath)
   const headings = useMemo(() => parseMarkdownHeadings(content), [content])
   const [activeHeadingId, setActiveHeadingId] = useState<string>()

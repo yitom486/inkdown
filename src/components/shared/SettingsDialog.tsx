@@ -10,12 +10,17 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
   AUTO_SAVE_INTERVAL_OPTIONS,
+  DEFAULT_VIEW_MODE_OPTIONS,
+  PREVIEW_DEBOUNCE_OPTIONS,
   RECENT_FILES_LIMIT_OPTIONS,
   useAppSettingsStore,
   type AutoSaveIntervalMs,
+  type PreviewDebounceMs,
   type RecentFilesLimit,
 } from '@/stores/app-settings-store'
-import { useEditorUiStore, type AppTheme } from '@/stores/editor-ui-store'
+import { useEditorUiStore } from '@/stores/editor-ui-store'
+import type { AppTheme } from '@shared/editor-types'
+import type { EditorViewMode } from '@shared/editor-types'
 import { cn } from '@/lib/utils'
 
 interface SettingsDialogProps {
@@ -112,6 +117,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const setAutoSaveIntervalMs = useAppSettingsStore((state) => state.setAutoSaveIntervalMs)
   const setMaxRecentFiles = useAppSettingsStore((state) => state.setMaxRecentFiles)
   const clearRecentFiles = useAppSettingsStore((state) => state.clearRecentFiles)
+  const defaultViewMode = useAppSettingsStore((state) => state.defaultViewMode)
+  const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
+  const restoreLastFileOnStartup = useAppSettingsStore((state) => state.restoreLastFileOnStartup)
+  const setDefaultViewMode = useAppSettingsStore((state) => state.setDefaultViewMode)
+  const setPreviewDebounceMs = useAppSettingsStore((state) => state.setPreviewDebounceMs)
+  const setRestoreLastFileOnStartup = useAppSettingsStore((state) => state.setRestoreLastFileOnStartup)
 
   const themeOptions: Array<{ value: AppTheme; label: string }> = [
     { value: 'dark', label: '深色' },
@@ -151,6 +162,20 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 onChange={setAutoSaveIntervalMs}
               />
             </SettingRow>
+            <SettingRow title="默认视图模式" description="无历史记录的新文档或文件首次打开时使用。">
+              <OptionButtons<EditorViewMode>
+                value={defaultViewMode}
+                options={DEFAULT_VIEW_MODE_OPTIONS}
+                onChange={setDefaultViewMode}
+              />
+            </SettingRow>
+            <SettingRow title="预览刷新延迟" description="停止输入后更新预览的等待时间。">
+              <OptionButtons<PreviewDebounceMs>
+                value={previewDebounceMs}
+                options={PREVIEW_DEBOUNCE_OPTIONS}
+                onChange={setPreviewDebounceMs}
+              />
+            </SettingRow>
           </section>
 
           <Separator className="my-2" />
@@ -181,6 +206,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <Button type="button" size="xs" variant="outline" onClick={clearRecentFiles}>
                 清除
               </Button>
+            </SettingRow>
+            <SettingRow title="启动时恢复上次文件" description="无崩溃草稿时，自动打开上次编辑的文档。">
+              <ToggleSwitch
+                checked={restoreLastFileOnStartup}
+                onChange={setRestoreLastFileOnStartup}
+                label="启动时恢复上次文件"
+              />
             </SettingRow>
           </section>
         </div>

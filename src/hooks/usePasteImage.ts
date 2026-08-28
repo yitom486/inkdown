@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { fileApi } from '@/api/file-api'
-import { isCancelled } from '@shared/errors'
+import { reportAppError } from '@/lib/report-error'
 import { isOk } from '@shared/result'
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -42,9 +42,7 @@ export function usePasteImage(markdownFilePath: string | undefined) {
         })
 
         if (!isOk(result)) {
-          if (!isCancelled(result.error)) {
-            toast.error(result.error.message)
-          }
+          reportAppError(result.error)
           return null
         }
 

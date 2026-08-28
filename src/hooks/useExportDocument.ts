@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { fileApi } from '@/api/file-api'
 import { buildExportHtml, getSuggestedExportName } from '@/lib/export-document'
-import { isCancelled } from '@shared/errors'
+import { reportAppError } from '@/lib/report-error'
 import { isOk } from '@shared/result'
 
 export function useExportDocument(content: string, filePath: string | undefined) {
@@ -14,9 +14,7 @@ export function useExportDocument(content: string, filePath: string | undefined)
     })
 
     if (!isOk(result)) {
-      if (!isCancelled(result.error)) {
-        throw result.error
-      }
+      reportAppError(result.error)
       return
     }
 
@@ -31,9 +29,7 @@ export function useExportDocument(content: string, filePath: string | undefined)
     })
 
     if (!isOk(result)) {
-      if (!isCancelled(result.error)) {
-        throw result.error
-      }
+      reportAppError(result.error)
       return
     }
 

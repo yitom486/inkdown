@@ -62,6 +62,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setSavedContent(result.content)
       syncTitle(result.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.filePath)
+      useAppSettingsStore.getState().setLastOpenedFilePath(result.filePath)
     },
     [syncTitle],
   )
@@ -114,6 +115,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.value.filePath)
+      useAppSettingsStore.getState().setLastOpenedFilePath(result.value.filePath)
       clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')
@@ -132,6 +134,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
       useAppSettingsStore.getState().addRecentFile(result.value.filePath)
+      useAppSettingsStore.getState().setLastOpenedFilePath(result.value.filePath)
       clearDraftForFile(result.value.filePath)
       if (!variables.silent) {
         toast.success('已保存')
