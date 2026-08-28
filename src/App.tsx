@@ -19,6 +19,7 @@ import { appApi } from '@/api/app-api'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
+import { isMarkdownEditorFocused } from '@/lib/editor-focus'
 
 function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -27,6 +28,7 @@ function App() {
   const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
   const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
+  const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
   const autoSaveEnabled = useAppSettingsStore((state) => state.autoSaveEnabled)
   const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
   const recentFiles = useAppSettingsStore((state) => state.recentFiles)
@@ -136,7 +138,17 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
+      const mod = event.ctrlKey || event.metaKey
+
+      if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'b') {
+        if (!isMarkdownEditorFocused()) {
+          event.preventDefault()
+          toggleSidebar()
+        }
+        return
+      }
+
+      if (!mod || event.shiftKey || event.altKey) return
       if (event.key === ',') {
         event.preventDefault()
         setSettingsOpen(true)
@@ -149,7 +161,7 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [toggleSidebar])
 
   if (!window.electronAPI) {
     const isElectron = navigator.userAgent.includes('Electron')

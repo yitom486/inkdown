@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { reportRuntimeError } from '@/lib/error-reporter'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
+import { ActivityBar } from '@/components/layout/ActivityBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
+import { WelcomePage } from '@/components/layout/WelcomePage'
 import { ViewModeToggle } from '@/components/layout/ViewModeToggle'
 import {
   MarkdownEditor,
@@ -18,6 +20,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import { useScrollSync } from '@/hooks/useScrollSync'
+import { useSidebarPanelSync } from '@/hooks/useSidebarPanelSync'
 import { useMarkdownPreview } from '@/hooks/useMarkdownPreview'
 import { usePasteImage } from '@/hooks/usePasteImage'
 import {
@@ -89,6 +92,10 @@ export function EditorLayout({
   const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
   const outlineExpanded = useEditorUiStore((state) => state.outlineExpanded)
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
+  const sidebarVisible = useEditorUiStore((state) => state.sidebarVisible)
+  const setSidebarVisible = useEditorUiStore((state) => state.setSidebarVisible)
+  const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
+  const sidebarPanelRef = useSidebarPanelSync(sidebarVisible)
   const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
   const tabSize = useAppSettingsStore((state) => state.tabSize)
   const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
@@ -110,8 +117,9 @@ export function EditorLayout({
     mode: 'find',
   })
 
-  const showEditor = viewMode === 'editor' || viewMode === 'split'
-  const showPreview = viewMode === 'preview' || viewMode === 'split'
+  const showEditor = Boolean(filePath) && (viewMode === 'editor' || viewMode === 'split')
+  const showPreview = Boolean(filePath) && (viewMode === 'preview' || viewMode === 'split')
+  const showWelcome = !filePath
 
   const contentPanelIds = useMemo(() => {
     if (showEditor && showPreview) return ['editor', 'preview']
@@ -198,6 +206,8 @@ export function EditorLayout({
   }, [headings, updateActiveHeading, viewMode])
 
   useEffect(() => {
+    if (!filePath) return
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
 
@@ -234,6 +244,8 @@ export function EditorLayout({
       <TitleBar
         theme={theme}
         recentFiles={recentFiles}
+        sidebarVisible={sidebarVisible}
+        onToggleSidebar={toggleSidebar}
         onToggleTheme={toggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
@@ -250,14 +262,26 @@ export function EditorLayout({
         onQuit={onQuit}
       />
 
-      <ResizablePanelGroup
+      <div className="flex min-h-0 flex-1">
+        <ActivityBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
+
+        <ResizablePanelGroup
         id="markdown-editor-sidebar-main"
         orientation="horizontal"
         defaultLayout={sidebarLayout.defaultLayout}
         onLayoutChanged={sidebarLayout.onLayoutChanged}
-        className="min-h-0 flex-1"
+        className="min-h-0 min-w-0 flex-1"
       >
-        <ResizablePanel id="sidebar" defaultSize="20%" minSize="14%" maxSize="40%" className="min-w-0">
+        <ResizablePanel
+          id="sidebar"
+          panelRef={sidebarPanelRef}
+          collapsible
+          collapsedSize={0}
+          defaultSize="20%"
+          minSize="14%"
+          maxSize="40%"
+          className="min-w-0"
+        >
           <Sidebar
             workspaceRoot={workspaceRoot}
             fileTree={fileTree}
@@ -271,25 +295,38 @@ export function EditorLayout({
             isRescanningWorkspace={isRescanningWorkspace}
             onSelectFile={onSelectFile}
             onSelectHeading={handleSelectHeading}
+            onHideSidebar={() => setSidebarVisible(false)}
           />
         </ResizablePanel>
 
-        <ResizableHandle withHandle />
+        {sidebarVisible && <ResizableHandle withHandle />}
 
         <ResizablePanel id="main" defaultSize="80%" minSize="45%" className="min-w-0">
           <div className="flex h-full min-h-0 flex-col">
             <FileBreadcrumb
               filePath={filePath}
               isDirty={isDirty}
+              welcome={showWelcome}
               trailing={
-                <ViewModeToggle
-                  mode={viewMode}
-                  onChange={(mode) => setViewMode(filePath, mode)}
-                />
+                showWelcome ? undefined : (
+                  <ViewModeToggle
+                    mode={viewMode}
+                    onChange={(mode) => setViewMode(filePath, mode)}
+                  />
+                )
               }
             />
 
             <main className="min-h-0 flex-1 bg-editor">
+              {showWelcome ? (
+                <WelcomePage
+                  recentFiles={recentFiles}
+                  workspaceRoot={workspaceRoot}
+                  onOpenFile={onOpenFile}
+                  onOpenFolder={onOpenFolder}
+                  onOpenRecentFile={onOpenRecentFile}
+                />
+              ) : (
               <ResizablePanelGroup
                 id={`markdown-editor-content-${viewMode}`}
                 orientation="horizontal"
@@ -359,10 +396,12 @@ export function EditorLayout({
                   </ResizablePanel>
                 )}
               </ResizablePanelGroup>
+              )}
             </main>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      </div>
     </div>
   )
 }

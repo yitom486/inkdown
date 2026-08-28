@@ -22,6 +22,7 @@ interface SidebarProps {
   isRescanningWorkspace?: boolean
   onSelectFile: (path: string) => void
   onSelectHeading: (heading: MarkdownHeading) => void
+  onHideSidebar?: () => void
 }
 
 export function Sidebar({
@@ -37,6 +38,7 @@ export function Sidebar({
   isRescanningWorkspace,
   onSelectFile,
   onSelectHeading,
+  onHideSidebar,
 }: SidebarProps) {
   const outlineLayout = useDefaultLayout({
     id: 'markdown-editor-explorer-outline',
@@ -62,6 +64,7 @@ export function Sidebar({
               onRescanWorkspace={onRescanWorkspace}
               isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
+              onHideSidebar={onHideSidebar}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
@@ -85,6 +88,7 @@ export function Sidebar({
               onRescanWorkspace={onRescanWorkspace}
               isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
+              onHideSidebar={onHideSidebar}
             />
           </div>
           <DocumentOutline

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { launchBuiltApp } from './helpers/launch-app'
 
 test.describe('应用启动', () => {
-  test('主窗口加载并显示文件菜单', async () => {
+  test('主窗口加载并显示欢迎页与文件菜单', async () => {
     const app = await launchBuiltApp()
 
     try {
@@ -12,6 +12,7 @@ test.describe('应用启动', () => {
         timeout: 15_000,
       })
       await expect(window.getByRole('button', { name: '帮助' })).toBeVisible()
+      await expect(window.getByRole('heading', { name: '轻量阅读器' })).toBeVisible()
     } finally {
       await app.close()
     }

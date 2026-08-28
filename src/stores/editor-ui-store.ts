@@ -27,10 +27,13 @@ function resolveFileKey(filePath?: string): string {
 interface EditorUiStore {
   theme: AppTheme
   outlineExpanded: boolean
+  sidebarVisible: boolean
   fileStates: Record<string, FileUiState>
   setTheme: (theme: AppTheme) => void
   toggleTheme: () => void
   setOutlineExpanded: (expanded: boolean) => void
+  setSidebarVisible: (visible: boolean) => void
+  toggleSidebar: () => void
   getFileState: (filePath?: string) => FileUiState
   setViewMode: (filePath: string | undefined, mode: EditorViewMode) => void
   saveScrollState: (
@@ -45,6 +48,7 @@ export const useEditorUiStore = create<EditorUiStore>()(
     (set, get) => ({
       theme: 'dark',
       outlineExpanded: false,
+      sidebarVisible: true,
       fileStates: {},
 
       setTheme: (theme) => set({ theme }),
@@ -52,6 +56,10 @@ export const useEditorUiStore = create<EditorUiStore>()(
         set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
 
       setOutlineExpanded: (expanded) => set({ outlineExpanded: expanded }),
+
+      setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
+
+      toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
 
       getFileState: (filePath) => {
         const key = resolveFileKey(filePath)
@@ -93,6 +101,7 @@ export const useEditorUiStore = create<EditorUiStore>()(
       partialize: (state) => ({
         theme: state.theme,
         outlineExpanded: state.outlineExpanded,
+        sidebarVisible: state.sidebarVisible,
         fileStates: state.fileStates,
       }),
     },

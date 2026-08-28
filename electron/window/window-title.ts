@@ -11,7 +11,7 @@ export function formatWindowTitle(
   if (filePath) {
     return `${basename(filePath)}${dirtyMark} — ${appTitle}`
   }
-  return `未命名${dirtyMark} — ${appTitle}`
+  return appTitle
 }
 
 export function applyWindowTitle(

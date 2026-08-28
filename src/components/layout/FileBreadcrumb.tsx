@@ -10,16 +10,17 @@ import {
 interface FileBreadcrumbProps {
   filePath?: string
   isDirty: boolean
+  welcome?: boolean
   trailing?: ReactNode
 }
 
-function splitPath(filePath?: string): string[] {
-  if (!filePath) return ['未命名文档']
+function splitPath(filePath?: string, welcome = false): string[] {
+  if (!filePath) return welcome ? ['欢迎'] : ['未命名文档']
   return filePath.split(/[/\\]/).filter(Boolean)
 }
 
-export function FileBreadcrumb({ filePath, isDirty, trailing }: FileBreadcrumbProps) {
-  const segments = splitPath(filePath)
+export function FileBreadcrumb({ filePath, isDirty, welcome = false, trailing }: FileBreadcrumbProps) {
+  const segments = splitPath(filePath, welcome)
 
   return (
     <div className="flex h-9 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-sm">

@@ -1,0 +1,61 @@
+# 推送版本 tag（如 v0.1.0）时：测试 → 打包 Windows 安装程序 → 创建 GitHub Release
+# 普通 git push 到 master 不会触发本 workflow，仅 CI 运行
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: 打包并发布 Windows 安装程序
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 类型检查
+        run: bun run typecheck
+
+      - name: 单元与集成测试
+        run: bun run test
+
+      - name: 构建并打包 NSIS 安装程序
+        run: bun run pack
+        env:
+          # CI 无代码签名证书，跳过自动签名探测
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: 列出 release 产物
+        shell: bash
+        run: ls -la release/
+
+      - name: 创建 GitHub Release 并上传安装包
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.exe
+            release/*.exe.blockmap
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

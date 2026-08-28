@@ -1,5 +1,6 @@
 import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
+import { ActivityBar } from '@/components/layout/ActivityBar'
 import { FileExplorer } from '@/components/layout/FileExplorer'
 import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
 import { EpubViewer } from '@/components/reader/EpubViewer'
@@ -10,6 +11,8 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
+import { useSidebarPanelSync } from '@/hooks/useSidebarPanelSync'
+import { useEditorUiStore } from '@/stores/editor-ui-store'
 import type { ReaderDocumentKind } from '@shared/types/document'
 import type { FileTreeNode } from '@shared/types/file'
 
@@ -56,6 +59,11 @@ export function ReaderLayout({
   onNewWindow,
   onQuit,
 }: ReaderLayoutProps) {
+  const sidebarVisible = useEditorUiStore((state) => state.sidebarVisible)
+  const setSidebarVisible = useEditorUiStore((state) => state.setSidebarVisible)
+  const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
+  const sidebarPanelRef = useSidebarPanelSync(sidebarVisible)
+
   const sidebarLayout = useDefaultLayout({
     id: 'reader-sidebar-main',
     panelIds: ['sidebar', 'main'],
@@ -66,7 +74,9 @@ export function ReaderLayout({
       <TitleBar
         theme={theme}
         recentFiles={recentFiles}
+        sidebarVisible={sidebarVisible}
         readOnly
+        onToggleSidebar={toggleSidebar}
         onToggleTheme={onToggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
@@ -83,14 +93,26 @@ export function ReaderLayout({
         onQuit={onQuit}
       />
 
-      <ResizablePanelGroup
+      <div className="flex min-h-0 flex-1">
+        <ActivityBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
+
+        <ResizablePanelGroup
         id="reader-sidebar-main"
         orientation="horizontal"
         defaultLayout={sidebarLayout.defaultLayout}
         onLayoutChanged={sidebarLayout.onLayoutChanged}
-        className="min-h-0 flex-1"
+        className="min-h-0 min-w-0 flex-1"
       >
-        <ResizablePanel id="sidebar" defaultSize="20%" minSize="14%" maxSize="40%" className="min-w-0">
+        <ResizablePanel
+          id="sidebar"
+          panelRef={sidebarPanelRef}
+          collapsible
+          collapsedSize={0}
+          defaultSize="20%"
+          minSize="14%"
+          maxSize="40%"
+          className="min-w-0"
+        >
           <FileExplorer
             workspaceRoot={workspaceRoot}
             tree={fileTree}
@@ -99,10 +121,11 @@ export function ReaderLayout({
             onRescanWorkspace={onRescanWorkspace}
             isRescanning={isRescanningWorkspace}
             onSelectFile={onSelectFile}
+            onHideSidebar={() => setSidebarVisible(false)}
           />
         </ResizablePanel>
 
-        <ResizableHandle withHandle />
+        {sidebarVisible && <ResizableHandle withHandle />}
 
         <ResizablePanel id="main" defaultSize="80%" minSize="45%" className="min-w-0">
           <div className="flex h-full min-h-0 flex-col">
@@ -119,6 +142,7 @@ export function ReaderLayout({
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      </div>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import {
   Folder,
   FolderOpen,
   RefreshCw,
+  PanelLeftClose,
 } from 'lucide-react'
 import type { FileTreeNode } from '@shared/types/file'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ interface FileExplorerProps {
   onRescanWorkspace?: () => void
   isRescanning?: boolean
   onSelectFile: (path: string) => void
+  onHideSidebar?: () => void
 }
 
 function FileIcon({ documentKind }: { documentKind?: FileTreeNode['documentKind'] }) {
@@ -112,6 +114,7 @@ export function FileExplorer({
   onRescanWorkspace,
   isRescanning = false,
   onSelectFile,
+  onHideSidebar,
 }: FileExplorerProps) {
   const rootName = workspaceRoot?.split(/[/\\]/).pop() ?? '工作区'
 
@@ -123,6 +126,18 @@ export function FileExplorer({
           资源管理器
         </div>
         <div className="flex items-center gap-1">
+          {onHideSidebar ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={onHideSidebar}
+              title="隐藏侧栏 (Ctrl+B)"
+              aria-label="隐藏侧栏"
+            >
+              <PanelLeftClose className="size-3.5" />
+            </Button>
+          ) : null}
           {workspaceRoot && onRescanWorkspace ? (
             <Button
               variant="ghost"

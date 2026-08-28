@@ -7,6 +7,8 @@ import {
   HelpCircle,
   LogOut,
   Moon,
+  PanelLeft,
+  PanelLeftClose,
   Save,
   SaveAll,
   Settings,
@@ -32,8 +34,10 @@ function getRecentFileLabel(filePath: string): string {
 interface TitleBarProps {
   theme: 'dark' | 'light'
   recentFiles: string[]
+  sidebarVisible?: boolean
   readOnly?: boolean
   onToggleTheme: () => void
+  onToggleSidebar?: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
   onOpenRecentFile: (path: string) => void
@@ -52,8 +56,10 @@ interface TitleBarProps {
 export function TitleBar({
   theme,
   recentFiles,
+  sidebarVisible = true,
   readOnly = false,
   onToggleTheme,
+  onToggleSidebar,
   onOpenFile,
   onOpenFolder,
   onOpenRecentFile,
@@ -142,6 +148,31 @@ export function TitleBar({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {onToggleSidebar && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2.5 text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+            >
+              视图
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52">
+            <DropdownMenuItem onClick={onToggleSidebar}>
+              {sidebarVisible ? (
+                <PanelLeftClose className="size-4" />
+              ) : (
+                <PanelLeft className="size-4" />
+              )}
+              {sidebarVisible ? '隐藏侧栏' : '显示侧栏'}
+              <DropdownMenuShortcut>Ctrl+B</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -4,8 +4,8 @@
 
 ## 项目阶段摘要
 
-> **当前版本**: v0.0.1  
-> **阶段结论**: 三份计划均为 `done`，主功能路线图阶段 0–5 已闭环（自动更新除外）。
+> **当前版本**: v0.0.1（代码库）→ 计划首发 **v0.1.0**（GitHub Release，无 AI）  
+> **阶段结论**: 编辑器 v0.0.1 已闭环；阅读器与 ACP 按下方计划推进。
 
 | 里程碑 | 状态 |
 |--------|------|
@@ -14,7 +14,9 @@
 | 体验打磨（Sonner / 扩展设置 / Tab·字号） | `done` |
 | 打包发布（NSIS 安装包） | `done` |
 | 自动更新 | `cancelled`（后续单独立项） |
-| 电子书阅读（EPUB/PDF/MOBI） | `in-progress`（PDF/EPUB/MOBI MVP + 书签批注） |
+| 电子书阅读（EPUB/PDF/MOBI） | `in-progress` |
+| **GitHub Release v0.1（无 AI）** | `pending` |
+| ACP Agent 客户端（Codex） | `pending`（目标 v0.2.x） |
 
 ---
 
@@ -70,3 +72,5 @@ YYYY-MM-DD-计划名称.md
 | [2026-08-28-电子书阅读支持.md](./2026-08-28-电子书阅读支持.md) | `in-progress` | PDF/EPUB 只读阅读，应用更名轻量阅读器 |
 | [2026-08-28-阅读标记与批注.md](./2026-08-28-阅读标记与批注.md) | `in-progress` | 书签、批注、选区工具条 |
 | [2026-08-29-PDF虚拟滚动优化.md](./2026-08-29-PDF虚拟滚动优化.md) | `pending` | PDF 虚拟列表 + 渲染缓存（按需实施） |
+| [2026-08-29-ACP客户端.md](./2026-08-29-ACP客户端.md) | `pending` | ACP Client + codex-acp（v0.2.x，不自研引擎） |
+| [2026-08-29-GitHub发布与版本路线.md](./2026-08-29-GitHub发布与版本路线.md) | `pending` | v0.1 无 AI 首发 Release，v0.2 接入 Agent |

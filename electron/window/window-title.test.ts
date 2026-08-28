@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { formatWindowTitle } from './window-title'
 
 describe('formatWindowTitle', () => {
-  it('未命名文件显示占位标题', () => {
-    expect(formatWindowTitle(undefined, false, '轻量阅读器')).toBe('未命名 — 轻量阅读器')
+  it('无打开文件时仅显示应用名', () => {
+    expect(formatWindowTitle(undefined, false, '轻量阅读器')).toBe('轻量阅读器')
   })
 
   it('脏标记追加圆点', () => {
