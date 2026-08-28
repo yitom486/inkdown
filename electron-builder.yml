@@ -7,5 +7,6 @@ files:
   - out/**/*
   - package.json
 win:
+  icon: resources/icon.ico
   target:
     - nsis

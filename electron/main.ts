@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeImage } from 'electron'
 import { basename, join } from 'path'
 import { IPC } from '@shared/ipc-channels'
 import { APP_TITLE } from '@shared/constants'
@@ -11,6 +11,7 @@ import {
   saveFileDialog,
 } from './file-service'
 import { getAppVersion } from './app-service'
+import { resolveAppIconPath } from './app-paths'
 
 let mainWindow: BrowserWindow | null = null
 let allowClose = false
@@ -31,6 +32,9 @@ function createWindow(): void {
   allowClose = false
   documentDirty = false
 
+  const iconPath = resolveAppIconPath()
+  const windowIcon = iconPath ? nativeImage.createFromPath(iconPath) : undefined
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -40,6 +44,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     backgroundColor: '#1e1e1e',
     title: APP_TITLE,
+    icon: windowIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
       contextIsolation: true,
