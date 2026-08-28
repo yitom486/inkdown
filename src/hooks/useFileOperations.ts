@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { appApi, fileApi } from '@/api/file-api'
 import { queryKeys } from '@/api/query-keys'
 import { isCancelled, type AppError } from '@shared/errors'
@@ -11,14 +12,25 @@ function getFileName(filePath?: string): string {
   return filePath.split(/[/\\]/).pop() ?? filePath
 }
 
+type UnsavedAction =
+  | { kind: 'open-file' }
+  | { kind: 'open-tree'; path: string }
+  | { kind: 'close-app' }
+
 export function useFileOperations(onError?: (error: AppError) => void) {
   const queryClient = useQueryClient()
   const [content, setContent] = useState('')
   const [filePath, setFilePath] = useState<string>()
   const [savedContent, setSavedContent] = useState('')
+  const [unsavedAction, setUnsavedAction] = useState<UnsavedAction | null>(null)
+  const unsavedActionRef = useRef<UnsavedAction | null>(null)
 
   const isDirty = content !== savedContent
   const fileName = getFileName(filePath)
+
+  useEffect(() => {
+    unsavedActionRef.current = unsavedAction
+  }, [unsavedAction])
 
   const { data: workspace = null } = useQuery<OpenFolderResult | null>({
     queryKey: queryKeys.workspace,
@@ -93,6 +105,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setFilePath(result.value.filePath)
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
+      toast.success('已保存')
     },
   })
 
@@ -106,23 +119,84 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       setFilePath(result.value.filePath)
       setSavedContent(variables.content)
       syncTitle(result.value.filePath, false)
+      toast.success('已保存')
     },
   })
 
-  const openFile = useCallback(() => openFileMutation.mutateAsync(), [openFileMutation])
-  const openFolder = useCallback(() => openFolderMutation.mutateAsync(), [openFolderMutation])
-  const openFileFromTree = useCallback(
-    (path: string) => readFileMutation.mutateAsync(path),
-    [readFileMutation],
+  const executeUnsavedAction = useCallback(async (action: UnsavedAction) => {
+    switch (action.kind) {
+      case 'open-file':
+        await openFileMutation.mutateAsync()
+        break
+      case 'open-tree':
+        await readFileMutation.mutateAsync(action.path)
+        break
+      case 'close-app':
+        window.electronAPI?.confirmClose('proceed')
+        break
+    }
+  }, [openFileMutation, readFileMutation])
+
+  const promptIfDirty = useCallback(
+    (action: UnsavedAction, run: () => void | Promise<void>) => {
+      if (isDirty) {
+        setUnsavedAction(action)
+        return
+      }
+      void run()
+    },
+    [isDirty],
   )
+
+  const openFile = useCallback(
+    () => promptIfDirty({ kind: 'open-file' }, () => void openFileMutation.mutateAsync()),
+    [openFileMutation, promptIfDirty],
+  )
+
+  const openFolder = useCallback(() => openFolderMutation.mutateAsync(), [openFolderMutation])
+
+  const openFileFromTree = useCallback(
+    (path: string) =>
+      promptIfDirty({ kind: 'open-tree', path }, () => void readFileMutation.mutateAsync(path)),
+    [promptIfDirty, readFileMutation],
+  )
+
   const saveFile = useCallback(
     () => saveFileMutation.mutateAsync({ filePath, content }),
     [content, filePath, saveFileMutation],
   )
+
   const saveFileAs = useCallback(
     () => saveFileAsMutation.mutateAsync({ content }),
     [content, saveFileAsMutation],
   )
+
+  const cancelUnsavedPrompt = useCallback(() => {
+    const action = unsavedActionRef.current
+    setUnsavedAction(null)
+    if (action?.kind === 'close-app') {
+      window.electronAPI?.confirmClose('cancel')
+    }
+  }, [])
+
+  const discardUnsavedChanges = useCallback(async () => {
+    const action = unsavedActionRef.current
+    setUnsavedAction(null)
+    if (action) {
+      await executeUnsavedAction(action)
+    }
+  }, [executeUnsavedAction])
+
+  const saveUnsavedChanges = useCallback(async () => {
+    const action = unsavedActionRef.current
+    const result = await saveFileMutation.mutateAsync({ filePath, content })
+    if (!isOk(result)) return
+
+    setUnsavedAction(null)
+    if (action) {
+      await executeUnsavedAction(action)
+    }
+  }, [content, executeUnsavedAction, filePath, saveFileMutation])
 
   const quitApp = useCallback(() => {
     window.electronAPI?.quit()
@@ -131,6 +205,16 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   useEffect(() => {
     syncTitle(filePath, isDirty)
   }, [filePath, isDirty, syncTitle])
+
+  useEffect(() => {
+    window.electronAPI?.setDirty(isDirty)
+  }, [isDirty])
+
+  useEffect(() => {
+    return window.electronAPI?.onRequestClose(() => {
+      setUnsavedAction({ kind: 'close-app' })
+    })
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -164,6 +248,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     isDirty,
     workspaceRoot: workspace?.rootPath,
     fileTree: workspace?.tree ?? ([] as FileTreeNode[]),
+    unsavedPromptOpen: unsavedAction !== null,
     isFileBusy:
       openFileMutation.isPending ||
       openFolderMutation.isPending ||
@@ -176,6 +261,9 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     saveFile,
     saveFileAs,
     quitApp,
+    cancelUnsavedPrompt,
+    discardUnsavedChanges,
+    saveUnsavedChanges,
   }
 }
 

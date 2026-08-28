@@ -1,5 +1,6 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Eye } from 'lucide-react'
+import { toast } from 'sonner'
 import { applyScrollRatio, scrollRatio } from '@/lib/markdown-headings'
 import '@/styles/markdown-preview.css'
 
@@ -115,6 +116,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
           await navigator.clipboard.writeText(text)
           button.classList.add('copied')
           button.setAttribute('aria-label', '已复制')
+          toast.success('代码已复制')
           window.setTimeout(() => {
             button.classList.remove('copied')
             button.setAttribute('aria-label', '复制代码')

@@ -10,6 +10,9 @@ import type { Result } from '@shared/result'
 export interface ElectronAPI {
   platform: string
   getVersion: () => Promise<string>
+  setDirty: (isDirty: boolean) => void
+  confirmClose: (decision: 'proceed' | 'cancel') => void
+  onRequestClose: (callback: () => void) => () => void
   openFile: () => Promise<Result<OpenFileResult, AppError>>
   openFolder: () => Promise<Result<OpenFolderResult, AppError>>
   readFile: (filePath: string) => Promise<Result<OpenFileResult, AppError>>

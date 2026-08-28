@@ -1,6 +1,9 @@
 export const IPC = {
   APP_GET_VERSION: 'app:get-version',
   APP_QUIT: 'app:quit',
+  APP_SET_DIRTY: 'app:set-dirty',
+  APP_REQUEST_CLOSE: 'app:request-close',
+  APP_CLOSE_DECISION: 'app:close-decision',
   FILE_OPEN: 'file:open',
   FILE_OPEN_FOLDER: 'file:open-folder',
   FILE_READ: 'file:read',

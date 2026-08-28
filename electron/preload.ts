@@ -6,6 +6,19 @@ import type { ElectronAPI } from '@shared/electron-api.types'
 const electronAPI: ElectronAPI = {
   platform: process.platform,
   getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.APP_GET_VERSION),
+  setDirty: (isDirty: boolean) => {
+    ipcRenderer.send(IPC.APP_SET_DIRTY, isDirty)
+  },
+  confirmClose: (decision: 'proceed' | 'cancel') => {
+    ipcRenderer.send(IPC.APP_CLOSE_DECISION, decision)
+  },
+  onRequestClose: (callback: () => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on(IPC.APP_REQUEST_CLOSE, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.APP_REQUEST_CLOSE, handler)
+    }
+  },
   openFile: () => ipcRenderer.invoke(IPC.FILE_OPEN),
   openFolder: () => ipcRenderer.invoke(IPC.FILE_OPEN_FOLDER),
   readFile: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ, filePath),

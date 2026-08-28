@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AboutDialog } from '@/components/shared/AboutDialog'
 import { ErrorBanner } from '@/components/shared/ErrorBanner'
+import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { EditorLayout } from '@/components/layout/EditorLayout'
+import { Toaster } from '@/components/ui/sonner'
 import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
 import type { AppError } from '@shared/errors'
 
@@ -14,15 +16,21 @@ function App() {
     content,
     setContent,
     filePath,
+    fileName,
     isDirty,
     workspaceRoot,
     fileTree,
+    unsavedPromptOpen,
+    isFileBusy,
     openFile,
     openFolder,
     openFileFromTree,
     saveFile,
     saveFileAs,
     quitApp,
+    cancelUnsavedPrompt,
+    discardUnsavedChanges,
+    saveUnsavedChanges,
   } = useFileOperations((error) => setLastError(error))
 
   useEffect(() => {
@@ -46,6 +54,7 @@ function App() {
 
   return (
     <>
+      <Toaster richColors closeButton position="top-right" />
       <ErrorBanner error={lastError} onDismiss={() => setLastError(null)} />
       <EditorLayout
         filePath={filePath}
@@ -68,6 +77,15 @@ function App() {
         onOpenChange={setAboutOpen}
         version={appMeta?.version || '…'}
         platform={appMeta?.platform || ''}
+      />
+
+      <UnsavedChangesDialog
+        open={unsavedPromptOpen}
+        fileName={fileName}
+        saving={isFileBusy}
+        onSave={() => void saveUnsavedChanges()}
+        onDiscard={() => void discardUnsavedChanges()}
+        onCancel={cancelUnsavedPrompt}
       />
     </>
   )

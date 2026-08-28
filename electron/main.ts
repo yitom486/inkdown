@@ -11,6 +11,8 @@ import {
 } from './file-service'
 
 let mainWindow: BrowserWindow | null = null
+let allowClose = false
+let documentDirty = false
 
 function updateWindowTitle(filePath?: string, isDirty = false): void {
   if (!mainWindow) return
@@ -24,6 +26,9 @@ function updateWindowTitle(filePath?: string, isDirty = false): void {
 }
 
 function createWindow(): void {
+  allowClose = false
+  documentDirty = false
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -47,6 +52,12 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  mainWindow.on('close', (event) => {
+    if (allowClose || !documentDirty) return
+    event.preventDefault()
+    mainWindow?.webContents.send(IPC.APP_REQUEST_CLOSE)
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -64,6 +75,14 @@ function createWindow(): void {
 
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion())
+  ipcMain.on(IPC.APP_SET_DIRTY, (_event, isDirty: boolean) => {
+    documentDirty = isDirty
+  })
+  ipcMain.on(IPC.APP_CLOSE_DECISION, (_event, decision: 'proceed' | 'cancel') => {
+    if (decision === 'cancel') return
+    allowClose = true
+    mainWindow?.close()
+  })
   ipcMain.handle(IPC.FILE_OPEN, () => openFileDialog())
   ipcMain.handle(IPC.FILE_OPEN_FOLDER, () => openFolderDialog())
   ipcMain.handle(IPC.FILE_READ, (_event, filePath: string) => readFileByPath(filePath))
@@ -74,7 +93,9 @@ function registerIpcHandlers(): void {
   ipcMain.on(IPC.FILE_UPDATE_TITLE, (_event, payload: { filePath?: string; isDirty: boolean }) => {
     updateWindowTitle(payload.filePath, payload.isDirty)
   })
-  ipcMain.on(IPC.APP_QUIT, () => app.quit())
+  ipcMain.on(IPC.APP_QUIT, () => {
+    mainWindow?.close()
+  })
 }
 
 app.whenReady().then(() => {
