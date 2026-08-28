@@ -9,6 +9,7 @@ export const IPC = {
   FILE_READ: 'file:read',
   FILE_SAVE: 'file:save',
   FILE_SAVE_AS: 'file:save-as',
+  FILE_READ_IMAGE: 'file:read-image',
   FILE_UPDATE_TITLE: 'file:update-title',
 } as const
 

@@ -1,21 +1,67 @@
 import { useEffect, useState } from 'react'
-import DOMPurify from 'dompurify'
+import DOMPurify, { type Config } from 'dompurify'
+import { fileApi } from '@/api/file-api'
+import {
+  buildImageReplacements,
+  extractLocalImageRefsFromHtml,
+  replaceImageSrcInHtml,
+} from '@/lib/markdown-images'
 import { markdownParser } from '@/lib/markdown'
+import { isOk } from '@shared/result'
 
-export function useMarkdownPreview(content: string, delay = 300): string {
+const PREVIEW_SANITIZE_OPTIONS: Config = {
+  ALLOWED_URI_REGEXP:
+    /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+}
+
+async function resolveLocalImagesInHtml(
+  html: string,
+  filePath: string | undefined,
+): Promise<string> {
+  const localRefs = extractLocalImageRefsFromHtml(html, filePath)
+  if (localRefs.length === 0) return html
+
+  const dataUrlsByAbsolutePath: Record<string, string | undefined> = {}
+  const uniquePaths = [...new Set(localRefs.map((ref) => ref.absolutePath))]
+
+  await Promise.all(
+    uniquePaths.map(async (absolutePath) => {
+      const result = await fileApi.readImage(absolutePath)
+      if (isOk(result)) {
+        dataUrlsByAbsolutePath[absolutePath] = result.value.dataUrl
+      }
+    }),
+  )
+
+  const replacements = buildImageReplacements(localRefs, dataUrlsByAbsolutePath)
+  return replaceImageSrcInHtml(html, replacements)
+}
+
+export function useMarkdownPreview(content: string, filePath?: string, delay = 300): string {
   const [html, setHtml] = useState('')
 
   useEffect(() => {
+    let cancelled = false
+
     const timer = window.setTimeout(() => {
-      const env: { headingSlugCounts: Map<string, number> } = {
-        headingSlugCounts: new Map(),
-      }
-      const raw = markdownParser.render(content, env)
-      setHtml(DOMPurify.sanitize(raw))
+      void (async () => {
+        const env: { headingSlugCounts: Map<string, number> } = {
+          headingSlugCounts: new Map(),
+        }
+        const raw = markdownParser.render(content, env)
+        const withImages = await resolveLocalImagesInHtml(raw, filePath)
+
+        if (!cancelled) {
+          setHtml(String(DOMPurify.sanitize(withImages, PREVIEW_SANITIZE_OPTIONS)))
+        }
+      })()
     }, delay)
 
-    return () => window.clearTimeout(timer)
-  }, [content, delay])
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [content, filePath, delay])
 
   return html
 }

@@ -1,6 +1,7 @@
 import type {
   OpenFileResult,
   OpenFolderResult,
+  ReadImageResult,
   SaveFilePayload,
   SaveFileResult,
 } from '@shared/file-types'
@@ -16,6 +17,7 @@ export interface ElectronAPI {
   openFile: () => Promise<Result<OpenFileResult, AppError>>
   openFolder: () => Promise<Result<OpenFolderResult, AppError>>
   readFile: (filePath: string) => Promise<Result<OpenFileResult, AppError>>
+  readImage: (filePath: string) => Promise<Result<ReadImageResult, AppError>>
   saveFile: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>
   saveFileAs: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void

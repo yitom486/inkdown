@@ -2,6 +2,7 @@ import type { AppError } from '@shared/errors'
 import type {
   OpenFileResult,
   OpenFolderResult,
+  ReadImageResult,
   SaveFilePayload,
   SaveFileResult,
 } from '@shared/file-types'
@@ -36,6 +37,12 @@ export const fileApi = {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.readFile(filePath)
+  },
+
+  async readImage(filePath: string): Promise<Result<ReadImageResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.readImage(filePath)
   },
 
   async saveFile(payload: SaveFilePayload): Promise<Result<SaveFileResult, AppError>> {

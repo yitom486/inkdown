@@ -31,7 +31,7 @@ export function ViewModeToggle({ mode, onChange }: ViewModeToggleProps) {
           type="button"
           variant="ghost"
           size="icon-xs"
-          title={label}
+          title={`${label} (Ctrl+${value === 'editor' ? '1' : value === 'split' ? '2' : '3'})`}
           aria-label={label}
           aria-pressed={mode === value}
           className={cn(

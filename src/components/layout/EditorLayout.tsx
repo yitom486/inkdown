@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -21,7 +21,7 @@ import {
   parseMarkdownHeadings,
   type MarkdownHeading,
 } from '@/lib/markdown-headings'
-import { useEditorUiStore } from '@/stores/editor-ui-store'
+import { useEditorUiStore, type EditorViewMode } from '@/stores/editor-ui-store'
 import type { FileTreeNode } from '@shared/file-types'
 
 interface EditorLayoutProps {
@@ -66,7 +66,7 @@ export function EditorLayout({
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
 
   const viewMode = fileState.viewMode
-  const previewHtml = useMarkdownPreview(content)
+  const previewHtml = useMarkdownPreview(content, filePath)
   const headings = useMemo(() => parseMarkdownHeadings(content), [content])
   const [activeHeadingId, setActiveHeadingId] = useState<string>()
 
@@ -115,6 +115,26 @@ export function EditorLayout({
     },
     [jumpToHeading],
   )
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
+
+      const shortcuts: Record<string, EditorViewMode> = {
+        '1': 'editor',
+        '2': 'split',
+        '3': 'preview',
+      }
+      const nextMode = shortcuts[event.key]
+      if (!nextMode) return
+
+      event.preventDefault()
+      setViewMode(filePath, nextMode)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [filePath, setViewMode])
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">

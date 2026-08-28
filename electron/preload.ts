@@ -22,6 +22,7 @@ const electronAPI: ElectronAPI = {
   openFile: () => ipcRenderer.invoke(IPC.FILE_OPEN),
   openFolder: () => ipcRenderer.invoke(IPC.FILE_OPEN_FOLDER),
   readFile: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ, filePath),
+  readImage: (filePath: string) => ipcRenderer.invoke(IPC.FILE_READ_IMAGE, filePath),
   saveFile: (payload: SaveFilePayload) => ipcRenderer.invoke(IPC.FILE_SAVE, payload),
   saveFileAs: (payload: SaveFilePayload) => ipcRenderer.invoke(IPC.FILE_SAVE_AS, payload),
   updateTitle: (payload) => {

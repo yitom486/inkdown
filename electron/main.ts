@@ -7,6 +7,7 @@ import {
   openFileDialog,
   openFolderDialog,
   readFileByPath,
+  readImageAsDataUrl,
   saveFileDialog,
 } from './file-service'
 
@@ -86,6 +87,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC.FILE_OPEN, () => openFileDialog())
   ipcMain.handle(IPC.FILE_OPEN_FOLDER, () => openFolderDialog())
   ipcMain.handle(IPC.FILE_READ, (_event, filePath: string) => readFileByPath(filePath))
+  ipcMain.handle(IPC.FILE_READ_IMAGE, (_event, filePath: string) => readImageAsDataUrl(filePath))
   ipcMain.handle(IPC.FILE_SAVE, (_event, payload: SaveFilePayload) => saveFileDialog(payload))
   ipcMain.handle(IPC.FILE_SAVE_AS, (_event, payload: SaveFilePayload) =>
     saveFileDialog({ ...payload, filePath: undefined }),

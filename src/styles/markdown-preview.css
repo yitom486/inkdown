@@ -178,6 +178,16 @@
   height: auto;
 }
 
+.markdown-preview img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.75rem 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
 .markdown-preview-empty {
   color: var(--muted-foreground);
 }

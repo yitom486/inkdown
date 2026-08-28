@@ -12,6 +12,10 @@ export interface SaveFileResult {
   filePath: string
 }
 
+export interface ReadImageResult {
+  dataUrl: string
+}
+
 export interface FileTreeNode {
   name: string
   path: string
