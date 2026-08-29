@@ -9,6 +9,7 @@ import type {
 import type { AcpMessageAttachment } from '@/lib/acp-composer'
 import { acpApi } from '@/api/acp-api'
 import { listPreferredConfigPatches } from '@/lib/acp-config-preferences'
+import { acpDevLog, acpDevWarn } from '@/lib/acp-dev-log'
 import { formatAcpConnectedMessage } from '@/lib/acp-session-restore'
 import { reportAppError } from '@/lib/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
@@ -113,7 +114,19 @@ export function useAcpSession(workspaceRoot?: string) {
         !result.sessionRestored &&
         (result.restoreAttempts?.length ?? 0) > 0
       ) {
-        console.warn('[acp-ui] session restore fell back to new', result)
+        acpDevWarn('session restore fell back to new', {
+          requestedSessionId: result.requestedSessionId,
+          newSessionId: result.sessionId,
+          restoreAttempts: result.restoreAttempts,
+          restoreMethod: result.restoreMethod,
+        })
+      } else {
+        acpDevLog('session ready', {
+          sessionId: result.sessionId,
+          sessionRestored: result.sessionRestored,
+          restoreMethod: result.restoreMethod,
+          requestedSessionId: result.requestedSessionId,
+        })
       }
     },
     [appendSystemMessage, setConfigOptions, setPromptCapabilities, setSession, setStatus],
@@ -208,19 +221,143 @@ export function useAcpSession(workspaceRoot?: string) {
     appendSystemMessage('已断开连接（本对话会话 id 已保留，重连时可恢复）')
   }, [appendSystemMessage, finishStreaming, setSession, setStatus])
 
+  /**
+   * 对齐 Agent 到当前本地线程：离线会自动连接；已连接则按需重连并 resume。
+   * - 有 agentSessionId → connect(resume)
+   * - 无 agentSessionId → connect(new)
+   */
+  const syncAgentSessionToActiveThread = useCallback(async (): Promise<boolean> => {
+    const cwd = workspaceRoot?.trim()
+    const statusNow = useAcpUiStore.getState().status
+    if (!cwd) {
+      acpDevLog('sync skip: no workspace cwd')
+      appendSystemMessage('请先打开工作区文件夹，再使用 Agent。')
+      return false
+    }
+    if (statusNow === 'connecting' || statusNow === 'awaiting_auth') {
+      acpDevLog('sync skip: status busy', { statusNow })
+      return false
+    }
+    if (useAcpUiStore.getState().prompting) {
+      appendSystemMessage('请先停止当前回合，再切换历史对话。')
+      return false
+    }
+
+    const resumeSessionId = activeThreadAgentSessionId()
+    const liveSessionId = useAcpUiStore.getState().sessionId?.trim() || undefined
+    const alreadyAligned =
+      statusNow === 'connected' &&
+      Boolean(resumeSessionId) &&
+      Boolean(liveSessionId) &&
+      resumeSessionId === liveSessionId
+
+    if (alreadyAligned) {
+      acpDevLog('sync skip: already on target session', { resumeSessionId })
+      return true
+    }
+
+    const wasOnline = statusNow === 'connected' || statusNow === 'error'
+    acpDevLog('sync start', {
+      statusNow,
+      wasOnline,
+      resumeSessionId: resumeSessionId ?? null,
+      liveSessionId: liveSessionId ?? null,
+      runtimeId: selectedRuntimeId,
+      cwd,
+    })
+
+    setStatus('connecting')
+    setAuthError(null)
+    appendSystemMessage(
+      resumeSessionId
+        ? wasOnline
+          ? `正在切换到历史会话 ${resumeSessionId.slice(0, 8)}…`
+          : `正在连接并恢复历史会话 ${resumeSessionId.slice(0, 8)}…`
+        : wasOnline
+          ? '正在为当前对话创建新的 Agent 会话…'
+          : `正在连接 ${selectedRuntimeId}…`,
+    )
+
+    if (wasOnline) {
+      const disconnected = await acpApi.disconnect()
+      if (!isOk(disconnected)) {
+        acpDevWarn('sync disconnect failed', disconnected.error)
+        setStatus('error', disconnected.error.message)
+        reportAppError(disconnected.error)
+        appendSystemMessage(`切换会话失败：${disconnected.error.message}`)
+        return false
+      }
+      setSession(null)
+      finishStreaming()
+      setStatus('connecting')
+    }
+
+    const result = await acpApi.connect({
+      runtimeId: selectedRuntimeId,
+      cwd,
+      resumeSessionId,
+    })
+    if (!isOk(result)) {
+      acpDevWarn('sync connect failed', result.error)
+      setStatus('error', result.error.message)
+      reportAppError(result.error)
+      appendSystemMessage(`连接失败：${result.error.message}`)
+      return false
+    }
+
+    if (result.value.phase === 'needs_auth') {
+      acpDevLog('sync needs auth', { methods: result.value.authMethods.length })
+      setStatus('awaiting_auth')
+      setAuthMethods(result.value.authMethods)
+      setAuthOpen(true)
+      appendSystemMessage('需要认证：请选择登录方式')
+      return false
+    }
+
+    const prefix = resumeSessionId
+      ? wasOnline
+        ? '已切换历史会话'
+        : '已连接并恢复历史会话'
+      : wasOnline
+        ? '已为当前对话新建会话'
+        : '已连接'
+
+    await finalizeConnected(result.value, prefix)
+    acpDevLog('sync done', {
+      sessionId: result.value.sessionId,
+      sessionRestored: result.value.sessionRestored,
+      restoreAttempts: result.value.restoreAttempts,
+    })
+    return true
+  }, [
+    appendSystemMessage,
+    finalizeConnected,
+    finishStreaming,
+    selectedRuntimeId,
+    setSession,
+    setStatus,
+    workspaceRoot,
+  ])
+
   const sendPrompt = useCallback(
     async (payload: {
       text: string
       prompt: AcpContentBlock[]
       messageAttachments?: AcpMessageAttachment[]
     }) => {
-      const sid = useAcpUiStore.getState().sessionId
-      if (!sid) {
-        appendSystemMessage('尚未连接 Agent，请先点击连接。')
-        return
-      }
       if (useAcpUiStore.getState().prompting) return
       if (!payload.prompt.length) return
+
+      let sid = useAcpUiStore.getState().sessionId
+      if (!sid) {
+        acpDevLog('sendPrompt: offline, auto-connect before send')
+        const ok = await syncAgentSessionToActiveThread()
+        sid = useAcpUiStore.getState().sessionId
+        if (!ok || !sid) {
+          appendSystemMessage('自动连接未完成，请检查工作区或完成认证后再发送。')
+          return
+        }
+      }
 
       appendUserMessage(payload.text, payload.messageAttachments)
       setPrompting(true)
@@ -242,6 +379,7 @@ export function useAcpSession(workspaceRoot?: string) {
       beginAgentReply,
       finishStreaming,
       setPrompting,
+      syncAgentSessionToActiveThread,
     ],
   )
 
@@ -279,6 +417,7 @@ export function useAcpSession(workspaceRoot?: string) {
   return {
     connect,
     disconnect,
+    syncAgentSessionToActiveThread,
     sendPrompt,
     cancel,
     setModel,

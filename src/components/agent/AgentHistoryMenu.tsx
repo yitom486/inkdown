@@ -27,9 +27,14 @@ function formatThreadTime(ts: number): string {
 interface AgentHistoryMenuProps {
   workspaceRoot?: string
   disabled?: boolean
+  onAfterSwitchThread?: () => void
 }
 
-export function AgentHistoryMenu({ workspaceRoot, disabled }: AgentHistoryMenuProps) {
+export function AgentHistoryMenu({
+  workspaceRoot,
+  disabled,
+  onAfterSwitchThread,
+}: AgentHistoryMenuProps) {
   const threads = useAcpUiStore((s) => s.threads)
   const activeThreadId = useAcpUiStore((s) => s.activeThreadId)
   const prompting = useAcpUiStore((s) => s.prompting)
@@ -64,6 +69,7 @@ export function AgentHistoryMenu({ workspaceRoot, disabled }: AgentHistoryMenuPr
           onSelect={(e) => {
             e.preventDefault()
             createThread(workspaceRoot)
+            onAfterSwitchThread?.()
           }}
         >
           <Plus className="size-3.5" />
@@ -77,14 +83,17 @@ export function AgentHistoryMenu({ workspaceRoot, disabled }: AgentHistoryMenuPr
               thread={thread}
               active={thread.id === activeThreadId}
               canSwitch={!prompting}
-              onSelect={() => switchThread(thread.id)}
+              onSelect={() => {
+                switchThread(thread.id)
+                onAfterSwitchThread?.()
+              }}
               onDelete={() => deleteThread(thread.id)}
             />
           ))}
         </div>
         <DropdownMenuSeparator />
         <p className="px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
-          气泡保存在本机；Agent 侧会话 id 挂在本对话上，重连时优先 resume。
+          切换历史会自动连接并尝试恢复该对话的 Agent 会话；失败时仍可查看本地气泡。
         </p>
       </DropdownMenuContent>
     </DropdownMenu>

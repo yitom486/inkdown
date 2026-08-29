@@ -247,6 +247,7 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
   const {
     connect,
     disconnect,
+    syncAgentSessionToActiveThread,
     sendPrompt,
     cancel,
     setModel,
@@ -388,7 +389,10 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
               )}
             </Button>
           )}
-          <AgentHistoryMenu workspaceRoot={workspaceRoot} />
+          <AgentHistoryMenu
+            workspaceRoot={workspaceRoot}
+            onAfterSwitchThread={() => void syncAgentSessionToActiveThread()}
+          />
           <Button
             type="button"
             variant="ghost"
@@ -396,7 +400,10 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
             className="size-7 rounded-lg"
             title="新对话"
             disabled={view.prompting}
-            onClick={() => createThread(workspaceRoot)}
+            onClick={() => {
+              createThread(workspaceRoot)
+              void syncAgentSessionToActiveThread()
+            }}
           >
             <Plus className="size-3.5" />
           </Button>
@@ -437,7 +444,11 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
 
       <div className="shrink-0 space-y-1.5 p-3 pt-2">
         <AgentComposer
-          disabled={view.status !== 'connected'}
+          disabled={
+            !workspaceRoot ||
+            view.status === 'connecting' ||
+            view.status === 'awaiting_auth'
+          }
           prompting={view.prompting}
           workspaceRoot={workspaceRoot}
           promptCapabilities={view.promptCapabilities}

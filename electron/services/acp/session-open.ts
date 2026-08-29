@@ -45,6 +45,8 @@ export async function restoreOrCreateAcpSession(
   const log =
     input.log ??
     ((level, message, data) => {
+      // 生产环境不刷常规 ACP 诊断；失败 warn 仍保留便于排障
+      if (level === 'info' && process.env.NODE_ENV === 'production') return
       const line = `[acp] ${message}`
       if (level === 'warn') console.warn(line, data ?? '')
       else console.info(line, data ?? '')

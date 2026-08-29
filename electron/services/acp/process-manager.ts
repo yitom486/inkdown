@@ -66,7 +66,9 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
       const line = stderrBuffer.slice(0, idx).replace(/\r$/, '')
       stderrBuffer = stderrBuffer.slice(idx + 1)
       if (line.trim()) {
-        console.error(`[acp:${options.runtime.id}]`, line)
+        if (process.env.NODE_ENV !== 'production') {
+          console.error(`[acp:${options.runtime.id}]`, line)
+        }
         options.onStderrLine?.(line)
       }
     }
