@@ -3,6 +3,7 @@ import {
   Bot,
   ChevronDown,
   Loader2,
+  Plus,
   Settings2,
   Square,
   Trash2,
@@ -16,6 +17,7 @@ import {
   groupAgentMessages,
 } from '@/components/agent/AgentActivityGroup'
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
+import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { Button } from '@/components/ui/button'
 import {
@@ -146,6 +148,7 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
   const view = useAcpChatView()
   const setSelectedRuntimeId = useAcpUiStore((s) => s.setSelectedRuntimeId)
   const setPanelOpen = useAcpUiStore((s) => s.setPanelOpen)
+  const createThread = useAcpUiStore((s) => s.createThread)
   const {
     connect,
     disconnect,
@@ -174,6 +177,11 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
     () => groupAgentMessages(view.messages),
     [view.messages],
   )
+
+  const activeTitle = useMemo(() => {
+    const thread = view.threads.find((t) => t.id === view.activeThreadId)
+    return thread && thread.title !== '新对话' ? thread.title : null
+  }, [view.activeThreadId, view.threads])
 
   const runtimeName =
     BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === view.selectedRuntimeId)?.name ??
@@ -273,6 +281,11 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
               {statusLabel}
             </span>
           </div>
+          {activeTitle ? (
+            <p className="truncate text-[10px] text-muted-foreground" title={activeTitle}>
+              {activeTitle}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-0.5">
           {view.status === 'connected' ? (
@@ -303,12 +316,24 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
               )}
             </Button>
           )}
+          <AgentHistoryMenu workspaceRoot={workspaceRoot} />
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="size-7 rounded-lg"
-            title="清空对话"
+            title="新对话"
+            disabled={view.prompting}
+            onClick={() => createThread(workspaceRoot)}
+          >
+            <Plus className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 rounded-lg"
+            title="清空当前对话"
             onClick={clearMessages}
           >
             <Trash2 className="size-3.5" />
