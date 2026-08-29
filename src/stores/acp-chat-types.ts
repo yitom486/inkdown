@@ -2,10 +2,18 @@ import type { AcpToolCallKind, AcpToolCallStatus } from '@shared/types/acp'
 
 export type AcpChatRole = 'user' | 'agent' | 'thought' | 'tool' | 'system'
 
+export interface AcpToolDiff {
+  path: string
+  oldText: string
+  newText: string
+}
+
 export interface AcpChatMessage {
   id: string
   role: AcpChatRole
   text: string
+  createdAt: number
+  updatedAt?: number
   streaming?: boolean
   /** tool 卡片字段 */
   toolCallId?: string
@@ -13,6 +21,7 @@ export interface AcpChatMessage {
   toolStatus?: AcpToolCallStatus | string
   toolTitle?: string
   toolContentText?: string
+  toolDiffs?: AcpToolDiff[]
   toolLocations?: Array<{ path: string; line?: number }>
 }
 
@@ -27,11 +36,26 @@ export function extractTextFromContent(content: unknown): string {
   return ''
 }
 
-/** 把 ACP tool content[] 压成可读摘要（卡片展开区） */
+export function parseToolDiffs(content: unknown): AcpToolDiff[] {
+  if (!Array.isArray(content)) return []
+  const diffs: AcpToolDiff[] = []
+  for (const item of content) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    if (row.type !== 'diff') continue
+    diffs.push({
+      path: typeof row.path === 'string' ? row.path : 'file',
+      oldText: typeof row.oldText === 'string' ? row.oldText : '',
+      newText: typeof row.newText === 'string' ? row.newText : '',
+    })
+  }
+  return diffs
+}
+
+/** 把 ACP tool content[] 压成可读摘要（卡片展开区；diff 另有可视化） */
 export function flattenToolContent(content: unknown): string {
   if (!Array.isArray(content)) {
-    const single = extractTextFromContent(content)
-    return single
+    return extractTextFromContent(content)
   }
 
   const parts: string[] = []
@@ -87,4 +111,64 @@ export function parseToolLocations(
 
 export function isToolActiveStatus(status: string | undefined): boolean {
   return status === 'pending' || status === 'in_progress' || !status
+}
+
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return '<1s'
+  const sec = Math.round(ms / 1000)
+  if (sec < 60) return `${sec}s`
+  const min = Math.floor(sec / 60)
+  const rem = sec % 60
+  return rem > 0 ? `${min}m ${rem}s` : `${min}m`
+}
+
+export type DiffLineKind = 'same' | 'add' | 'del'
+
+export interface DiffLine {
+  kind: DiffLineKind
+  text: string
+}
+
+/** 简易统一 diff：公共前后缀保留，中间标删/增 */
+export function buildSimpleDiffLines(oldText: string, newText: string): DiffLine[] {
+  if (oldText === newText) {
+    const lines = (newText || '(无变更)').split('\n')
+    return lines.map((text) => ({ kind: 'same' as const, text }))
+  }
+
+  const oldLines = oldText === '' ? [] : oldText.split('\n')
+  const newLines = newText === '' ? [] : newText.split('\n')
+
+  let start = 0
+  while (
+    start < oldLines.length &&
+    start < newLines.length &&
+    oldLines[start] === newLines[start]
+  ) {
+    start += 1
+  }
+
+  let oldEnd = oldLines.length - 1
+  let newEnd = newLines.length - 1
+  while (oldEnd >= start && newEnd >= start && oldLines[oldEnd] === newLines[newEnd]) {
+    oldEnd -= 1
+    newEnd -= 1
+  }
+
+  const lines: DiffLine[] = []
+  for (let i = 0; i < start; i++) lines.push({ kind: 'same', text: oldLines[i]! })
+  for (let i = start; i <= oldEnd; i++) lines.push({ kind: 'del', text: oldLines[i]! })
+  for (let i = start; i <= newEnd; i++) lines.push({ kind: 'add', text: newLines[i]! })
+  for (let i = oldEnd + 1; i < oldLines.length; i++) {
+    lines.push({ kind: 'same', text: oldLines[i]! })
+  }
+
+  if (lines.length > 80) {
+    return [
+      ...lines.slice(0, 40),
+      { kind: 'same', text: `… 另有 ${lines.length - 80} 行未展开 …` },
+      ...lines.slice(-40),
+    ]
+  }
+  return lines
 }

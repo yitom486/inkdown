@@ -2,6 +2,7 @@ import type { AppError } from '@shared/core/errors'
 import { err, ok, type Result } from '@shared/core/result'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type {
+  AcpAuthPreflightResult,
   AcpCancelPayload,
   AcpConnectPayload,
   AcpConnectResult,
@@ -55,6 +56,18 @@ export const acpApi = {
     const api = requireAcpBridge()
     if (!api.ok) return api
     return api.value.listAcpRuntimes()
+  },
+
+  async authPreflight(): Promise<Result<AcpAuthPreflightResult, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.acpAuthPreflight !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: 'ACP auth preflight 未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.acpAuthPreflight()
   },
 
   async connect(payload: AcpConnectPayload): Promise<Result<AcpConnectResult, AppError>> {

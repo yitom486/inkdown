@@ -131,3 +131,12 @@ export interface AcpPermissionResponsePayload {
   requestId: number
   outcome: AcpPermissionOutcome
 }
+
+/** 本机 Codex 登录态粗检（无密钥内容） */
+export interface AcpAuthPreflightResult {
+  codexHome: string
+  hasCodexHome: boolean
+  hasAuthFile: boolean
+  hasApiKeyEnv: boolean
+  looksLoggedIn: boolean
+}

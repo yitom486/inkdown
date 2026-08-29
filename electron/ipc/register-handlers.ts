@@ -46,6 +46,7 @@ import {
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
 import { listAcpRuntimes } from '../services/acp/agent-registry'
+import { probeCodexAuth } from '../services/acp/codex-auth-preflight'
 import {
   cancelAcp,
   connectAcp,
@@ -123,6 +124,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
+  ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, () => ok(probeCodexAuth()))
   ipcMain.handle(IPC.ACP_CONNECT, (_event, payload: AcpConnectPayload) => connectAcp(payload))
   ipcMain.handle(IPC.ACP_DISCONNECT, () => disconnectAcp())
   ipcMain.handle(IPC.ACP_SESSION_NEW, (_event, payload: AcpSessionNewPayload) =>

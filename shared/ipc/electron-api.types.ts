@@ -21,6 +21,7 @@ import type {
   UpdateReadingMarkPayload,
 } from '@shared/types/reading-mark'
 import type {
+  AcpAuthPreflightResult,
   AcpCancelPayload,
   AcpConnectPayload,
   AcpConnectResult,
@@ -73,6 +74,7 @@ export interface ElectronAPI {
   updateReadingMark: (payload: UpdateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
   deleteReadingMark: (id: string) => Promise<Result<void, AppError>>
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>
+  acpAuthPreflight: () => Promise<Result<AcpAuthPreflightResult, AppError>>
   acpConnect: (payload: AcpConnectPayload) => Promise<Result<AcpConnectResult, AppError>>
   acpDisconnect: () => Promise<Result<void, AppError>>
   acpSessionNew: (payload: AcpSessionNewPayload) => Promise<Result<AcpSessionNewResult, AppError>>

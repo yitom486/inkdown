@@ -11,6 +11,10 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  AgentActivityGroup,
+  groupAgentMessages,
+} from '@/components/agent/AgentActivityGroup'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +30,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAcpSession } from '@/hooks/useAcpSession'
 import { cn } from '@/lib/utils'
 import { useAcpChatView, useAcpUiStore } from '@/stores/acp-ui-store'
+import { acpApi } from '@/api/acp-api'
+import { isOk } from '@shared/core/result'
 import { BUILTIN_ACP_RUNTIMES } from '@shared/constants/acp-agents'
 import type { AcpConfigOption } from '@shared/types/acp'
 
@@ -142,11 +148,18 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
   const { connect, disconnect, sendPrompt, cancel, setModel, clearMessages } =
     useAcpSession(workspaceRoot)
   const [draft, setDraft] = useState('')
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const [authHint, setAuthHint] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { primary, secondary } = useMemo(
     () => splitConfigOptions(view.configOptions),
     [view.configOptions],
+  )
+
+  const timeline = useMemo(
+    () => groupAgentMessages(view.messages),
+    [view.messages],
   )
 
   const runtimeName =
@@ -156,6 +169,36 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [view.messages, view.prompting])
+
+  useEffect(() => {
+    if (!view.prompting) return
+    setNowMs(Date.now())
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [view.prompting])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const result = await acpApi.authPreflight()
+      if (cancelled || !isOk(result)) return
+      const p = result.value
+      if (p.looksLoggedIn) {
+        const via = [
+          p.hasAuthFile ? 'auth.json' : null,
+          p.hasApiKeyEnv ? '环境变量 API Key' : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+        setAuthHint(`已检测到本机 Codex 登录（${via}）`)
+      } else {
+        setAuthHint('未检测到本机 Codex 登录，连接后可能需要 ChatGPT / API Key 认证')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const statusLabel =
     view.status === 'connected'
@@ -281,11 +324,31 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                 点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。
               </p>
+              {authHint ? (
+                <p
+                  className={cn(
+                    'mt-2 rounded-md px-2 py-1.5 text-[10px] leading-relaxed',
+                    authHint.startsWith('已检测')
+                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                  )}
+                >
+                  {authHint}
+                </p>
+              ) : null}
             </div>
           ) : null}
-          {view.messages.map((msg) => (
-            <AgentMessageBubble key={msg.id} message={msg} />
-          ))}
+          {timeline.map((item) =>
+            item.type === 'activity' ? (
+              <AgentActivityGroup
+                key={item.messages.map((m) => m.id).join('-')}
+                messages={item.messages}
+                nowMs={nowMs}
+              />
+            ) : (
+              <AgentMessageBubble key={item.message.id} message={item.message} />
+            ),
+          )}
           {view.prompting ? (
             <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
@@ -382,6 +445,11 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
                   <p className="mt-1 truncate text-[10px] text-muted-foreground" title={runtimeName}>
                     当前运行时 · {runtimeName}
                   </p>
+                  {authHint ? (
+                    <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                      {authHint}
+                    </p>
+                  ) : null}
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -9,6 +9,7 @@ import {
   extractTextFromContent,
   flattenToolContent,
   isToolActiveStatus,
+  parseToolDiffs,
   parseToolLocations,
 } from '@/stores/acp-chat-types'
 
@@ -69,8 +70,10 @@ function applyToolCallUpdate(
     typeof update.kind === 'string' ? update.kind : (prev?.toolKind ?? 'other')
 
   let contentText = prev?.toolContentText ?? prev?.text ?? ''
+  let toolDiffs = prev?.toolDiffs
   if ('content' in update) {
     contentText = flattenToolContent(update.content)
+    toolDiffs = parseToolDiffs(update.content)
   }
 
   let locations = prev?.toolLocations
@@ -87,8 +90,11 @@ function applyToolCallUpdate(
     toolStatus: status,
     toolTitle: title,
     toolContentText: contentText,
+    toolDiffs: toolDiffs && toolDiffs.length > 0 ? toolDiffs : undefined,
     toolLocations: locations,
     text: contentText || title,
+    createdAt: prev?.createdAt ?? Date.now(),
+    updatedAt: Date.now(),
     streaming: active,
   }
 
@@ -133,31 +139,41 @@ export const useAcpUiStore = create<AcpUiStore>()(
 
       appendUserMessage: (text) =>
         set((s) => ({
-          messages: [...s.messages, { id: newId('user'), role: 'user', text }],
+          messages: [
+            ...s.messages,
+            { id: newId('user'), role: 'user', text, createdAt: Date.now() },
+          ],
         })),
 
       appendSystemMessage: (text) =>
         set((s) => ({
-          messages: [...s.messages, { id: newId('sys'), role: 'system', text }],
+          messages: [
+            ...s.messages,
+            { id: newId('sys'), role: 'system', text, createdAt: Date.now() },
+          ],
         })),
 
       clearMessages: () => set({ messages: [] }),
 
       finishStreaming: () =>
-        set((s) => ({
-          prompting: false,
-          messages: s.messages.map((m) => {
-            if (!m.streaming) return m
-            if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
-              return {
-                ...m,
-                streaming: false,
-                toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
+        set((s) => {
+          const now = Date.now()
+          return {
+            prompting: false,
+            messages: s.messages.map((m) => {
+              if (!m.streaming) return m
+              if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
+                return {
+                  ...m,
+                  streaming: false,
+                  updatedAt: now,
+                  toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
+                }
               }
-            }
-            return { ...m, streaming: false }
-          }),
-        })),
+              return { ...m, streaming: false, updatedAt: now }
+            }),
+          }
+        }),
 
       applySessionUpdate: (update) => {
         const kind =
@@ -195,6 +211,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
                 toolStatus: 'in_progress',
                 toolContentText: chunkText,
                 text: chunkText,
+                createdAt: Date.now(),
                 streaming: true,
               })
               return { messages }
@@ -206,6 +223,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
               toolContentText: merged,
               text: merged,
               streaming: true,
+              updatedAt: Date.now(),
               toolStatus: prev.toolStatus ?? 'in_progress',
             }
             return { messages }
@@ -239,6 +257,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
             messages[messages.length - 1] = {
               ...last,
               text: last.text + text,
+              updatedAt: Date.now(),
             }
             return { messages }
           }
@@ -246,6 +265,8 @@ export const useAcpUiStore = create<AcpUiStore>()(
             id: newId(role),
             role,
             text,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
             streaming: true,
           })
           return { messages }

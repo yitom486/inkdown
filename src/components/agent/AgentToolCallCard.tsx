@@ -15,6 +15,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
+import { AgentDiffPreview } from '@/components/agent/AgentDiffPreview'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { isToolActiveStatus } from '@/stores/acp-chat-types'
@@ -68,9 +69,11 @@ interface AgentToolCallCardProps {
 export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
   const active = Boolean(message.streaming) || isToolActiveStatus(message.toolStatus)
   const [open, setOpen] = useState(active)
+  const diffs = message.toolDiffs ?? []
   const detail = message.toolContentText || message.text
-  const hasDetail = Boolean(detail && detail !== message.toolTitle)
+  const hasTextDetail = Boolean(detail && detail !== message.toolTitle && diffs.length === 0)
   const locations = message.toolLocations ?? []
+  const hasBody = hasTextDetail || diffs.length > 0 || locations.length > 0
 
   useEffect(() => {
     setOpen(active)
@@ -78,11 +81,15 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
 
   const title = message.toolTitle || '工具调用'
   const locationHint =
-    locations.length === 1
-      ? basename(locations[0].path)
-      : locations.length > 1
-        ? `${locations.length} 个文件`
-        : null
+    diffs.length === 1
+      ? basename(diffs[0]!.path)
+      : locations.length === 1
+        ? basename(locations[0]!.path)
+        : locations.length > 1
+          ? `${locations.length} 个文件`
+          : diffs.length > 1
+            ? `${diffs.length} 个文件`
+            : null
 
   return (
     <div
@@ -104,7 +111,7 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
             <span className="ml-1.5 font-normal text-muted-foreground">{locationHint}</span>
           ) : null}
         </span>
-        {hasDetail || locations.length > 0 ? (
+        {hasBody ? (
           open ? (
             <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
           ) : (
@@ -113,9 +120,9 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
         ) : null}
       </button>
 
-      {open && (hasDetail || locations.length > 0) ? (
+      {open && hasBody ? (
         <div className="space-y-1.5 border-t border-border/40 px-2.5 py-2">
-          {locations.length > 0 ? (
+          {locations.length > 0 && diffs.length === 0 ? (
             <ul className="space-y-0.5">
               {locations.map((loc) => (
                 <li
@@ -129,7 +136,8 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
               ))}
             </ul>
           ) : null}
-          {hasDetail ? (
+          {diffs.length > 0 ? <AgentDiffPreview diffs={diffs} /> : null}
+          {hasTextDetail ? (
             <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-muted-foreground">
               {detail}
             </pre>
