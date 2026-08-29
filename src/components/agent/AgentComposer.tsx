@@ -62,7 +62,23 @@ export function AgentComposer({
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
   const attachmentsRef = useRef(attachments)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   attachmentsRef.current = attachments
+
+  /** 拖入/粘贴附件后聚焦输入末尾，便于立刻打字；不影响继续拖贴 */
+  const focusComposerEnd = useCallback(() => {
+    const el = textareaRef.current
+    if (!el || el.disabled) return
+    requestAnimationFrame(() => {
+      el.focus({ preventScroll: true })
+      const len = el.value.length
+      try {
+        el.setSelectionRange(len, len)
+      } catch {
+        /* 部分环境下 disabled 切换瞬间可能抛错，忽略即可 */
+      }
+    })
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -80,28 +96,32 @@ export function AgentComposer({
     })
   }, [])
 
-  const addAttachments = useCallback((next: ComposerAttachment[]) => {
-    if (next.length === 0) return
-    setAttachments((prev) => {
-      const seen = new Set(
-        prev
-          .map((a) => a.absolutePath)
-          .filter((p): p is string => Boolean(p))
-          .map(normalizePathForCompare),
-      )
-      const merged = [...prev]
-      for (const att of next) {
-        const key = att.absolutePath ? normalizePathForCompare(att.absolutePath) : ''
-        if (key && seen.has(key)) {
-          if (att.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(att.previewUrl)
-          continue
+  const addAttachments = useCallback(
+    (next: ComposerAttachment[]) => {
+      if (next.length === 0) return
+      setAttachments((prev) => {
+        const seen = new Set(
+          prev
+            .map((a) => a.absolutePath)
+            .filter((p): p is string => Boolean(p))
+            .map(normalizePathForCompare),
+        )
+        const merged = [...prev]
+        for (const att of next) {
+          const key = att.absolutePath ? normalizePathForCompare(att.absolutePath) : ''
+          if (key && seen.has(key)) {
+            if (att.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(att.previewUrl)
+            continue
+          }
+          if (key) seen.add(key)
+          merged.push(att)
         }
-        if (key) seen.add(key)
-        merged.push(att)
-      }
-      return merged
-    })
-  }, [])
+        return merged
+      })
+      focusComposerEnd()
+    },
+    [focusComposerEnd],
+  )
 
   const ingestWorkspacePaths = useCallback(
     (paths: string[]) => {
@@ -315,9 +335,12 @@ export function AgentComposer({
         const workspacePaths = readWorkspacePathsFromDataTransfer(e.dataTransfer)
         if (workspacePaths.length > 0) {
           ingestWorkspacePaths(workspacePaths)
+          focusComposerEnd()
           return
         }
-        void ingestDroppedFiles(e.dataTransfer.files)
+        void ingestDroppedFiles(e.dataTransfer.files).finally(() => {
+          focusComposerEnd()
+        })
       }}
     >
       {dragOver ? (
@@ -361,6 +384,7 @@ export function AgentComposer({
       ) : null}
 
       <textarea
+        ref={textareaRef}
         className="min-h-[72px] w-full resize-none bg-transparent px-3 py-2.5 text-xs leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
         placeholder={
           disabled
@@ -374,7 +398,9 @@ export function AgentComposer({
           const image = extractClipboardImage(e.clipboardData?.items)
           if (!image) return
           e.preventDefault()
-          void ingestImageBlob(image.blob, image.mimeType)
+          void ingestImageBlob(image.blob, image.mimeType).finally(() => {
+            focusComposerEnd()
+          })
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
