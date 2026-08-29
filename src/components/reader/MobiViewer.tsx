@@ -165,27 +165,19 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       const item = chaptersRef.current[flatIndex]
       if (!item) return false
 
-      const sameSpine = item.id === currentChapterIdRef.current
-      const navFlatIndex = useReaderNavigationStore.getState().nav.flatIndex
-      if (sameSpine && !options?.forceReload) {
-        const doc = iframeRef.current?.contentDocument
-        if (doc && flatIndex !== navFlatIndex) {
-          const scrolled = scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex)
-          if (scrolled) {
-            applyNavFlatIndex(flatIndex)
-            window.requestAnimationFrame(() => {
-              syncMobiViewportNav(doc, item.id)
-            })
-            return true
-          }
-        }
-        if (flatIndex === navFlatIndex) return true
-      }
-
       applyNavFlatIndex(flatIndex)
 
-      if (!options?.forceReload && sameSpine) {
-        return true
+      const sameSpine = item.id === currentChapterIdRef.current
+      if (sameSpine && !options?.forceReload) {
+        const doc = iframeRef.current?.contentDocument
+        if (doc?.body) {
+          scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex)
+          window.requestAnimationFrame(() => {
+            syncMobiViewportNav(doc, item.id)
+            useReaderNavigationStore.getState().clearNavIntent()
+          })
+          return true
+        }
       }
 
       setChapterLoading(true)
@@ -194,12 +186,6 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         if (!loaded) {
           toast.error('该章节暂无正文')
           return false
-        }
-        if (flatIndex !== findFirstFlatIndexById(chaptersRef.current, item.id)) {
-          const doc = iframeRef.current?.contentDocument
-          if (doc) {
-            scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex)
-          }
         }
         return true
       } finally {
@@ -506,6 +492,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         }
         window.requestAnimationFrame(() => {
           if (chapterId) syncMobiViewportNav(doc, chapterId)
+          useReaderNavigationStore.getState().clearNavIntent()
         })
       }
     }
