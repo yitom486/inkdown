@@ -15,6 +15,10 @@ import {
 import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/acp-plan'
 import { pruneIntermediateAgentReplies } from '@/lib/acp-prune-agent-replies'
 import {
+  rememberPreferredConfig,
+  type AcpPreferredConfigMap,
+} from '@/lib/acp-config-preferences'
+import {
   toolCallIdFromPermission,
   type AcpPermissionOptionView,
 } from '@/lib/acp-permission'
@@ -55,6 +59,11 @@ interface AcpUiStore {
   threads: AcpChatThread[]
   activeThreadId: string
   historyOpen: boolean
+  /**
+   * 各运行时下用户选过的 Mode / Model 等（persist）。
+   * 连接后写回 Agent，避免每次重开都回到默认。
+   */
+  preferredConfigByRuntime: AcpPreferredConfigMap
   /** 当前待用户审批的工具权限（不持久化） */
   pendingPermission: AcpPendingPermission | null
   setPanelOpen: (open: boolean) => void
@@ -65,6 +74,11 @@ interface AcpUiStore {
   setSession: (sessionId: string | null, configOptions?: AcpConfigOption[]) => void
   setConfigOptions: (options: AcpConfigOption[]) => void
   setPrompting: (prompting: boolean) => void
+  rememberConfigPreference: (
+    runtimeId: string,
+    configId: string,
+    value: string | boolean,
+  ) => void
   setPendingPermission: (pending: AcpPendingPermission | null) => void
   /** 把 permission 请求里的 toolCall 写入时间线，保证审批卡能挂上工具气泡 */
   ingestPermissionRequest: (pending: AcpPendingPermission) => void
@@ -203,6 +217,8 @@ export const useAcpUiStore = create<AcpUiStore>()(
       threads: [initialThread],
       activeThreadId: initialThread.id,
       historyOpen: false,
+      preferredConfigByRuntime: {},
+      pendingPermission: null,
 
       setPanelOpen: (open) => set({ panelOpen: open }),
       togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
@@ -234,7 +250,15 @@ export const useAcpUiStore = create<AcpUiStore>()(
 
       setConfigOptions: (options) => set({ configOptions: options }),
       setPrompting: (prompting) => set({ prompting }),
-      pendingPermission: null,
+      rememberConfigPreference: (runtimeId, configId, value) =>
+        set((s) => ({
+          preferredConfigByRuntime: rememberPreferredConfig(
+            s.preferredConfigByRuntime,
+            runtimeId,
+            configId,
+            value,
+          ),
+        })),
       setPendingPermission: (pending) => set({ pendingPermission: pending }),
       clearPendingPermission: (requestId) =>
         set((s) => {
@@ -583,6 +607,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
       partialize: (state) => ({
         panelOpen: state.panelOpen,
         selectedRuntimeId: state.selectedRuntimeId,
+        preferredConfigByRuntime: state.preferredConfigByRuntime,
         activeThreadId: state.activeThreadId,
         threads: state.threads.map((t) => ({
           ...t,
@@ -600,11 +625,16 @@ export const useAcpUiStore = create<AcpUiStore>()(
           threads.some((t) => t.id === p.activeThreadId)
             ? p.activeThreadId
             : threads[0]!.id
+        const preferredConfigByRuntime =
+          p.preferredConfigByRuntime && typeof p.preferredConfigByRuntime === 'object'
+            ? p.preferredConfigByRuntime
+            : current.preferredConfigByRuntime
         return {
           ...current,
           ...p,
           threads,
           activeThreadId,
+          preferredConfigByRuntime,
           prompting: false,
           status: 'disconnected',
           sessionId: null,

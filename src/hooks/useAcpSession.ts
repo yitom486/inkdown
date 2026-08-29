@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { isOk } from '@shared/core/result'
-import type { AcpAuthMethod } from '@shared/types/acp'
+import type { AcpAuthMethod, AcpConfigOption, AcpConnectReadyResult } from '@shared/types/acp'
 import { acpApi } from '@/api/acp-api'
+import { listPreferredConfigPatches } from '@/lib/acp-config-preferences'
 import { formatAcpConnectedMessage } from '@/lib/acp-session-restore'
 import { reportAppError } from '@/lib/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
@@ -12,10 +13,40 @@ function activeThreadAgentSessionId(): string | undefined {
   return thread?.agentSessionId?.trim() || undefined
 }
 
+/** 连接就绪后：把 Zustand 里记住的 Mode/Model 等写回当前 ACP session */
+async function applyStoredConfigPreferences(
+  sessionId: string,
+  runtimeId: string,
+  initialOptions: AcpConfigOption[],
+): Promise<AcpConfigOption[]> {
+  const preferred =
+    useAcpUiStore.getState().preferredConfigByRuntime[runtimeId] ?? undefined
+  const patches = listPreferredConfigPatches(initialOptions, preferred)
+  if (patches.length === 0) return initialOptions
+
+  let latest = initialOptions
+  for (const patch of patches) {
+    const result = await acpApi.setConfigOption({
+      sessionId,
+      configId: patch.configId,
+      value: patch.value,
+    })
+    if (!isOk(result)) {
+      console.warn('[acp-ui] 套用配置偏好失败', patch, result.error)
+      continue
+    }
+    if (result.value.configOptions.length > 0) {
+      latest = result.value.configOptions
+    }
+  }
+  return latest
+}
+
 export function useAcpSession(workspaceRoot?: string) {
   const setStatus = useAcpUiStore((s) => s.setStatus)
   const setSession = useAcpUiStore((s) => s.setSession)
   const setConfigOptions = useAcpUiStore((s) => s.setConfigOptions)
+  const rememberConfigPreference = useAcpUiStore((s) => s.rememberConfigPreference)
   const applySessionUpdate = useAcpUiStore((s) => s.applySessionUpdate)
   const finishStreaming = useAcpUiStore((s) => s.finishStreaming)
   const appendUserMessage = useAcpUiStore((s) => s.appendUserMessage)
@@ -52,6 +83,33 @@ export function useAcpSession(workspaceRoot?: string) {
       offUpdate()
     }
   }, [applySessionUpdate, finishStreaming, setSession, setStatus])
+
+  const finalizeConnected = useCallback(
+    async (result: AcpConnectReadyResult, prefix: string) => {
+      setStatus('connected')
+      const options = result.configOptions ?? []
+      setSession(result.sessionId, options)
+      appendSystemMessage(formatAcpConnectedMessage(result, prefix))
+
+      const applied = await applyStoredConfigPreferences(
+        result.sessionId,
+        useAcpUiStore.getState().selectedRuntimeId,
+        options,
+      )
+      if (applied !== options) {
+        setConfigOptions(applied)
+      }
+
+      if (
+        result.requestedSessionId &&
+        !result.sessionRestored &&
+        (result.restoreAttempts?.length ?? 0) > 0
+      ) {
+        console.warn('[acp-ui] session restore fell back to new', result)
+      }
+    },
+    [appendSystemMessage, setConfigOptions, setSession, setStatus],
+  )
 
   const connect = useCallback(async () => {
     const cwd = workspaceRoot?.trim()
@@ -92,20 +150,11 @@ export function useAcpSession(workspaceRoot?: string) {
       return
     }
 
-    setSession(result.value.sessionId, result.value.configOptions ?? [])
-    setStatus('connected')
-    appendSystemMessage(formatAcpConnectedMessage(result.value, '已连接'))
-    if (
-      result.value.requestedSessionId &&
-      !result.value.sessionRestored &&
-      (result.value.restoreAttempts?.length ?? 0) > 0
-    ) {
-      console.warn('[acp-ui] session restore fell back to new', result.value)
-    }
+    await finalizeConnected(result.value, '已连接')
   }, [
     appendSystemMessage,
+    finalizeConnected,
     selectedRuntimeId,
-    setSession,
     setStatus,
     workspaceRoot,
   ])
@@ -123,11 +172,9 @@ export function useAcpSession(workspaceRoot?: string) {
       }
       setAuthOpen(false)
       setAuthMethods([])
-      setSession(result.value.sessionId, result.value.configOptions ?? [])
-      setStatus('connected')
-      appendSystemMessage(formatAcpConnectedMessage(result.value, '已认证并连接'))
+      await finalizeConnected(result.value, '已认证并连接')
     },
-    [appendSystemMessage, setSession, setStatus],
+    [finalizeConnected],
   )
 
   const cancelAuth = useCallback(async () => {
@@ -203,17 +250,19 @@ export function useAcpSession(workspaceRoot?: string) {
     async (configId: string, value: string) => {
       const sid = useAcpUiStore.getState().sessionId
       if (!sid) return
+      const runtimeId = useAcpUiStore.getState().selectedRuntimeId
       const result = await acpApi.setConfigOption({ sessionId: sid, configId, value })
       if (!isOk(result)) {
         reportAppError(result.error)
-        appendSystemMessage(`切换模型失败：${result.error.message}`)
+        appendSystemMessage(`切换配置失败：${result.error.message}`)
         return
       }
+      rememberConfigPreference(runtimeId, configId, value)
       if (result.value.configOptions.length > 0) {
         setConfigOptions(result.value.configOptions)
       }
     },
-    [appendSystemMessage, setConfigOptions],
+    [appendSystemMessage, rememberConfigPreference, setConfigOptions],
   )
 
   return {

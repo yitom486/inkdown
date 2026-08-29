@@ -128,6 +128,15 @@ describe('acp-ui-store history + plan', () => {
     expect(messages.some((m) => m.role === 'thought')).toBe(true)
   })
 
+  it('rememberConfigPreference persists per runtime', () => {
+    useAcpUiStore.getState().rememberConfigPreference('codex-acp', 'mode', 'ask-for-approval')
+    useAcpUiStore.getState().rememberConfigPreference('codex-acp', 'model', 'gpt-x')
+    expect(useAcpUiStore.getState().preferredConfigByRuntime['codex-acp']).toEqual({
+      mode: 'ask-for-approval',
+      model: 'gpt-x',
+    })
+  })
+
   it('applies plan sessionUpdate and replaces entries', () => {
     useAcpUiStore.getState().applySessionUpdate({
       sessionUpdate: 'plan',
