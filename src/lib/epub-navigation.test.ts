@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   findEpubFlatIndex,
-  findLastEpubFlatIndex,
   flattenEpubToc,
   isTocLikeChapter,
   pickInitialChapter,
@@ -117,7 +116,6 @@ describe('epub-navigation', () => {
 
     it('无 fragment 的同文件 href 默认匹配首个正文章节', () => {
       expect(findEpubFlatIndex(nested, { href: 'text00001.html' })).toBe(1)
-      expect(findLastEpubFlatIndex(nested, 'text00001.html')).toBe(1)
       expect(nested[1]?.label).toBe('自序')
     })
 

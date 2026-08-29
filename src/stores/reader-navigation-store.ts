@@ -16,8 +16,8 @@ import type { AdjacentFlatNavState } from '@/lib/reader-chapter-nav'
 import { encodeMobiTocHref } from '@/lib/mobi-navigation'
 import type { ReaderUnit } from '@/lib/reader-navigation'
 
-/** 用户点击上一节/下一节/目录后，视口同步不得立即覆盖 intent flatIndex */
-export const NAV_INTENT_LOCK_MS = 2500
+/** 用户点击导航后，短暂阻止视口同步覆盖 intent flatIndex */
+export const NAV_INTENT_LOCK_MS = 800
 
 interface NavIntent {
   flatIndex: number

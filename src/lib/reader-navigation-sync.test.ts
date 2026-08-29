@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { flattenEpubToc, findLastEpubFlatIndex, resolveChapterNav } from '@/lib/epub-navigation'
+import { flattenEpubToc, findEpubFlatIndex, resolveChapterNav } from '@/lib/epub-navigation'
 import { findEpubFlatIndexFromViewport } from '@/lib/epub-scroll-toc'
 import type { MobiChapterItem } from '@/lib/mobi-navigation'
 import {
@@ -128,7 +128,7 @@ describe('reader-navigation-sync', () => {
 
       const spineOnlyNav = syncEpubNavigation(chapters, { href: 'text00002.html' })
       expect(spineOnlyNav.current?.label).not.toBe('讨论与小结')
-      expect(findLastEpubFlatIndex(chapters, 'text00002.html')).not.toBe(lastSameDoc)
+      expect(findEpubFlatIndex(chapters, { href: 'text00002.html' })).not.toBe(lastSameDoc)
     })
   })
 

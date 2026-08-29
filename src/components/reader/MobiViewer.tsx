@@ -30,11 +30,8 @@ import {
 } from '@/lib/mobi-navigation'
 import {
   findFirstFlatIndexById,
-  findNextDistinctLoadTarget,
-  findPreviousDistinctLoadTarget,
 } from '@/lib/reader-chapter-nav'
 import { scrollMobiChapterToFlatIndex } from '@/lib/epub-scroll-toc'
-import { navigateMobiToFlatIndex } from '@/lib/reader-flat-nav'
 import { readMobiSelection } from '@/lib/mobi-selection'
 import {
   bindDocumentSelectionCollapse,
@@ -74,7 +71,6 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
   const [chapters, setChapters] = useState<MobiChapterItem[]>([])
   const [currentChapterId, setCurrentChapterId] = useState<string>()
-  const [currentTocFlatIndex, setCurrentTocFlatIndex] = useState(-1)
   const chaptersRef = useRef<MobiChapterItem[]>([])
   const [chapterDocHtml, setChapterDocHtml] = useState('')
   const [chapterLoading, setChapterLoading] = useState(false)
@@ -130,18 +126,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   }, [chapters])
 
   const applyNavFlatIndex = useCallback((flatIndex: number) => {
-    setCurrentTocFlatIndex(flatIndex)
     useReaderNavigationStore.getState().syncFlatIndex(flatIndex)
   }, [])
 
   const syncMobiViewportNav = useCallback((doc: Document, chapterId: string) => {
     if (chaptersRef.current.length === 0) return
-    const flatIndex = useReaderNavigationStore.getState().nav.flatIndex
     useReaderNavigationStore.getState().syncMobiViewport(chaptersRef.current, doc, chapterId)
-    const nextFlatIndex = useReaderNavigationStore.getState().nav.flatIndex
-    if (nextFlatIndex >= 0 && nextFlatIndex !== flatIndex) {
-      setCurrentTocFlatIndex(nextFlatIndex)
-    }
   }, [])
 
   const loadChapterById = useCallback(async (chapterId: string): Promise<boolean> => {
@@ -176,9 +166,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       if (!item) return false
 
       const sameSpine = item.id === currentChapterIdRef.current
+      const navFlatIndex = useReaderNavigationStore.getState().nav.flatIndex
       if (sameSpine && !options?.forceReload) {
         const doc = iframeRef.current?.contentDocument
-        if (doc && flatIndex !== currentTocFlatIndex) {
+        if (doc && flatIndex !== navFlatIndex) {
           const scrolled = scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex)
           if (scrolled) {
             applyNavFlatIndex(flatIndex)
@@ -188,7 +179,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             return true
           }
         }
-        if (flatIndex === currentTocFlatIndex) return true
+        if (flatIndex === navFlatIndex) return true
       }
 
       applyNavFlatIndex(flatIndex)
@@ -215,7 +206,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         setChapterLoading(false)
       }
     },
-    [applyNavFlatIndex, currentTocFlatIndex, loadChapterById, syncMobiViewportNav],
+    [applyNavFlatIndex, loadChapterById, syncMobiViewportNav],
   )
 
   const loadChapter = useCallback(
@@ -389,7 +380,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         }
       }
     },
-    [chapters, clearTextSelection, currentChapterId, currentTocFlatIndex, loadChapterAtIndex, syncMobiMarkOverlays, syncMobiViewportNav],
+    [chapters, clearTextSelection, currentChapterId, loadChapterAtIndex, syncMobiMarkOverlays, syncMobiViewportNav],
   )
 
   useEffect(() => {
@@ -414,7 +405,6 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     setChapters([])
     setChapterDocHtml('')
     setCurrentChapterId(undefined)
-    setCurrentTocFlatIndex(-1)
     setLoadError(null)
     mobiRef.current?.destroy()
     mobiRef.current = null
@@ -508,10 +498,11 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       if (!doc?.body) return
       bindChapterFrame(iframe)
       doc.documentElement.scrollTo({ top: 0 })
-      if (currentTocFlatIndex >= 0 && chaptersRef.current.length > 0) {
+      if (chaptersRef.current.length > 0) {
         const chapterId = currentChapterIdRef.current
-        if (chapterId && currentTocFlatIndex !== findFirstFlatIndexById(chaptersRef.current, chapterId)) {
-          scrollMobiChapterToFlatIndex(doc, chaptersRef.current, currentTocFlatIndex)
+        const navFlatIndex = useReaderNavigationStore.getState().nav.flatIndex
+        if (chapterId && navFlatIndex >= 0 && navFlatIndex !== findFirstFlatIndexById(chaptersRef.current, chapterId)) {
+          scrollMobiChapterToFlatIndex(doc, chaptersRef.current, navFlatIndex)
         }
         window.requestAnimationFrame(() => {
           if (chapterId) syncMobiViewportNav(doc, chapterId)

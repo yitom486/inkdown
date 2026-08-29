@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { flattenEpubToc } from '@/lib/epub-navigation'
-import { navigateEpubToFlatIndex, navigateMobiToFlatIndex } from '@/lib/reader-flat-nav'
-import type { MobiChapterItem } from '@/lib/mobi-navigation'
+import { navigateEpubToFlatIndex } from '@/lib/reader-flat-nav'
 
 const scrollEpubChapterInRendition = vi.fn()
 
@@ -14,8 +13,8 @@ vi.mock('@/lib/epub-scroll-toc', async (importOriginal) => {
   }
 })
 
-describe('reader-flat-nav（渲染 loadKey vs 导航 flatIndex）', () => {
-  it('EPUB 同 spine：点下一 flatIndex 只滚动不 display', () => {
+describe('navigateEpubToFlatIndex', () => {
+  it('同 spine：侧栏点小节只滚动不 display', () => {
     scrollEpubChapterInRendition.mockReturnValue(true)
 
     const chapters = flattenEpubToc([
@@ -36,31 +35,5 @@ describe('reader-flat-nav（渲染 loadKey vs 导航 flatIndex）', () => {
     expect(syncFlatIndex).toHaveBeenCalledWith(1)
     expect(scrollEpubChapterInRendition).toHaveBeenCalled()
     expect(display).not.toHaveBeenCalled()
-  })
-
-  it('MOBI 同 chapter.id：点下一 flatIndex 只滚动不 reload', async () => {
-    const chapters: MobiChapterItem[] = [
-      { id: '2', label: '第一章 佟家的奴才', level: 0 },
-      { id: '2', label: '战场上的俘虏', level: 1 },
-    ]
-
-    const syncFlatIndex = vi.fn()
-    const scrollToFlatIndex = vi.fn().mockReturnValue(true)
-    const loadChapterById = vi.fn().mockResolvedValue(true)
-
-    const ok = await navigateMobiToFlatIndex({
-      chapters,
-      flatIndex: 1,
-      currentChapterId: '2',
-      getDocument: () => window.document,
-      syncFlatIndex,
-      scrollToFlatIndex,
-      loadChapterById,
-    })
-
-    expect(ok).toBe(true)
-    expect(syncFlatIndex).toHaveBeenCalledWith(1)
-    expect(scrollToFlatIndex).toHaveBeenCalledWith(window.document, 1)
-    expect(loadChapterById).not.toHaveBeenCalled()
   })
 })

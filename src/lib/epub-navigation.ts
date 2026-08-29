@@ -212,11 +212,6 @@ export function findEpubFlatIndex(
   return pickFirstNavigableCandidate(chapters, candidates)
 }
 
-/** @deprecated 请使用 findEpubFlatIndex */
-export function findLastEpubFlatIndex(chapters: EpubChapter[], currentHref?: string): number {
-  return findEpubFlatIndex(chapters, { href: currentHref })
-}
-
 function resolveFlatIndex(
   chapters: EpubChapter[],
   hint?: EpubLocationHint,

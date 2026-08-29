@@ -7,7 +7,6 @@ export type {
 export {
   flattenEpubToc as flattenReaderToc,
   findEpubFlatIndex,
-  findLastEpubFlatIndex,
   isTocLikeChapter,
   pickInitialChapter,
   resolveChapterNav as resolveUnitNav,

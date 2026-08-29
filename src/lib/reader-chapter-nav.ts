@@ -252,22 +252,6 @@ export function resolveReaderChapterNav<T extends LeveledChapter>(
   }
 }
 
-/** @deprecated 请使用 resolveReaderChapterNav(chapters, flatIndex, 0) */
-export function findTopLevelIndex<T extends LeveledChapter>(
-  chapters: T[],
-  flatIndex: number,
-): number {
-  return findAnchorLevelIndex(chapters, flatIndex, 0)
-}
-
-/** @deprecated 请使用 resolveReaderChapterNav */
-export function resolveTopLevelChapterNav<T extends LeveledChapter>(
-  chapters: T[],
-  flatIndex: number,
-): AdjacentFlatNavState<T> {
-  return resolveReaderChapterNav(chapters, flatIndex, 0)
-}
-
 /** MOBI/AZW3：同一 spine 章节可对应多个 TOC 项，取第一个匹配项（视口同步负责精确定位） */
 export function findFirstFlatIndexById<T extends LeveledChapter & { id: string }>(
   chapters: T[],
@@ -276,18 +260,3 @@ export function findFirstFlatIndexById<T extends LeveledChapter & { id: string }
   if (!currentId) return -1
   return chapters.findIndex((chapter) => chapter.id === currentId)
 }
-
-/** @deprecated 同 spine 多 TOC 请优先 flatIndex / 视口同步，勿默认取最后一条 */
-export function findLastFlatIndexById<T extends LeveledChapter & { id: string }>(
-  chapters: T[],
-  currentId?: string,
-): number {
-  if (!currentId) return -1
-  for (let i = chapters.length - 1; i >= 0; i -= 1) {
-    if (chapters[i]!.id === currentId) return i
-  }
-  return -1
-}
-
-/** @deprecated 请使用 findLastFlatIndexById */
-export const findLastMobiFlatIndex = findLastFlatIndexById

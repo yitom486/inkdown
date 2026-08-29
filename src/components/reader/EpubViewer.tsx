@@ -526,6 +526,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         if (pendingChapter) {
           scrollEpubChapterInRendition(rendition, pendingChapter)
           pendingNavChapterRef.current = null
+          useReaderNavigationStore.getState().clearNavIntent()
         }
         if (
           chaptersRef.current.length > 0 &&
