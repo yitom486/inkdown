@@ -1,27 +1,10 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Eye } from 'lucide-react'
-import { toast } from 'sonner'
-import githubTheme from 'highlight.js/styles/github.min.css?url'
-import githubDarkTheme from 'highlight.js/styles/github-dark.min.css?url'
+import { useCodeBlockCopy } from '@/hooks/useCodeBlockCopy'
+import { useHighlightTheme } from '@/hooks/useHighlightTheme'
 import { applyScrollRatio, collectPreviewHeadingPositions, scrollRatio } from '@/lib/markdown-headings'
 import type { AppTheme } from '@/stores/editor-ui-store'
 import '@/styles/markdown-preview.css'
-
-const HIGHLIGHT_THEME_LINK_ID = 'markdown-preview-hljs-theme'
-
-function useHighlightTheme(theme: AppTheme) {
-  useEffect(() => {
-    let link = document.getElementById(HIGHLIGHT_THEME_LINK_ID) as HTMLLinkElement | null
-    if (!link) {
-      link = document.createElement('link')
-      link.id = HIGHLIGHT_THEME_LINK_ID
-      link.rel = 'stylesheet'
-      document.head.appendChild(link)
-    }
-
-    link.href = theme === 'dark' ? githubDarkTheme : githubTheme
-  }, [theme])
-}
 
 export interface PreviewPaneHandle {
   scrollToHeading: (id: string) => void
@@ -175,39 +158,13 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
         }
       }
 
-      const handleCopy = async (event: MouseEvent) => {
-        const target = event.target
-        if (!(target instanceof Element)) return
-
-        const button = target.closest<HTMLButtonElement>('.code-block-copy')
-        if (!button) return
-
-        const code = button.closest('.code-block')?.querySelector('code')
-        const text = code?.textContent
-        if (!text) return
-
-        event.preventDefault()
-        try {
-          await navigator.clipboard.writeText(text)
-          button.classList.add('copied')
-          button.setAttribute('aria-label', '已复制')
-          toast.success('代码已复制')
-          window.setTimeout(() => {
-            button.classList.remove('copied')
-            button.setAttribute('aria-label', '复制代码')
-          }, 1500)
-        } catch (error) {
-          console.error('复制代码失败：', error)
-        }
-      }
-
       container.addEventListener('click', handleClick)
-      container.addEventListener('click', handleCopy)
       return () => {
         container.removeEventListener('click', handleClick)
-        container.removeEventListener('click', handleCopy)
       }
     }, [html])
+
+    useCodeBlockCopy(previewRef, html)
 
     if (!html) {
       return (

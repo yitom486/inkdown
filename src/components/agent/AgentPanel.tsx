@@ -31,8 +31,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAcpSession } from '@/hooks/useAcpSession'
+import { useCodeBlockCopy } from '@/hooks/useCodeBlockCopy'
+import { useHighlightTheme } from '@/hooks/useHighlightTheme'
 import { cn } from '@/lib/utils'
 import { useAcpChatView, useAcpUiStore } from '@/stores/acp-ui-store'
+import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
 import { isOk } from '@shared/core/result'
 import { BUILTIN_ACP_RUNTIMES } from '@shared/constants/acp-agents'
@@ -167,6 +170,11 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [authHint, setAuthHint] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<HTMLDivElement>(null)
+  const theme = useEditorUiStore((s) => s.theme)
+
+  useHighlightTheme(theme)
+  useCodeBlockCopy(messagesRef, view.messages)
 
   const { primary, secondary } = useMemo(
     () => splitConfigOptions(view.configOptions),
@@ -358,7 +366,7 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
       ) : null}
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-3 px-3 py-3">
+        <div ref={messagesRef} className="flex flex-col gap-3 px-3 py-3">
           {view.messages.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-3 py-4 text-center">
               <Bot className="mx-auto mb-2 size-6 text-muted-foreground/60" />
