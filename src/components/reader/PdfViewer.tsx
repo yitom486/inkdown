@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
-import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type { PDFDocumentProxy, PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
@@ -18,7 +18,7 @@ import {
   scalePdfPageCssSize,
   type PdfPageCssSize,
 } from '@/lib/pdf-page-metrics'
-import { pdfjsLib } from '@/lib/pdf-worker'
+import { openPdfDocument } from '@/lib/pdf-document'
 import { shouldRenderPdfPage } from '@/lib/pdf-render'
 import type { ReaderUnit } from '@/lib/reader-navigation'
 import {
@@ -51,7 +51,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const pageAnchorRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null)
-  const loadingTaskRef = useRef<ReturnType<typeof pdfjsLib.getDocument> | null>(null)
+  const loadingTaskRef = useRef<PDFDocumentLoadingTask | null>(null)
   const ignoreScrollSyncRef = useRef(false)
   const pendingJumpPageRef = useRef<number | null>(null)
   const pageNumRef = useRef(1)
@@ -132,7 +132,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
     void (async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument({ data: data.data.slice() })
+        const loadingTask = openPdfDocument({ data: data.data.slice() })
         loadingTaskRef.current = loadingTask
         const pdf = await loadingTask.promise
         if (cancelled) {

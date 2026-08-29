@@ -28,6 +28,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# pdf.js CMap / fonts（由 vite copy-pdfjs-assets 从 node_modules 生成）
+src/public/pdfjs
+
 # Playwright
 test-results/
 playwright-report/

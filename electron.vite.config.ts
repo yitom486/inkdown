@@ -3,6 +3,7 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import type { Plugin } from 'vite'
+import { copyPdfjsAssetsPlugin } from './electron/vite-plugins/copy-pdfjs-assets'
 
 const sharedAlias = {
   '@shared': resolve('shared'),
@@ -57,6 +58,6 @@ export default defineConfig({
         ...sharedAlias,
       },
     },
-    plugins: [react(), tailwindcss(), removeCrossOriginPlugin()],
+    plugins: [react(), tailwindcss(), removeCrossOriginPlugin(), copyPdfjsAssetsPlugin()],
   },
 })
