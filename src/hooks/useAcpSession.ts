@@ -13,6 +13,7 @@ export function useAcpSession(workspaceRoot?: string) {
   const finishStreaming = useAcpUiStore((s) => s.finishStreaming)
   const appendUserMessage = useAcpUiStore((s) => s.appendUserMessage)
   const appendSystemMessage = useAcpUiStore((s) => s.appendSystemMessage)
+  const beginAgentReply = useAcpUiStore((s) => s.beginAgentReply)
   const setPrompting = useAcpUiStore((s) => s.setPrompting)
   const clearMessages = useAcpUiStore((s) => s.clearMessages)
   const selectedRuntimeId = useAcpUiStore((s) => s.selectedRuntimeId)
@@ -140,6 +141,7 @@ export function useAcpSession(workspaceRoot?: string) {
 
       appendUserMessage(trimmed)
       setPrompting(true)
+      beginAgentReply()
       const result = await acpApi.prompt({ sessionId: sid, text: trimmed })
       finishStreaming()
       if (!isOk(result)) {
@@ -151,7 +153,13 @@ export function useAcpSession(workspaceRoot?: string) {
         appendSystemMessage(`回合结束：${result.value.stopReason}`)
       }
     },
-    [appendSystemMessage, appendUserMessage, finishStreaming, setPrompting],
+    [
+      appendSystemMessage,
+      appendUserMessage,
+      beginAgentReply,
+      finishStreaming,
+      setPrompting,
+    ],
   )
 
   const cancel = useCallback(async () => {
@@ -178,7 +186,6 @@ export function useAcpSession(workspaceRoot?: string) {
       if (result.value.configOptions.length > 0) {
         setConfigOptions(result.value.configOptions)
       }
-      appendSystemMessage(`已切换配置 ${configId} → ${value}`)
     },
     [appendSystemMessage, setConfigOptions],
   )

@@ -33,6 +33,8 @@ interface AcpUiStore {
   setPrompting: (prompting: boolean) => void
   appendUserMessage: (text: string) => void
   appendSystemMessage: (text: string) => void
+  /** 发送后立刻占位，避免长时间只有「正在生成…」 */
+  beginAgentReply: () => void
   clearMessages: () => void
   applySessionUpdate: (update: Record<string, unknown>) => void
   finishStreaming: () => void
@@ -99,7 +101,13 @@ function applyToolCallUpdate(
   }
 
   if (idx >= 0) next[idx] = message
-  else next.push(message)
+  else {
+    const emptyAgentIdx = next.findIndex(
+      (m) => m.role === 'agent' && m.streaming && !m.text.trim(),
+    )
+    if (emptyAgentIdx >= 0) next.splice(emptyAgentIdx, 0, message)
+    else next.push(message)
+  }
   return next
 }
 
@@ -152,6 +160,25 @@ export const useAcpUiStore = create<AcpUiStore>()(
             { id: newId('sys'), role: 'system', text, createdAt: Date.now() },
           ],
         })),
+
+      beginAgentReply: () =>
+        set((s) => {
+          const last = s.messages[s.messages.length - 1]
+          if (last?.role === 'agent' && last.streaming) return s
+          return {
+            messages: [
+              ...s.messages,
+              {
+                id: newId('agent'),
+                role: 'agent',
+                text: '',
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                streaming: true,
+              },
+            ],
+          }
+        }),
 
       clearMessages: () => set({ messages: [] }),
 
@@ -261,14 +288,37 @@ export const useAcpUiStore = create<AcpUiStore>()(
             }
             return { messages }
           }
-          messages.push({
+
+          const emptyAgentIdx = messages.findIndex(
+            (m) => m.role === 'agent' && m.streaming && !m.text.trim(),
+          )
+
+          if (role === 'agent' && emptyAgentIdx >= 0) {
+            messages[emptyAgentIdx] = {
+              ...messages[emptyAgentIdx]!,
+              text,
+              updatedAt: Date.now(),
+              streaming: true,
+            }
+            return { messages }
+          }
+
+          const nextMsg: AcpChatMessage = {
             id: newId(role),
             role,
             text,
             createdAt: Date.now(),
             updatedAt: Date.now(),
             streaming: true,
-          })
+          }
+
+          // 思考出现在占位 Agent 气泡之前，保持时间线顺序
+          if (role === 'thought' && emptyAgentIdx >= 0) {
+            messages.splice(emptyAgentIdx, 0, nextMsg)
+            return { messages }
+          }
+
+          messages.push(nextMsg)
           return { messages }
         })
       },

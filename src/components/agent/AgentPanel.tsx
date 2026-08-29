@@ -366,7 +366,8 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
               <AgentMessageBubble key={item.message.id} message={item.message} />
             ),
           )}
-          {view.prompting ? (
+          {view.prompting &&
+          !view.messages.some((m) => m.streaming) ? (
             <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
               正在生成…

@@ -1,9 +1,11 @@
-import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
-import { renderAgentMarkdown } from '@/lib/agent-markdown'
+import { useMermaidInContainer } from '@/hooks/useMermaidInContainer'
+import { renderAgentMarkdown, renderAgentMarkdownStreaming } from '@/lib/agent-markdown'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
+import '@/styles/markdown-preview.css'
 
 interface AgentMessageBubbleProps {
   message: AcpChatMessage
@@ -11,22 +13,25 @@ interface AgentMessageBubbleProps {
 
 export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
   const [thoughtOpen, setThoughtOpen] = useState(Boolean(message.streaming))
+  const mdRef = useRef<HTMLDivElement>(null)
+  const deferredText = useDeferredValue(message.text)
+
   const html = useMemo(() => {
-    if (message.role === 'system' || message.role === 'user' || message.role === 'tool') {
-      return null
-    }
-    if (message.role === 'thought') return null
-    return renderAgentMarkdown(message.text)
-  }, [message.role, message.text])
+    if (message.role !== 'agent') return null
+    if (!deferredText.trim() && message.streaming) return null
+    if (message.streaming) return renderAgentMarkdownStreaming(deferredText)
+    return renderAgentMarkdown(deferredText)
+  }, [deferredText, message.role, message.streaming])
+
+  useMermaidInContainer(mdRef, html, message.role === 'agent' && !message.streaming && Boolean(html))
 
   useEffect(() => {
-    // 主流 IDE：思考进行中展开，结束后自动折叠，仍可手动点开
     setThoughtOpen(Boolean(message.streaming))
   }, [message.streaming])
 
   if (message.role === 'system') {
     return (
-      <div className="px-1 py-0.5 text-center text-[11px] text-muted-foreground/80">
+      <div className="px-1 py-0.5 text-center text-[10px] text-muted-foreground/70">
         {message.text}
       </div>
     )
@@ -61,12 +66,12 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
             {thoughtOpen ? (message.streaming ? '思考中' : '思考') : collapsedLabel}
           </span>
           {message.streaming ? (
-            <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+            <Loader2 className="size-3 shrink-0 animate-spin text-amber-500" />
           ) : null}
         </button>
         {thoughtOpen ? (
           <div className="border-t border-border/30 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground italic">
-            <div className="border-l-2 border-amber-500/30 pl-2.5">
+            <div className="border-l-2 border-amber-500/30 pl-2.5 whitespace-pre-wrap">
               {message.text}
               {message.streaming ? (
                 <span className="ml-1 inline-block h-2.5 w-1 animate-pulse rounded-sm bg-amber-500/60 align-middle" />
@@ -79,6 +84,7 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
   }
 
   const isUser = message.role === 'user'
+  const showEmptyStreaming = !isUser && message.streaming && !message.text.trim()
 
   return (
     <div
@@ -93,40 +99,42 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
           isUser
             ? 'rounded-br-md bg-primary text-primary-foreground'
             : 'rounded-bl-md border border-border/60 bg-card text-card-foreground',
+          message.streaming && !isUser && 'ring-1 ring-emerald-500/20',
         )}
       >
         {!isUser ? (
           <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
             Agent
             {message.streaming ? (
-              <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              <Loader2 className="size-3 animate-spin text-emerald-500" />
             ) : null}
           </div>
         ) : null}
 
         {isUser ? (
           <div className="whitespace-pre-wrap break-words">{message.text}</div>
+        ) : showEmptyStreaming ? (
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="inline-flex gap-1">
+              <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.2s]" />
+              <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.1s]" />
+              <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70" />
+            </span>
+            正在生成
+          </div>
         ) : (
           <div
+            ref={mdRef}
             className={cn(
-              'agent-md break-words',
+              'markdown-preview agent-md break-words text-[12px]',
               '[&_p]:my-1.5 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
-              '[&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4',
-              '[&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-4',
-              '[&_li]:my-0.5',
-              '[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted/80 [&_pre]:p-2',
-              '[&_code]:rounded [&_code]:bg-muted/60 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[11px]',
-              '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
-              '[&_a]:text-primary [&_a]:underline',
-              '[&_h1]:mb-1 [&_h1]:mt-2 [&_h1]:text-sm [&_h1]:font-semibold',
-              '[&_h2]:mb-1 [&_h2]:mt-2 [&_h2]:text-sm [&_h2]:font-semibold',
-              '[&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold',
+              '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
             )}
             dangerouslySetInnerHTML={{ __html: html ?? '' }}
           />
         )}
-        {message.streaming && !isUser ? (
-          <span className="mt-0.5 inline-block h-3 w-1.5 animate-pulse rounded-sm bg-foreground/50 align-middle" />
+        {message.streaming && !isUser && !showEmptyStreaming ? (
+          <span className="mt-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-foreground/60 align-middle" />
         ) : null}
       </div>
     </div>
