@@ -1,0 +1,17 @@
+---
+description: 阅读器侧栏 flatIndex vs 底栏渲染级章节导航
+globs: src/components/reader/**/*.{ts,tsx},src/lib/*nav*.ts,src/lib/epub*.ts,src/lib/mobi*.ts,src/stores/reader-navigation-store.ts
+alwaysApply: false
+---
+
+# 阅读器导航粒度
+
+| 功能 | 粒度 | 说明 |
+|------|------|------|
+| 侧栏 / 视口高亮 | 展平 TOC `flatIndex` | 含三级小节 |
+| 底栏 prev/next、工具栏 current | 渲染单位 loadKey | EPUB spine / MOBI chapter id；**禁止**三级小节当翻页单元 |
+
+- 导航来自 `reader-navigation-store`；禁止 Toolbar/Footer/侧栏各自维护 nav state
+- Viewer 只做 IO + 调用 `sync*`；解析在 `reader-navigation-sync` / `epub-navigation` / `mobi-navigation`
+- 视口优先匹配可见标题；短标签（≤3 字）仅精确匹配；**禁止**用全书 percentage 回退导航
+- 改导航须跑 `bun run test`（含 `reader-nav-granularity.test.ts`）

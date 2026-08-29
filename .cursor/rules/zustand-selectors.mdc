@@ -1,0 +1,26 @@
+---
+description: Zustand selector 禁止返回新对象以免无限重渲染
+globs: src/stores/**/*.ts
+alwaysApply: false
+---
+
+# Zustand 选择器
+
+`useStore(selector)` 用 `Object.is` 比较返回值。selector **每次返回新对象/数组** → 无限重渲染（`Maximum update depth exceeded`）。
+
+## 强制
+
+```typescript
+// ❌
+useStore((s) => ({ a: s.a, b: s.b }))
+
+// ✅
+import { useShallow } from 'zustand/react/shallow'
+useStore(useShallow((s) => ({ a: s.a, b: s.b })))
+
+// ✅ 或拆原始值
+const a = useStore((s) => s.a)
+```
+
+- `action` / `sync*`：值未变不要 `set`（参考 `isSameNav`）
+- 参考：`editor-ui-store.ts` 的 `useFileUiState`、`reader-navigation-store.ts` 的 `useReaderNavTitles`

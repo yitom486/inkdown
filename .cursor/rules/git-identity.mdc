@@ -1,0 +1,36 @@
+---
+description: Git 提交作者身份与 Attribution（GitHub Contributors）
+alwaysApply: true
+---
+
+# Git 身份
+
+本仓库 GitHub 账号为 **yitom486**。提交必须能关联到该账号，否则 Contributors 不显示本人。
+
+## 强制作者
+
+```
+user.name  = yitom486
+user.email = yitom486@gmail.com
+```
+
+Agent 执行 `git commit` 前，若 shell 中存在 `GIT_AUTHOR_*` / `GIT_COMMITTER_*`（常见为 `zheye@users.noreply.local`），**必须覆盖为**：
+
+```powershell
+$env:GIT_AUTHOR_NAME="yitom486"
+$env:GIT_AUTHOR_EMAIL="yitom486@gmail.com"
+$env:GIT_COMMITTER_NAME="yitom486"
+$env:GIT_COMMITTER_EMAIL="yitom486@gmail.com"
+```
+
+## Attribution
+
+- **禁止**在 commit message 中保留或添加 `Co-authored-by: Cursor`
+- 若 Cursor 自动注入了该 trailer：在 **未 push** 时用 `git commit --amend` 去掉后再推
+- 提醒用户保持 Cursor Settings → Agent → Attribution 关闭
+
+## 其它
+
+- Commit message：简体中文，`type: 描述`
+- 仅在用户明确要求时 commit / push
+- 已 push 的历史作者需改写时，先征得用户同意再 force push
