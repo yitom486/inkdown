@@ -13,8 +13,17 @@ export interface ViewportNavEntry {
   selector?: string
 }
 
-export function normalizeLoadKey(key: string): string {
+export function normalizeLoadKey(key: string | null | undefined): string {
+  if (!key) return ''
   return key.split('#')[0]?.toLowerCase() ?? key.toLowerCase()
+}
+
+/** iframe 中的 HTMLElement 属于 iframe 自己的 Window，不能用父窗口构造器判断。 */
+function isDocumentHtmlElement(node: Element | null): node is HTMLElement {
+  if (!node) return false
+  const HTMLElementConstructor = node.ownerDocument.defaultView?.HTMLElement
+  if (HTMLElementConstructor) return node instanceof HTMLElementConstructor
+  return typeof HTMLElement !== 'undefined' && node instanceof HTMLElement
 }
 
 export function normalizeHeadingText(text: string): string {
@@ -54,7 +63,7 @@ export function pickBestHeadingMatch(
   let bestScore = -1
 
   for (const node of nodes) {
-    if (!(node instanceof HTMLElement)) continue
+    if (!isDocumentHtmlElement(node)) continue
     const text = normalizeHeadingText(node.textContent ?? '')
     if (!isHeadingLabelMatch(label, text)) continue
 
@@ -83,9 +92,9 @@ export function findFragmentElement(document: Document, fragment: string): HTMLE
     const byId = document.getElementById(id)
     if (byId) return byId
     const byQuery = document.querySelector(`#${CSS.escape(id)}`)
-    if (byQuery instanceof HTMLElement) return byQuery
+    if (isDocumentHtmlElement(byQuery)) return byQuery
     const byName = document.querySelector(`a[name="${id}"]`)
-    if (byName instanceof HTMLElement) return byName
+    if (isDocumentHtmlElement(byName)) return byName
   }
   return null
 }
@@ -117,7 +126,7 @@ function findElementBySelector(document: Document, selector: string): HTMLElemen
 
   try {
     const node = document.querySelector(trimmed)
-    return node instanceof HTMLElement ? node : null
+    return isDocumentHtmlElement(node) ? node : null
   } catch {
     return null
   }
@@ -136,6 +145,12 @@ export function findBlockElementByLabel(document: Document, label: string): HTML
 
 export function findViewportEntryAnchor(document: Document, entry: ViewportNavEntry): HTMLElement | null {
   if (entry.selector) {
+    // KF8 的位置解析器会取目标 offset 之后遇到的第一个 id/name/aid。
+    // 对不少 AZW3，这个元素其实是脚注或正文段落，并不是 TOC 标题本身。
+    // 因此先使用 TOC 标签定位语义标题，仅在标题确实不存在时才信任 selector。
+    const byLabel = findBlockElementByLabel(document, entry.label)
+    if (byLabel) return byLabel
+
     const bySelector = findElementBySelector(document, entry.selector)
     if (bySelector) return bySelector
   }
@@ -184,7 +199,7 @@ function findPrimaryVisibleHeading(
   let bestTop = -Infinity
 
   for (const node of document.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
-    if (!(node instanceof HTMLElement)) continue
+    if (!isDocumentHtmlElement(node)) continue
     const text = normalizeHeadingText(node.textContent ?? '')
     if (text.length < 2) continue
 
@@ -198,7 +213,7 @@ function findPrimaryVisibleHeading(
 
   if (!best) {
     for (const node of document.querySelectorAll('p[class*="calibre"], div[class*="calibre"]')) {
-      if (!(node instanceof HTMLElement)) continue
+      if (!isDocumentHtmlElement(node)) continue
       const text = normalizeHeadingText(node.textContent ?? '')
       if (text.length < 4) continue
 
@@ -337,14 +352,15 @@ export function findFlatIndexFromViewport(
 export function scrollToViewportEntry(
   document: Document,
   entry: ViewportNavEntry,
-  options?: { behavior?: ScrollBehavior },
+  options?: { behavior?: ScrollBehavior; topOffset?: number },
 ): boolean {
   const element = findViewportEntryAnchor(document, entry)
   if (!element) return false
 
   const behavior = options?.behavior ?? 'smooth'
   const scrollRoot = resolveScrollRoot(document)
-  const top = resolveElementScrollTop(element, scrollRoot)
+  const topOffset = Math.max(0, options?.topOffset ?? 0)
+  const top = Math.max(0, resolveElementScrollTop(element, scrollRoot) - topOffset)
 
   element.scrollIntoView({ behavior, block: 'start' })
   scrollRoot.scrollTo({ top, behavior })

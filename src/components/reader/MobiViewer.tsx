@@ -126,7 +126,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   }, [chapters])
 
   const applyNavFlatIndex = useCallback((flatIndex: number) => {
-    useReaderNavigationStore.getState().syncFlatIndex(flatIndex)
+    const units = chaptersRef.current
+    const item = units[flatIndex]
+    if (!item) return
+
+    // 直接走 MOBI 分派，避免 HMR/会话切换瞬间的 store.format 将 id 型条目
+    // 误送入 EPUB 的 href 解析链路。
+    useReaderNavigationStore.getState().syncMobi(units, item.id, flatIndex)
   }, [])
 
   const syncMobiViewportNav = useCallback((doc: Document, chapterId: string) => {
@@ -165,14 +171,30 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       const item = chaptersRef.current[flatIndex]
       if (!item) return false
 
+      const navigationStore = useReaderNavigationStore.getState()
+      const previousFlatIndex = navigationStore.nav.flatIndex
       applyNavFlatIndex(flatIndex)
 
       const sameSpine = item.id === currentChapterIdRef.current
       if (sameSpine && !options?.forceReload) {
         const doc = iframeRef.current?.contentDocument
         if (doc?.body) {
-          scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex, { behavior: 'auto' })
-          return true
+          const scrolled = scrollMobiChapterToFlatIndex(
+            doc,
+            chaptersRef.current,
+            flatIndex,
+            { behavior: 'auto' },
+          )
+          if (scrolled) return true
+
+          navigationStore.syncMobi(
+            chaptersRef.current,
+            currentChapterIdRef.current,
+            previousFlatIndex >= 0 ? previousFlatIndex : undefined,
+          )
+          navigationStore.clearNavIntent()
+          toast.error('未找到该小节在正文中的位置')
+          return false
         }
       }
 
@@ -188,7 +210,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         setChapterLoading(false)
       }
     },
-    [applyNavFlatIndex, loadChapterById, syncMobiViewportNav],
+    [applyNavFlatIndex, loadChapterById],
   )
 
   const loadChapter = useCallback(
@@ -384,6 +406,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     if (!data) return
 
     let cancelled = false
+    chaptersRef.current = []
+    currentChapterIdRef.current = undefined
     setReady(false)
     setChapters([])
     setChapterDocHtml('')
@@ -416,12 +440,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             }
           },
         )
+        chaptersRef.current = nextChapters
         setChapters(nextChapters)
+        useReaderNavigationStore.getState().setUnits(nextChapters)
 
         const savedChapterId = useReadingProgressStore.getState().getMobiProgress(filePath)?.chapterId
         const candidates = pickReadableMobiChapterCandidates(
           nextChapters,
-          spine,
           savedChapterId,
         )
         setChapterLoading(true)
@@ -431,11 +456,14 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             const candidateIndex = nextChapters.findIndex(
               (item) => item.id === candidate.id && item.label === candidate.label,
             )
-            if (candidateIndex >= 0) {
-              loaded = await loadChapterAtIndex(candidateIndex, { forceReload: true })
-            } else {
-              loaded = await loadChapterById(candidate.id)
-            }
+            if (candidateIndex < 0) continue
+
+            // 初始化不能调用依赖 React state/ref 的 loadChapterAtIndex；此处直接使用
+            // 本轮解析出的 nextChapters，避免首次打开时读取到空的 chaptersRef。
+            useReaderNavigationStore
+              .getState()
+              .syncMobi(nextChapters, candidate.id, candidateIndex)
+            loaded = await loadChapterById(candidate.id)
             if (loaded) break
           }
           if (!loaded) {
@@ -495,7 +523,22 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           : -1
 
       if (chapterId && navFlatIndex >= 0 && navFlatIndex !== firstIndex) {
-        scrollMobiChapterToFlatIndex(doc, chaptersRef.current, navFlatIndex, { behavior: 'auto' })
+        const scrolled = scrollMobiChapterToFlatIndex(
+          doc,
+          chaptersRef.current,
+          navFlatIndex,
+          { behavior: 'auto' },
+        )
+        if (!scrolled) {
+          const navigationStore = useReaderNavigationStore.getState()
+          navigationStore.syncMobi(
+            chaptersRef.current,
+            chapterId,
+            firstIndex >= 0 ? firstIndex : undefined,
+          )
+          navigationStore.clearNavIntent()
+          toast.error('未找到该小节在正文中的位置')
+        }
       } else {
         doc.documentElement.scrollTo({ top: 0 })
       }

@@ -128,7 +128,6 @@ export function buildMobiChapterList(
 
 export function pickReadableMobiChapterCandidates(
   chapters: MobiChapterItem[],
-  spine: Array<{ id: string }>,
   preferredChapterId?: string,
 ): MobiChapterItem[] {
   const preferred =
@@ -140,9 +139,6 @@ export function pickReadableMobiChapterCandidates(
   if (preferred) ordered.push(preferred)
   for (const chapter of chapters) {
     if (chapter.id !== preferred?.id) ordered.push(chapter)
-  }
-  for (const entry of spineToChapterItems(spine)) {
-    if (!ordered.some((item) => item.id === entry.id)) ordered.push(entry)
   }
 
   return ordered

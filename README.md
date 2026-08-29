@@ -1,169 +1,128 @@
 # 轻量阅读器
 
-基于 **Electron + React** 的桌面应用：Markdown 编辑 + 多格式电子书阅读。  
-产品中文名 **轻量阅读器**；仓库名仍为 `markdown-editor`（历史原因）。
+轻量阅读器是一款 Windows 桌面应用，把 Markdown 写作和电子书阅读放在同一个工作区中。它适合整理本地文档、编写 Markdown，以及阅读 PDF、EPUB、MOBI 和 AZW3 文件。
 
-## 下载
+当前版本专注本地编辑与阅读，不包含 AI 功能，也不需要 API Key。
 
-> **GitHub Releases** 提供 Windows 安装包（`.exe`）。  
-> 首发版本 **v0.1.x 不含 AI 功能**，专注编辑与阅读；AI Agent 计划在 **v0.2.x** 通过 [ACP](https://agentclientprotocol.com/) 接入。
+## 主要功能
 
-| 版本 | 说明 | 下载 |
-|------|------|------|
-| v0.1.x | Markdown + PDF/EPUB/MOBI/AZW3，书签批注 | [Releases](../../releases) |
-| v0.2.x（计划） | 上述全部 + AI Agent 侧栏（Codex / ACP） | 待发布 |
+### Markdown 编辑
 
-### 如何发新版本（维护者）
+- 使用语法高亮编辑 Markdown，实时查看排版结果
+- 支持标题、列表、引用、代码块、表格和任务列表
+- 支持 KaTeX 数学公式与 Mermaid 图表
+- 支持查找替换、粗体、斜体、链接等常用编辑操作
+- 支持打开、保存、另存为和可选的自动保存
+- 文件有未保存修改时给出明确提示
+- 粘贴本地图片时可复制到文档的资源目录
+- 可将文档导出为 HTML 或 PDF
 
-**不是**每次 `git push` 都会发版；只有 **推送版本 tag** 才会自动打包并发布：
+### 电子书阅读
+
+| 格式 | 当前支持的能力 |
+| --- | --- |
+| PDF | 连续滚动、缩放与高清渲染、文本选择和复制、目录导航 |
+| EPUB | 目录导航、章节切换、阅读进度、主题、书签、高亮和批注 |
+| MOBI | 目录导航、章节或小节切换、阅读进度、主题、书签、高亮和批注 |
+| AZW3 | 多级目录、章内小节跳转、阅读进度、主题、书签、高亮和批注 |
+
+阅读器会记住最近阅读的章节。再次打开同一本书时，会优先恢复到上次的阅读位置。
+
+> MOBI 与 AZW3 的分章方式由电子书文件自身决定。经典 MOBI 经常把正文拆成较小的节或 pagebreak；AZW3/KF8 通常把整章放在一个正文单元中，再通过目录锚点定位章内小节。因此，两种格式的换章粒度可能不同，这并不代表正文缺失。
+
+### 本地文件管理
+
+- 打开一个文件夹作为工作区
+- 在资源管理器中浏览 Markdown 和电子书文件
+- 自动刷新新增、删除或改名后的文件
+- 使用面包屑查看当前文件位置
+- 深色与浅色主题
+- 通过设置面板调整编辑器和阅读体验
+
+## 基本使用方法
+
+### 编辑 Markdown
+
+1. 点击“打开”，选择 Markdown 文件或工作区文件夹。
+2. 在编辑区输入内容，右侧预览会自动更新。
+3. 使用 `Ctrl+S` 保存；需要保留原文件时使用“另存为”。
+4. 通过“导出”生成 HTML 或 PDF 文件。
+
+### 阅读电子书
+
+1. 在资源管理器中选择 PDF、EPUB、MOBI 或 AZW3 文件。
+2. 点击阅读区上方的“目录”打开章节列表。
+3. 点击目录项跳转到对应章节或小节。
+4. 使用底部导航切换上一个或下一个正文单元。
+5. 选中文字后可以复制、添加高亮或填写批注。
+6. 点击“添加书签”保存当前阅读位置。
+
+对于一个正文单元中包含多个小节的 AZW3 文件，点击目录后会在目标标题上方保留一定距离，方便确认跳转位置。
+
+## 常用快捷键
+
+| 快捷键 | 功能 |
+| --- | --- |
+| `Ctrl+O` | 打开文件 |
+| `Ctrl+S` | 保存当前 Markdown 文件 |
+| `Ctrl+Shift+S` | 另存为 |
+| `Ctrl+B` | 粗体 |
+| `Ctrl+I` | 斜体 |
+| `Ctrl+K` | 插入链接 |
+| `Ctrl+F` | 查找 |
+| `Ctrl+,` | 打开设置 |
+
+## 下载与安装
+
+Windows 安装包通过 [GitHub Releases](../../releases) 发布。下载 `.exe` 后按安装向导操作即可。
+
+| 版本 | 内容 |
+| --- | --- |
+| v0.1.x | Markdown 编辑、PDF/EPUB/MOBI/AZW3 阅读、书签与批注 |
+| v0.2.x（计划） | 在现有功能上增加可选的 AI Agent 侧栏 |
+
+## 当前限制
+
+- 电子书的目录质量、标题层级和分章粒度取决于文件自身的制作质量。
+- 带 DRM 加密的 EPUB、MOBI 或 AZW3 文件无法直接读取。
+- 扫描版 PDF 如果没有文本层，只能查看页面，不能直接选择文字。
+- 少数旧版 MOBI 文件可能缺少有效目录；应用会尝试根据可读正文生成基础章节列表。
+- AI Agent 仍在规划中，当前安装包不包含相关运行时。
+
+## 隐私与数据
+
+- 文档和电子书默认在本机处理，不会自动上传。
+- 阅读进度、书签和批注保存在本地应用数据中。
+- 当前版本不需要账号，也不需要配置云端 API Key。
+
+## 本地开发
+
+项目使用 Bun，日常开发不要改用 npm、yarn 或 pnpm。
 
 ```bash
-# 更新 package.json 版本号 → 提交 → 打 tag → 推送 tag
+bun install
+bun run dev
+bun run typecheck
+bun run test
+bun run build
+```
+
+生成 Windows 安装包：
+
+```bash
+bun run pack
+```
+
+主要技术组成：Electron、React、TypeScript、CodeMirror 6、markdown-it、pdf.js、epub.js 和 `@lingo-reader/mobi-parser`。开发约定与项目结构见 [AGENTS.md](./AGENTS.md)。
+
+## 发布版本
+
+只有推送版本 tag 才会触发 GitHub Actions 打包发布，普通 `git push` 不会创建 Release。
+
+```bash
 git tag v0.1.0
 git push origin master
 git push origin v0.1.0
 ```
 
-GitHub Actions 工作流 [`.github/workflows/release.yml`](./.github/workflows/release.yml) 会在 Windows 上执行 `bun run pack`，并将 `.exe` 上传至 Releases。
-
-详细说明见 [`.plan/2026-08-29-GitHub发布与版本路线.md`](./.plan/2026-08-29-GitHub发布与版本路线.md)。
-
----
-
-## 当前功能（v0.1）
-
-### Markdown 编辑器
-
-- CodeMirror 6 语法高亮、分屏实时预览
-- KaTeX 公式、Mermaid 图表、GFM 表格/任务列表
-- 快捷键（Ctrl+B/I/K）、查找替换、主题切换
-- 打开/保存/另存为、未保存提示、自动保存（可选）
-- 导出 PDF / HTML、粘贴图片到 assets
-
-### 电子书阅读（只读）
-
-| 格式 | 能力 |
-|------|------|
-| PDF | 连续滚动、高清渲染、选区复制 |
-| EPUB | 目录、章节导航、主题、书签/高亮/批注 |
-| MOBI / AZW3 | KF8 解析、目录、一级章节切换、书签/批注 |
-
-### 其他
-
-- 工作区侧栏（文件夹扫描、文件变更自动刷新）
-- 深色 / 浅色主题、设置面板（`Ctrl+,`）
-
----
-
-## 路线图
-
-### 已完成
-
-- [x] Markdown 编辑器核心（编辑、预览、导出）
-- [x] PDF / EPUB 阅读 MVP
-- [x] MOBI / AZW3 双格式解析与阅读
-- [x] 跨格式书签、高亮、批注
-- [x] Windows NSIS 安装包（`bun run pack`）
-
-### 进行中
-
-- [ ] 电子书体验收尾（PDF 虚拟滚动优化等，见 `.plan/`）
-- [ ] **GitHub Releases 首发 v0.1.0**（无 AI 安装包）
-
-### 计划中 — AI Agent（v0.2+）
-
-通过 **[Agent Client Protocol (ACP)](https://agentclientprotocol.com/)** 对接已有 Agent 运行时，**不自研大模型或 Agent 引擎**。
-
-| 能力 | 说明 | 目标版本 |
-|------|------|----------|
-| ACP Client | 主进程 stdio JSON-RPC，IPC 桥接渲染进程 | v0.2.0 |
-| Codex 适配器 | 对接 [`codex-acp`](https://github.com/agentclientprotocol/codex-acp) | v0.2.0 |
-| Agent 侧栏 | 流式对话、取消、连接状态 | v0.2.0 |
-| 工作区上下文 | 会话 `cwd` 绑定当前工作区 | v0.2.0 |
-| 工具权限 | 写文件/工具调用前用户确认 | v0.2.0 |
-| 文件读写回调 | Agent 经 ACP 读取/修改项目内文件 | v0.3.0 |
-| 多 Agent 配置 | 可选 Gemini CLI、Claude 等适配器 | v0.3.0+ |
-
-**重要说明：**
-
-- **v0.1 安装包不包含 AI**，也无需 API Key 即可使用编辑/阅读功能。
-- **v0.2 起**，AI 为可选模块：用户需自行安装 Agent 运行时（如 `codex-acp`）并配置 `OPENAI_API_KEY` 或 `CODEX_API_KEY`；密钥**不会**写入应用或仓库。
-- 开发计划详见 [`.plan/2026-08-29-ACP客户端.md`](./.plan/2026-08-29-ACP客户端.md)。
-
-#### AI 前置条件（v0.2 发布后）
-
-```bash
-# 运行 Codex ACP 适配器（示例；应用内将自动 spawn）
-bunx -y @agentclientprotocol/codex-acp
-
-# 环境变量（任选其一）
-set OPENAI_API_KEY=sk-...
-# 或
-set CODEX_API_KEY=...
-# Electron 桌面环境建议禁用浏览器 OAuth
-set NO_BROWSER=1
-```
-
----
-
-## 技术栈
-
-| 类别 | 选型 |
-|------|------|
-| 包管理 | [Bun](https://bun.sh) |
-| 桌面 | Electron + electron-vite |
-| 前端 | React + TypeScript + shadcn/ui + Tailwind |
-| 编辑器 | CodeMirror 6 |
-| 电子书 | pdf.js、epub.js、@lingo-reader/mobi-parser |
-| 测试 | Vitest + Playwright |
-| 打包 | electron-builder（Windows NSIS） |
-
-架构与开发准则见 [AGENTS.md](./AGENTS.md)。
-
----
-
-## 快速开始（开发）
-
-```bash
-# 安装依赖
-bun install
-
-# 开发模式
-bun run dev
-
-# 类型检查 + 单元测试 + 构建 + E2E
-bun run test:all
-
-# 打包 Windows 安装程序（输出到 release/）
-bun run pack
-```
-
-## 添加 shadcn 组件
-
-```bash
-bunx shadcn@latest add dialog
-```
-
-> Windows：若组件生成到 `@/` 而非 `src/components/ui/`，需手动移动到正确位置。
-
----
-
-## 项目结构
-
-```
-start/
-├── electron/          # 主进程、preload、IPC、services
-├── src/               # React 渲染进程
-├── shared/            # 跨进程类型与 IPC 契约
-├── e2e/               # Playwright E2E
-├── .plan/             # 开发计划与路线图
-└── resources/         # 应用图标等资源
-```
-
-更多细节见 [AGENTS.md](./AGENTS.md) 与 [`.plan/README.md`](./.plan/README.md)。
-
----
-
-## 许可证
-
-见 [LICENSE](./LICENSE)（若尚未添加，发版前补充）。
+发布工作流位于 [`.github/workflows/release.yml`](./.github/workflows/release.yml)。

@@ -78,15 +78,14 @@ describe('buildMobiChapterList', () => {
     expect(chapters[0]?.id).toBe('1')
   })
 
-  it('候选章节包含 spine 兜底顺序', () => {
-    const chapters: MobiChapterItem[] = [{ id: '1', label: '第一章', level: 0 }]
-    const candidates = pickReadableMobiChapterCandidates(chapters, [
-      { id: '0' },
-      { id: '1' },
-      { id: '2' },
-    ])
+  it('候选章节只来自最终导航列表，不回退到无导航的 spine 插图切片', () => {
+    const chapters: MobiChapterItem[] = [
+      { id: '1', label: '第一章', level: 0 },
+      { id: '3', label: '第二章', level: 0 },
+    ]
+    const candidates = pickReadableMobiChapterCandidates(chapters)
 
-    expect(candidates.map((item) => item.id)).toEqual(['1', '0', '2'])
+    expect(candidates.map((item) => item.id)).toEqual(['1', '3'])
   })
 
   it('优先恢复上次阅读的章节', () => {
@@ -95,7 +94,7 @@ describe('buildMobiChapterList', () => {
       { id: '1', label: '第一章', level: 0 },
       { id: '2', label: '第二章', level: 0 },
     ]
-    const candidates = pickReadableMobiChapterCandidates(chapters, [{ id: '0' }, { id: '1' }, { id: '2' }], '2')
+    const candidates = pickReadableMobiChapterCandidates(chapters, '2')
     expect(candidates[0]?.id).toBe('2')
   })
 })

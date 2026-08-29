@@ -10,6 +10,9 @@ import {
 import { isTocLikeChapter } from '@/lib/epub-navigation'
 import { isTocLikeMobiChapter } from '@/lib/mobi-navigation'
 
+/** 章内跳转后在标题上方保留呼吸空间，避免标题贴住阅读区顶边。 */
+export const MOBI_ANCHOR_TOP_OFFSET = 64
+
 function hrefMatches(currentHref: string, chapterHref: string): boolean {
   const current = normalizeLoadKey(currentHref)
   const target = normalizeLoadKey(chapterHref)
@@ -95,7 +98,7 @@ export function scrollMobiChapterToFlatIndex(
   document: Document,
   chapters: MobiChapterItem[],
   flatIndex: number,
-  options?: { behavior?: ScrollBehavior },
+  options?: { behavior?: ScrollBehavior; topOffset?: number },
 ): boolean {
   const chapter = chapters[flatIndex]
   if (!chapter) return false
@@ -107,7 +110,10 @@ export function scrollMobiChapterToFlatIndex(
       loadKey: chapter.id,
       selector: chapter.selector,
     },
-    options,
+    {
+      ...options,
+      topOffset: options?.topOffset ?? MOBI_ANCHOR_TOP_OFFSET,
+    },
   )
 }
 

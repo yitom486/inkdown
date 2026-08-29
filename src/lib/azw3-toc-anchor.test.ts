@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   findBlockElementByLabel,
   findHeadingElementByLabel,
+  findViewportEntryAnchor,
   isHeadingLabelMatch,
   scrollToViewportEntry,
   type ViewportNavEntry,
@@ -56,11 +57,34 @@ describe('KF8/AZW3 calibre 外层容器回归', () => {
       loadKey: '2',
       selector: '[aid="missing"]',
     }
-    // selector 失效时回退标签匹配，仍应滚到小节而非章首
+    // selector 失效时自动回退标签匹配，仍应滚到小节而非章首
     expect(findBlockElementByLabel(document, label)?.id).toBe('sec2')
-    expect(scrollToViewportEntry(document, { ...entry, selector: undefined }, { behavior: 'auto' })).toBe(
-      true,
+    expect(scrollToViewportEntry(document, entry, { behavior: 'auto' })).toBe(true)
+  })
+
+  it('parser selector 指向脚注时，优先使用真正的三级标题', () => {
+    const document = mockScrollDocument(
+      `
+        <div class="calibre">
+          <h2 id="section-3">三、金土相代：安禄山起兵的政治宣传</h2>
+          <p>本节正文……<a id="fn59" aid="wrong-target">[59]</a></p>
+        </div>
+      `,
+      [
+        { selector: '#section-3', top: 2200, height: 40 },
+        { selector: '#fn59', top: 3600, height: 20 },
+      ],
+      0,
     )
+    const entry: ViewportNavEntry = {
+      flatIndex: 7,
+      label: '三、金土相代：安禄山起兵的政治宣传',
+      loadKey: '5',
+      selector: '[aid="wrong-target"]',
+    }
+
+    expect(findViewportEntryAnchor(document, entry)?.id).toBe('section-3')
+    expect(scrollToViewportEntry(document, entry, { behavior: 'auto' })).toBe(true)
   })
 
   it('aid selector 优先命中', () => {

@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   isHeadingLabelMatch,
   findFlatIndexFromViewport,
   findHeadingElementByLabel,
   findBlockElementByLabel,
   findViewportEntryAnchor,
+  normalizeLoadKey,
   scrollToViewportEntry,
   type ViewportNavEntry,
 } from '@/lib/reader-viewport-nav'
@@ -15,6 +16,8 @@ import {
   buildMobiViewportEntries,
   findEpubFlatIndexFromViewport,
   findMobiFlatIndexFromViewport,
+  MOBI_ANCHOR_TOP_OFFSET,
+  scrollMobiChapterToFlatIndex,
 } from '@/lib/epub-scroll-toc'
 import type { MobiChapterItem } from '@/lib/mobi-navigation'
 import { syncEpubNavigationFromViewport, syncMobiNavigationFromViewport } from '@/lib/reader-navigation-sync'
@@ -37,6 +40,11 @@ describe('isHeadingLabelMatch', () => {
 })
 
 describe('reader-viewport-nav（跨格式）', () => {
+  it('热更新期间缺失 loadKey 时不抛出异常', () => {
+    expect(normalizeLoadKey(undefined)).toBe('')
+    expect(normalizeLoadKey(null)).toBe('')
+  })
+
   describe('EPUB', () => {
     const introChapters = flattenEpubToc([
       { label: '导言', href: 'intro.html#preface' },
@@ -219,7 +227,7 @@ describe('reader-viewport-nav（跨格式）', () => {
       expect(findFlatIndexFromViewport(document, entries, '3')).toBe(0)
     })
 
-    it('KF8 selector 优先于标题文本匹配', () => {
+    it('KF8 selector 可定位标题', () => {
       const document = mockScrollDocument(
         `<p id="sec2" class="calibre_2">二、四面其主：安史乱中的王伷</p><p class="calibre_2">正文</p>`,
         [{ id: 'sec2', top: 800, height: 40 }],
@@ -264,6 +272,63 @@ describe('reader-viewport-nav（跨格式）', () => {
 
       expect(findBlockElementByLabel(document, entry.label)?.textContent).toContain('三、金土相克')
       expect(scrollToViewportEntry(document, entry, { behavior: 'auto' })).toBe(true)
+    })
+
+    it('AZW3 章内跳转后在标题上方保留可见距离', () => {
+      const document = mockScrollDocument(
+        '<p id="section" class="calibre_4">二、四星聚与玄宗朝的佛道之争</p>',
+        [{ id: 'section', top: 1200, height: 40 }],
+        0,
+      )
+      const scrollRoot = (document.scrollingElement ?? document.documentElement) as HTMLElement
+      const scrollTo = vi.fn()
+      Object.defineProperty(scrollRoot, 'scrollTo', { configurable: true, value: scrollTo })
+      const mobiChapters: MobiChapterItem[] = [
+        {
+          id: '2',
+          label: '二、四星聚与玄宗朝的佛道之争',
+          level: 1,
+          selector: '#section',
+        },
+      ]
+
+      expect(scrollMobiChapterToFlatIndex(document, mobiChapters, 0, { behavior: 'auto' })).toBe(true)
+      expect(scrollTo).toHaveBeenLastCalledWith({
+        top: 1200 - MOBI_ANCHOR_TOP_OFFSET,
+        behavior: 'auto',
+      })
+    })
+
+    it('iframe 文档中的标题不会被父窗口 HTMLElement 判断误杀', () => {
+      const frameDocument = mockScrollDocument(
+        '<p id="subsection" class="calibre_4">四、严复的死亡与哀荣</p>',
+        [{ id: 'subsection', top: 800, height: 40 }],
+        0,
+      )
+      const element = frameDocument.getElementById('subsection')
+      expect(element).not.toBeNull()
+      if (!element) return
+
+      const frameHTMLElement = HTMLElement
+      Object.defineProperty(element, 'ownerDocument', {
+        configurable: true,
+        value: { defaultView: { HTMLElement: frameHTMLElement } },
+      })
+      vi.stubGlobal('HTMLElement', class ParentHTMLElement {})
+
+      const entry: ViewportNavEntry = {
+        flatIndex: 8,
+        label: '四、严复的死亡与哀荣',
+        loadKey: '2',
+        selector: '#subsection',
+      }
+
+      try {
+        expect(element instanceof HTMLElement).toBe(false)
+        expect(findViewportEntryAnchor(frameDocument, entry)?.id).toBe('subsection')
+      } finally {
+        vi.unstubAllGlobals()
+      }
     })
   })
 })
