@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useShallow } from 'zustand/react/shallow'
 import type { EpubChapter, EpubLocationHint } from '@/lib/epub-navigation'
 import type { MobiChapterItem } from '@/lib/mobi-navigation'
 import {
@@ -13,6 +14,22 @@ import {
 import type { AdjacentFlatNavState } from '@/lib/reader-chapter-nav'
 import { encodeMobiTocHref } from '@/lib/mobi-navigation'
 import type { ReaderUnit } from '@/lib/reader-navigation'
+
+function isSameNav(
+  a: AdjacentFlatNavState<ReaderUnit>,
+  b: AdjacentFlatNavState<ReaderUnit>,
+): boolean {
+  return (
+    a.flatIndex === b.flatIndex &&
+    a.currentIndex === b.currentIndex &&
+    a.previousIndex === b.previousIndex &&
+    a.nextIndex === b.nextIndex &&
+    a.current?.label === b.current?.label &&
+    a.previous?.label === b.previous?.label &&
+    a.next?.label === b.next?.label &&
+    a.current?.href === b.current?.href
+  )
+}
 
 type ReaderNavUnit = ReaderUnit | MobiChapterItem
 
@@ -55,62 +72,63 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
     })
   },
 
-  setUnits: (units) => set({ units }),
+  setUnits: (units) => {
+    if (get().units === units) return
+    set({ units })
+  },
 
-  setReady: (ready) => set({ ready }),
+  setReady: (ready) => {
+    if (get().ready === ready) return
+    set({ ready })
+  },
 
   syncEpub: (units, hint, flatIndex) => {
-    set({
-      units,
-      format: 'epub',
-      nav: syncEpubNavigation(units, hint, flatIndex),
-    })
+    const nav = syncEpubNavigation(units, hint, flatIndex)
+    const prev = get()
+    if (prev.format === 'epub' && prev.units === units && isSameNav(prev.nav, nav)) return
+    set({ units, format: 'epub', nav })
   },
 
   syncEpubViewport: (units, document, spineHref) => {
-    set({
-      units,
-      format: 'epub',
-      nav: syncEpubNavigationFromViewport(units, document, spineHref),
-    })
+    const nav = syncEpubNavigationFromViewport(units, document, spineHref)
+    const prev = get()
+    if (prev.format === 'epub' && isSameNav(prev.nav, nav)) return
+    set({ units, format: 'epub', nav })
   },
 
   syncEpubRendition: (units, rendition) => {
     const nav = syncEpubNavigationFromRendition(units, rendition)
     if (nav.flatIndex < 0) return
-    set({
-      units,
-      format: 'epub',
-      nav,
-    })
+    const prev = get()
+    if (prev.format === 'epub' && isSameNav(prev.nav, nav)) return
+    set({ units, format: 'epub', nav })
   },
 
   syncMobi: (units, chapterId, flatIndex) => {
-    set({
-      units,
-      format: 'mobi',
-      nav: syncMobiNavigation(units, chapterId, flatIndex),
-    })
+    const nav = syncMobiNavigation(units, chapterId, flatIndex)
+    const prev = get()
+    if (prev.format === 'mobi' && isSameNav(prev.nav, nav)) return
+    set({ units, format: 'mobi', nav })
   },
 
   syncPdf: (units, pageNum) => {
-    set({
-      units,
-      format: 'pdf',
-      nav: syncPdfNavigation(units, pageNum),
-    })
+    const nav = syncPdfNavigation(units, pageNum)
+    const prev = get()
+    if (prev.format === 'pdf' && prev.units === units && isSameNav(prev.nav, nav)) return
+    set({ units, format: 'pdf', nav })
   },
 
   syncFlatIndex: (flatIndex) => {
-    const { format, units } = get()
+    const { format, units, nav: prevNav } = get()
     if (flatIndex < 0 || flatIndex >= units.length) return
 
-    if (format === 'mobi') {
-      set({ nav: syncMobiNavigation(units as MobiChapterItem[], undefined, flatIndex) })
-      return
-    }
+    const nav =
+      format === 'mobi'
+        ? syncMobiNavigation(units as MobiChapterItem[], undefined, flatIndex)
+        : syncEpubNavigation(units as EpubChapter[], undefined, flatIndex)
 
-    set({ nav: syncEpubNavigation(units as EpubChapter[], undefined, flatIndex) })
+    if (isSameNav(prevNav, nav)) return
+    set({ nav })
   },
 }))
 
@@ -124,6 +142,7 @@ export function selectReaderNavTitles(state: {
       ? encodeMobiTocHref(nav.flatIndex)
       : nav.current?.href
 
+  // 只返回原始值：勿带 nav 对象，否则浅比较失效
   return {
     currentTitle: nav.current?.label ?? '—',
     previousTitle: nav.previous?.label ?? '—',
@@ -131,10 +150,10 @@ export function selectReaderNavTitles(state: {
     previousDisabled: !nav.previous,
     nextDisabled: !nav.next,
     currentUnitId,
-    nav,
   }
 }
 
+/** 须用 useShallow：选择器每次返回新对象，否则会 Maximum update depth exceeded */
 export function useReaderNavTitles() {
-  return useReaderNavigationStore(selectReaderNavTitles)
+  return useReaderNavigationStore(useShallow(selectReaderNavTitles))
 }

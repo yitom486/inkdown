@@ -83,17 +83,23 @@ describe('reader-navigation-store', () => {
     expect(titles.currentUnitId).toBe('mobi-toc:2')
   })
 
-  it('PDF syncPdf 后底部导航标题来自 store', () => {
-    const outline = [
-      { label: '第1章', href: '1', level: 0 },
-      { label: '第2章', href: '10', level: 0 },
-    ]
+  it('同一位置重复 sync 不会改写 store（避免滚动风暴）', () => {
+    const chapters = flattenEpubToc([
+      { label: '第一章', href: 'ch1.xhtml' },
+      { label: '第二章', href: 'ch2.xhtml' },
+    ])
+    useReaderNavigationStore.getState().syncEpub(chapters, { href: 'ch2.xhtml' })
+    const first = useReaderNavigationStore.getState().nav
 
-    useReaderNavigationStore.getState().syncPdf(outline, 10)
+    useReaderNavigationStore.getState().syncEpub(chapters, { href: 'ch2.xhtml' })
+    expect(useReaderNavigationStore.getState().nav).toBe(first)
+  })
+
+  it('selectReaderNavTitles 只返回原始字段，不含 nav 对象引用', () => {
+    const chapters = flattenEpubToc([{ label: '第一章', href: 'ch1.xhtml' }])
+    useReaderNavigationStore.getState().syncEpub(chapters, { href: 'ch1.xhtml' })
     const titles = selectReaderNavTitles(useReaderNavigationStore.getState())
-
-    expect(titles.currentTitle).toBe('第2章')
-    expect(titles.previousTitle).toBe('第1章')
-    expect(titles.nextTitle).toBe('—')
+    expect(titles).not.toHaveProperty('nav')
+    expect(titles.currentTitle).toBe('第一章')
   })
 })
