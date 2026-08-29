@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import type { FileTreeNode } from '@shared/types/file'
 import { Button } from '@/components/ui/button'
+import { writeWorkspacePathsToDataTransfer } from '@/lib/acp-composer'
 import { getParentDir, isMarkdownPath } from '@/lib/file-tree-ops'
 import { cn } from '@/lib/utils'
 import type { useFileTreeActions } from '@/hooks/useFileTreeActions'
@@ -240,44 +241,60 @@ function TreeNode({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors',
+        'flex w-full cursor-grab items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors active:cursor-grabbing',
         isActive
           ? 'bg-primary/15 text-primary'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+        renaming && 'cursor-default active:cursor-default',
       )}
       style={rowPadding}
+      draggable={!renaming}
+      title={renaming ? undefined : '拖到 Agent 输入区可附加为引用'}
+      onDragStart={(e) => {
+        if (renaming) {
+          e.preventDefault()
+          return
+        }
+        writeWorkspacePathsToDataTransfer(e.dataTransfer, [node.path])
+      }}
+      onClick={() => {
+        if (!renaming) onSelectFile(node.path)
+      }}
+      onKeyDown={(e) => {
+        if (renaming) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelectFile(node.path)
+        }
+      }}
       onContextMenu={(e) => onContextMenu(e, node)}
     >
-      <button
-        type="button"
-        className="inline-flex min-w-0 flex-1 items-center gap-2 text-left"
-        onClick={() => onSelectFile(node.path)}
-      >
-        <FileIcon documentKind={node.documentKind} />
-        {renaming ? (
-          <input
-            ref={inputRef}
-            className="min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0.5 text-xs text-foreground outline-none"
-            value={inlineEdit.value}
-            onChange={(e) => onInlineChange(e.target.value)}
-            onBlur={() => onInlineCommit()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                onInlineCommit()
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                onInlineCancel()
-              }
-            }}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="truncate">{node.name}</span>
-        )}
-      </button>
+      <FileIcon documentKind={node.documentKind} />
+      {renaming ? (
+        <input
+          ref={inputRef}
+          className="min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0.5 text-xs text-foreground outline-none"
+          value={inlineEdit.value}
+          onChange={(e) => onInlineChange(e.target.value)}
+          onBlur={() => onInlineCommit()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              onInlineCommit()
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              onInlineCancel()
+            }
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="truncate">{node.name}</span>
+      )}
     </div>
   )
 }

@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAcpPromptBlocks,
   canSendComposer,
+  fileNameFromPath,
+  INKDOWN_WORKSPACE_PATHS_MIME,
   isPathInsideWorkspace,
   mimeFromFileName,
+  readWorkspacePathsFromDataTransfer,
   toFileUri,
+  writeWorkspacePathsToDataTransfer,
   type ComposerAttachment,
 } from './acp-composer'
 
@@ -114,5 +118,29 @@ describe('acp-composer', () => {
       promptCapabilities: {},
     })
     expect(blocks).toEqual([{ type: 'text', text: 'x' }])
+  })
+
+  it('round-trips workspace paths through DataTransfer MIME', () => {
+    const store = new Map<string, string>()
+    const dt = {
+      effectAllowed: 'none' as string,
+      setData(type: string, value: string) {
+        store.set(type, value)
+      },
+      getData(type: string) {
+        return store.get(type) ?? ''
+      },
+      types: [] as string[],
+    }
+    writeWorkspacePathsToDataTransfer(dt as unknown as DataTransfer, [
+      'D:\\ws\\docs\\a.md',
+      'D:\\ws\\docs\\a.md',
+      '',
+    ])
+    expect(store.get(INKDOWN_WORKSPACE_PATHS_MIME)).toContain('D:\\\\ws\\\\docs\\\\a.md')
+    expect(readWorkspacePathsFromDataTransfer(dt as unknown as DataTransfer)).toEqual([
+      'D:\\ws\\docs\\a.md',
+    ])
+    expect(fileNameFromPath('D:\\ws\\docs\\a.md')).toBe('a.md')
   })
 })

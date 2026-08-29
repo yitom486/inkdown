@@ -4,6 +4,9 @@ import {
 } from '@shared/constants/images'
 import type { AcpContentBlock, AcpPromptCapabilities } from '@shared/types/acp'
 
+/** 侧栏 → Agent 输入区拖拽的自定义 MIME（JSON 绝对路径数组） */
+export const INKDOWN_WORKSPACE_PATHS_MIME = 'application/x-inkdown-workspace-paths'
+
 /** 单张图片上限（发送前） */
 export const ACP_MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
@@ -82,6 +85,43 @@ export function isImageMimeType(mimeType: string): boolean {
 
 export function newAttachmentId(): string {
   return `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+export function fileNameFromPath(filePath: string): string {
+  const parts = filePath.replace(/\\/g, '/').split('/')
+  return parts[parts.length - 1] || filePath
+}
+
+/** 在侧栏文件行 dragstart 时写入路径，供 Agent 输入区识别 */
+export function writeWorkspacePathsToDataTransfer(
+  dataTransfer: DataTransfer,
+  paths: string[],
+): void {
+  const unique = [...new Set(paths.filter((p) => p.trim()))]
+  if (unique.length === 0) return
+  dataTransfer.setData(INKDOWN_WORKSPACE_PATHS_MIME, JSON.stringify(unique))
+  dataTransfer.setData('text/plain', unique.join('\n'))
+  dataTransfer.effectAllowed = 'copy'
+}
+
+/** 从拖放数据解析工作区绝对路径（自定义 MIME 优先） */
+export function readWorkspacePathsFromDataTransfer(dataTransfer: DataTransfer): string[] {
+  const raw = dataTransfer.getData(INKDOWN_WORKSPACE_PATHS_MIME)
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return []
+}
+
+export function dataTransferHasWorkspacePaths(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes(INKDOWN_WORKSPACE_PATHS_MIME)
 }
 
 export function attachmentToMessageMeta(att: ComposerAttachment): AcpMessageAttachment {

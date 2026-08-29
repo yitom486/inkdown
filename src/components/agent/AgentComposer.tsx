@@ -9,10 +9,14 @@ import {
   blobToBase64,
   buildAcpPromptBlocks,
   canSendComposer,
+  dataTransferHasWorkspacePaths,
+  fileNameFromPath,
   isImageMimeType,
   isPathInsideWorkspace,
   mimeFromFileName,
   newAttachmentId,
+  normalizePathForCompare,
+  readWorkspacePathsFromDataTransfer,
   type AcpMessageAttachment,
   type ComposerAttachment,
 } from '@/lib/acp-composer'
@@ -78,8 +82,54 @@ export function AgentComposer({
 
   const addAttachments = useCallback((next: ComposerAttachment[]) => {
     if (next.length === 0) return
-    setAttachments((prev) => [...prev, ...next])
+    setAttachments((prev) => {
+      const seen = new Set(
+        prev
+          .map((a) => a.absolutePath)
+          .filter((p): p is string => Boolean(p))
+          .map(normalizePathForCompare),
+      )
+      const merged = [...prev]
+      for (const att of next) {
+        const key = att.absolutePath ? normalizePathForCompare(att.absolutePath) : ''
+        if (key && seen.has(key)) {
+          if (att.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(att.previewUrl)
+          continue
+        }
+        if (key) seen.add(key)
+        merged.push(att)
+      }
+      return merged
+    })
   }, [])
+
+  const ingestWorkspacePaths = useCallback(
+    (paths: string[]) => {
+      if (!workspaceRoot?.trim()) {
+        toast.error('请先打开工作区后再附加文件')
+        return
+      }
+
+      const next: ComposerAttachment[] = []
+      for (const absolutePath of paths) {
+        if (!isPathInsideWorkspace(absolutePath, workspaceRoot)) {
+          toast.error(`文件须在工作区内：${fileNameFromPath(absolutePath)}`)
+          continue
+        }
+        const name = fileNameFromPath(absolutePath)
+        const mime = mimeFromFileName(name)
+        next.push({
+          id: newAttachmentId(),
+          kind: isImageMimeType(mime) ? 'image' : 'file',
+          name,
+          mimeType: mime,
+          absolutePath,
+        })
+      }
+      addAttachments(next)
+    },
+    [addAttachments, workspaceRoot],
+  )
 
   const ingestImageBlob = useCallback(
     async (blob: Blob, mimeType: string, nameHint?: string) => {
@@ -241,11 +291,16 @@ export function AgentComposer({
       onDragEnter={(e) => {
         e.preventDefault()
         e.stopPropagation()
-        if (!disabled) setDragOver(true)
+        if (disabled) return
+        const hasWorkspace = dataTransferHasWorkspacePaths(e.dataTransfer)
+        const hasFiles = e.dataTransfer.types.includes('Files')
+        if (hasWorkspace || hasFiles) setDragOver(true)
       }}
       onDragOver={(e) => {
         e.preventDefault()
         e.stopPropagation()
+        if (disabled) return
+        e.dataTransfer.dropEffect = 'copy'
       }}
       onDragLeave={(e) => {
         e.preventDefault()
@@ -257,12 +312,17 @@ export function AgentComposer({
         e.stopPropagation()
         setDragOver(false)
         if (disabled) return
+        const workspacePaths = readWorkspacePathsFromDataTransfer(e.dataTransfer)
+        if (workspacePaths.length > 0) {
+          ingestWorkspacePaths(workspacePaths)
+          return
+        }
         void ingestDroppedFiles(e.dataTransfer.files)
       }}
     >
       {dragOver ? (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-emerald-500/10 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-          松开以附加到对话
+          松开以附加文件引用
         </div>
       ) : null}
 
@@ -271,25 +331,25 @@ export function AgentComposer({
           {attachments.map((att) => (
             <div
               key={att.id}
-              className="group inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 py-1 pr-1 pl-1.5 text-[10px]"
+              className="group inline-flex max-w-[11rem] items-center gap-1 rounded-md border border-sky-500/25 bg-sky-500/10 py-0.5 pr-0.5 pl-1.5 text-[10px] text-sky-800 dark:text-sky-200"
             >
               {att.kind === 'image' && att.previewUrl ? (
                 <img
                   src={att.previewUrl}
                   alt=""
-                  className="size-7 shrink-0 rounded object-cover"
+                  className="size-5 shrink-0 rounded object-cover"
                 />
               ) : att.kind === 'image' ? (
-                <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <ImageIcon className="size-3 shrink-0 opacity-80" />
               ) : (
-                <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <FileIcon className="size-3 shrink-0 opacity-80" />
               )}
-              <span className="min-w-0 truncate" title={att.absolutePath ?? att.name}>
+              <span className="min-w-0 truncate font-medium" title={att.absolutePath ?? att.name}>
                 {att.name}
               </span>
               <button
                 type="button"
-                className="inline-flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground"
+                className="inline-flex size-5 shrink-0 items-center justify-center rounded text-sky-700/70 hover:bg-sky-500/15 hover:text-sky-900 dark:text-sky-200/70 dark:hover:text-sky-100"
                 title="移除"
                 onClick={() => removeAttachment(att.id)}
               >
@@ -305,7 +365,7 @@ export function AgentComposer({
         placeholder={
           disabled
             ? '请先连接 Agent'
-            : '输入消息，Enter 发送 · Shift+Enter 换行 · 可拖拽文件或粘贴图片'
+            : '输入消息，Enter 发送 · 可从资源管理器拖入文件 · 粘贴图片'
         }
         value={draft}
         disabled={disabled}

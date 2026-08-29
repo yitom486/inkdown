@@ -133,8 +133,8 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
                   <div
                     key={att.id}
                     className={cn(
-                      'inline-flex max-w-full items-center gap-1.5 rounded-lg border px-1.5 py-1 text-[10px]',
-                      'border-primary-foreground/25 bg-primary-foreground/10',
+                      'inline-flex max-w-[11rem] items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+                      'border-primary-foreground/30 bg-primary-foreground/12',
                     )}
                     title={att.absolutePath ?? att.name}
                   >
@@ -142,7 +142,7 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
                       <img
                         src={att.previewUrl}
                         alt=""
-                        className="size-7 shrink-0 rounded object-cover"
+                        className="size-5 shrink-0 rounded object-cover"
                       />
                     ) : null}
                     <span className="min-w-0 truncate">{att.name}</span>
