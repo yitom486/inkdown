@@ -86,26 +86,27 @@ describe('resolveMobiChapterNav', () => {
     { id: '2', label: '第二章 长安与魏州', level: 0 },
   ]
 
-  it('指定 flat index 时精确匹配当前目录项', () => {
+  it('指定 flat index 时底栏显示所属 spine 章节', () => {
     const nav = resolveMobiChapterNav(chapters, '1', 2)
-    expect(nav.current?.label).toBe('一、小引')
-    expect(nav.previous?.label).toBe('第一章 五星会聚')
+    expect(nav.flatIndex).toBe(2)
+    expect(nav.current?.label).toBe('第一章 五星会聚')
+    expect(nav.previous).toBeNull()
     expect(nav.next?.label).toBe('第二章 长安与魏州')
   })
 
   it('仅 spine id 时回退到第一个匹配项（精确定位交给视口同步）', () => {
     const nav = resolveMobiChapterNav(chapters, '1')
     expect(nav.current?.label).toBe('第一章 五星会聚')
-    expect(nav.next?.label).toBe('一、小引')
+    expect(nav.next?.label).toBe('第二章 长安与魏州')
   })
 
-  it('上一节跳过目录页', () => {
+  it('上一节跳过目录页与同 spine 小节', () => {
     const nav = resolveMobiChapterNav(chapters, '2')
     expect(nav.current?.label).toBe('第二章 长安与魏州')
-    expect(nav.previous?.label).toBe('一、小引')
+    expect(nav.previous?.label).toBe('第一章 五星会聚')
   })
 
-  it('单元结构下按最小目录步进', () => {
+  it('单元结构下底栏按 spine 步进', () => {
     const nested: MobiChapterItem[] = [
       { id: '0', label: '目录', level: 0 },
       { id: '1', label: '自序', level: 1 },
@@ -119,7 +120,7 @@ describe('resolveMobiChapterNav', () => {
     ]
     const nav = resolveMobiChapterNav(nested, '4', 7)
     expect(nav.current?.label).toBe('第二单元')
-    expect(nav.previous?.label).toBe('组织背景')
+    expect(nav.previous?.label).toBe('第一单元')
     expect(nav.next?.label).toBe('第三单元')
   })
 

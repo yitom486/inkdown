@@ -146,12 +146,56 @@ export function findAnchorLevelIndex<T extends LeveledChapter>(
   chapters: T[],
   flatIndex: number,
   navLevel: number,
+  isTocLike?: (chapter: T) => boolean,
 ): number {
   if (flatIndex < 0) return -1
   for (let i = flatIndex; i >= 0; i -= 1) {
     const chapter = chapters[i]!
+    if (isTocLike?.(chapter)) continue
     if (chapter.level === navLevel) return i
-    if (chapter.level < navLevel) return -1
+    if (chapter.level < navLevel) return i
+  }
+  return -1
+}
+
+export function findPreviousNavChapterIndex<T extends LeveledChapter>(
+  chapters: T[],
+  anchorIndex: number,
+  navLevel: number,
+  options: {
+    isTocLike?: (chapter: T) => boolean
+    shouldSkipAdjacent?: (current: T, candidate: T) => boolean
+  } = {},
+): number {
+  if (anchorIndex < 0) return -1
+  const current = chapters[anchorIndex]!
+  for (let i = anchorIndex - 1; i >= 0; i -= 1) {
+    const chapter = chapters[i]!
+    if (options.isTocLike?.(chapter)) continue
+    if (chapter.level > navLevel) continue
+    if (options.shouldSkipAdjacent?.(current, chapter)) continue
+    return i
+  }
+  return -1
+}
+
+export function findNextNavChapterIndex<T extends LeveledChapter>(
+  chapters: T[],
+  anchorIndex: number,
+  navLevel: number,
+  options: {
+    isTocLike?: (chapter: T) => boolean
+    shouldSkipAdjacent?: (current: T, candidate: T) => boolean
+  } = {},
+): number {
+  if (anchorIndex < 0) return -1
+  const current = chapters[anchorIndex]!
+  for (let i = anchorIndex + 1; i < chapters.length; i += 1) {
+    const chapter = chapters[i]!
+    if (options.isTocLike?.(chapter)) continue
+    if (chapter.level > navLevel) continue
+    if (options.shouldSkipAdjacent?.(current, chapter)) continue
+    return i
   }
   return -1
 }
@@ -165,16 +209,8 @@ export function findPreviousNavChapter<T extends LeveledChapter>(
     shouldSkipAdjacent?: (current: T, candidate: T) => boolean
   } = {},
 ): T | null {
-  if (anchorIndex < 0) return null
-  const current = chapters[anchorIndex]!
-  for (let i = anchorIndex - 1; i >= 0; i -= 1) {
-    const chapter = chapters[i]!
-    if (chapter.level !== navLevel) continue
-    if (options.isTocLike?.(chapter)) continue
-    if (options.shouldSkipAdjacent?.(current, chapter)) continue
-    return chapter
-  }
-  return null
+  const index = findPreviousNavChapterIndex(chapters, anchorIndex, navLevel, options)
+  return index >= 0 ? chapters[index]! : null
 }
 
 export function findNextNavChapter<T extends LeveledChapter>(
@@ -186,37 +222,32 @@ export function findNextNavChapter<T extends LeveledChapter>(
     shouldSkipAdjacent?: (current: T, candidate: T) => boolean
   } = {},
 ): T | null {
-  if (anchorIndex < 0) return null
-  const current = chapters[anchorIndex]!
-  for (let i = anchorIndex + 1; i < chapters.length; i += 1) {
-    const chapter = chapters[i]!
-    if (chapter.level !== navLevel) continue
-    if (options.isTocLike?.(chapter)) continue
-    if (options.shouldSkipAdjacent?.(current, chapter)) continue
-    return chapter
-  }
-  return null
+  const index = findNextNavChapterIndex(chapters, anchorIndex, navLevel, options)
+  return index >= 0 ? chapters[index]! : null
 }
 
+/** 底栏上一章/下一章：与正文渲染粒度一致，跳过更细的小节 */
 export function resolveReaderChapterNav<T extends LeveledChapter>(
   chapters: T[],
   flatIndex: number,
   navLevel: number,
-  isTocLike?: (chapter: T) => boolean,
-): {
-  current: T | null
-  previous: T | null
-  next: T | null
-  currentIndex: number
-  flatIndex: number
-} {
-  const anchorIndex = findAnchorLevelIndex(chapters, flatIndex, navLevel)
+  options: {
+    isTocLike?: (chapter: T) => boolean
+    shouldSkipAdjacent?: (current: T, candidate: T) => boolean
+  } = {},
+): AdjacentFlatNavState<T> {
+  const anchorIndex = findAnchorLevelIndex(chapters, flatIndex, navLevel, options.isTocLike)
+  const previousIndex = findPreviousNavChapterIndex(chapters, anchorIndex, navLevel, options)
+  const nextIndex = findNextNavChapterIndex(chapters, anchorIndex, navLevel, options)
   const current = anchorIndex >= 0 ? chapters[anchorIndex]! : null
+
   return {
     current,
-    previous: findPreviousNavChapter(chapters, anchorIndex, navLevel, { isTocLike }),
-    next: findNextNavChapter(chapters, anchorIndex, navLevel, { isTocLike }),
+    previous: previousIndex >= 0 ? chapters[previousIndex]! : null,
+    next: nextIndex >= 0 ? chapters[nextIndex]! : null,
     currentIndex: anchorIndex,
+    previousIndex,
+    nextIndex,
     flatIndex,
   }
 }
@@ -233,13 +264,7 @@ export function findTopLevelIndex<T extends LeveledChapter>(
 export function resolveTopLevelChapterNav<T extends LeveledChapter>(
   chapters: T[],
   flatIndex: number,
-): {
-  current: T | null
-  previous: T | null
-  next: T | null
-  currentIndex: number
-  flatIndex: number
-} {
+): AdjacentFlatNavState<T> {
   return resolveReaderChapterNav(chapters, flatIndex, 0)
 }
 

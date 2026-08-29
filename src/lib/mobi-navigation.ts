@@ -4,7 +4,8 @@ import {
 } from '@/lib/mobi-chapter-html'
 import {
   findFirstFlatIndexById,
-  resolveAdjacentFlatNav,
+  findNextDistinctLoadTarget,
+  findPreviousDistinctLoadTarget,
   type AdjacentFlatNavState,
 } from '@/lib/reader-chapter-nav'
 
@@ -189,8 +190,25 @@ export function resolveMobiChapterNav(
     }
   }
 
-  return resolveAdjacentFlatNav(chapters, resolvedFlatIndex, {
+  const spineId = chapters[resolvedFlatIndex]!.id
+  const anchorIndex = findFirstFlatIndexById(chapters, spineId)
+  const loadOptions = {
     isTocLike: isTocLikeMobiChapter,
-    getLoadTargetKey: (chapter) => chapter.id,
-  })
+    getLoadTargetKey: (chapter: MobiChapterItem) => chapter.id,
+  }
+  const previous = findPreviousDistinctLoadTarget(chapters, anchorIndex, loadOptions)
+  const next = findNextDistinctLoadTarget(chapters, anchorIndex, loadOptions)
+  const previousIndex =
+    previous !== null ? findFirstFlatIndexById(chapters, previous.item.id) : -1
+  const nextIndex = next !== null ? findFirstFlatIndexById(chapters, next.item.id) : -1
+
+  return {
+    current: anchorIndex >= 0 ? chapters[anchorIndex]! : null,
+    previous: previousIndex >= 0 ? chapters[previousIndex]! : null,
+    next: nextIndex >= 0 ? chapters[nextIndex]! : null,
+    currentIndex: anchorIndex,
+    previousIndex,
+    nextIndex,
+    flatIndex: resolvedFlatIndex,
+  }
 }

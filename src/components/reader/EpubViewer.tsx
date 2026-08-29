@@ -14,6 +14,7 @@ import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
+import { navigateEpubToFlatIndex } from '@/lib/reader-flat-nav'
 import {
   flattenEpubToc,
   pickInitialChapter,
@@ -41,7 +42,7 @@ import {
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
-import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
+import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/core/errors'
 import type { ReadingMark } from '@shared/types/reading-mark'
@@ -114,6 +115,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const hoveredMarkIdRef = useRef<string | null>(null)
   const reportLocationTimerRef = useRef<number | null>(null)
   const saveProgressTimerRef = useRef<number | null>(null)
+  const pendingNavChapterRef = useRef<EpubChapter | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, deleteMark } = useReadingMarks(filePath)
@@ -142,6 +144,15 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const syncChapterNav = useCallback(
     (location?: EpubLocation | string, flatIndex?: number) => {
       const units = chaptersRef.current
+      if (typeof flatIndex === 'number' && flatIndex >= 0 && units.length > 0) {
+        useReaderNavigationStore.getState().syncFlatIndex(flatIndex)
+        return
+      }
+
+      if (isNavIntentLocked(useReaderNavigationStore.getState().navIntent)) {
+        return
+      }
+
       const rendition = renditionRef.current
       if (rendition && units.length > 0) {
         useReaderNavigationStore.getState().syncEpubRendition(units, rendition)
@@ -156,7 +167,6 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
               href: location?.start?.href,
               cfi: location?.start?.cfi,
             }
-      // 无显式 flatIndex 时不传全书 percentage，避免 21% 误匹配「小结」等尾部 TOC
       useReaderNavigationStore.getState().syncEpub(units, hint, flatIndex)
     },
     [],
@@ -209,31 +219,21 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
   const goToChapter = useCallback((chapter: EpubChapter | null, flatIndex?: number) => {
     if (!chapter || !renditionRef.current) return
-    const rendition = renditionRef.current
     const resolvedIndex =
       typeof flatIndex === 'number' && flatIndex >= 0
         ? flatIndex
         : chaptersRef.current.findIndex(
             (item) => item.href === chapter.href && item.label === chapter.label,
           )
+    if (resolvedIndex < 0) return
 
-    const scrolledInPlace = scrollEpubChapterInRendition(rendition, chapter)
-    if (scrolledInPlace) {
-      if (resolvedIndex >= 0) {
-        useReaderNavigationStore.getState().syncFlatIndex(resolvedIndex)
-      }
-      window.requestAnimationFrame(() => {
-        useReaderNavigationStore
-          .getState()
-          .syncEpubRendition(chaptersRef.current, rendition)
-      })
-      return
-    }
-
-    if (resolvedIndex >= 0) {
-      useReaderNavigationStore.getState().syncFlatIndex(resolvedIndex)
-    }
-    void rendition.display(chapter.href)
+    const pending = navigateEpubToFlatIndex(
+      chaptersRef.current,
+      resolvedIndex,
+      renditionRef.current,
+      (index) => useReaderNavigationStore.getState().syncFlatIndex(index),
+    )
+    pendingNavChapterRef.current = pending
   }, [])
 
   const markHoverHandlers = useCallback((): EpubMarkHoverHandlers => {
@@ -355,6 +355,9 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
         const onScroll = () => {
           scheduleReportLocation(rendition)
+          if (isNavIntentLocked(useReaderNavigationStore.getState().navIntent)) {
+            return
+          }
           const location = rendition.currentLocation() as EpubLocation | null
           const spineHref = location?.start?.href
           if (spineHref && chaptersRef.current.length > 0) {
@@ -519,7 +522,15 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       requestAnimationFrame(() => {
         applyReadingLayout(rendition)
         syncVisualMarks()
-        if (chaptersRef.current.length > 0) {
+        const pendingChapter = pendingNavChapterRef.current
+        if (pendingChapter) {
+          scrollEpubChapterInRendition(rendition, pendingChapter)
+          pendingNavChapterRef.current = null
+        }
+        if (
+          chaptersRef.current.length > 0 &&
+          !isNavIntentLocked(useReaderNavigationStore.getState().navIntent)
+        ) {
           useReaderNavigationStore.getState().syncEpubRendition(chaptersRef.current, rendition)
         }
         requestAnimationFrame(() => {

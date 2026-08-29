@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { flattenEpubToc } from '@/lib/epub-navigation'
+import type { MobiChapterItem } from '@/lib/mobi-navigation'
 import { useReaderNavigationStore, selectReaderNavTitles } from '@/stores/reader-navigation-store'
+
+import { mockRelativeOffsetTop, mockScrollRoot } from '@/lib/reader-viewport-test-helpers'
 
 function buildGovernanceChapterDocument(): Document {
   const document = window.document
@@ -9,20 +12,15 @@ function buildGovernanceChapterDocument(): Document {
     <section id="chapter2"><h2>第2章 国家治理逻辑</h2></section>
     <section id="summary"><h3>讨论与小结</h3></section>
   `
-
-  const scrollRoot = document.scrollingElement ?? document.documentElement
-  Object.defineProperty(scrollRoot, 'clientHeight', { configurable: true, value: 800 })
-  Object.defineProperty(scrollRoot, 'scrollTop', { configurable: true, value: 900, writable: true })
-
+  mockScrollRoot(document, 900)
+  const scrollRoot = document.scrollingElement as HTMLElement
   for (const [id, top] of [
     ['chapter2', 1200],
     ['summary', 4800],
   ] as const) {
     const element = document.getElementById(id)
-    if (!element) continue
-    Object.defineProperty(element, 'offsetTop', { configurable: true, value: top })
+    if (element instanceof HTMLElement) mockRelativeOffsetTop(element, top, 40)
   }
-
   return document
 }
 
@@ -65,17 +63,19 @@ describe('reader-navigation-store', () => {
     expect(titles.currentTitle).toBe(storeState.nav.current?.label)
     expect(titles.previousTitle).toBe(storeState.nav.previous?.label ?? '—')
     expect(titles.nextTitle).toBe(storeState.nav.next?.label ?? '—')
-    expect(titles.currentTitle).toBe('第2章 国家治理逻辑')
+    expect(titles.currentTitle).toBe('第一单元')
     expect(titles.currentUnitId).toBe('text00002.html#chapter2')
   })
 
   it('MOBI syncMobi 后 currentUnitId 使用 mobi-toc 编码', () => {
-    const chapters = [
+    const chapters: MobiChapterItem[] = [
       { id: '0', label: '目录', level: 0 },
       { id: '1', label: '第一章', level: 0 },
       { id: '2', label: '第二章', level: 0 },
     ]
 
+    useReaderNavigationStore.getState().beginSession('/books/test.mobi', 'mobi')
+    useReaderNavigationStore.getState().setUnits(chapters)
     useReaderNavigationStore.getState().syncMobi(chapters, '2', 2)
     const titles = selectReaderNavTitles(useReaderNavigationStore.getState())
 
@@ -101,5 +101,29 @@ describe('reader-navigation-store', () => {
     const titles = selectReaderNavTitles(useReaderNavigationStore.getState())
     expect(titles).not.toHaveProperty('nav')
     expect(titles.currentTitle).toBe('第一章')
+  })
+
+  it('syncFlatIndex 后 intent 锁阻止视口误覆盖（加载后仍显示用户点的节）', () => {
+    const chapters = flattenEpubToc([
+      { label: '第一部分', href: 'part1.html' },
+      { label: '第一章 佟家的奴才', href: 'ch1.html' },
+      { label: '战场上的俘虏', href: 'ch1.html#prisoners' },
+    ])
+    const document = window.document
+    document.body.innerHTML = `<h2 id="prisoners">战场上的俘虏</h2>`
+    mockScrollRoot(document, 0)
+    const scrollRoot = document.scrollingElement as HTMLElement
+    const prisoners = document.getElementById('prisoners')
+    if (prisoners) mockRelativeOffsetTop(prisoners, 0, 40)
+
+    useReaderNavigationStore.getState().setUnits(chapters)
+    useReaderNavigationStore.getState().syncFlatIndex(1)
+
+    expect(useReaderNavigationStore.getState().nav.current?.label).toContain('第一章')
+
+    useReaderNavigationStore.getState().syncEpubViewport(chapters, document, 'ch1.html')
+
+    expect(useReaderNavigationStore.getState().nav.current?.label).toContain('第一章')
+    expect(useReaderNavigationStore.getState().navIntent?.flatIndex).toBe(1)
   })
 })

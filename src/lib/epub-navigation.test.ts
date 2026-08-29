@@ -61,15 +61,16 @@ describe('epub-navigation', () => {
     expect(nav.next).toBeNull()
   })
 
-  it('位于二级小节时按最小目录步进', () => {
+  it('位于二级小节时底栏仍显示所属章节', () => {
     const nested = flattenEpubToc([
       { label: '第一章', href: 'ch1.xhtml', subitems: [{ label: '一、小引', href: 'ch1.xhtml#intro' }] },
       { label: '第二章', href: 'ch2.xhtml' },
     ])
     const nav = resolveChapterNav(nested, 'ch1.xhtml#intro')
-    expect(nav.current?.label).toBe('一、小引')
+    expect(nav.current?.label).toBe('第一章')
     expect(nav.previous).toBeNull()
     expect(nav.next?.label).toBe('第二章')
+    expect(nav.flatIndex).toBeGreaterThanOrEqual(0)
   })
 
   describe('同 HTML 多目录项（scrolled-doc 回归）', () => {
@@ -91,13 +92,13 @@ describe('epub-navigation', () => {
       expect(monolithic[index]?.label).toBe('讨论与小结')
     })
 
-    it('底部导航与正文开头同步', () => {
+    it('底部导航与正文开头同步（渲染单位为整章）', () => {
       const nav = resolveChapterNav(monolithic, {
         href: 'chapter01.html',
         percentage: 0.01,
       })
-      expect(nav.current?.label).toBe('自序')
-      expect(nav.next?.label).toBe('问题提出')
+      expect(nav.current?.label).toBe('第1章 导论')
+      expect(nav.next?.label).toBe('第2章 组织结构')
       expect(nav.previous).toBeNull()
     })
   })
@@ -138,6 +139,35 @@ describe('epub-navigation', () => {
       expect(nav.current?.label).toContain('第1章')
       expect(nav.previous?.label).toBe('自序')
       expect(nav.next?.label).toContain('第2章')
+    })
+  })
+
+  describe('嵌套 TOC（康熙红票类）', () => {
+    const kangxi = flattenEpubToc([
+      {
+        label: '第一部分 进入清朝权贵圈的西洋人',
+        href: 'part1.html',
+        subitems: [
+          {
+            label: '第一章 佟家的奴才',
+            href: 'ch1.html',
+            subitems: [
+              { label: '战场上的俘虏', href: 'ch1.html#prisoners' },
+              { label: '康熙母亲的娘家', href: 'ch1.html#family' },
+            ],
+          },
+          { label: '第二章', href: 'ch2.html' },
+        ],
+      },
+    ])
+
+    it('三级小节位置：底栏当前为二级章、下一章为第二章', () => {
+      const prisonersIndex = kangxi.findIndex((c) => c.label === '战场上的俘虏')
+      const nav = resolveChapterNav(kangxi, undefined, prisonersIndex)
+      expect(nav.current?.label).toContain('第一章')
+      expect(nav.next?.label).toBe('第二章')
+      expect(nav.previous?.label).toContain('第一部分')
+      expect(nav.nextIndex).toBeGreaterThan(nav.currentIndex)
     })
   })
 })

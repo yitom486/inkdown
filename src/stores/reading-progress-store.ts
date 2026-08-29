@@ -75,6 +75,16 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
         const cfi = progress.cfi.trim()
         if (!normalized || !cfi) return
 
+        const prev = get().epubByFile[normalized]
+        if (
+          prev &&
+          prev.cfi === cfi &&
+          prev.href === progress.href &&
+          prev.percentage === progress.percentage
+        ) {
+          return
+        }
+
         set((state) => ({
           epubByFile: {
             ...state.epubByFile,
@@ -109,6 +119,16 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
         const normalized = normalizeFilePath(filePath)
         if (!normalized || !entry.locationsJson.trim()) return
 
+        const prev = get().epubLocationsByFile[normalized]
+        if (
+          prev &&
+          prev.fingerprint === entry.fingerprint &&
+          prev.chunkSize === entry.chunkSize &&
+          prev.locationsJson === entry.locationsJson
+        ) {
+          return
+        }
+
         set((state) => ({
           epubLocationsByFile: {
             ...state.epubLocationsByFile,
@@ -142,6 +162,9 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
         const chapterId = progress.chapterId.trim()
         if (!normalized || !chapterId) return
 
+        const prev = get().mobiByFile[normalized]
+        if (prev?.chapterId === chapterId) return
+
         set((state) => ({
           mobiByFile: {
             ...state.mobiByFile,
@@ -174,11 +197,15 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
         const normalized = normalizeFilePath(filePath)
         if (!normalized || progress.pageNum < 1) return
 
+        const pageNum = Math.floor(progress.pageNum)
+        const prev = get().pdfByFile[normalized]
+        if (prev?.pageNum === pageNum) return
+
         set((state) => ({
           pdfByFile: {
             ...state.pdfByFile,
             [normalized]: {
-              pageNum: Math.floor(progress.pageNum),
+              pageNum,
               updatedAt: Date.now(),
             },
           },

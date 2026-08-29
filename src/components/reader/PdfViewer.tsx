@@ -96,6 +96,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   useEffect(() => {
     if (outlineUnits.length === 0) return
+    useReaderNavigationStore.getState().setUnits(outlineUnits)
     useReaderNavigationStore.getState().syncPdf(outlineUnits, pageNum)
   }, [outlineUnits, pageNum])
 
@@ -294,6 +295,36 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setPageNum(targetPage)
   }, [])
 
+  const goToFlatIndex = useCallback(
+    (flatIndex: number) => {
+      const unit = outlineUnits[flatIndex]
+      if (!unit) return
+      useReaderNavigationStore.getState().syncFlatIndex(flatIndex)
+      const nextPage = Number.parseInt(unit.href, 10)
+      if (Number.isFinite(nextPage) && nextPage >= 1) {
+        jumpToPage(nextPage)
+      }
+    },
+    [jumpToPage, outlineUnits],
+  )
+
+  const goToUnit = useCallback(
+    (unit: ReaderUnit) => {
+      const flatIndex = outlineUnits.findIndex(
+        (item) => item.href === unit.href && item.label === unit.label,
+      )
+      if (flatIndex >= 0) {
+        goToFlatIndex(flatIndex)
+        return
+      }
+      const nextPage = Number.parseInt(unit.href, 10)
+      if (Number.isFinite(nextPage) && nextPage >= 1) {
+        jumpToPage(nextPage)
+      }
+    },
+    [goToFlatIndex, jumpToPage, outlineUnits],
+  )
+
   useLayoutEffect(() => {
     const targetPage = pendingJumpPageRef.current
     if (targetPage === null) return
@@ -342,16 +373,6 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const goNext = useCallback(() => {
     scrollToPage(Math.min(numPages, pageNum + 1), 'smooth')
   }, [numPages, pageNum, scrollToPage])
-
-  const goToUnit = useCallback(
-    (unit: ReaderUnit) => {
-      const nextPage = Number.parseInt(unit.href, 10)
-      if (Number.isFinite(nextPage) && nextPage >= 1) {
-        jumpToPage(nextPage)
-      }
-    },
-    [jumpToPage],
-  )
 
   const handlePageMouseUp = useCallback((pageNumber: number, pageElement: HTMLElement) => {
     window.setTimeout(() => {
@@ -548,8 +569,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
       <ReaderFooterNav
         ready={ready}
-        onPrevious={() => nav.previous && goToUnit(nav.previous)}
-        onNext={() => nav.next && goToUnit(nav.next)}
+        onPrevious={() => nav.previousIndex >= 0 && goToFlatIndex(nav.previousIndex)}
+        onNext={() => nav.nextIndex >= 0 && goToFlatIndex(nav.nextIndex)}
       />
 
       {selectionToolbarPos && selectionSnapshot ? (

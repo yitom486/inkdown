@@ -1,5 +1,6 @@
 import {
-  resolveAdjacentFlatNav,
+  pickReaderNavLevel,
+  resolveReaderChapterNav,
   type AdjacentFlatNavState,
 } from '@/lib/reader-chapter-nav'
 
@@ -54,6 +55,47 @@ export function pickInitialChapter(chapters: EpubChapter[]): EpubChapter | null 
 
 function normalizeHref(href: string): string {
   return href.split('#')[0]?.toLowerCase() ?? href.toLowerCase()
+}
+
+/** 每个 spine 文件对应一条渲染单位（优先无 fragment、层级更浅） */
+export function buildEpubRenderUnits(chapters: EpubChapter[]): EpubChapter[] {
+  const primaryByBase = new Map<string, EpubChapter>()
+
+  for (const chapter of chapters) {
+    if (isTocLikeChapter(chapter)) continue
+    const base = normalizeHref(chapter.href)
+    const existing = primaryByBase.get(base)
+    if (!existing) {
+      primaryByBase.set(base, chapter)
+      continue
+    }
+    const preferCurrent =
+      (!chapter.href.includes('#') && existing.href.includes('#')) ||
+      (!chapter.href.includes('#') &&
+        !existing.href.includes('#') &&
+        chapter.level < existing.level)
+    if (preferCurrent) primaryByBase.set(base, chapter)
+  }
+
+  const units: EpubChapter[] = []
+  const seen = new Set<string>()
+  for (const chapter of chapters) {
+    if (isTocLikeChapter(chapter)) continue
+    const base = normalizeHref(chapter.href)
+    const primary = primaryByBase.get(base)
+    if (primary === chapter && !seen.has(base)) {
+      units.push(chapter)
+      seen.add(base)
+    }
+  }
+  return units
+}
+
+/** 底栏导航粒度：与 spine 渲染单位一致（非三级小节） */
+export function resolveEpubRenderLevel(chapters: EpubChapter[]): number {
+  const renderUnits = buildEpubRenderUnits(chapters)
+  if (renderUnits.length === 0) return pickReaderNavLevel(chapters, isTocLikeChapter)
+  return pickReaderNavLevel(renderUnits, () => false)
 }
 
 function shouldSkipEpubParentAdjacent(current: EpubChapter, candidate: EpubChapter): boolean {
@@ -157,16 +199,16 @@ export function findEpubFlatIndex(
     if (exactIndex >= 0) return exactIndex
   }
 
-  let candidates = collectSameDocumentCandidates(chapters, href)
+  const candidates = collectSameDocumentCandidates(chapters, href)
   if (candidates.length === 0) return -1
   if (candidates.length === 1) return candidates[0]!
 
-  candidates = preferLeafCandidates(chapters, candidates, href)
-
   if (typeof hint.percentage === 'number' && Number.isFinite(hint.percentage)) {
-    return pickCandidateByPercentage(chapters, candidates, hint.percentage)
+    const leafCandidates = preferLeafCandidates(chapters, candidates, href)
+    return pickCandidateByPercentage(chapters, leafCandidates, hint.percentage)
   }
 
+  // 与底部导航同一粒度：同 spine 内按 TOC 顺序取首条，不强行跳到子 fragment
   return pickFirstNavigableCandidate(chapters, candidates)
 }
 
@@ -193,7 +235,7 @@ function resolveFlatIndex(
   )
 }
 
-/** 根据当前 location 在展平 TOC 中解析上一节 / 当前 / 下一节 */
+/** 根据当前 location 在展平 TOC 中解析上一章 / 当前章 / 下一章（渲染粒度） */
 export function resolveChapterNav(
   chapters: EpubChapter[],
   hintOrHref?: EpubLocationHint | string,
@@ -226,9 +268,9 @@ export function resolveChapterNav(
     }
   }
 
-  return resolveAdjacentFlatNav(chapters, resolvedFlatIndex, {
+  const navLevel = resolveEpubRenderLevel(chapters)
+  return resolveReaderChapterNav(chapters, resolvedFlatIndex, navLevel, {
     isTocLike: isTocLikeChapter,
-    getLoadTargetKey: (chapter) => chapter.href,
     shouldSkipAdjacent: shouldSkipEpubParentAdjacent,
   })
 }

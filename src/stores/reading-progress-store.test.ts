@@ -96,5 +96,35 @@ describe('reading-progress-store', () => {
     expect(Object.keys(useReadingProgressStore.getState().mobiByFile)).toHaveLength(0)
     expect(useReadingProgressStore.getState().getPdfProgress('D:\\book\\x.pdf')).toBeUndefined()
   })
+
+  it('相同进度重复写入时不更新 updatedAt（避免 persist 抖动）', () => {
+    const epub = 'D:\\book\\same.epub'
+    const mobi = 'D:\\book\\same.mobi'
+    const pdf = 'D:\\book\\same.pdf'
+
+    useReadingProgressStore.getState().saveEpubProgress(epub, {
+      cfi: 'epubcfi(/6/4)',
+      href: 'ch1.xhtml',
+      percentage: 0.2,
+    })
+    useReadingProgressStore.getState().saveMobiProgress(mobi, { chapterId: 'ch-1' })
+    useReadingProgressStore.getState().savePdfProgress(pdf, { pageNum: 3 })
+
+    const epubFirst = useReadingProgressStore.getState().getEpubProgress(epub)!
+    const mobiFirst = useReadingProgressStore.getState().getMobiProgress(mobi)!
+    const pdfFirst = useReadingProgressStore.getState().getPdfProgress(pdf)!
+
+    useReadingProgressStore.getState().saveEpubProgress(epub, {
+      cfi: 'epubcfi(/6/4)',
+      href: 'ch1.xhtml',
+      percentage: 0.2,
+    })
+    useReadingProgressStore.getState().saveMobiProgress(mobi, { chapterId: 'ch-1' })
+    useReadingProgressStore.getState().savePdfProgress(pdf, { pageNum: 3 })
+
+    expect(useReadingProgressStore.getState().getEpubProgress(epub)).toBe(epubFirst)
+    expect(useReadingProgressStore.getState().getMobiProgress(mobi)).toBe(mobiFirst)
+    expect(useReadingProgressStore.getState().getPdfProgress(pdf)).toBe(pdfFirst)
+  })
 })
 

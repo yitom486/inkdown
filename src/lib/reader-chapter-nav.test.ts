@@ -80,7 +80,9 @@ describe('resolveReaderChapterNav', () => {
     const nav = resolveReaderChapterNav(chapters, 1, 0)
     expect(nav.current?.label).toBe('第一章')
     expect(nav.next?.label).toBe('第二章')
+    expect(nav.nextIndex).toBe(2)
     expect(nav.previous).toBeNull()
+    expect(nav.previousIndex).toBe(-1)
   })
 })
 

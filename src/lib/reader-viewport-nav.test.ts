@@ -15,32 +15,7 @@ import {
 import type { MobiChapterItem } from '@/lib/mobi-navigation'
 import { syncEpubNavigationFromViewport, syncMobiNavigationFromViewport } from '@/lib/reader-navigation-sync'
 
-function mockScrollDocument(
-  html: string,
-  layout: Array<{ selector?: string; id?: string; top: number; height: number }>,
-  scrollTop: number,
-): Document {
-  const document = window.document
-  document.body.innerHTML = html
-
-  const scrollRoot = document.scrollingElement ?? document.documentElement
-  Object.defineProperty(scrollRoot, 'clientHeight', { configurable: true, value: 800 })
-  Object.defineProperty(scrollRoot, 'scrollTop', { configurable: true, value: scrollTop, writable: true })
-
-  for (const item of layout) {
-    const element = item.id
-      ? document.getElementById(item.id)
-      : item.selector
-        ? document.querySelector(item.selector)
-        : null
-    if (!element || !(element instanceof HTMLElement)) continue
-    Object.defineProperty(element, 'offsetTop', { configurable: true, value: item.top })
-    Object.defineProperty(element, 'offsetHeight', { configurable: true, value: item.height })
-  }
-
-  return document
-}
-
+import { mockRelativeOffsetTop, mockScrollDocument, mockScrollRoot } from '@/lib/reader-viewport-test-helpers'
 describe('isHeadingLabelMatch', () => {
   it('短标签「小结」不得模糊匹配「讨论与小结」', () => {
     expect(isHeadingLabelMatch('小结', '讨论与小结')).toBe(false)
@@ -96,7 +71,7 @@ describe('reader-viewport-nav（跨格式）', () => {
       expect(nav.current?.label).not.toBe('小结')
     })
 
-    it('滚过导言标题线后才切到研究策略（当前节仍在视口时不误切）', () => {
+    it('滚过导言标题线后才切到研究策略', () => {
       const document = mockScrollDocument(
         `
           <section id="preface"><h2>导言</h2><p>正文</p></section>
@@ -113,20 +88,85 @@ describe('reader-viewport-nav（跨格式）', () => {
       expect(introChapters[1]?.label).toBe('研究策略')
     })
 
-    it('导言仍在激活线处时保持导言，不因底部瞄到研究策略而切换', () => {
+    it('导言仍在激活线处时保持导言，不因下方 fragment 提前切换', () => {
       const document = mockScrollDocument(
         `
           <h2>导言</h2><p>${'正文。'.repeat(80)}</p>
-          <h2>研究策略</h2>
+          <h2 id="strategy">研究策略</h2>
         `,
         [
           { selector: 'h2:first-of-type', top: 0, height: 48 },
-          { selector: 'h2:last-of-type', top: 1400, height: 48 },
+          { id: 'strategy', top: 1400, height: 48 },
         ],
         1100,
       )
 
       expect(findEpubFlatIndexFromViewport(introChapters, document, 'intro.html')).toBe(0)
+    })
+
+    it('章首视口时底栏为「第一章」，下一章非同页子节', () => {
+      const chapters = flattenEpubToc([
+        {
+          label: '第一部分 进入清朝权贵圈的西洋人',
+          href: 'part1.html',
+          subitems: [
+            {
+              label: '第一章 佟家的奴才',
+              href: 'ch1.html',
+              subitems: [
+                { label: '战场上的俘虏', href: 'ch1.html#prisoners' },
+                { label: '康熙母亲的娘家', href: 'ch1.html#family' },
+              ],
+            },
+            { label: '第二章', href: 'ch2.html' },
+          ],
+        },
+      ])
+
+      const document = mockScrollDocument(
+        `
+          <h1>第一章 佟家的奴才</h1>
+          <p>${'正文。'.repeat(40)}</p>
+          <h2 id="prisoners">战场上的俘虏</h2>
+        `,
+        [
+          { selector: 'h1', top: 0, height: 48 },
+          { id: 'prisoners', top: 400, height: 40 },
+        ],
+        0,
+      )
+
+      const nav = syncEpubNavigationFromViewport(chapters, document, 'ch1.html')
+      expect(nav.current?.label).toContain('第一章')
+      expect(nav.current?.label).not.toBe('战场上的俘虏')
+      expect(nav.next?.label).toBe('第二章')
+    })
+
+    it('嵌套容器内标题：offsetTop=0 但 getBoundingClientRect 在视口内仍识别章标题', () => {
+      const chapters = flattenEpubToc([
+        { label: '第一章 佟家的奴才', href: 'ch1.html' },
+        { label: '战场上的俘虏', href: 'ch1.html#prisoners' },
+      ])
+
+      const document = mockScrollDocument(
+        `
+          <div id="wrap"><h1>第一章 佟家的奴才</h1></div>
+          <h2 id="prisoners">战场上的俘虏</h2>
+        `,
+        [
+          { id: 'wrap', top: 120, height: 48 },
+          { id: 'prisoners', top: 2400, height: 40 },
+        ],
+        120,
+      )
+      const h1 = document.querySelector('h1')
+      if (h1 instanceof HTMLElement) {
+        mockRelativeOffsetTop(h1, 0, 48)
+      }
+
+      const nav = syncEpubNavigationFromViewport(chapters, document, 'ch1.html')
+      expect(nav.current?.label).toContain('第一章')
+      expect(nav.current?.label).not.toBe('战场上的俘虏')
     })
   })
 
@@ -153,7 +193,8 @@ describe('reader-viewport-nav（跨格式）', () => {
       )
 
       const nav = syncMobiNavigationFromViewport(chapters, document, '1')
-      expect(nav.current?.label).toBe('研究策略')
+      expect(chapters[nav.flatIndex]?.label).toBe('研究策略')
+      expect(nav.current?.label).toBe('导言')
     })
 
     it('「小结」不得误匹配含小结字样的长标题', () => {

@@ -135,17 +135,36 @@ function getRenditionContents(rendition: EpubRenditionLike): EpubRenditionConten
   return (Array.isArray(raw) ? raw : raw ? [raw] : []) as EpubRenditionContents[]
 }
 
+export function scrollEpubChapterToEntry(
+  document: Document,
+  chapter: EpubChapter,
+  options?: { behavior?: ScrollBehavior },
+): boolean {
+  if (chapter.href.includes('#')) {
+    return scrollEpubChapterToFragment(document, chapter, options)
+  }
+  return scrollToViewportEntry(
+    document,
+    {
+      flatIndex: -1,
+      label: chapter.label,
+      loadKey: normalizeLoadKey(chapter.href),
+    },
+    options,
+  )
+}
+
 export function scrollEpubChapterInRendition(
   rendition: EpubRenditionLike,
   chapter: EpubChapter,
 ): boolean {
   const targetBase = normalizeLoadKey(chapter.href)
   const currentBase = normalizeLoadKey(resolveSpineHrefFromRendition(rendition) ?? '')
-  if (!chapter.href.includes('#') || !targetBase || targetBase !== currentBase) return false
+  if (!targetBase || targetBase !== currentBase) return false
 
   for (const contents of getRenditionContents(rendition)) {
     if (!contents.document) continue
-    if (scrollEpubChapterToFragment(contents.document, chapter)) return true
+    if (scrollEpubChapterToEntry(contents.document, chapter, { behavior: 'auto' })) return true
   }
 
   return false

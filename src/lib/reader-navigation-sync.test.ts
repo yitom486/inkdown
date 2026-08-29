@@ -29,28 +29,25 @@ function buildGovernanceMonolithicToc() {
   ])
 }
 
-function buildGovernanceChapterDocument(): Document {
+import { mockRelativeOffsetTop, mockScrollRoot } from '@/lib/reader-viewport-test-helpers'
+
+function buildGovernanceChapterDocument(scrollTop = 0): Document {
   const document = window.document
   document.body.innerHTML = `
     <section id="unit1"><h1>第一单元</h1></section>
     <section id="chapter2"><h2>第2章 国家治理逻辑与中国官僚制</h2><p>正文…</p></section>
     <section id="summary"><h3>讨论与小结</h3><p>小结…</p></section>
   `
-
-  const scrollRoot = document.scrollingElement ?? document.documentElement
-  Object.defineProperty(scrollRoot, 'clientHeight', { configurable: true, value: 800 })
-  Object.defineProperty(scrollRoot, 'scrollTop', { configurable: true, value: 0, writable: true })
-
+  mockScrollRoot(document, scrollTop)
+  const scrollRoot = document.scrollingElement as HTMLElement
   for (const [id, top] of [
     ['unit1', 0],
     ['chapter2', 1200],
     ['summary', 4800],
   ] as const) {
     const element = document.getElementById(id)
-    if (!element) continue
-    Object.defineProperty(element, 'offsetTop', { configurable: true, value: top })
+    if (element instanceof HTMLElement) mockRelativeOffsetTop(element, top, 40)
   }
-
   return document
 }
 
@@ -65,39 +62,36 @@ describe('reader-navigation-sync', () => {
   describe('EPUB scrolled-doc 状态不同步回归', () => {
     const chapters = buildGovernanceMonolithicToc()
 
-    it('视口在第2章时，统一同步层应显示第2章', () => {
-      const document = buildGovernanceChapterDocument()
-      const scrollRoot = document.scrollingElement ?? document.documentElement
-      scrollRoot.scrollTop = 900
+    it('视口在第2章时，底栏显示所属单元，下一章为第3章', () => {
+      const document = buildGovernanceChapterDocument(900)
 
       const nav = syncEpubNavigationFromViewport(chapters, document, 'text00002.html')
-      expect(nav.current?.label).toBe('第2章 国家治理逻辑')
-      expect(nav.next?.label).toBe('讨论与小结')
+      expect(nav.current?.label).toBe('第一单元')
+      expect(nav.next?.label).toBe('第3章 控制权理论')
     })
 
     it('全书百分比 hint 与视口不一致时，视口同步优先（防止底部显示讨论与小结）', () => {
-      const document = buildGovernanceChapterDocument()
-      const scrollRoot = document.scrollingElement ?? document.documentElement
-      scrollRoot.scrollTop = 900
+      const document = buildGovernanceChapterDocument(900)
 
       const hintNav = syncEpubNavigation(chapters, {
         href: 'text00002.html',
         percentage: 0.9,
       })
-      expect(hintNav.current?.label).toBe('讨论与小结')
+      expect(hintNav.current?.label).toBe('第一单元')
+      expect(chapters[hintNav.flatIndex]?.label).toBe('讨论与小结')
 
       const viewportNav = syncEpubNavigationFromRendition(
         chapters,
         mockEpubRendition(document, 'text00002.html'),
       )
-      expect(viewportNav.current?.label).toBe('第2章 国家治理逻辑')
-      expect(viewportNav.current?.label).not.toBe(hintNav.current?.label)
+      expect(viewportNav.current?.label).toBe('第一单元')
+      expect(chapters[viewportNav.flatIndex]?.label).toBe('第2章 国家治理逻辑')
+      expect(chapters[hintNav.flatIndex]?.label).toBe('讨论与小结')
+      expect(viewportNav.flatIndex).not.toBe(hintNav.flatIndex)
     })
 
     it('syncEpubNavigationFromRendition 与 scroll 视口结果一致', () => {
-      const document = buildGovernanceChapterDocument()
-      const scrollRoot = document.scrollingElement ?? document.documentElement
-      scrollRoot.scrollTop = 900
+      const document = buildGovernanceChapterDocument(900)
 
       const fromScroll = syncEpubNavigationFromViewport(chapters, document, 'text00002.html')
       const fromRendition = syncEpubNavigationFromRendition(
@@ -110,9 +104,7 @@ describe('reader-navigation-sync', () => {
     })
 
     it('工具栏/底部/侧栏共用 flatIndex：视口锚点与 resolveChapterNav 一致', () => {
-      const document = buildGovernanceChapterDocument()
-      const scrollRoot = document.scrollingElement ?? document.documentElement
-      scrollRoot.scrollTop = 900
+      const document = buildGovernanceChapterDocument(900)
 
       const flatIndex = findEpubFlatIndexFromViewport(chapters, document, 'text00002.html')
       const nav = resolveChapterNav(chapters, undefined, flatIndex)
@@ -141,18 +133,18 @@ describe('reader-navigation-sync', () => {
   })
 
   describe('三格式统一同步入口', () => {
-    it('MOBI 通过 syncMobiNavigation 解析最小目录步进', () => {
+    it('MOBI 通过 syncMobiNavigation 解析 spine 级底栏', () => {
       const chapters: MobiChapterItem[] = [
         { id: '0', label: '目录', level: 0 },
         { id: '1', label: '第一章', level: 0 },
-        { id: '2', label: '一、小引', level: 1 },
-        { id: '3', label: '第二章', level: 0 },
+        { id: '1', label: '一、小引', level: 1 },
+        { id: '2', label: '第二章', level: 0 },
       ]
 
       const nav = syncMobiNavigation(chapters, undefined, 2)
-      expect(nav.current?.label).toBe('一、小引')
+      expect(nav.current?.label).toBe('第一章')
       expect(nav.next?.label).toBe('第二章')
-      expect(nav.previous?.label).toBe('第一章')
+      expect(nav.previous).toBeNull()
     })
 
     it('PDF 通过 syncPdfNavigation 按页码解析大纲', () => {
@@ -175,18 +167,16 @@ describe('reader-navigation-sync', () => {
 
       const document = window.document
       document.body.innerHTML = `<h2>导言</h2><h2>研究策略</h2>`
-      const scrollRoot = document.scrollingElement ?? document.documentElement
-      Object.defineProperty(scrollRoot, 'clientHeight', { configurable: true, value: 800 })
-      Object.defineProperty(scrollRoot, 'scrollTop', { configurable: true, value: 900, writable: true })
-
+      mockScrollRoot(document, 900)
+      const scrollRoot = document.scrollingElement as HTMLElement
       const headings = document.querySelectorAll('h2')
-      Object.defineProperty(headings[0]!, 'offsetTop', { configurable: true, value: 0 })
-      Object.defineProperty(headings[0]!, 'offsetHeight', { configurable: true, value: 600 })
-      Object.defineProperty(headings[1]!, 'offsetTop', { configurable: true, value: 850 })
-      Object.defineProperty(headings[1]!, 'offsetHeight', { configurable: true, value: 300 })
+      mockRelativeOffsetTop(headings[0] as HTMLElement, 0, 600)
+      mockRelativeOffsetTop(headings[1] as HTMLElement, 850, 300)
 
       const nav = syncMobiNavigationFromViewport(chapters, document, '1')
-      expect(nav.current?.label).toBe('研究策略')
+      expect(chapters[nav.flatIndex]?.label).toBe('研究策略')
+      expect(nav.current?.label).toBe('导言')
+      expect(nav.next).toBeNull()
     })
   })
 })

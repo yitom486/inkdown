@@ -101,7 +101,14 @@ export function syncMobiNavigation(
 
 export function syncPdfNavigation(
   units: ReaderUnit[],
-  pageNum: number,
+  pageNum?: number,
+  flatIndex?: number,
 ): AdjacentFlatNavState<ReaderUnit> {
-  return resolveChapterNav(units, String(pageNum))
+  if (typeof flatIndex === 'number' && flatIndex >= 0 && flatIndex < units.length) {
+    return resolveChapterNav(units, undefined, flatIndex)
+  }
+  if (typeof pageNum === 'number' && Number.isFinite(pageNum)) {
+    return resolveChapterNav(units, String(pageNum))
+  }
+  return EMPTY_READER_NAV
 }

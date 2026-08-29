@@ -213,20 +213,29 @@ EPUB / MOBI / PDF 阅读器中，**工具栏当前标题、底部上一节/下�
 
 ### 渲染分块 vs 导航分块（跨格式）
 
-电子书渲染按 **loadKey**（EPUB spine 文件 / MOBI·AZW3 章节 id）连续灌入 iframe，导航按 **TOC flatIndex** 切片。二者粒度不同是常态，**必须用同一套视口 scroll-spy 对齐**，禁止各格式各写一套：
+电子书渲染按 **loadKey**（EPUB spine 文件 / MOBI·AZW3 章节 id）连续灌入 iframe；**侧栏与视口**按展平 TOC **flatIndex**（含三级小节）定位；**底栏上一章/下一章**必须与 loadKey 渲染单位一致，禁止把三级小节当作独立翻页单元：
+
+| 功能 | 数据粒度 | 实现 |
+|------|----------|------|
+| 侧栏目录 / 视口高亮 | 展平 TOC 全层级 | `flattenEpubToc` / `units[nav.flatIndex]` |
+| 底栏 / 工具栏 current·previous·next | spine 渲染单位 | EPUB：`buildEpubRenderUnits` + `resolveReaderChapterNav`；MOBI：按 `chapter.id` 步进 |
+| 侧栏点击三级小节 | flatIndex | 同 spine 内滚动到 fragment / 标题锚点 |
 
 | 层 | 路径 | 职责 |
 |----|------|------|
 | 视口算法（共享） | `src/lib/reader-viewport-nav.ts` | `findFlatIndexFromViewport` / `scrollToViewportEntry` |
 | 格式适配 | `src/lib/epub-scroll-toc.ts` | EPUB fragment + MOBI 标题锚点 → `ViewportNavEntry[]` |
+| 底栏解析 | `src/lib/epub-navigation.ts` / `mobi-navigation.ts` | `resolveChapterNav` / `resolveMobiChapterNav` |
 | 同步入口 | `src/lib/reader-navigation-sync.ts` | `syncEpub*Viewport` / `syncMobiNavigationFromViewport` |
-| 状态 | `reader-navigation-store` | 工具栏 / 底部 / 侧栏唯一数据源 |
+| 状态 | `reader-navigation-store` | `nav.flatIndex` = 视口位置；`nav.current/next` = 渲染级章节 |
 
-- **MOBI / AZW3** 与 EPUB 相同问题：多个 TOC 项共用同一 `chapter.id`，同 spine 内点「下一节」须 **滚到标题锚点**，不得仅 `loadChapter` 因 id 相同而 early-return
-- **视口同步优先可见标题**：激活线处 `h1–h6` 与 TOC 标签匹配为准；**短标签（≤3 字如「小结」）仅精确匹配**，禁止模糊命中「讨论与小结」
+- **MOBI / AZW3** 同 spine 多 TOC：底栏 `findNextDistinctLoadTarget` 跳 **不同 id**；侧栏 / 目录点击三级项在同 id 内滚动
+- **视口同步优先可见标题**：激活线处 `h1–h6` 与 TOC 标签匹配为准；**短标签（≤3 字如「小结」）仅精确匹配**
 - **禁止用全书 percentage 回退导航**（`relocated` 无视口时只用 spine href），percentage 只用于进度环/持久化
-- **PDF** 按页码定位，无同 HTML 多节问题；保持 `syncPdf` 即可
-- 新增连续滚动格式时，先扩展 `ViewportNavEntry` 构建，再接入 store；**不得**在 Viewer 内单独写 nav 本地 state
+- **PDF** 底栏按大纲渲染级（`pickReaderNavLevel`）；侧栏仍用 flatIndex
+- **store.units 粒度**：EPUB / MOBI 存展平 TOC 原条目，禁止 MOBI 写入伪条目导致 flatIndex 错位
+- **回归测试（强制）**：`src/lib/reader-nav-granularity.test.ts` 覆盖三格式——底栏为章、侧栏可为小节、intent 锁；改导航须跑 `bun run test`
+- 新增连续滚动格式时，先扩展 `ViewportNavEntry`，再区分侧栏 flatIndex 与底栏 render unit；**不得**在 Viewer 内单独写 nav 本地 state
 
 ### Zustand 选择器与无限重渲染（强制）
 

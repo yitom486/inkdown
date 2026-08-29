@@ -78,6 +78,23 @@ function resolveScrollRoot(document: Document): HTMLElement {
   return (document.scrollingElement ?? document.documentElement) as HTMLElement
 }
 
+/** 相对滚动根的文档坐标（沿 parentElement 累加 offsetTop，兼容嵌套 EPUB） */
+export function resolveElementScrollTop(element: HTMLElement, scrollRoot: HTMLElement): number {
+  let top = 0
+  let node: HTMLElement | null = element
+
+  while (node && node !== scrollRoot) {
+    top += node.offsetTop
+    node = node.parentElement
+  }
+
+  if (node === scrollRoot) return top
+
+  const elementRect = element.getBoundingClientRect()
+  const rootRect = scrollRoot.getBoundingClientRect()
+  return elementRect.top - rootRect.top + scrollRoot.scrollTop
+}
+
 function filterEntriesForLoadKey(entries: ViewportNavEntry[], loadKey: string): ViewportNavEntry[] {
   const base = normalizeLoadKey(loadKey)
   return entries.filter((entry) => normalizeLoadKey(entry.loadKey) === base)
@@ -88,6 +105,9 @@ function findPrimaryVisibleHeading(
   scrollTop: number,
   activationLine: number,
 ): HTMLElement | null {
+  const scrollRoot = resolveScrollRoot(document)
+  const bandTop = scrollTop - 8
+  const bandBottom = scrollTop + activationLine
   let best: HTMLElement | null = null
   let bestTop = -Infinity
 
@@ -96,14 +116,65 @@ function findPrimaryVisibleHeading(
     const text = normalizeHeadingText(node.textContent ?? '')
     if (text.length < 2) continue
 
-    const top = node.offsetTop
-    if (top <= scrollTop + activationLine && top > bestTop) {
+    const top = resolveElementScrollTop(node, scrollRoot)
+    if (top < bandTop - 8 || top > bandBottom) continue
+    if (top > bestTop) {
       bestTop = top
       best = node
     }
   }
 
   return best
+}
+
+function findHighestAnchorBeforeActivation(
+  candidates: ViewportNavEntry[],
+  document: Document,
+  activationY: number,
+): { flatIndex: number; top: number; hasFragment: boolean } | null {
+  const scrollRoot = resolveScrollRoot(document)
+  let activeIndex = -1
+  let activeTop = -Infinity
+  let hasFragment = false
+
+  for (const entry of candidates) {
+    const element = findViewportEntryAnchor(document, entry)
+    if (!element) continue
+    const top = resolveElementScrollTop(element, scrollRoot)
+    if (top <= activationY && top > activeTop) {
+      activeTop = top
+      activeIndex = entry.flatIndex
+      hasFragment = Boolean(entry.fragment)
+    }
+  }
+
+  if (activeIndex < 0) return null
+  return { flatIndex: activeIndex, top: activeTop, hasFragment }
+}
+
+function findNearestAnchorBelowActivation(
+  candidates: ViewportNavEntry[],
+  document: Document,
+  activationY: number,
+): { flatIndex: number; distance: number } | null {
+  const scrollRoot = resolveScrollRoot(document)
+  let nearestIndex = -1
+  let nearestDistance = Number.POSITIVE_INFINITY
+
+  for (const entry of candidates) {
+    const element = findViewportEntryAnchor(document, entry)
+    if (!element) continue
+    const top = resolveElementScrollTop(element, scrollRoot)
+    if (top <= activationY) continue
+    const distance = top - activationY
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearestIndex = entry.flatIndex
+    }
+  }
+
+  if (nearestIndex < 0) return null
+  return { flatIndex: nearestIndex, distance: nearestDistance }
 }
 
 function matchEntryByVisibleHeading(
@@ -127,8 +198,10 @@ function matchEntryByVisibleHeading(
 }
 
 /**
- * 视口 scroll-spy：激活线处可见标题 > fragment 锚点 > 无锚点回退首条。
- * 不做「底部瞄到下一节就切换」——当前节仍在视口主体时必须保持。
+ * 视口 scroll-spy：与底部导航同一粒度（TOC flatIndex）。
+ * 1. 激活带内可见标题（须在视口内，非已滚走的页顶 h1）
+ * 2. 最高 fragment/锚点 ≤ 激活线
+ * 3. 仅当已滚过父级且无带内标题时，才提升到近距子 fragment
  */
 export function findFlatIndexFromViewport(
   document: Document,
@@ -144,57 +217,8 @@ export function findFlatIndexFromViewport(
   const scrollTop = scrollRoot.scrollTop
   const activationY = scrollTop + activationLine
 
-  const hasFragmentEntry = scoped.some((entry) => entry.fragment)
   const withAnchor = scoped.filter((entry) => findViewportEntryAnchor(document, entry) !== null)
   const candidates = withAnchor.length > 0 ? withAnchor : scoped
-
-  if (hasFragmentEntry) {
-    let activeIndex = candidates[0]!.flatIndex
-    let activeTop = -Infinity
-
-    for (const entry of candidates) {
-      const element = findViewportEntryAnchor(document, entry)
-      if (!element) continue
-      const top = element.offsetTop
-      if (top <= activationY && top > activeTop) {
-        activeTop = top
-        activeIndex = entry.flatIndex
-      }
-    }
-
-    let nearestBelowIndex = -1
-    let nearestBelowDistance = Number.POSITIVE_INFINITY
-    for (const entry of candidates) {
-      const element = findViewportEntryAnchor(document, entry)
-      if (!element) continue
-      const top = element.offsetTop
-      if (top <= activationY) continue
-      const distance = top - activationY
-      if (distance < nearestBelowDistance) {
-        nearestBelowDistance = distance
-        nearestBelowIndex = entry.flatIndex
-      }
-    }
-
-    if (activeTop === -Infinity && nearestBelowIndex >= 0) {
-      return nearestBelowIndex
-    }
-
-    // 无 fragment 的父级标题在顶、正文已进入同页下一 fragment 节（如「第一单元」→「第2章」）
-    const activeEntry = candidates.find((entry) => entry.flatIndex === activeIndex)
-    if (
-      activeEntry &&
-      !activeEntry.fragment &&
-      activeTop >= 0 &&
-      activeTop <= activationLine &&
-      nearestBelowIndex >= 0 &&
-      nearestBelowDistance < viewportHeight * 0.45
-    ) {
-      return nearestBelowIndex
-    }
-
-    return activeIndex
-  }
 
   const visibleHeading = findPrimaryVisibleHeading(document, scrollTop, activationLine)
   if (visibleHeading) {
@@ -202,20 +226,25 @@ export function findFlatIndexFromViewport(
     if (fromHeading >= 0) return fromHeading
   }
 
-  let activeIndex = candidates[0]!.flatIndex
-  let activeTop = -Infinity
+  const highest = findHighestAnchorBeforeActivation(candidates, document, activationY)
+  const nearestBelow = findNearestAnchorBelowActivation(candidates, document, activationY)
 
-  for (const entry of candidates) {
-    const element = findViewportEntryAnchor(document, entry)
-    if (!element) continue
-    const top = element.offsetTop
-    if (top <= activationY && top > activeTop) {
-      activeTop = top
-      activeIndex = entry.flatIndex
-    }
+  if (!highest) {
+    return nearestBelow?.flatIndex ?? candidates[0]!.flatIndex
   }
 
-  return activeIndex
+  const activeEntry = candidates.find((entry) => entry.flatIndex === highest.flatIndex)
+  if (
+    activeEntry &&
+    !activeEntry.fragment &&
+    scrollTop > highest.top + activationLine &&
+    nearestBelow &&
+    nearestBelow.distance < viewportHeight * 0.45
+  ) {
+    return nearestBelow.flatIndex
+  }
+
+  return highest.flatIndex
 }
 
 export function scrollToViewportEntry(
@@ -228,7 +257,7 @@ export function scrollToViewportEntry(
 
   const behavior = options?.behavior ?? 'smooth'
   const scrollRoot = resolveScrollRoot(document)
-  const top = element.offsetTop
+  const top = resolveElementScrollTop(element, scrollRoot)
 
   element.scrollIntoView({ behavior, block: 'start' })
   scrollRoot.scrollTo({ top, behavior })

@@ -71,6 +71,9 @@ export const useEditorUiStore = create<EditorUiStore>()(
 
       setViewMode: (filePath, mode) => {
         const key = resolveFileKey(filePath)
+        const prev = get().fileStates[key]
+        if (prev?.viewMode === mode) return
+
         set((state) => ({
           fileStates: {
             ...state.fileStates,
@@ -84,6 +87,15 @@ export const useEditorUiStore = create<EditorUiStore>()(
 
       saveScrollState: (filePath, editorScrollRatio, previewScrollRatio) => {
         const key = resolveFileKey(filePath)
+        const prev = get().fileStates[key]
+        if (
+          prev &&
+          prev.editorScrollRatio === editorScrollRatio &&
+          prev.previewScrollRatio === previewScrollRatio
+        ) {
+          return
+        }
+
         set((state) => ({
           fileStates: {
             ...state.fileStates,

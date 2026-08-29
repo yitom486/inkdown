@@ -16,6 +16,18 @@ import type { AdjacentFlatNavState } from '@/lib/reader-chapter-nav'
 import { encodeMobiTocHref } from '@/lib/mobi-navigation'
 import type { ReaderUnit } from '@/lib/reader-navigation'
 
+/** 用户点击上一节/下一节/目录后，视口同步不得立即覆盖 intent flatIndex */
+export const NAV_INTENT_LOCK_MS = 2500
+
+interface NavIntent {
+  flatIndex: number
+  lockedUntil: number
+}
+
+export function isNavIntentLocked(intent: NavIntent | null, now = Date.now()): boolean {
+  return intent !== null && now < intent.lockedUntil
+}
+
 function isSameNav(
   a: AdjacentFlatNavState<ReaderUnit>,
   b: AdjacentFlatNavState<ReaderUnit>,
@@ -44,6 +56,7 @@ interface ReaderNavigationStore {
   format: ReaderFormat | null
   units: ReaderNavUnit[]
   nav: AdjacentFlatNavState<ReaderUnit>
+  navIntent: NavIntent | null
   ready: boolean
   beginSession: (filePath: string, format: ReaderFormat) => void
   setUnits: (units: ReaderNavUnit[]) => void
@@ -55,6 +68,7 @@ interface ReaderNavigationStore {
   syncMobiViewport: (units: MobiChapterItem[], document: Document, chapterId: string) => void
   syncPdf: (units: ReaderUnit[], pageNum: number) => void
   syncFlatIndex: (flatIndex: number) => void
+  clearNavIntent: () => void
 }
 
 export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get) => ({
@@ -62,6 +76,7 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
   format: null,
   units: [],
   nav: EMPTY_READER_NAV,
+  navIntent: null,
   ready: false,
 
   beginSession: (filePath, format) => {
@@ -70,6 +85,7 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
       format,
       units: [],
       nav: EMPTY_READER_NAV,
+      navIntent: null,
       ready: false,
     })
   },
@@ -92,16 +108,18 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
   },
 
   syncEpubViewport: (units, document, spineHref) => {
-    const nav = syncEpubNavigationFromViewport(units, document, spineHref)
     const prev = get()
+    if (isNavIntentLocked(prev.navIntent)) return
+    const nav = syncEpubNavigationFromViewport(units, document, spineHref)
     if (prev.format === 'epub' && isSameNav(prev.nav, nav)) return
     set({ units, format: 'epub', nav })
   },
 
   syncEpubRendition: (units, rendition) => {
+    const prev = get()
+    if (isNavIntentLocked(prev.navIntent)) return
     const nav = syncEpubNavigationFromRendition(units, rendition)
     if (nav.flatIndex < 0) return
-    const prev = get()
     if (prev.format === 'epub' && isSameNav(prev.nav, nav)) return
     set({ units, format: 'epub', nav })
   },
@@ -110,19 +128,25 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
     const nav = syncMobiNavigation(units, chapterId, flatIndex)
     const prev = get()
     if (prev.format === 'mobi' && isSameNav(prev.nav, nav)) return
-    set({ units, format: 'mobi', nav })
+    const nextIntent =
+      typeof flatIndex === 'number' && flatIndex >= 0
+        ? { flatIndex, lockedUntil: Date.now() + NAV_INTENT_LOCK_MS }
+        : prev.navIntent
+    set({ units, format: 'mobi', nav, navIntent: nextIntent })
   },
 
   syncMobiViewport: (units, document, chapterId) => {
-    const nav = syncMobiNavigationFromViewport(units, document, chapterId)
     const prev = get()
+    if (isNavIntentLocked(prev.navIntent)) return
+    const nav = syncMobiNavigationFromViewport(units, document, chapterId)
     if (prev.format === 'mobi' && isSameNav(prev.nav, nav)) return
     set({ units, format: 'mobi', nav })
   },
 
   syncPdf: (units, pageNum) => {
-    const nav = syncPdfNavigation(units, pageNum)
     const prev = get()
+    if (isNavIntentLocked(prev.navIntent)) return
+    const nav = syncPdfNavigation(units, pageNum)
     if (prev.format === 'pdf' && prev.units === units && isSameNav(prev.nav, nav)) return
     set({ units, format: 'pdf', nav })
   },
@@ -134,22 +158,41 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
     const nav =
       format === 'mobi'
         ? syncMobiNavigation(units as MobiChapterItem[], undefined, flatIndex)
-        : syncEpubNavigation(units as EpubChapter[], undefined, flatIndex)
+        : format === 'pdf'
+          ? syncPdfNavigation(units as ReaderUnit[], undefined, flatIndex)
+          : syncEpubNavigation(units as EpubChapter[], undefined, flatIndex)
 
-    if (isSameNav(prevNav, nav)) return
-    set({ nav })
+    if (isSameNav(prevNav, nav)) {
+      set({
+        navIntent: { flatIndex, lockedUntil: Date.now() + NAV_INTENT_LOCK_MS },
+      })
+      return
+    }
+    set({
+      nav,
+      navIntent: { flatIndex, lockedUntil: Date.now() + NAV_INTENT_LOCK_MS },
+    })
+  },
+
+  clearNavIntent: () => {
+    if (get().navIntent === null) return
+    set({ navIntent: null })
   },
 }))
 
 export function selectReaderNavTitles(state: {
   nav: AdjacentFlatNavState<ReaderUnit>
   format: ReaderFormat | null
+  units: ReaderNavUnit[]
 }) {
-  const { nav, format } = state
+  const { nav, format, units } = state
+  const viewportUnit = nav.flatIndex >= 0 ? units[nav.flatIndex] : undefined
   const currentUnitId =
     format === 'mobi' && nav.flatIndex >= 0
       ? encodeMobiTocHref(nav.flatIndex)
-      : nav.current?.href
+      : viewportUnit && 'href' in viewportUnit
+        ? viewportUnit.href
+        : nav.current?.href
 
   // 只返回原始值：勿带 nav 对象，否则浅比较失效
   return {
