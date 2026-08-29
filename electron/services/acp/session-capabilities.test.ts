@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseLoadSessionSupported,
+  parsePromptCapabilities,
   parseResumeSessionSupported,
 } from './session-capabilities'
 
@@ -23,5 +24,11 @@ describe('session capabilities', () => {
     ).toBe(true)
     expect(parseResumeSessionSupported({ sessionCapabilities: {} })).toBe(false)
     expect(parseResumeSessionSupported({})).toBe(false)
+  })
+
+  it('parses promptCapabilities.image', () => {
+    expect(parsePromptCapabilities({ promptCapabilities: { image: true } }).image).toBe(true)
+    expect(parsePromptCapabilities({ promptCapabilities: {} }).image).toBe(false)
+    expect(parsePromptCapabilities({}).image).toBeUndefined()
   })
 })

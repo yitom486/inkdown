@@ -1,9 +1,10 @@
 import type { AcpToolCallKind, AcpToolCallStatus } from '@shared/types/acp'
 import type { AcpPlanEntry } from '@/lib/acp-plan'
+import type { AcpMessageAttachment } from '@/lib/acp-composer'
 
 export type AcpChatRole = 'user' | 'agent' | 'thought' | 'tool' | 'plan' | 'system'
 
-export type { AcpPlanEntry }
+export type { AcpPlanEntry, AcpMessageAttachment }
 
 export interface AcpToolDiff {
   path: string
@@ -18,6 +19,8 @@ export interface AcpChatMessage {
   createdAt: number
   updatedAt?: number
   streaming?: boolean
+  /** 用户消息附件摘要（不含 base64） */
+  attachments?: AcpMessageAttachment[]
   /** tool 卡片字段 */
   toolCallId?: string
   toolKind?: AcpToolCallKind | string

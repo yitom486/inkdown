@@ -2,7 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { DEFAULT_ACP_RUNTIME_ID } from '@shared/constants/acp-agents'
-import type { AcpConfigOption, AcpConnectionStatus } from '@shared/types/acp'
+import type {
+  AcpConfigOption,
+  AcpConnectionStatus,
+  AcpPromptCapabilities,
+} from '@shared/types/acp'
 import {
   type AcpChatMessage,
   type AcpChatRole,
@@ -12,6 +16,7 @@ import {
   parseToolDiffs,
   parseToolLocations,
 } from '@/stores/acp-chat-types'
+import type { AcpMessageAttachment } from '@/lib/acp-composer'
 import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/acp-plan'
 import { pruneIntermediateAgentReplies } from '@/lib/acp-prune-agent-replies'
 import {
@@ -57,6 +62,8 @@ interface AcpUiStore {
   statusError?: string
   configOptions: AcpConfigOption[]
   prompting: boolean
+  /** 当前连接 Agent 的 prompt 能力（不持久化） */
+  promptCapabilities: AcpPromptCapabilities
   threads: AcpChatThread[]
   activeThreadId: string
   historyOpen: boolean
@@ -74,6 +81,7 @@ interface AcpUiStore {
   setStatus: (status: AcpConnectionStatus, errorMessage?: string) => void
   setSession: (sessionId: string | null, configOptions?: AcpConfigOption[]) => void
   setConfigOptions: (options: AcpConfigOption[]) => void
+  setPromptCapabilities: (caps: AcpPromptCapabilities) => void
   setPrompting: (prompting: boolean) => void
   rememberConfigPreference: (
     runtimeId: string,
@@ -84,7 +92,7 @@ interface AcpUiStore {
   /** 把 permission 请求里的 toolCall 写入时间线，保证审批卡能挂上工具气泡 */
   ingestPermissionRequest: (pending: AcpPendingPermission) => void
   clearPendingPermission: (requestId?: number) => void
-  appendUserMessage: (text: string) => void
+  appendUserMessage: (text: string, attachments?: AcpMessageAttachment[]) => void
   appendSystemMessage: (text: string) => void
   beginAgentReply: () => void
   clearMessages: () => void
@@ -114,16 +122,29 @@ function createEmptyThread(workspaceRoot?: string): AcpChatThread {
 }
 
 function titleFromMessages(messages: AcpChatMessage[]): string {
-  const user = messages.find((m) => m.role === 'user' && m.text.trim())
+  const user = messages.find(
+    (m) => m.role === 'user' && (m.text.trim() || (m.attachments?.length ?? 0) > 0),
+  )
   if (!user) return '新对话'
   const t = user.text.replace(/\s+/g, ' ').trim()
-  return t.length > 36 ? `${t.slice(0, 36)}…` : t
+  if (t) return t.length > 36 ? `${t.slice(0, 36)}…` : t
+  const first = user.attachments?.[0]?.name
+  return first ? `附件 · ${first}` : '新对话'
 }
 
 function freezeMessages(messages: AcpChatMessage[]): AcpChatMessage[] {
-  return messages.slice(-MAX_MESSAGES_PER_THREAD).map((m) =>
-    m.streaming ? { ...m, streaming: false } : m,
-  )
+  return messages.slice(-MAX_MESSAGES_PER_THREAD).map((m) => {
+    const base = m.streaming ? { ...m, streaming: false } : m
+    if (!base.attachments?.length) return base
+    return {
+      ...base,
+      attachments: base.attachments.map((a) =>
+        a.previewUrl?.startsWith('blob:')
+          ? { ...a, previewUrl: undefined }
+          : a,
+      ),
+    }
+  })
 }
 
 function ensureThreadList(threads: AcpChatThread[], workspaceRoot?: string): {
@@ -242,6 +263,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
       statusError: undefined,
       configOptions: [],
       prompting: false,
+      promptCapabilities: {},
       threads: [initialThread],
       activeThreadId: initialThread.id,
       historyOpen: false,
@@ -282,7 +304,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           status,
           statusError: errorMessage,
           ...(status === 'disconnected' || status === 'error'
-            ? { prompting: false, pendingPermission: null }
+            ? { prompting: false, pendingPermission: null, promptCapabilities: {} }
             : {}),
         }),
 
@@ -301,6 +323,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
         })),
 
       setConfigOptions: (options) => set({ configOptions: options }),
+      setPromptCapabilities: (caps) => set({ promptCapabilities: caps }),
       setPrompting: (prompting) => set({ prompting }),
       rememberConfigPreference: (runtimeId, configId, value) =>
         set((s) => ({
@@ -343,12 +366,18 @@ export const useAcpUiStore = create<AcpUiStore>()(
         get().applySessionUpdate(update)
       },
 
-      appendUserMessage: (text) =>
+      appendUserMessage: (text, attachments) =>
         set((s) =>
           patchActiveThread(s, (t) => {
             const messages = [
               ...t.messages,
-              { id: newId('user'), role: 'user' as const, text, createdAt: Date.now() },
+              {
+                id: newId('user'),
+                role: 'user' as const,
+                text,
+                createdAt: Date.now(),
+                ...(attachments && attachments.length > 0 ? { attachments } : {}),
+              },
             ]
             return {
               ...t,
@@ -701,6 +730,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           status: 'disconnected',
           sessionId: null,
           configOptions: [],
+          promptCapabilities: {},
           pendingPermission: null,
         }
       },
@@ -734,6 +764,7 @@ export function useAcpChatView() {
         sessionId: s.sessionId,
         statusError: s.statusError,
         configOptions: s.configOptions,
+        promptCapabilities: s.promptCapabilities,
         messages: thread?.messages ?? [],
         prompting: s.prompting,
         selectedRuntimeId: s.selectedRuntimeId,

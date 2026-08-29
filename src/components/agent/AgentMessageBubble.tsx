@@ -126,7 +126,34 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
         ) : null}
 
         {isUser ? (
-          <div className="whitespace-pre-wrap break-words">{message.text}</div>
+          <div className="flex flex-col gap-1.5">
+            {(message.attachments?.length ?? 0) > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {message.attachments!.map((att) => (
+                  <div
+                    key={att.id}
+                    className={cn(
+                      'inline-flex max-w-full items-center gap-1.5 rounded-lg border px-1.5 py-1 text-[10px]',
+                      'border-primary-foreground/25 bg-primary-foreground/10',
+                    )}
+                    title={att.absolutePath ?? att.name}
+                  >
+                    {att.kind === 'image' && att.previewUrl ? (
+                      <img
+                        src={att.previewUrl}
+                        alt=""
+                        className="size-7 shrink-0 rounded object-cover"
+                      />
+                    ) : null}
+                    <span className="min-w-0 truncate">{att.name}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {message.text.trim() ? (
+              <div className="whitespace-pre-wrap break-words">{message.text}</div>
+            ) : null}
+          </div>
         ) : showEmptyStreaming ? (
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span className="inline-flex gap-1">

@@ -210,16 +210,29 @@ export async function savePastedImage(
       return err({ code: 'FILE_WRITE_ERROR', message: '不支持的图片格式' })
     }
 
-    const assetsDir = join(dirname(payload.markdownFilePath), PASTED_IMAGE_ASSETS_DIR)
+    const markdownPath = payload.markdownFilePath?.trim()
+    const workspaceRoot = payload.workspaceRoot?.trim()
+    if (!markdownPath && !workspaceRoot) {
+      return err({
+        code: 'FILE_WRITE_ERROR',
+        message: '保存粘贴图片需要 markdownFilePath 或 workspaceRoot',
+      })
+    }
+
+    const assetsDir = markdownPath
+      ? join(dirname(markdownPath), PASTED_IMAGE_ASSETS_DIR)
+      : join(workspaceRoot!, '.inkdown', 'agent-pasted')
     await mkdir(assetsDir, { recursive: true })
 
     const fileName = `pasted-${Date.now()}${extension}`
     const absolutePath = join(assetsDir, fileName)
     await writeFile(absolutePath, Buffer.from(payload.base64, 'base64'))
 
-    return ok({
-      relativePath: `./${PASTED_IMAGE_ASSETS_DIR}/${fileName}`.replace(/\\/g, '/'),
-    })
+    const relativePath = markdownPath
+      ? `./${PASTED_IMAGE_ASSETS_DIR}/${fileName}`.replace(/\\/g, '/')
+      : `.inkdown/agent-pasted/${fileName}`.replace(/\\/g, '/')
+
+    return ok({ relativePath, absolutePath })
   } catch (error) {
     return err(toAppError(error, '保存粘贴图片失败'))
   }

@@ -1,10 +1,8 @@
 import {
-  ArrowUp,
   ChevronDown,
   Loader2,
   Plus,
   Settings2,
-  Square,
   Trash2,
   Unplug,
   Wifi,
@@ -15,6 +13,7 @@ import {
   AgentActivityGroup,
   groupAgentMessages,
 } from '@/components/agent/AgentActivityGroup'
+import { AgentComposer } from '@/components/agent/AgentComposer'
 import { AgentMark } from '@/components/agent/AgentMark'
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
@@ -249,13 +248,6 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
 
   const configsDisabled = view.status !== 'connected' || view.prompting
 
-  const onSubmit = () => {
-    const text = draft
-    if (!text.trim()) return
-    setDraft('')
-    void sendPrompt(text)
-  }
-
   return (
     <aside
       className="flex h-full w-full min-w-0 flex-col border-l border-border/50 bg-sidebar/95 backdrop-blur-sm"
@@ -423,144 +415,118 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
       </ScrollArea>
 
       <div className="shrink-0 space-y-1.5 p-3 pt-2">
-        <div className="rounded-2xl border border-border/70 bg-background shadow-sm focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
-          <textarea
-            className="min-h-[72px] w-full resize-none rounded-t-2xl bg-transparent px-3 py-2.5 text-xs leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
-            placeholder={
-              view.status === 'connected'
-                ? '输入消息，Enter 发送 · Shift+Enter 换行'
-                : '请先连接 Agent'
-            }
-            value={draft}
-            disabled={view.status !== 'connected'}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                onSubmit()
-              }
-            }}
-          />
-
-          <div className="flex items-center gap-0.5 border-t border-border/40 px-1.5 py-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  title="更多设置"
-                >
-                  <Settings2 className="size-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel className="text-[10px] text-muted-foreground">
-                  运行时
-                </DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={view.selectedRuntimeId}
-                  onValueChange={setSelectedRuntimeId}
-                >
-                  {BUILTIN_ACP_RUNTIMES.map((rt) => (
-                    <DropdownMenuRadioItem
-                      key={rt.id}
-                      value={rt.id}
-                      disabled={
-                        view.status === 'connected' ||
-                        view.status === 'connecting' ||
-                        view.status === 'awaiting_auth'
-                      }
-                      className="text-xs"
-                    >
-                      {rt.name}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-
-                {secondary.length > 0 ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-[10px] text-muted-foreground">
-                      其它配置
-                    </DropdownMenuLabel>
-                    {secondary.map((opt) => (
-                      <div key={opt.configId} className="px-2 py-1.5">
-                        <p className="mb-1 text-[10px] text-muted-foreground">{opt.name}</p>
-                        <select
-                          className="h-7 w-full rounded-md border border-border/70 bg-background px-2 text-[11px] outline-none disabled:opacity-50"
-                          value={String(opt.currentValue ?? '')}
-                          disabled={configsDisabled}
-                          onChange={(e) => void setModel(opt.configId, e.target.value)}
-                        >
-                          {opt.options?.map((item) => (
-                            <option key={item.value} value={item.value}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+        <AgentComposer
+          disabled={view.status !== 'connected'}
+          prompting={view.prompting}
+          workspaceRoot={workspaceRoot}
+          promptCapabilities={view.promptCapabilities}
+          draft={draft}
+          onDraftChange={setDraft}
+          onCancel={() => void cancel()}
+          onSubmit={(payload) => {
+            void sendPrompt({
+              text: payload.text,
+              prompt: payload.prompt,
+              messageAttachments: payload.messageAttachments,
+            })
+          }}
+          toolbarStart={
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    title="更多设置"
+                  >
+                    <Settings2 className="size-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                    运行时
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={view.selectedRuntimeId}
+                    onValueChange={setSelectedRuntimeId}
+                  >
+                    {BUILTIN_ACP_RUNTIMES.map((rt) => (
+                      <DropdownMenuRadioItem
+                        key={rt.id}
+                        value={rt.id}
+                        disabled={
+                          view.status === 'connected' ||
+                          view.status === 'connecting' ||
+                          view.status === 'awaiting_auth'
+                        }
+                        className="text-xs"
+                      >
+                        {rt.name}
+                      </DropdownMenuRadioItem>
                     ))}
-                  </>
-                ) : null}
+                  </DropdownMenuRadioGroup>
 
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5">
-                  <p className="text-[10px] text-muted-foreground">工作区</p>
-                  <p className="mt-0.5 truncate text-[11px]" title={workspaceRoot ?? ''}>
-                    {workspaceRoot ?? '未打开'}
-                  </p>
-                  <p className="mt-1 truncate text-[10px] text-muted-foreground" title={runtimeName}>
-                    当前运行时 · {runtimeName}
-                  </p>
-                  {authHint ? (
-                    <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
-                      {authHint}
-                    </p>
+                  {secondary.length > 0 ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                        其它配置
+                      </DropdownMenuLabel>
+                      {secondary.map((opt) => (
+                        <div key={opt.configId} className="px-2 py-1.5">
+                          <p className="mb-1 text-[10px] text-muted-foreground">{opt.name}</p>
+                          <select
+                            className="h-7 w-full rounded-md border border-border/70 bg-background px-2 text-[11px] outline-none disabled:opacity-50"
+                            value={String(opt.currentValue ?? '')}
+                            disabled={configsDisabled}
+                            onChange={(e) => void setModel(opt.configId, e.target.value)}
+                          >
+                            {opt.options?.map((item) => (
+                              <option key={item.value} value={item.value}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </>
                   ) : null}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
 
-            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-              {primary.map((opt, index) => (
-                <CompactConfigMenu
-                  key={opt.configId}
-                  option={opt}
-                  disabled={configsDisabled}
-                  onChange={(configId, value) => void setModel(configId, value)}
-                  emphasize={index === 0}
-                />
-              ))}
-              {view.status === 'connected' && primary.length === 0 ? (
-                <span className="px-1 text-[10px] text-muted-foreground">无会话配置项</span>
-              ) : null}
-            </div>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5">
+                    <p className="text-[10px] text-muted-foreground">工作区</p>
+                    <p className="mt-0.5 truncate text-[11px]" title={workspaceRoot ?? ''}>
+                      {workspaceRoot ?? '未打开'}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] text-muted-foreground" title={runtimeName}>
+                      当前运行时 · {runtimeName}
+                    </p>
+                    {authHint ? (
+                      <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                        {authHint}
+                      </p>
+                    ) : null}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            {view.prompting ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="size-7 shrink-0 rounded-full"
-                title="停止"
-                onClick={() => void cancel()}
-              >
-                <Square className="size-3" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="icon"
-                className="size-7 shrink-0 rounded-full"
-                title="发送"
-                disabled={view.status !== 'connected' || !draft.trim()}
-                onClick={onSubmit}
-              >
-                <ArrowUp className="size-3.5" />
-              </Button>
-            )}
-          </div>
-        </div>
+              <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+                {primary.map((opt, index) => (
+                  <CompactConfigMenu
+                    key={opt.configId}
+                    option={opt}
+                    disabled={configsDisabled}
+                    onChange={(configId, value) => void setModel(configId, value)}
+                    emphasize={index === 0}
+                  />
+                ))}
+                {view.status === 'connected' && primary.length === 0 ? (
+                  <span className="px-1 text-[10px] text-muted-foreground">无会话配置项</span>
+                ) : null}
+              </div>
+            </>
+          }
+        />
 
         {view.statusError ? (
           <p className="text-[10px] text-destructive">{view.statusError}</p>

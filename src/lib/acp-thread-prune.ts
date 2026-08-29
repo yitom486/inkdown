@@ -5,7 +5,7 @@ export function isBlankThreadMessages(messages: AcpChatMessage[]): boolean {
   return !messages.some((m) => {
     if (m.role === 'system') return false
     if (m.role === 'user' || m.role === 'agent' || m.role === 'thought') {
-      return m.text.trim().length > 0
+      return m.text.trim().length > 0 || (m.attachments?.length ?? 0) > 0
     }
     if (m.role === 'tool') return true
     if (m.role === 'plan') {

@@ -31,6 +31,24 @@ describe('acp-thread-prune', () => {
     expect(
       isBlankThread({ messages: [msg({ role: 'agent', text: '答复' })] }),
     ).toBe(false)
+    expect(
+      isBlankThread({
+        messages: [
+          msg({
+            role: 'user',
+            text: '',
+            attachments: [
+              {
+                id: 'a1',
+                kind: 'file',
+                name: 'a.md',
+                mimeType: 'text/markdown',
+              },
+            ],
+          }),
+        ],
+      }),
+    ).toBe(false)
   })
 
   it('prunes blank threads but can keep one id', () => {

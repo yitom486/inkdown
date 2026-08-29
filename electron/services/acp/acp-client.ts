@@ -5,7 +5,9 @@ import type {
   AcpAuthMethod,
   AcpConnectResult,
   AcpConnectionStatus,
+  AcpContentBlock,
   AcpPermissionOutcome,
+  AcpPromptCapabilities,
   AcpPromptResult,
   AcpSessionUpdateEvent,
   AcpSetConfigOptionResult,
@@ -23,6 +25,7 @@ import { runConnectAuthGate } from './connect-auth-gate'
 import { AcpTerminalManager } from './acp-terminal'
 import {
   parseLoadSessionSupported,
+  parsePromptCapabilities,
   parseResumeSessionSupported,
 } from './session-capabilities'
 import { restoreOrCreateAcpSession } from './session-open'
@@ -51,6 +54,7 @@ let runtimeId: string | null = null
 let workspaceRoot: string | null = null
 let loadSessionSupported = false
 let resumeSessionSupported = false
+let cachedPromptCapabilities: AcpPromptCapabilities = {}
 /** 本次连接周期内希望恢复的旧 session（来自 UI thread.agentSessionId） */
 let pendingResumeSessionId: string | null = null
 /** session/load 回放历史时压制转发，避免与本地气泡重复 */
@@ -165,6 +169,7 @@ async function openSessionAfterAuth(
       configOptions: parseAcpConfigOptions(opened.configOptions),
       loadSessionSupported,
       resumeSessionSupported,
+      promptCapabilities: cachedPromptCapabilities,
       sessionRestored: opened.sessionRestored,
       restoreMethod: opened.restoreMethod,
       requestedSessionId: opened.requestedSessionId,
@@ -406,6 +411,7 @@ export async function connectAcp(payload: {
         : {}
     loadSessionSupported = parseLoadSessionSupported(caps)
     resumeSessionSupported = parseResumeSessionSupported(caps)
+    cachedPromptCapabilities = parsePromptCapabilities(caps)
 
     const authMethods = parseAuthMethods(initResult.authMethods)
     const preflight = probeCodexAuth()
@@ -435,6 +441,7 @@ export async function connectAcp(payload: {
         authMethods: gate.methods,
         loadSessionSupported,
         resumeSessionSupported,
+        promptCapabilities: cachedPromptCapabilities,
       })
     }
 
@@ -522,6 +529,7 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
   workspaceRoot = null
   loadSessionSupported = false
   resumeSessionSupported = false
+  cachedPromptCapabilities = {}
   pendingResumeSessionId = null
   suppressSessionUpdates = false
   cachedAgentName = undefined
@@ -587,15 +595,20 @@ export async function setAcpConfigOption(payload: {
 
 export async function promptAcp(payload: {
   sessionId: string
-  text: string
+  prompt: AcpContentBlock[]
 }): Promise<Result<AcpPromptResult, AppError>> {
   const t = requireTransport()
   if (!t.ok) return t
 
+  const prompt = Array.isArray(payload.prompt) ? payload.prompt : []
+  if (prompt.length === 0) {
+    return err({ code: 'ACP_PROTOCOL_ERROR', message: 'prompt 不能为空' })
+  }
+
   try {
     const result = (await t.value.request('session/prompt', {
       sessionId: payload.sessionId,
-      prompt: [{ type: 'text', text: payload.text }],
+      prompt,
     })) as Record<string, unknown>
     const stopReason = typeof result.stopReason === 'string' ? result.stopReason : 'end_turn'
     return ok({ stopReason })

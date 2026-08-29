@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { isOk } from '@shared/core/result'
-import type { AcpAuthMethod, AcpConfigOption, AcpConnectReadyResult } from '@shared/types/acp'
+import type {
+  AcpAuthMethod,
+  AcpConfigOption,
+  AcpConnectReadyResult,
+  AcpContentBlock,
+} from '@shared/types/acp'
+import type { AcpMessageAttachment } from '@/lib/acp-composer'
 import { acpApi } from '@/api/acp-api'
 import { listPreferredConfigPatches } from '@/lib/acp-config-preferences'
 import { formatAcpConnectedMessage } from '@/lib/acp-session-restore'
@@ -53,6 +59,7 @@ export function useAcpSession(workspaceRoot?: string) {
   const appendSystemMessage = useAcpUiStore((s) => s.appendSystemMessage)
   const beginAgentReply = useAcpUiStore((s) => s.beginAgentReply)
   const setPrompting = useAcpUiStore((s) => s.setPrompting)
+  const setPromptCapabilities = useAcpUiStore((s) => s.setPromptCapabilities)
   const clearMessages = useAcpUiStore((s) => s.clearMessages)
   const selectedRuntimeId = useAcpUiStore((s) => s.selectedRuntimeId)
   const sessionId = useAcpUiStore((s) => s.sessionId)
@@ -89,6 +96,7 @@ export function useAcpSession(workspaceRoot?: string) {
       setStatus('connected')
       const options = result.configOptions ?? []
       setSession(result.sessionId, options)
+      setPromptCapabilities(result.promptCapabilities ?? {})
       appendSystemMessage(formatAcpConnectedMessage(result, prefix))
 
       const applied = await applyStoredConfigPreferences(
@@ -108,7 +116,7 @@ export function useAcpSession(workspaceRoot?: string) {
         console.warn('[acp-ui] session restore fell back to new', result)
       }
     },
-    [appendSystemMessage, setConfigOptions, setSession, setStatus],
+    [appendSystemMessage, setConfigOptions, setPromptCapabilities, setSession, setStatus],
   )
 
   const connect = useCallback(async () => {
@@ -201,20 +209,23 @@ export function useAcpSession(workspaceRoot?: string) {
   }, [appendSystemMessage, finishStreaming, setSession, setStatus])
 
   const sendPrompt = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim()
-      if (!trimmed) return
+    async (payload: {
+      text: string
+      prompt: AcpContentBlock[]
+      messageAttachments?: AcpMessageAttachment[]
+    }) => {
       const sid = useAcpUiStore.getState().sessionId
       if (!sid) {
         appendSystemMessage('尚未连接 Agent，请先点击连接。')
         return
       }
       if (useAcpUiStore.getState().prompting) return
+      if (!payload.prompt.length) return
 
-      appendUserMessage(trimmed)
+      appendUserMessage(payload.text, payload.messageAttachments)
       setPrompting(true)
       beginAgentReply()
-      const result = await acpApi.prompt({ sessionId: sid, text: trimmed })
+      const result = await acpApi.prompt({ sessionId: sid, prompt: payload.prompt })
       finishStreaming()
       if (!isOk(result)) {
         reportAppError(result.error)

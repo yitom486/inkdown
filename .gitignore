@@ -31,6 +31,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # pdf.js CMap / fonts（由 vite copy-pdfjs-assets 从 node_modules 生成）
 src/public/pdfjs
 
+# Agent 粘贴图片落盘目录（工作区内）
+.inkdown/
+
 # Playwright
 test-results/
 playwright-report/

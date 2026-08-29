@@ -49,13 +49,17 @@ export interface OpenFolderResult {
 }
 
 export interface SavePastedImagePayload {
-  markdownFilePath: string
+  /** Markdown 旁 assets/；与 workspaceRoot 二选一 */
+  markdownFilePath?: string
+  /** Agent 粘贴：落到 workspace/.inkdown/agent-pasted/ */
+  workspaceRoot?: string
   base64: string
   mimeType: string
 }
 
 export interface SavePastedImageResult {
   relativePath: string
+  absolutePath: string
 }
 
 export interface ExportDocumentPayload {

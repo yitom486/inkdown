@@ -47,6 +47,30 @@ export interface AcpSessionRestoreAttempt {
   error?: string
 }
 
+export interface AcpPromptCapabilities {
+  /** Agent 是否接受 ContentBlock.image */
+  image?: boolean
+  audio?: boolean
+  embeddedContext?: boolean
+}
+
+/** session/prompt 的 ContentBlock（Client → Agent） */
+export type AcpContentBlock =
+  | { type: 'text'; text: string }
+  | {
+      type: 'resource_link'
+      uri: string
+      name: string
+      mimeType?: string
+      size?: number
+    }
+  | {
+      type: 'image'
+      data: string
+      mimeType: string
+      uri?: string
+    }
+
 export interface AcpConnectReadyResult {
   phase: 'ready'
   runtimeId: string
@@ -57,6 +81,7 @@ export interface AcpConnectReadyResult {
   configOptions?: AcpConfigOption[]
   loadSessionSupported?: boolean
   resumeSessionSupported?: boolean
+  promptCapabilities?: AcpPromptCapabilities
   /** 是否成功恢复到请求的旧 session */
   sessionRestored?: boolean
   restoreMethod?: AcpSessionRestoreMethod
@@ -75,6 +100,7 @@ export interface AcpConnectNeedsAuthResult {
   authMethods: AcpAuthMethod[]
   loadSessionSupported?: boolean
   resumeSessionSupported?: boolean
+  promptCapabilities?: AcpPromptCapabilities
 }
 
 export type AcpConnectResult = AcpConnectReadyResult | AcpConnectNeedsAuthResult
@@ -125,7 +151,7 @@ export interface AcpSessionNewResult {
 
 export interface AcpPromptPayload {
   sessionId: string
-  text: string
+  prompt: AcpContentBlock[]
 }
 
 export interface AcpPromptResult {
