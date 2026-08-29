@@ -49,7 +49,10 @@ jobs:
       - name: 安装 Playwright 系统依赖
         run: bunx playwright install-deps
 
+      - name: 安装虚拟显示（Electron 在 Linux CI 需要 X11）
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       - name: E2E 测试
-        run: bun run test:e2e
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" bun run test:e2e
         env:
           CI: true

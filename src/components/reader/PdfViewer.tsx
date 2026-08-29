@@ -27,8 +27,14 @@ import {
   readPdfSelection,
   type PdfSelectionSnapshot,
 } from '@/lib/pdf-selection'
+import {
+  bindDocumentSelectionCollapse,
+  bindOutsideReaderPointerDismiss,
+  clearWindowSelection,
+} from '@/lib/reader-selection-dismiss'
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
+import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import type { AppError } from '@shared/core/errors'
 import type { ReadingMark } from '@shared/types/reading-mark'
 import { isOk } from '@shared/core/result'
@@ -47,6 +53,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const loadingTaskRef = useRef<ReturnType<typeof pdfjsLib.getDocument> | null>(null)
   const ignoreScrollSyncRef = useRef(false)
   const pendingJumpPageRef = useRef<number | null>(null)
+  const pageNumRef = useRef(1)
+  const savePdfProgressTimerRef = useRef<number | null>(null)
   const [pageNum, setPageNum] = useState(1)
   const [numPages, setNumPages] = useState(0)
   const [scale, setScale] = useState(1.2)
@@ -60,6 +68,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     null,
   )
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+
+  const clearTextSelection = useCallback(() => {
+    setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+    clearWindowSelection(window)
+  }, [])
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, deleteMark } = useReadingMarks(filePath)
@@ -114,6 +128,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         setPdfDoc(pdf)
         setNumPages(pdf.numPages)
 
+        const savedProgress = useReadingProgressStore.getState().getPdfProgress(filePath)
+        const restoredPage =
+          savedProgress?.pageNum &&
+          savedProgress.pageNum >= 1 &&
+          savedProgress.pageNum <= pdf.numPages
+            ? savedProgress.pageNum
+            : 1
+        pageNumRef.current = restoredPage
+        if (restoredPage > 1) {
+          pendingJumpPageRef.current = restoredPage
+        }
+        setPageNum(restoredPage)
+
         const firstPage = await pdf.getPage(1)
         if (!cancelled) {
           const viewport = firstPage.getViewport({ scale: 1 })
@@ -134,12 +161,39 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
     return () => {
       cancelled = true
+      if (pageNumRef.current >= 1) {
+        useReadingProgressStore.getState().savePdfProgress(filePath, {
+          pageNum: pageNumRef.current,
+        })
+      }
       void loadingTaskRef.current?.destroy()
       pdfDocRef.current = null
       loadingTaskRef.current = null
       setPdfDoc(null)
     }
   }, [data, filePath])
+
+  useEffect(() => {
+    pageNumRef.current = pageNum
+  }, [pageNum])
+
+  useEffect(() => {
+    if (!ready || pageNum < 1) return
+
+    if (savePdfProgressTimerRef.current !== null) {
+      window.clearTimeout(savePdfProgressTimerRef.current)
+    }
+    savePdfProgressTimerRef.current = window.setTimeout(() => {
+      savePdfProgressTimerRef.current = null
+      useReadingProgressStore.getState().savePdfProgress(filePath, { pageNum })
+    }, 400)
+
+    return () => {
+      if (savePdfProgressTimerRef.current !== null) {
+        window.clearTimeout(savePdfProgressTimerRef.current)
+      }
+    }
+  }, [filePath, pageNum, ready])
 
   const fitWidth = useCallback(() => {
     const pdf = pdfDocRef.current
@@ -163,6 +217,21 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
   }, [filePath])
+
+  useEffect(() => {
+    return bindDocumentSelectionCollapse(document, window, () => {
+      setSelectionSnapshot(null)
+      setSelectionToolbarPos(null)
+    })
+  }, [])
+
+  useEffect(() => {
+    return bindOutsideReaderPointerDismiss((target) => {
+      const container = containerRef.current
+      if (!container) return false
+      return container.contains(target)
+    }, clearTextSelection)
+  }, [clearTextSelection])
 
   const scaledPageSize = useMemo(
     () => scalePdfPageCssSize(pageCssSize, scale),
@@ -273,15 +342,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     window.setTimeout(() => {
       const snapshot = readPdfSelection(pageElement, pageNumber)
       if (!snapshot) {
-        setSelectionSnapshot(null)
-        setSelectionToolbarPos(null)
+        clearTextSelection()
         return
       }
 
       setSelectionSnapshot(snapshot)
       setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
     }, 10)
-  }, [])
+  }, [clearTextSelection])
 
   const addPageBookmark = useCallback(async () => {
     if (!fileFingerprint || numPages === 0) return
@@ -319,11 +387,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         toast.success(note ? '已保存批注' : '已添加高亮')
       }
 
-      setSelectionSnapshot(null)
-      setSelectionToolbarPos(null)
-      window.getSelection()?.removeAllRanges()
+      clearTextSelection()
     },
-    [createMark, fileFingerprint, filePath, selectionSnapshot],
+    [clearTextSelection, createMark, fileFingerprint, filePath, selectionSnapshot],
   )
 
   const handleSelectMark = useCallback(
@@ -489,17 +555,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
               if (ok) toast.success('已复制')
             })
-            setSelectionToolbarPos(null)
+            clearTextSelection()
           }}
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
           }}
-          onDismiss={() => {
-            setSelectionToolbarPos(null)
-            setSelectionSnapshot(null)
-            window.getSelection()?.removeAllRanges()
-          }}
+          onDismiss={clearTextSelection}
         />
       ) : null}
 

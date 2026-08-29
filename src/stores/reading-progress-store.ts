@@ -15,9 +15,21 @@ export interface EpubLocationsCacheEntry {
   updatedAt: number
 }
 
+export interface MobiReadingProgress {
+  chapterId: string
+  updatedAt: number
+}
+
+export interface PdfReadingProgress {
+  pageNum: number
+  updatedAt: number
+}
+
 interface ReadingProgressStore {
   epubByFile: Record<string, EpubReadingProgress>
   epubLocationsByFile: Record<string, EpubLocationsCacheEntry>
+  mobiByFile: Record<string, MobiReadingProgress>
+  pdfByFile: Record<string, PdfReadingProgress>
   getEpubProgress: (filePath: string) => EpubReadingProgress | undefined
   saveEpubProgress: (
     filePath: string,
@@ -31,6 +43,17 @@ interface ReadingProgressStore {
     entry: Omit<EpubLocationsCacheEntry, 'updatedAt'>,
   ) => void
   clearEpubLocations: (filePath: string) => void
+  getMobiProgress: (filePath: string) => MobiReadingProgress | undefined
+  saveMobiProgress: (filePath: string, progress: Pick<MobiReadingProgress, 'chapterId'>) => void
+  clearMobiProgress: (filePath: string) => void
+  getPdfProgress: (filePath: string) => PdfReadingProgress | undefined
+  savePdfProgress: (filePath: string, progress: Pick<PdfReadingProgress, 'pageNum'>) => void
+  clearPdfProgress: (filePath: string) => void
+}
+
+function normalizeFilePath(filePath: string): string | undefined {
+  const normalized = filePath.trim()
+  return normalized || undefined
 }
 
 export const useReadingProgressStore = create<ReadingProgressStore>()(
@@ -38,15 +61,17 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
     (set, get) => ({
       epubByFile: {},
       epubLocationsByFile: {},
+      mobiByFile: {},
+      pdfByFile: {},
 
       getEpubProgress: (filePath) => {
-        const normalized = filePath.trim()
+        const normalized = normalizeFilePath(filePath)
         if (!normalized) return undefined
         return get().epubByFile[normalized]
       },
 
       saveEpubProgress: (filePath, progress) => {
-        const normalized = filePath.trim()
+        const normalized = normalizeFilePath(filePath)
         const cfi = progress.cfi.trim()
         if (!normalized || !cfi) return
 
@@ -64,7 +89,7 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
       },
 
       clearEpubProgress: (filePath) => {
-        const normalized = filePath.trim()
+        const normalized = normalizeFilePath(filePath)
         if (!normalized) return
 
         set((state) => {
@@ -75,13 +100,13 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
       },
 
       getEpubLocations: (filePath) => {
-        const normalized = filePath.trim()
+        const normalized = normalizeFilePath(filePath)
         if (!normalized) return undefined
         return get().epubLocationsByFile[normalized]
       },
 
       saveEpubLocations: (filePath, entry) => {
-        const normalized = filePath.trim()
+        const normalized = normalizeFilePath(filePath)
         if (!normalized || !entry.locationsJson.trim()) return
 
         set((state) => ({
@@ -96,7 +121,7 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
       },
 
       clearEpubLocations: (filePath) => {
-        const normalized = filePath.trim()
+        const normalized = normalizeFilePath(filePath)
         if (!normalized) return
 
         set((state) => {
@@ -105,12 +130,79 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
           return { epubLocationsByFile: next }
         })
       },
+
+      getMobiProgress: (filePath) => {
+        const normalized = normalizeFilePath(filePath)
+        if (!normalized) return undefined
+        return get().mobiByFile[normalized]
+      },
+
+      saveMobiProgress: (filePath, progress) => {
+        const normalized = normalizeFilePath(filePath)
+        const chapterId = progress.chapterId.trim()
+        if (!normalized || !chapterId) return
+
+        set((state) => ({
+          mobiByFile: {
+            ...state.mobiByFile,
+            [normalized]: {
+              chapterId,
+              updatedAt: Date.now(),
+            },
+          },
+        }))
+      },
+
+      clearMobiProgress: (filePath) => {
+        const normalized = normalizeFilePath(filePath)
+        if (!normalized) return
+
+        set((state) => {
+          const next = { ...state.mobiByFile }
+          delete next[normalized]
+          return { mobiByFile: next }
+        })
+      },
+
+      getPdfProgress: (filePath) => {
+        const normalized = normalizeFilePath(filePath)
+        if (!normalized) return undefined
+        return get().pdfByFile[normalized]
+      },
+
+      savePdfProgress: (filePath, progress) => {
+        const normalized = normalizeFilePath(filePath)
+        if (!normalized || progress.pageNum < 1) return
+
+        set((state) => ({
+          pdfByFile: {
+            ...state.pdfByFile,
+            [normalized]: {
+              pageNum: Math.floor(progress.pageNum),
+              updatedAt: Date.now(),
+            },
+          },
+        }))
+      },
+
+      clearPdfProgress: (filePath) => {
+        const normalized = normalizeFilePath(filePath)
+        if (!normalized) return
+
+        set((state) => {
+          const next = { ...state.pdfByFile }
+          delete next[normalized]
+          return { pdfByFile: next }
+        })
+      },
     }),
     {
       name: 'reader-progress',
       partialize: (state) => ({
         epubByFile: state.epubByFile,
         epubLocationsByFile: state.epubLocationsByFile,
+        mobiByFile: state.mobiByFile,
+        pdfByFile: state.pdfByFile,
       }),
     },
   ),

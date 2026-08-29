@@ -34,6 +34,11 @@ import {
   type EpubMarkHoverHandlers,
 } from '@/lib/epub-reading-marks'
 import { copyTextToClipboard, readEpubSelection, type EpubSelectionSnapshot } from '@/lib/epub-selection'
+import {
+  bindDocumentSelectionCollapse,
+  bindOutsideReaderPointerDismiss,
+  clearEpubRenditionSelections,
+} from '@/lib/reader-selection-dismiss'
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -100,6 +105,13 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
+
+  const clearTextSelection = useCallback(() => {
+    setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+    clearEpubRenditionSelections(renditionRef.current)
+  }, [])
+
   const scrollCleanupRef = useRef<(() => void) | null>(null)
   const selectionCleanupRef = useRef<(() => void) | null>(null)
   const markHoverCleanupRef = useRef<(() => void) | null>(null)
@@ -256,10 +268,9 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         toast.success(note ? '已保存批注' : '已添加高亮')
       }
 
-      setSelectionSnapshot(null)
-      setSelectionToolbarPos(null)
+      clearTextSelection()
     },
-    [chapterNav, createMark, fileFingerprint, filePath, selectionSnapshot, theme],
+    [chapterNav, clearTextSelection, createMark, fileFingerprint, filePath, selectionSnapshot, theme],
   )
 
   const handleSelectMark = useCallback((mark: ReadingMark) => {
@@ -313,12 +324,16 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           contents.window.removeEventListener('scroll', onScroll)
         }
 
+        const collapseSelectionUi = () => {
+          setSelectionSnapshot(null)
+          setSelectionToolbarPos(null)
+        }
+
         const onMouseUp = () => {
           window.setTimeout(() => {
             const snapshot = readEpubSelection(contents)
             if (!snapshot) {
-              setSelectionSnapshot(null)
-              setSelectionToolbarPos(null)
+              clearTextSelection()
               return
             }
 
@@ -332,9 +347,16 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           }, 10)
         }
 
+        const unbindSelectionCollapse = bindDocumentSelectionCollapse(
+          contents.document,
+          contents.window,
+          collapseSelectionUi,
+        )
+
         contents.document.addEventListener('mouseup', onMouseUp)
         selectionCleanupRef.current = () => {
           contents.document.removeEventListener('mouseup', onMouseUp)
+          unbindSelectionCollapse()
         }
 
         let hoverRaf = 0
@@ -386,8 +408,16 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
       rendition.hooks.content.register(handler)
     },
-    [markHoverHandlers, scheduleReportLocation, theme],
+    [clearTextSelection, markHoverHandlers, scheduleReportLocation, theme],
   )
+
+  useEffect(() => {
+    return bindOutsideReaderPointerDismiss((target) => {
+      const container = containerRef.current
+      if (!container) return false
+      return container.contains(target)
+    }, clearTextSelection)
+  }, [clearTextSelection])
 
   useEffect(() => {
     if (!ready) return
@@ -681,16 +711,13 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
             void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
               if (ok) toast.success('已复制')
             })
-            setSelectionToolbarPos(null)
+            clearTextSelection()
           }}
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
           }}
-          onDismiss={() => {
-            setSelectionToolbarPos(null)
-            setSelectionSnapshot(null)
-          }}
+          onDismiss={clearTextSelection}
         />
       ) : null}
 

@@ -3,8 +3,9 @@ import {
   isMobiChapterReadable,
 } from '@/lib/mobi-chapter-html'
 import {
-  findLastMobiFlatIndex,
-  resolveTopLevelChapterNav,
+  findLastFlatIndexById,
+  pickReaderNavLevel,
+  resolveReaderChapterNav,
 } from '@/lib/reader-chapter-nav'
 
 export interface MobiChapterItem {
@@ -103,8 +104,12 @@ export function buildMobiChapterList(
 export function pickReadableMobiChapterCandidates(
   chapters: MobiChapterItem[],
   spine: Array<{ id: string }>,
+  preferredChapterId?: string,
 ): MobiChapterItem[] {
-  const preferred = pickInitialMobiChapter(chapters)
+  const preferred =
+    (preferredChapterId &&
+      chapters.find((chapter) => chapter.id === preferredChapterId)) ||
+    pickInitialMobiChapter(chapters)
   const ordered: MobiChapterItem[] = []
 
   if (preferred) ordered.push(preferred)
@@ -121,6 +126,13 @@ export function pickReadableMobiChapterCandidates(
 /** 跳过纯目录页；Viewer 内还会过滤 XML 脏章节 */
 export function pickInitialMobiChapter(chapters: MobiChapterItem[]): MobiChapterItem | null {
   if (chapters.length === 0) return null
+
+  const navLevel = pickReaderNavLevel(chapters, isTocLikeMobiChapter)
+  const atNavLevel = chapters.find(
+    (chapter) => chapter.level === navLevel && !isTocLikeMobiChapter(chapter),
+  )
+  if (atNavLevel) return atNavLevel
+
   return chapters.find((chapter) => !isTocLikeMobiChapter(chapter)) ?? chapters[0]!
 }
 
@@ -128,6 +140,31 @@ export function resolveMobiChapterNav(
   chapters: MobiChapterItem[],
   currentId?: string,
 ) {
-  const flatIndex = findLastMobiFlatIndex(chapters, currentId)
-  return resolveTopLevelChapterNav(chapters, flatIndex)
+  if (chapters.length === 0) {
+    return {
+      current: null,
+      previous: null,
+      next: null,
+      currentIndex: -1,
+      flatIndex: -1,
+    }
+  }
+
+  const navLevel = pickReaderNavLevel(chapters, isTocLikeMobiChapter)
+  const flatIndex = findLastFlatIndexById(chapters, currentId)
+
+  if (flatIndex < 0 && !currentId) {
+    const initial = pickInitialMobiChapter(chapters)
+    const initialIndex = initial
+      ? chapters.findIndex((item) => item.id === initial.id && item.label === initial.label)
+      : 0
+    return resolveReaderChapterNav(
+      chapters,
+      initialIndex >= 0 ? initialIndex : 0,
+      navLevel,
+      isTocLikeMobiChapter,
+    )
+  }
+
+  return resolveReaderChapterNav(chapters, flatIndex, navLevel, isTocLikeMobiChapter)
 }

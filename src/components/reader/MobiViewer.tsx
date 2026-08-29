@@ -28,11 +28,17 @@ import {
 } from '@/lib/mobi-navigation'
 import { readMobiSelection } from '@/lib/mobi-selection'
 import {
+  bindDocumentSelectionCollapse,
+  bindOutsideReaderPointerDismiss,
+  clearWindowSelection,
+} from '@/lib/reader-selection-dismiss'
+import {
   copyTextToClipboard,
   type PdfSelectionSnapshot,
 } from '@/lib/pdf-selection'
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
+import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/core/errors'
 import type { ReadingMark } from '@shared/types/reading-mark'
@@ -47,6 +53,7 @@ interface MobiViewerProps {
 
 export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const mobiRef = useRef<KindleBook | null>(null)
+  const currentChapterIdRef = useRef<string | undefined>(undefined)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const themeRef = useRef(theme)
   themeRef.current = theme
@@ -69,6 +76,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
+
+  const clearTextSelection = useCallback(() => {
+    setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+    clearWindowSelection(iframeRef.current?.contentWindow ?? null)
+  }, [])
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, deleteMark } = useReadingMarks(filePath)
@@ -112,10 +125,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     }
 
     setCurrentChapterId(chapterId)
+    currentChapterIdRef.current = chapterId
+    useReadingProgressStore.getState().saveMobiProgress(filePath, { chapterId })
     setChapterDocHtml(documentHtml)
     setLoadError(null)
     return true
-  }, [])
+  }, [filePath])
 
   const loadChapter = useCallback(
     async (chapterId: string) => {
@@ -170,8 +185,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           if (!currentChapterId) return
           const snapshot = readMobiSelection(doc, win)
           if (!snapshot) {
-            setSelectionSnapshot(null)
-            setSelectionToolbarPos(null)
+            clearTextSelection()
             return
           }
 
@@ -182,6 +196,11 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           })
         }, 10)
       }
+
+      const onSelectionChange = bindDocumentSelectionCollapse(doc, win, () => {
+        setSelectionSnapshot(null)
+        setSelectionToolbarPos(null)
+      })
 
       const onClick = (event: MouseEvent) => {
         const target = event.target
@@ -257,6 +276,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
       chapterCleanupRef.current = () => {
         doc.removeEventListener('mouseup', onMouseUp)
+        onSelectionChange()
         doc.removeEventListener('click', onClick)
         doc.removeEventListener('mousemove', onMouseMove)
         scrollRoot.removeEventListener('wheel', onWheel)
@@ -265,8 +285,16 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         }
       }
     },
-    [chapters, currentChapterId, loadAdjacentChapter, syncMobiMarkOverlays],
+    [chapters, clearTextSelection, currentChapterId, loadAdjacentChapter, syncMobiMarkOverlays],
   )
+
+  useEffect(() => {
+    return bindOutsideReaderPointerDismiss((target) => {
+      const iframe = iframeRef.current
+      if (!iframe) return false
+      return target === iframe || iframe.contains(target)
+    }, clearTextSelection)
+  }, [clearTextSelection])
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -305,7 +333,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         )
         setChapters(nextChapters)
 
-        const candidates = pickReadableMobiChapterCandidates(nextChapters, spine)
+        const savedChapterId = useReadingProgressStore.getState().getMobiProgress(filePath)?.chapterId
+        const candidates = pickReadableMobiChapterCandidates(
+          nextChapters,
+          spine,
+          savedChapterId,
+        )
         setChapterLoading(true)
         try {
           let loaded = false
@@ -335,6 +368,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
     return () => {
       cancelled = true
+      const chapterId = currentChapterIdRef.current
+      if (chapterId) {
+        useReadingProgressStore.getState().saveMobiProgress(filePath, { chapterId })
+      }
       chapterCleanupRef.current?.()
       chapterCleanupRef.current = null
       mobiRef.current?.destroy()
@@ -430,11 +467,9 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         }
       }
 
-      setSelectionSnapshot(null)
-      setSelectionToolbarPos(null)
-      iframeRef.current?.contentWindow?.getSelection()?.removeAllRanges()
+      clearTextSelection()
     },
-    [createMark, currentChapterId, fileFingerprint, filePath, selectionSnapshot, syncMobiMarkOverlays],
+    [clearTextSelection, createMark, currentChapterId, fileFingerprint, filePath, selectionSnapshot, syncMobiMarkOverlays],
   )
 
   const handleSelectMark = useCallback(
@@ -545,16 +580,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
               if (ok) toast.success('已复制')
             })
-            setSelectionToolbarPos(null)
+            clearTextSelection()
           }}
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
           }}
-          onDismiss={() => {
-            setSelectionToolbarPos(null)
-            setSelectionSnapshot(null)
-          }}
+          onDismiss={clearTextSelection}
         />
       ) : null}
 

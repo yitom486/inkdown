@@ -6,7 +6,10 @@ export type {
 
 export {
   flattenEpubToc as flattenReaderToc,
+  findLastEpubFlatIndex,
   isTocLikeChapter,
   pickInitialChapter,
   resolveChapterNav as resolveUnitNav,
 } from '@/lib/epub-navigation'
+
+export { pickReaderNavLevel, resolveReaderChapterNav } from '@/lib/reader-chapter-nav'

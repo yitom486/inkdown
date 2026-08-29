@@ -55,6 +55,16 @@ describe('buildMobiChapterList', () => {
 
     expect(candidates.map((item) => item.id)).toEqual(['1', '0', '2'])
   })
+
+  it('优先恢复上次阅读的章节', () => {
+    const chapters: MobiChapterItem[] = [
+      { id: '0', label: '目录', level: 0 },
+      { id: '1', label: '第一章', level: 0 },
+      { id: '2', label: '第二章', level: 0 },
+    ]
+    const candidates = pickReadableMobiChapterCandidates(chapters, [{ id: '0' }, { id: '1' }, { id: '2' }], '2')
+    expect(candidates[0]?.id).toBe('2')
+  })
 })
 
 describe('resolveMobiChapterNav', () => {
@@ -70,4 +80,32 @@ describe('resolveMobiChapterNav', () => {
     expect(nav.current?.label).toBe('第一章 五星会聚')
     expect(nav.next?.label).toBe('第二章 长安与魏州')
   })
+
+  it('同一 spine 多 TOC 条目时取最后匹配并回溯到一级章', () => {
+    const nav = resolveMobiChapterNav(chapters, '1')
+    expect(nav.current?.label).toBe('第一章 五星会聚')
+    expect(nav.previous).toBeNull()
+    expect(nav.next?.label).toBe('第二章 长安与魏州')
+  })
+
+  it('上一章跳过目录页', () => {
+    const nav = resolveMobiChapterNav(chapters, '2')
+    expect(nav.current?.label).toBe('第二章 长安与魏州')
+    expect(nav.previous?.label).toBe('第一章 五星会聚')
+    expect(nav.previous?.label).not.toBe('目录')
+  })
+
+  it('目录下挂二级正文时与 EPUB 一样按二级跳转', () => {
+    const nested: MobiChapterItem[] = [
+      { id: '0', label: '目录', level: 0 },
+      { id: '0', label: '自序', level: 1 },
+      { id: '1', label: '第1章 导论', level: 1 },
+      { id: '2', label: '第2章 组织研究', level: 1 },
+    ]
+    const nav = resolveMobiChapterNav(nested, '0')
+    expect(nav.current?.label).toBe('自序')
+    expect(nav.next?.label).toBe('第1章 导论')
+    expect(nav.previous).toBeNull()
+  })
 })
+
