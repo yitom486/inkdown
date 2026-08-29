@@ -7,9 +7,11 @@ import type {
   AcpPermissionOutcome,
   AcpPromptResult,
   AcpSessionUpdateEvent,
+  AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
 } from '@shared/types/acp'
 import { getAcpRuntime } from './agent-registry'
+import { parseAcpConfigOptions } from './config-options'
 import {
   createAcpClientMethodRouter,
   pickAllowOptionId,
@@ -278,6 +280,7 @@ export async function connectAcp(payload: {
       protocolVersion: negotiated,
       agentName: typeof agentInfo?.name === 'string' ? agentInfo.name : undefined,
       agentVersion: typeof agentInfo?.version === 'string' ? agentInfo.version : undefined,
+      configOptions: parseAcpConfigOptions(sessionResult.configOptions),
     })
   } catch (error) {
     await disconnectAcp()
@@ -306,7 +309,7 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
 
 export async function createAcpSession(
   cwd: string,
-): Promise<Result<{ sessionId: string }, AppError>> {
+): Promise<Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>> {
   const t = requireTransport()
   if (!t.ok) return t
 
@@ -321,9 +324,40 @@ export async function createAcpSession(
     }
     sessionId = id
     setStatus('connected')
-    return ok({ sessionId: id })
+    return ok({
+      sessionId: id,
+      configOptions: parseAcpConfigOptions(result.configOptions),
+    })
   } catch (error) {
     return err(toProtocolError(error, '创建会话失败'))
+  }
+}
+
+export async function setAcpConfigOption(payload: {
+  sessionId: string
+  configId: string
+  value: string | boolean
+}): Promise<Result<AcpSetConfigOptionResult, AppError>> {
+  const t = requireTransport()
+  if (!t.ok) return t
+
+  try {
+    const result = (await t.value.request('session/set_config_option', {
+      sessionId: payload.sessionId,
+      configId: payload.configId,
+      value: payload.value,
+    })) as Record<string, unknown>
+    const configOptions = parseAcpConfigOptions(
+      result.configOptions ?? result,
+    )
+    // 部分 Agent 直接返回数组
+    const parsed =
+      configOptions.length > 0
+        ? configOptions
+        : parseAcpConfigOptions(Array.isArray(result) ? result : [])
+    return ok({ configOptions: parsed })
+  } catch (error) {
+    return err(toProtocolError(error, '设置配置项失败'))
   }
 }
 

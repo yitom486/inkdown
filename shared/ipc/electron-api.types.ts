@@ -32,6 +32,8 @@ import type {
   AcpSessionNewPayload,
   AcpSessionNewResult,
   AcpSessionUpdateEvent,
+  AcpSetConfigOptionPayload,
+  AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
 } from '@shared/types/acp'
 
@@ -76,6 +78,9 @@ export interface ElectronAPI {
   acpSessionNew: (payload: AcpSessionNewPayload) => Promise<Result<AcpSessionNewResult, AppError>>
   acpPrompt: (payload: AcpPromptPayload) => Promise<Result<AcpPromptResult, AppError>>
   acpCancel: (payload: AcpCancelPayload) => Promise<Result<void, AppError>>
+  acpSetConfigOption: (
+    payload: AcpSetConfigOptionPayload,
+  ) => Promise<Result<AcpSetConfigOptionResult, AppError>>
   acpRespondPermission: (payload: AcpPermissionResponsePayload) => void
   onAcpSessionUpdate: (callback: (event: AcpSessionUpdateEvent) => void) => () => void
   onAcpStatusChanged: (callback: (event: AcpStatusChangedEvent) => void) => () => void

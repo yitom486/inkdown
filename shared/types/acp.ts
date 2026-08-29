@@ -29,6 +29,33 @@ export interface AcpConnectResult {
   protocolVersion: number
   agentName?: string
   agentVersion?: string
+  configOptions?: AcpConfigOption[]
+}
+
+export interface AcpConfigOptionValue {
+  value: string
+  name: string
+  description?: string
+}
+
+export interface AcpConfigOption {
+  configId: string
+  name: string
+  description?: string
+  category?: string
+  type: 'select' | 'boolean' | string
+  currentValue?: string | boolean
+  options?: AcpConfigOptionValue[]
+}
+
+export interface AcpSetConfigOptionPayload {
+  sessionId: string
+  configId: string
+  value: string | boolean
+}
+
+export interface AcpSetConfigOptionResult {
+  configOptions: AcpConfigOption[]
 }
 
 export interface AcpSessionNewPayload {
@@ -37,6 +64,7 @@ export interface AcpSessionNewPayload {
 
 export interface AcpSessionNewResult {
   sessionId: string
+  configOptions?: AcpConfigOption[]
 }
 
 export interface AcpPromptPayload {

@@ -35,6 +35,7 @@ export const IPC = {
   ACP_SESSION_NEW: 'acp:session-new',
   ACP_PROMPT: 'acp:prompt',
   ACP_CANCEL: 'acp:cancel',
+  ACP_SET_CONFIG_OPTION: 'acp:set-config-option',
   ACP_PERMISSION_RESPONSE: 'acp:permission-response',
   ACP_SESSION_UPDATE: 'acp:session-update',
   ACP_STATUS_CHANGED: 'acp:status-changed',

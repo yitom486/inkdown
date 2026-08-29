@@ -17,6 +17,7 @@ import type {
   AcpPermissionResponsePayload,
   AcpPromptPayload,
   AcpSessionNewPayload,
+  AcpSetConfigOptionPayload,
 } from '@shared/types/acp'
 import { ok } from '@shared/core/result'
 import {
@@ -53,6 +54,7 @@ import {
   onAcpSessionUpdate,
   onAcpStatusChanged,
   promptAcp,
+  setAcpConfigOption,
   setAcpPermissionBridge,
 } from '../services/acp/acp-client'
 import { pickAllowOptionId } from '../services/acp/client-handlers'
@@ -128,6 +130,9 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.ACP_PROMPT, (_event, payload: AcpPromptPayload) => promptAcp(payload))
   ipcMain.handle(IPC.ACP_CANCEL, (_event, payload: AcpCancelPayload) => cancelAcp(payload))
+  ipcMain.handle(IPC.ACP_SET_CONFIG_OPTION, (_event, payload: AcpSetConfigOptionPayload) =>
+    setAcpConfigOption(payload),
+  )
 
   ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())
 

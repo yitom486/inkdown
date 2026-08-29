@@ -13,6 +13,8 @@ import type {
   AcpSessionNewPayload,
   AcpSessionNewResult,
   AcpSessionUpdateEvent,
+  AcpSetConfigOptionPayload,
+  AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
 } from '@shared/types/acp'
 
@@ -61,6 +63,14 @@ export const acpApi = {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.acpCancel(payload)
+  },
+
+  async setConfigOption(
+    payload: AcpSetConfigOptionPayload,
+  ): Promise<Result<AcpSetConfigOptionResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.acpSetConfigOption(payload)
   },
 
   respondPermission(payload: AcpPermissionResponsePayload): Result<void, AppError> {
