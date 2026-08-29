@@ -21,7 +21,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import { useScrollSync } from '@/hooks/useScrollSync'
-import { useSidebarPanelSync } from '@/hooks/useSidebarPanelSync'
+import { useCollapsiblePanelSync } from '@/hooks/useSidebarPanelSync'
 import { useMarkdownPreview } from '@/hooks/useMarkdownPreview'
 import { usePasteImage } from '@/hooks/usePasteImage'
 import {
@@ -99,7 +99,8 @@ export function EditorLayout({
   const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
   const agentPanelOpen = useAcpUiStore((state) => state.panelOpen)
   const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
-  const sidebarPanelRef = useSidebarPanelSync(sidebarVisible)
+  const sidebarPanelRef = useCollapsiblePanelSync(sidebarVisible)
+  const agentPanelRef = useCollapsiblePanelSync(agentPanelOpen)
   const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
   const tabSize = useAppSettingsStore((state) => state.tabSize)
   const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
@@ -132,8 +133,8 @@ export function EditorLayout({
   }, [showEditor, showPreview])
 
   const sidebarLayout = useDefaultLayout({
-    id: 'markdown-editor-sidebar-main',
-    panelIds: ['sidebar', 'main'],
+    id: 'markdown-editor-shell',
+    panelIds: ['sidebar', 'main', 'agent'],
   })
 
   const contentLayout = useDefaultLayout({
@@ -286,144 +287,165 @@ export function EditorLayout({
           onToggleSidebar={toggleSidebar}
           onToggleAgentPanel={toggleAgentPanel}
         />
-        {agentPanelOpen ? <AgentPanel workspaceRoot={workspaceRoot} /> : null}
 
         <ResizablePanelGroup
-        id="markdown-editor-sidebar-main"
-        orientation="horizontal"
-        defaultLayout={sidebarLayout.defaultLayout}
-        onLayoutChanged={sidebarLayout.onLayoutChanged}
-        className="min-h-0 min-w-0 flex-1"
-      >
-        <ResizablePanel
-          id="sidebar"
-          panelRef={sidebarPanelRef}
-          collapsible
-          collapsedSize={0}
-          defaultSize="20%"
-          minSize="14%"
-          maxSize="40%"
-          className="min-w-0"
+          id="markdown-editor-shell"
+          orientation="horizontal"
+          defaultLayout={sidebarLayout.defaultLayout}
+          onLayoutChanged={sidebarLayout.onLayoutChanged}
+          className="min-h-0 min-w-0 flex-1"
         >
-          <Sidebar
-            workspaceRoot={workspaceRoot}
-            fileTree={fileTree}
-            activeFilePath={filePath}
-            headings={headings}
-            activeHeadingId={activeHeadingId}
-            outlineExpanded={outlineExpanded}
-            onOutlineToggle={() => setOutlineExpanded(!outlineExpanded)}
-            onOpenFolder={onOpenFolder}
-            onRescanWorkspace={onRescanWorkspace}
-            isRescanningWorkspace={isRescanningWorkspace}
-            onSelectFile={onSelectFile}
-            onSelectHeading={handleSelectHeading}
-            onHideSidebar={() => setSidebarVisible(false)}
-          />
-        </ResizablePanel>
-
-        {sidebarVisible && <ResizableHandle withHandle />}
-
-        <ResizablePanel id="main" defaultSize="80%" minSize="45%" className="min-w-0">
-          <div className="flex h-full min-h-0 flex-col">
-            <FileBreadcrumb
-              filePath={filePath}
-              isDirty={isDirty}
-              welcome={showWelcome}
-              trailing={
-                showWelcome ? undefined : (
-                  <ViewModeToggle
-                    mode={viewMode}
-                    onChange={(mode) => setViewMode(filePath, mode)}
-                  />
-                )
-              }
+          <ResizablePanel
+            id="sidebar"
+            panelRef={sidebarPanelRef}
+            collapsible
+            collapsedSize={0}
+            defaultSize="18%"
+            minSize="12%"
+            maxSize="36%"
+            className="min-w-0"
+          >
+            <Sidebar
+              workspaceRoot={workspaceRoot}
+              fileTree={fileTree}
+              activeFilePath={filePath}
+              headings={headings}
+              activeHeadingId={activeHeadingId}
+              outlineExpanded={outlineExpanded}
+              onOutlineToggle={() => setOutlineExpanded(!outlineExpanded)}
+              onOpenFolder={onOpenFolder}
+              onRescanWorkspace={onRescanWorkspace}
+              isRescanningWorkspace={isRescanningWorkspace}
+              onSelectFile={onSelectFile}
+              onSelectHeading={handleSelectHeading}
+              onHideSidebar={() => setSidebarVisible(false)}
             />
+          </ResizablePanel>
 
-            <main className="min-h-0 flex-1 bg-editor">
-              {showWelcome ? (
-                <WelcomePage
-                  recentFiles={recentFiles}
-                  workspaceRoot={workspaceRoot}
-                  onOpenFile={onOpenFile}
-                  onOpenFolder={onOpenFolder}
-                  onOpenRecentFile={onOpenRecentFile}
-                />
-              ) : (
-              <ResizablePanelGroup
-                id={`markdown-editor-content-${viewMode}`}
-                orientation="horizontal"
-                defaultLayout={contentLayout.defaultLayout}
-                onLayoutChanged={contentLayout.onLayoutChanged}
-                className="h-full min-h-0"
-              >
-                {showEditor && (
-                  <ResizablePanel
-                    id="editor"
-                    defaultSize={showPreview ? '50%' : '100%'}
-                    minSize={showPreview ? '28%' : '100%'}
-                    className="min-w-0"
+          {sidebarVisible ? <ResizableHandle withHandle /> : null}
+
+          <ResizablePanel id="main" defaultSize="57%" minSize="30%" className="min-w-0">
+            <div className="flex h-full min-h-0 flex-col">
+              <FileBreadcrumb
+                filePath={filePath}
+                isDirty={isDirty}
+                welcome={showWelcome}
+                trailing={
+                  showWelcome ? undefined : (
+                    <ViewModeToggle
+                      mode={viewMode}
+                      onChange={(mode) => setViewMode(filePath, mode)}
+                    />
+                  )
+                }
+              />
+
+              <main className="min-h-0 flex-1 bg-editor">
+                {showWelcome ? (
+                  <WelcomePage
+                    recentFiles={recentFiles}
+                    workspaceRoot={workspaceRoot}
+                    onOpenFile={onOpenFile}
+                    onOpenFolder={onOpenFolder}
+                    onOpenRecentFile={onOpenRecentFile}
+                  />
+                ) : (
+                  <ResizablePanelGroup
+                    id={`markdown-editor-content-${viewMode}`}
+                    orientation="horizontal"
+                    defaultLayout={contentLayout.defaultLayout}
+                    onLayoutChanged={contentLayout.onLayoutChanged}
+                    className="h-full min-h-0"
                   >
-                    <div className="relative h-full min-h-0">
-                      <FindReplaceBar
-                        open={findReplace.open}
-                        mode={findReplace.mode}
-                        editorView={editorRef.current?.getView() ?? null}
-                        onClose={() => setFindReplace((state) => ({ ...state, open: false }))}
-                      />
-                      <PaneErrorBoundary name="编辑器" filePath={filePath}>
-                        <MarkdownEditor
-                          ref={editorRef}
-                          value={content}
-                          filePath={filePath}
-                          theme={theme}
-                          tabSize={tabSize}
-                          fontSize={editorFontSize}
-                          onChange={onContentChange}
-                          onScroll={handleEditorScroll}
-                          onPasteImage={handlePasteImage}
-                        />
-                      </PaneErrorBoundary>
-                    </div>
-                  </ResizablePanel>
-                )}
+                    {showEditor && (
+                      <ResizablePanel
+                        id="editor"
+                        defaultSize={showPreview ? '50%' : '100%'}
+                        minSize={showPreview ? '28%' : '100%'}
+                        className="min-w-0"
+                      >
+                        <div className="relative h-full min-h-0">
+                          <FindReplaceBar
+                            open={findReplace.open}
+                            mode={findReplace.mode}
+                            editorView={editorRef.current?.getView() ?? null}
+                            onClose={() =>
+                              setFindReplace((state) => ({ ...state, open: false }))
+                            }
+                          />
+                          <PaneErrorBoundary name="编辑器" filePath={filePath}>
+                            <MarkdownEditor
+                              ref={editorRef}
+                              value={content}
+                              filePath={filePath}
+                              theme={theme}
+                              tabSize={tabSize}
+                              fontSize={editorFontSize}
+                              onChange={onContentChange}
+                              onScroll={handleEditorScroll}
+                              onPasteImage={handlePasteImage}
+                            />
+                          </PaneErrorBoundary>
+                        </div>
+                      </ResizablePanel>
+                    )}
 
-                {showEditor && showPreview && (
-                  <>
-                    <ResizableHandle withHandle />
-                    <ResizablePanel id="preview" defaultSize="50%" minSize="28%" className="min-w-0">
-                      <PaneErrorBoundary name="预览" filePath={filePath}>
-                        <PreviewPane
-                          ref={previewRef}
-                          html={previewHtml}
-                          theme={theme}
-                          onScroll={handlePreviewScroll}
-                          onHeadingActivate={handlePreviewHeadingActivate}
-                        />
-                      </PaneErrorBoundary>
-                    </ResizablePanel>
-                  </>
-                )}
+                    {showEditor && showPreview && (
+                      <>
+                        <ResizableHandle withHandle />
+                        <ResizablePanel
+                          id="preview"
+                          defaultSize="50%"
+                          minSize="28%"
+                          className="min-w-0"
+                        >
+                          <PaneErrorBoundary name="预览" filePath={filePath}>
+                            <PreviewPane
+                              ref={previewRef}
+                              html={previewHtml}
+                              theme={theme}
+                              onScroll={handlePreviewScroll}
+                              onHeadingActivate={handlePreviewHeadingActivate}
+                            />
+                          </PaneErrorBoundary>
+                        </ResizablePanel>
+                      </>
+                    )}
 
-                {!showEditor && showPreview && (
-                  <ResizablePanel id="preview-full" defaultSize="100%" className="min-w-0">
-                    <PaneErrorBoundary name="预览" filePath={filePath}>
-                      <PreviewPane
-                        ref={previewRef}
-                        html={previewHtml}
-                        theme={theme}
-                        onScroll={handlePreviewScroll}
-                        onHeadingActivate={handlePreviewHeadingActivate}
-                      />
-                    </PaneErrorBoundary>
-                  </ResizablePanel>
+                    {!showEditor && showPreview && (
+                      <ResizablePanel id="preview-full" defaultSize="100%" className="min-w-0">
+                        <PaneErrorBoundary name="预览" filePath={filePath}>
+                          <PreviewPane
+                            ref={previewRef}
+                            html={previewHtml}
+                            theme={theme}
+                            onScroll={handlePreviewScroll}
+                            onHeadingActivate={handlePreviewHeadingActivate}
+                          />
+                        </PaneErrorBoundary>
+                      </ResizablePanel>
+                    )}
+                  </ResizablePanelGroup>
                 )}
-              </ResizablePanelGroup>
-              )}
-            </main>
-          </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+              </main>
+            </div>
+          </ResizablePanel>
+
+          {agentPanelOpen ? <ResizableHandle withHandle /> : null}
+
+          <ResizablePanel
+            id="agent"
+            panelRef={agentPanelRef}
+            collapsible
+            collapsedSize={0}
+            defaultSize="25%"
+            minSize="16%"
+            maxSize="45%"
+            className="min-w-0"
+          >
+            <AgentPanel workspaceRoot={workspaceRoot} />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
     </div>
   )

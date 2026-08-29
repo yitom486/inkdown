@@ -1,6 +1,5 @@
 import {
   ArrowUp,
-  Bot,
   ChevronDown,
   Loader2,
   Plus,
@@ -16,6 +15,7 @@ import {
   AgentActivityGroup,
   groupAgentMessages,
 } from '@/components/agent/AgentActivityGroup'
+import { AgentMark } from '@/components/agent/AgentMark'
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
@@ -258,14 +258,14 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
 
   return (
     <aside
-      className="flex h-full w-[22rem] shrink-0 flex-col border-r border-border/50 bg-sidebar/95 backdrop-blur-sm"
+      className="flex h-full w-full min-w-0 flex-col border-l border-border/50 bg-sidebar/95 backdrop-blur-sm"
       role="region"
       aria-label="Agent 聊天"
       data-testid="agent-panel"
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/50 px-3">
         <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Bot className="size-4" />
+          <AgentMark className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -378,7 +378,7 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
         <div ref={messagesRef} className="flex flex-col gap-3 px-3 py-3">
           {view.messages.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-3 py-4 text-center">
-              <Bot className="mx-auto mb-2 size-6 text-muted-foreground/60" />
+              <AgentMark className="mx-auto mb-2 size-6 text-muted-foreground/60" />
               <p className="text-xs font-medium text-foreground/80">开始与 Codex 对话</p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                 点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。

@@ -1,6 +1,5 @@
 import {
   AppWindow,
-  Bot,
   Bug,
   FileCode2,
   FileText,
@@ -15,6 +14,7 @@ import {
   Settings,
   Sun,
 } from 'lucide-react'
+import { AgentMark } from '@/components/agent/AgentMark'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -227,7 +227,7 @@ export function TitleBar({
             title={agentPanelOpen ? '关闭 Agent (Ctrl+Shift+A)' : '打开 Agent (Ctrl+Shift+A)'}
             onClick={onToggleAgentPanel}
           >
-            <Bot className="size-4" />
+            <AgentMark className="size-4" />
           </Button>
         ) : null}
         <Button
