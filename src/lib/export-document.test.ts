@@ -30,9 +30,14 @@ describe('buildExportHtml', () => {
     expect(html).toContain('<!DOCTYPE html>')
     expect(html).toContain('<article class="markdown-preview">')
     expect(html).toContain('code-block-toolbar')
+    expect(html).toContain('code-block-lang')
+    expect(html).not.toContain('aria-label="复制代码"')
+    expect(html).not.toMatch(/<button\b[^>]*code-block-copy/)
     expect(html).toContain('<strong>bold</strong>')
     expect(html).toContain('<title>readme.md</title>')
-    expect(html).toContain('font-family')
+    expect(html).toContain('Microsoft YaHei')
+    expect(html).toContain('hljs-keyword')
+    expect(html).toContain('@page')
   })
 
   it('未提供文件路径时使用默认标题', async () => {

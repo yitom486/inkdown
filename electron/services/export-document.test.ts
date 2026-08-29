@@ -4,18 +4,19 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isOk } from '@shared/core/result'
 
-const { showSaveDialog, printToPDF, loadURL, destroy } = vi.hoisted(() => ({
+const { showSaveDialog, printToPDF, loadURL, destroy, executeJavaScript } = vi.hoisted(() => ({
   showSaveDialog: vi.fn(),
   printToPDF: vi.fn(),
   loadURL: vi.fn(),
   destroy: vi.fn(),
+  executeJavaScript: vi.fn(),
 }))
 
 vi.mock('electron', () => {
   class MockBrowserWindow {
     loadURL = loadURL
     destroy = destroy
-    webContents = { printToPDF }
+    webContents = { printToPDF, executeJavaScript }
   }
 
   return {
@@ -79,6 +80,8 @@ describe('exportPdfDocument', () => {
     loadURL.mockClear()
     printToPDF.mockReset()
     destroy.mockClear()
+    executeJavaScript.mockReset()
+    executeJavaScript.mockResolvedValue(true)
     printToPDF.mockResolvedValue(Buffer.from('%PDF-1.4\n% mock pdf content'))
   })
 
@@ -107,7 +110,10 @@ describe('exportPdfDocument', () => {
 
     expect(printToPDF).toHaveBeenCalledWith({
       printBackground: true,
-      margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
+      landscape: false,
+      pageSize: 'A4',
+      preferCSSPageSize: true,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
     })
 
     const written = await readFile(target)

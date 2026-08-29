@@ -286,10 +286,16 @@ export async function exportPdfDocument(
 
     const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(payload.html)}`
     await exportWindow.loadURL(dataUrl)
+    await exportWindow.webContents.executeJavaScript(
+      'document.fonts ? document.fonts.ready.then(() => true) : true',
+    )
 
     const pdfBuffer = await exportWindow.webContents.printToPDF({
       printBackground: true,
-      margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
+      landscape: false,
+      pageSize: 'A4',
+      preferCSSPageSize: true,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
     })
 
     await writeFile(filePath, pdfBuffer)

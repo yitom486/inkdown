@@ -8,7 +8,7 @@ import {
   Wifi,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   AgentActivityGroup,
   groupAgentMessages,
@@ -35,7 +35,12 @@ import { useAcpSession } from '@/hooks/useAcpSession'
 import { useCodeBlockCopy } from '@/hooks/useCodeBlockCopy'
 import { useHighlightTheme } from '@/hooks/useHighlightTheme'
 import { cn } from '@/lib/utils'
-import { useAcpChatView, useAcpUiStore } from '@/stores/acp-ui-store'
+import {
+  useAcpActiveMessages,
+  useAcpChatShell,
+  useAcpPendingPermission,
+  useAcpUiStore,
+} from '@/stores/acp-ui-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
 import { isOk } from '@shared/core/result'
@@ -148,8 +153,94 @@ function CompactConfigMenu({
   )
 }
 
-export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
-  const view = useAcpChatView()
+interface AgentMessageListProps {
+  bottomRef: RefObject<HTMLDivElement | null>
+  messagesRef: RefObject<HTMLDivElement | null>
+  authHint: string | null
+}
+
+/**
+ * 只订阅消息相关状态，避免流式输出让 Agent 面板的标题栏和输入栏一起更新。
+ */
+const AgentMessageList = memo(function AgentMessageList({
+  bottomRef,
+  messagesRef,
+  authHint,
+}: AgentMessageListProps) {
+  const messages = useAcpActiveMessages()
+  const pendingPermission = useAcpPendingPermission()
+  const prompting = useAcpUiStore((s) => s.prompting)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  useCodeBlockCopy(messagesRef, messages)
+
+  const timeline = useMemo(() => groupAgentMessages(messages), [messages])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [bottomRef, messages, pendingPermission, prompting])
+
+  const pendingOrphan = shouldShowOrphanPermissionCard(pendingPermission, messages)
+
+  useEffect(() => {
+    if (!prompting) return
+    setNowMs(Date.now())
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [prompting])
+
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <div ref={messagesRef} className="flex flex-col gap-3 px-3 py-3">
+        {messages.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-3 py-4 text-center">
+            <AgentMark className="mx-auto mb-2 size-6 text-muted-foreground/60" />
+            <p className="text-xs font-medium text-foreground/80">开始与 Codex 对话</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。
+            </p>
+            {authHint ? (
+              <p
+                className={cn(
+                  'mt-2 rounded-md px-2 py-1.5 text-[10px] leading-relaxed',
+                  authHint.startsWith('已检测')
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                )}
+              >
+                {authHint}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {timeline.map((item) =>
+          item.type === 'activity' ? (
+            <AgentActivityGroup
+              key={item.messages.map((m) => m.id).join('-')}
+              messages={item.messages}
+              nowMs={nowMs}
+            />
+          ) : (
+            <AgentMessageBubble key={item.message.id} message={item.message} />
+          ),
+        )}
+        {prompting && !messages.some((m) => m.streaming) ? (
+          <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            正在生成…
+          </div>
+        ) : null}
+        {pendingOrphan && pendingPermission ? (
+          <AgentPermissionCard pending={pendingPermission} />
+        ) : null}
+        <div ref={bottomRef} />
+      </div>
+    </ScrollArea>
+  )
+})
+
+export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanelProps) {
+  const view = useAcpChatShell()
   const setSelectedRuntimeId = useAcpUiStore((s) => s.setSelectedRuntimeId)
   const setPanelOpen = useAcpUiStore((s) => s.setPanelOpen)
   const createThread = useAcpUiStore((s) => s.createThread)
@@ -168,49 +259,21 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
     cancelAuth,
   } = useAcpSession(workspaceRoot)
   const [draft, setDraft] = useState('')
-  const [nowMs, setNowMs] = useState(() => Date.now())
   const [authHint, setAuthHint] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   const theme = useEditorUiStore((s) => s.theme)
 
   useHighlightTheme(theme)
-  useCodeBlockCopy(messagesRef, view.messages)
 
   const { primary, secondary } = useMemo(
     () => splitConfigOptions(view.configOptions),
     [view.configOptions],
   )
 
-  const timeline = useMemo(
-    () => groupAgentMessages(view.messages),
-    [view.messages],
-  )
-
-  const activeTitle = useMemo(() => {
-    const thread = view.threads.find((t) => t.id === view.activeThreadId)
-    return thread && thread.title !== '新对话' ? thread.title : null
-  }, [view.activeThreadId, view.threads])
-
   const runtimeName =
     BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === view.selectedRuntimeId)?.name ??
     view.selectedRuntimeId
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [view.messages, view.prompting, view.pendingPermission])
-
-  const pendingOrphan = shouldShowOrphanPermissionCard(
-    view.pendingPermission,
-    view.messages,
-  )
-
-  useEffect(() => {
-    if (!view.prompting) return
-    setNowMs(Date.now())
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [view.prompting])
 
   useEffect(() => {
     let cancelled = false
@@ -290,9 +353,9 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
               {statusLabel}
             </span>
           </div>
-          {activeTitle ? (
-            <p className="truncate text-[10px] text-muted-foreground" title={activeTitle}>
-              {activeTitle}
+          {view.activeTitle ? (
+            <p className="truncate text-[10px] text-muted-foreground" title={view.activeTitle}>
+              {view.activeTitle}
             </p>
           ) : null}
         </div>
@@ -366,53 +429,11 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
         </div>
       ) : null}
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div ref={messagesRef} className="flex flex-col gap-3 px-3 py-3">
-          {view.messages.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-3 py-4 text-center">
-              <AgentMark className="mx-auto mb-2 size-6 text-muted-foreground/60" />
-              <p className="text-xs font-medium text-foreground/80">开始与 Codex 对话</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。
-              </p>
-              {authHint ? (
-                <p
-                  className={cn(
-                    'mt-2 rounded-md px-2 py-1.5 text-[10px] leading-relaxed',
-                    authHint.startsWith('已检测')
-                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-                  )}
-                >
-                  {authHint}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          {timeline.map((item) =>
-            item.type === 'activity' ? (
-              <AgentActivityGroup
-                key={item.messages.map((m) => m.id).join('-')}
-                messages={item.messages}
-                nowMs={nowMs}
-              />
-            ) : (
-              <AgentMessageBubble key={item.message.id} message={item.message} />
-            ),
-          )}
-          {view.prompting &&
-          !view.messages.some((m) => m.streaming) ? (
-            <div className="flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" />
-              正在生成…
-            </div>
-          ) : null}
-          {pendingOrphan && view.pendingPermission ? (
-            <AgentPermissionCard pending={view.pendingPermission} />
-          ) : null}
-          <div ref={bottomRef} />
-        </div>
-      </ScrollArea>
+      <AgentMessageList
+        bottomRef={bottomRef}
+        messagesRef={messagesRef}
+        authHint={authHint}
+      />
 
       <div className="shrink-0 space-y-1.5 p-3 pt-2">
         <AgentComposer
@@ -543,4 +564,4 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
       />
     </aside>
   )
-}
+})

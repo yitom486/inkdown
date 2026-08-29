@@ -755,6 +755,29 @@ export function useAcpPendingPermission() {
   return useAcpUiStore((s) => s.pendingPermission)
 }
 
+/**
+ * Agent 面板外壳所需的状态。
+ *
+ * 不返回当前线程的 messages/threads 数组，避免流式消息更新时让标题栏、
+ * 配置栏和输入栏一起重渲染。消息列表通过 useAcpActiveMessages 单独订阅。
+ */
+export function useAcpChatShell() {
+  return useAcpUiStore(
+    useShallow((s) => {
+      const thread = s.threads.find((t) => t.id === s.activeThreadId)
+      return {
+        status: s.status,
+        statusError: s.statusError,
+        configOptions: s.configOptions,
+        promptCapabilities: s.promptCapabilities,
+        prompting: s.prompting,
+        selectedRuntimeId: s.selectedRuntimeId,
+        activeTitle: thread && thread.title !== '新对话' ? thread.title : null,
+      }
+    }),
+  )
+}
+
 export function useAcpChatView() {
   return useAcpUiStore(
     useShallow((s) => {

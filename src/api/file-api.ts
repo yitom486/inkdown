@@ -34,6 +34,30 @@ function requireElectronAPI(): Result<ElectronAPI, AppError> {
   return ok(window.electronAPI)
 }
 
+const WORKSPACE_FS_METHODS = [
+  'createWorkspaceFile',
+  'createWorkspaceDirectory',
+  'renameWorkspacePath',
+  'deleteWorkspacePath',
+  'copyWorkspacePath',
+  'moveWorkspacePath',
+] as const satisfies ReadonlyArray<keyof ElectronAPI>
+
+function requireWorkspaceFsAPI(): Result<ElectronAPI, AppError> {
+  const api = requireElectronAPI()
+  if (!api.ok) return api
+
+  const missing = WORKSPACE_FS_METHODS.filter((name) => typeof api.value[name] !== 'function')
+  if (missing.length > 0) {
+    return err({
+      code: 'API_UNAVAILABLE',
+      message: `工作区文件 API 未加载（缺少 ${missing.join(', ')}）。请完全退出并重新运行 bun run dev`,
+    })
+  }
+
+  return api
+}
+
 export const fileApi = {
   async openFile(options?: OpenDialogOptions): Promise<Result<OpenDocumentResult, AppError>> {
     const api = requireElectronAPI()
@@ -94,7 +118,7 @@ export const fileApi = {
   async createWorkspaceFile(
     payload: WorkspaceFsCreateFilePayload,
   ): Promise<Result<WorkspaceFsPathResult, AppError>> {
-    const api = requireElectronAPI()
+    const api = requireWorkspaceFsAPI()
     if (!api.ok) return api
     return api.value.createWorkspaceFile(payload)
   },
@@ -102,7 +126,7 @@ export const fileApi = {
   async createWorkspaceDirectory(
     payload: WorkspaceFsCreateDirPayload,
   ): Promise<Result<WorkspaceFsPathResult, AppError>> {
-    const api = requireElectronAPI()
+    const api = requireWorkspaceFsAPI()
     if (!api.ok) return api
     return api.value.createWorkspaceDirectory(payload)
   },
@@ -110,7 +134,7 @@ export const fileApi = {
   async renameWorkspacePath(
     payload: WorkspaceFsRenamePayload,
   ): Promise<Result<WorkspaceFsPathResult, AppError>> {
-    const api = requireElectronAPI()
+    const api = requireWorkspaceFsAPI()
     if (!api.ok) return api
     return api.value.renameWorkspacePath(payload)
   },
@@ -118,7 +142,7 @@ export const fileApi = {
   async deleteWorkspacePath(
     payload: WorkspaceFsDeletePayload,
   ): Promise<Result<void, AppError>> {
-    const api = requireElectronAPI()
+    const api = requireWorkspaceFsAPI()
     if (!api.ok) return api
     return api.value.deleteWorkspacePath(payload)
   },
@@ -126,7 +150,7 @@ export const fileApi = {
   async copyWorkspacePath(
     payload: WorkspaceFsCopyPayload,
   ): Promise<Result<WorkspaceFsPathResult, AppError>> {
-    const api = requireElectronAPI()
+    const api = requireWorkspaceFsAPI()
     if (!api.ok) return api
     return api.value.copyWorkspacePath(payload)
   },
@@ -134,7 +158,7 @@ export const fileApi = {
   async moveWorkspacePath(
     payload: WorkspaceFsMovePayload,
   ): Promise<Result<WorkspaceFsPathResult, AppError>> {
-    const api = requireElectronAPI()
+    const api = requireWorkspaceFsAPI()
     if (!api.ok) return api
     return api.value.moveWorkspacePath(payload)
   },
