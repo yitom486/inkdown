@@ -88,9 +88,22 @@ export async function buildMobiChapterDocument(
   theme: EpubThemeMode,
 ): Promise<string> {
   const bodyHtml = normalizeMobiChapterHtml(chapter.html)
+  // KF8/AZW3 的 resolveHref 依赖 aid/name/id 作章内锚点，消毒时必须保留
   const sanitized = DOMPurify.sanitize(bodyHtml, {
     ADD_TAGS: ['img', 'svg', 'video', 'audio', 'picture', 'source'],
-    ADD_ATTR: ['href', 'class', 'id', 'style', 'src', 'alt', 'title', 'poster', 'filepos'],
+    ADD_ATTR: [
+      'href',
+      'class',
+      'id',
+      'style',
+      'src',
+      'alt',
+      'title',
+      'poster',
+      'filepos',
+      'aid',
+      'name',
+    ],
   })
 
   const cssParts = await Promise.all(chapter.css.map((part) => fetchCssText(part.href)))
@@ -116,6 +129,17 @@ export function buildMobiChapterHtml(chapter: MobiProcessedChapter): string {
   const bodyHtml = normalizeMobiChapterHtml(chapter.html)
   return DOMPurify.sanitize(bodyHtml, {
     ADD_TAGS: ['img', 'svg', 'video', 'audio'],
-    ADD_ATTR: ['href', 'class', 'id', 'style', 'src', 'alt', 'title', 'filepos'],
+    ADD_ATTR: [
+      'href',
+      'class',
+      'id',
+      'style',
+      'src',
+      'alt',
+      'title',
+      'filepos',
+      'aid',
+      'name',
+    ],
   })
 }

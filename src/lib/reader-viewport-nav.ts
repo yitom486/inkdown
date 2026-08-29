@@ -21,16 +21,52 @@ export function normalizeHeadingText(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-/** 短标签（≤3 字）仅允许精确匹配，防止「小结」误命中「讨论与小结」 */
+/**
+ * 标题与 TOC 标签是否匹配。
+ * - 短标签（≤3 字）仅精确匹配
+ * - 禁止用「大容器 textContent 包含小节标题」冒充锚点（KF8 的 div.calibre 常见）
+ */
 export function isHeadingLabelMatch(label: string, headingText: string): boolean {
   const target = normalizeHeadingText(label)
   const text = normalizeHeadingText(headingText)
   if (!target || !text) return false
   if (text === target) return true
   if (target.length <= 3 || text.length <= 3) return false
+
+  // 元素正文远长于 TOC 标签 → 多半是章节包装容器，不是小节标题本身
+  const maxWrapperLen = Math.max(target.length + 24, Math.ceil(target.length * 1.6))
+  if (text.length > maxWrapperLen) return false
+
   if (text.includes(target)) return true
   if (target.includes(text) && text.length >= 5) return true
   return false
+}
+
+/** 在候选节点中选最贴合 TOC 标签的锚点（精确 > 更短文本） */
+export function pickBestHeadingMatch(
+  nodes: Iterable<Element>,
+  label: string,
+): HTMLElement | null {
+  const target = normalizeHeadingText(label)
+  if (!target) return null
+
+  let best: HTMLElement | null = null
+  let bestScore = -1
+
+  for (const node of nodes) {
+    if (!(node instanceof HTMLElement)) continue
+    const text = normalizeHeadingText(node.textContent ?? '')
+    if (!isHeadingLabelMatch(label, text)) continue
+
+    // 精确匹配优先；其次文本越短越好（避免命中父级容器）
+    const score = text === target ? 1_000_000 - text.length : 100_000 - text.length
+    if (score > bestScore) {
+      bestScore = score
+      best = node
+    }
+  }
+
+  return best
 }
 
 function decodeFragment(raw: string): string {
@@ -58,21 +94,14 @@ export function findHeadingElementByLabel(document: Document, label: string): HT
   const target = normalizeHeadingText(label)
   if (!target) return null
 
-  const headings = document.querySelectorAll('h1,h2,h3,h4,h5,h6')
-  for (const node of headings) {
-    if (!(node instanceof HTMLElement)) continue
-    const text = normalizeHeadingText(node.textContent ?? '')
-    if (isHeadingLabelMatch(label, text)) return node
-  }
+  const fromHeading = pickBestHeadingMatch(document.querySelectorAll('h1,h2,h3,h4,h5,h6'), label)
+  if (fromHeading) return fromHeading
 
-  // KF8/AZW3 常用 calibre 段落作标题，而非 h1–h6
-  for (const node of document.querySelectorAll('p[class*="calibre"], div[class*="calibre"]')) {
-    if (!(node instanceof HTMLElement)) continue
-    const text = normalizeHeadingText(node.textContent ?? '')
-    if (isHeadingLabelMatch(label, text)) return node
-  }
-
-  return null
+  // KF8/AZW3 常用 calibre 段落作标题；必须选最短匹配，勿取外层 div.calibre
+  return pickBestHeadingMatch(
+    document.querySelectorAll('p[class*="calibre"], div[class*="calibre"]'),
+    label,
+  )
 }
 
 function findElementBySelector(document: Document, selector: string): HTMLElement | null {
@@ -99,17 +128,10 @@ export function findBlockElementByLabel(document: Document, label: string): HTML
   const fromHeading = findHeadingElementByLabel(document, label)
   if (fromHeading) return fromHeading
 
-  const target = normalizeHeadingText(label)
-  if (!target) return null
-
-  for (const node of document.querySelectorAll('p, div, blockquote, li, span, td, th')) {
-    if (!(node instanceof HTMLElement)) continue
-    const text = normalizeHeadingText(node.textContent ?? '')
-    if (text.length < 2 || text.length > 160) continue
-    if (isHeadingLabelMatch(label, text)) return node
-  }
-
-  return null
+  return pickBestHeadingMatch(
+    document.querySelectorAll('p, div, blockquote, li, span, td, th'),
+    label,
+  )
 }
 
 export function findViewportEntryAnchor(document: Document, entry: ViewportNavEntry): HTMLElement | null {
