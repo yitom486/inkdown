@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import DOMPurify, { type Config } from 'dompurify'
+import DOMPurify from 'dompurify'
 import { fileApi } from '@/api/file-api'
 import {
   buildImageReplacements,
@@ -7,15 +7,9 @@ import {
   replaceImageSrcInHtml,
 } from '@/lib/markdown-images'
 import { markdownParser } from '@/lib/markdown'
+import { PREVIEW_SANITIZE_OPTIONS } from '@/lib/preview-sanitize'
 import { reportRuntimeError } from '@/lib/error-reporter'
 import { isOk } from '@shared/core/result'
-
-const PREVIEW_SANITIZE_OPTIONS: Config = {
-  ALLOWED_URI_REGEXP:
-    /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
-  ADD_TAGS: ['input'],
-  ADD_ATTR: ['type', 'checked', 'disabled'],
-}
 
 async function resolveLocalImagesInHtml(
   html: string,
@@ -56,7 +50,8 @@ export function useMarkdownPreview(content: string, filePath?: string, delay = 3
           const withImages = await resolveLocalImagesInHtml(raw, filePath)
 
           if (!cancelled) {
-            setHtml(String(DOMPurify.sanitize(withImages, PREVIEW_SANITIZE_OPTIONS)))
+            // 包一层再消毒：sole-root 的 pre.mermaid 在 DOMPurify 下会被剥成纯文本
+            setHtml(String(DOMPurify.sanitize(`<div>${withImages}</div>`, PREVIEW_SANITIZE_OPTIONS)))
           }
         } catch (error) {
           console.error('[useMarkdownPreview]', error)

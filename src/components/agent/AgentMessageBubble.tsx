@@ -1,12 +1,11 @@
 import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { AgentMermaidBlock } from '@/components/agent/AgentMermaidBlock'
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
 import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
+import { MarkdownContent } from '@/components/markdown/MarkdownContent'
 import {
   renderAgentMarkdown,
   renderAgentMarkdownStreaming,
-  splitAgentMarkdownParts,
 } from '@/lib/agent-markdown'
 import { mermaidLog } from '@/lib/mermaid-debug'
 import { cn } from '@/lib/utils'
@@ -29,14 +28,6 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
     if (message.streaming) return renderAgentMarkdownStreaming(textForMd)
     return renderAgentMarkdown(textForMd)
   }, [textForMd, message.role, message.streaming])
-
-  /** 结束后拆出 Mermaid，独立组件出图；流式仍整段 HTML（不做 Mermaid） */
-  const parts = useMemo(() => {
-    if (!html || message.streaming) {
-      return null
-    }
-    return splitAgentMarkdownParts(html)
-  }, [html, message.streaming])
 
   useEffect(() => {
     if (message.streaming) {
@@ -146,28 +137,15 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
             正在生成
           </div>
         ) : (
-          <div
+          <MarkdownContent
+            html={html ?? ''}
+            deferMermaid={Boolean(message.streaming)}
             className={cn(
               'markdown-preview agent-md break-words text-[12px]',
               '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
               '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
             )}
-          >
-            {parts
-              ? parts.map((part, index) =>
-                  part.type === 'mermaid' ? (
-                    <AgentMermaidBlock key={part.id} source={part.source} />
-                  ) : (
-                    <div
-                      key={`html-${index}`}
-                      dangerouslySetInnerHTML={{ __html: part.html }}
-                    />
-                  ),
-                )
-              : (
-                <div dangerouslySetInnerHTML={{ __html: html ?? '' }} />
-              )}
-          </div>
+          />
         )}
         {message.streaming && !isUser && !showEmptyStreaming ? (
           <span className="mt-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-foreground/60 align-middle" />

@@ -1,9 +1,9 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Eye } from 'lucide-react'
+import { MarkdownContent } from '@/components/markdown/MarkdownContent'
 import { useCodeBlockCopy } from '@/hooks/useCodeBlockCopy'
 import { useHighlightTheme } from '@/hooks/useHighlightTheme'
 import { applyScrollRatio, collectPreviewHeadingPositions, scrollRatio } from '@/lib/markdown-headings'
-import { hydrateMermaidInElement } from '@/lib/mermaid-hydrate'
 import type { AppTheme } from '@/stores/editor-ui-store'
 import '@/styles/markdown-preview.css'
 
@@ -26,7 +26,6 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
   function PreviewPane({ html, theme = 'dark', onScroll, onHeadingActivate }, ref) {
     const previewRef = useRef<HTMLDivElement>(null)
     const onScrollRef = useRef(onScroll)
-    const themeRef = useRef(theme)
     const onHeadingActivateRef = useRef(onHeadingActivate)
 
     useHighlightTheme(theme)
@@ -81,35 +80,6 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
       },
       getScrollElement: () => previewRef.current,
     }))
-
-    useEffect(() => {
-      const preview = previewRef.current
-      if (!preview || !html) return
-
-      const themeChanged = themeRef.current !== theme
-      themeRef.current = theme
-
-      let cancelled = false
-      const isCancelled = () => cancelled
-
-      const renderDiagrams = async (force: boolean): Promise<void> => {
-        try {
-          await hydrateMermaidInElement(preview, theme, { force, cancelled: isCancelled })
-        } catch (error) {
-          if (!cancelled) console.error('Mermaid 图表渲染失败：', error)
-        }
-      }
-
-      void renderDiagrams(themeChanged)
-      const raf = window.requestAnimationFrame(() => {
-        if (!cancelled) void renderDiagrams(themeChanged)
-      })
-
-      return () => {
-        cancelled = true
-        window.cancelAnimationFrame(raf)
-      }
-    }, [html, theme])
 
     useEffect(() => {
       const container = previewRef.current
@@ -171,8 +141,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
         ref={previewRef}
         data-theme={theme}
         className="markdown-preview h-full overflow-auto bg-preview p-6"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      >
+        <MarkdownContent html={html} />
+      </div>
     )
   },
 )
