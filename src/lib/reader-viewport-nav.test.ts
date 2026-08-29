@@ -4,6 +4,7 @@ import {
   isHeadingLabelMatch,
   findFlatIndexFromViewport,
   findHeadingElementByLabel,
+  findBlockElementByLabel,
   findViewportEntryAnchor,
   scrollToViewportEntry,
   type ViewportNavEntry,
@@ -246,6 +247,23 @@ describe('reader-viewport-nav（跨格式）', () => {
       expect(
         findHeadingElementByLabel(document, '一、赵晔：《忠义传》中的“贰臣”')?.className,
       ).toContain('calibre_5')
+    })
+
+    it('三级目录项：普通段落文本也可作锚点', () => {
+      const document = mockScrollDocument(
+        `<p class="calibre_4">三、金土相克：安禄山起兵的政治宣传</p><p>正文段落</p>`,
+        [{ selector: 'p.calibre_4', top: 2400, height: 36 }],
+        0,
+      )
+
+      const entry: ViewportNavEntry = {
+        flatIndex: 4,
+        label: '三、金土相克：安禄山起兵的政治宣传',
+        loadKey: '2',
+      }
+
+      expect(findBlockElementByLabel(document, entry.label)?.textContent).toContain('三、金土相克')
+      expect(scrollToViewportEntry(document, entry, { behavior: 'auto' })).toBe(true)
     })
   })
 })

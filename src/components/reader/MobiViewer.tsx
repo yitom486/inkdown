@@ -45,7 +45,7 @@ import {
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
-import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
+import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/core/errors'
 import type { ReadingMark } from '@shared/types/reading-mark'
@@ -171,11 +171,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       if (sameSpine && !options?.forceReload) {
         const doc = iframeRef.current?.contentDocument
         if (doc?.body) {
-          scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex)
-          window.requestAnimationFrame(() => {
-            syncMobiViewportNav(doc, item.id)
-            useReaderNavigationStore.getState().clearNavIntent()
-          })
+          scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex, { behavior: 'auto' })
           return true
         }
       }
@@ -320,6 +316,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
       const scrollRoot = doc.documentElement
       const onScroll = () => {
+        if (isNavIntentLocked(useReaderNavigationStore.getState().navIntent)) return
         if (currentChapterId) {
           syncMobiViewportNav(doc, currentChapterId)
         }
@@ -490,17 +487,17 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       const doc = iframe.contentDocument
       if (!doc?.body) return
       bindChapterFrame(iframe)
-      doc.documentElement.scrollTo({ top: 0 })
-      if (chaptersRef.current.length > 0) {
-        const chapterId = currentChapterIdRef.current
-        const navFlatIndex = useReaderNavigationStore.getState().nav.flatIndex
-        if (chapterId && navFlatIndex >= 0 && navFlatIndex !== findFirstFlatIndexById(chaptersRef.current, chapterId)) {
-          scrollMobiChapterToFlatIndex(doc, chaptersRef.current, navFlatIndex)
-        }
-        window.requestAnimationFrame(() => {
-          if (chapterId) syncMobiViewportNav(doc, chapterId)
-          useReaderNavigationStore.getState().clearNavIntent()
-        })
+      const navFlatIndex = useReaderNavigationStore.getState().nav.flatIndex
+      const chapterId = currentChapterIdRef.current
+      const firstIndex =
+        chapterId && chaptersRef.current.length > 0
+          ? findFirstFlatIndexById(chaptersRef.current, chapterId)
+          : -1
+
+      if (chapterId && navFlatIndex >= 0 && navFlatIndex !== firstIndex) {
+        scrollMobiChapterToFlatIndex(doc, chaptersRef.current, navFlatIndex, { behavior: 'auto' })
+      } else {
+        doc.documentElement.scrollTo({ top: 0 })
       }
     }
 

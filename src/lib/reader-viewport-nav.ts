@@ -78,12 +78,38 @@ export function findHeadingElementByLabel(document: Document, label: string): HT
 function findElementBySelector(document: Document, selector: string): HTMLElement | null {
   const trimmed = selector.trim()
   if (!trimmed) return null
+
+  const fileposMatch = trimmed.match(/^\[id="filepos:(\d+)"\]$/)
+  if (fileposMatch) {
+    const fileposId = `filepos:${fileposMatch[1]}`
+    const byId = document.getElementById(fileposId)
+    if (byId instanceof HTMLElement) return byId
+  }
+
   try {
     const node = document.querySelector(trimmed)
     return node instanceof HTMLElement ? node : null
   } catch {
     return null
   }
+}
+
+/** 按 TOC 标签在块级元素中查找锚点（KF8/AZW3 常不用 h1–h6） */
+export function findBlockElementByLabel(document: Document, label: string): HTMLElement | null {
+  const fromHeading = findHeadingElementByLabel(document, label)
+  if (fromHeading) return fromHeading
+
+  const target = normalizeHeadingText(label)
+  if (!target) return null
+
+  for (const node of document.querySelectorAll('p, div, blockquote, li, span, td, th')) {
+    if (!(node instanceof HTMLElement)) continue
+    const text = normalizeHeadingText(node.textContent ?? '')
+    if (text.length < 2 || text.length > 160) continue
+    if (isHeadingLabelMatch(label, text)) return node
+  }
+
+  return null
 }
 
 export function findViewportEntryAnchor(document: Document, entry: ViewportNavEntry): HTMLElement | null {
@@ -95,7 +121,7 @@ export function findViewportEntryAnchor(document: Document, entry: ViewportNavEn
     const byFragment = findFragmentElement(document, entry.fragment)
     if (byFragment) return byFragment
   }
-  return findHeadingElementByLabel(document, entry.label)
+  return findBlockElementByLabel(document, entry.label)
 }
 
 function resolveScrollRoot(document: Document): HTMLElement {
