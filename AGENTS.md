@@ -31,7 +31,7 @@
 | 客户端 UI 状态 | **Zustand** | 视图模式、滚动进度、侧栏折叠等本地持久化 |
 | 布局 | **react-resizable-panels** | 可拖拽分屏（经 shadcn Resizable 封装） |
 | 测试 | **Vitest** + **Playwright** | 单元/集成（`*.test.ts`）；E2E（`e2e/*.spec.ts`） |
-| 打包发布 | **electron-builder** | 生成 Windows `.exe` 安装包 |
+| 打包发布 | **electron-builder** | Windows `.exe` / macOS `.dmg` / Linux AppImage·deb |
 
 ## Bun 使用准则
 
@@ -456,7 +456,7 @@ chore: 使用 bun 初始化项目依赖
 | 2 | 文件打开 / 保存 | 可读写 `.md` 文件 |
 | 3 | CodeMirror 编辑 + markdown-it 预览 | 分屏实时预览、KaTeX/Mermaid |
 | 4 | 快捷键、主题、未保存提示、Result + Query | 完整编辑体验与服务端状态管理（进度见 `.plan/`） |
-| 5 | electron-builder 打包 | 生成可安装 `.exe` |
+| 5 | electron-builder 打包 | Win / macOS / Linux 安装包（见 Release 工作流） |
 
 ## 参考命令速查
 

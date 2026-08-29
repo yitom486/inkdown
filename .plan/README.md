@@ -12,7 +12,7 @@
 | 编辑器核心功能 | `done` |
 | 设置面板与增强 | `done` |
 | 体验打磨（Sonner / 扩展设置 / Tab·字号） | `done` |
-| 打包发布（NSIS 安装包） | `done` |
+| 打包发布（Win/macOS/Linux） | `done` |
 | 自动更新 | `cancelled`（后续单独立项） |
 | 电子书阅读（EPUB/PDF/MOBI） | `in-progress` |
 | **GitHub Release v0.1（无 AI）** | `pending` |

@@ -1,4 +1,4 @@
-# 推送版本 tag（如 v0.1.0）时：测试 → 打包 Windows 安装程序 → 创建 GitHub Release
+# 推送版本 tag（如 v0.1.0）时：测试 → 分平台打包 → 创建 GitHub Release
 # 普通 git push 到 master 不会触发本 workflow，仅 CI 运行
 
 name: Release
@@ -17,9 +17,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release:
-    name: 打包并发布 Windows 安装程序
-    runs-on: windows-latest
+  quality:
+    name: 类型检查与单元测试
+    runs-on: ubuntu-latest
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -38,8 +38,37 @@ jobs:
       - name: 单元与集成测试
         run: bun run test
 
-      - name: 构建并打包 NSIS 安装程序
-        run: bun run pack
+  build:
+    name: 打包 (${{ matrix.name }})
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            args: --win
+          - name: macOS
+            os: macos-latest
+            args: --mac
+          - name: Linux
+            os: ubuntu-latest
+            args: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 构建并打包
+        run: bun run build && bunx electron-builder ${{ matrix.args }} --publish never
         env:
           # CI 无代码签名证书，跳过自动签名探测
           CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -48,14 +77,44 @@ jobs:
         shell: bash
         run: ls -la release/
 
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/*.dmg
+            release/*.zip
+            release/*.AppImage
+            release/*.deb
+            release/*.blockmap
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    name: 创建 GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # tag 推送或手动触发时发布；手动触发时用当前 ref 名作为 release 名
+    steps:
+      - name: 下载全部安装包
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: installers-*
+          merge-multiple: true
+
+      - name: 列出待发布文件
+        run: find artifacts -type f | sort
+
       - name: 创建 GitHub Release 并上传安装包
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/*.exe
-            release/*.exe.blockmap
+          files: artifacts/*
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

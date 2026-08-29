@@ -1,6 +1,6 @@
 {
   "name": "markdown-editor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Electron 轻量阅读器（Markdown 编辑 + PDF/EPUB 阅读）",
   "main": "out/main/main.js",
   "type": "module",
@@ -10,6 +10,9 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "pack": "bun run build && electron-builder --publish never",
+    "pack:win": "bun run build && electron-builder --win --publish never",
+    "pack:mac": "bun run build && electron-builder --mac --publish never",
+    "pack:linux": "bun run build && electron-builder --linux --publish never",
     "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icon.ps1 && bun run scripts/generate-icon.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
