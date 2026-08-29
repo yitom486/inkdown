@@ -7,6 +7,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
 import { WelcomePage } from '@/components/layout/WelcomePage'
 import { ViewModeToggle } from '@/components/layout/ViewModeToggle'
+import { AgentPanel } from '@/components/agent/AgentPanel'
 import {
   MarkdownEditor,
   type MarkdownEditorHandle,
@@ -29,6 +30,7 @@ import {
   type MarkdownHeading,
 } from '@/lib/markdown-headings'
 import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import type { FileTreeNode } from '@shared/types/file'
 
@@ -95,6 +97,8 @@ export function EditorLayout({
   const sidebarVisible = useEditorUiStore((state) => state.sidebarVisible)
   const setSidebarVisible = useEditorUiStore((state) => state.setSidebarVisible)
   const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
+  const agentPanelOpen = useAcpUiStore((state) => state.panelOpen)
+  const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
   const sidebarPanelRef = useSidebarPanelSync(sidebarVisible)
   const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
   const tabSize = useAppSettingsStore((state) => state.tabSize)
@@ -239,13 +243,26 @@ export function EditorLayout({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [filePath, setViewMode])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
+      if (event.key.toLowerCase() !== 'a') return
+      event.preventDefault()
+      toggleAgentPanel()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [toggleAgentPanel])
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <TitleBar
         theme={theme}
         recentFiles={recentFiles}
         sidebarVisible={sidebarVisible}
+        agentPanelOpen={agentPanelOpen}
         onToggleSidebar={toggleSidebar}
+        onToggleAgentPanel={toggleAgentPanel}
         onToggleTheme={toggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
@@ -263,7 +280,13 @@ export function EditorLayout({
       />
 
       <div className="flex min-h-0 flex-1">
-        <ActivityBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
+        <ActivityBar
+          sidebarVisible={sidebarVisible}
+          agentPanelOpen={agentPanelOpen}
+          onToggleSidebar={toggleSidebar}
+          onToggleAgentPanel={toggleAgentPanel}
+        />
+        {agentPanelOpen ? <AgentPanel workspaceRoot={workspaceRoot} /> : null}
 
         <ResizablePanelGroup
         id="markdown-editor-sidebar-main"

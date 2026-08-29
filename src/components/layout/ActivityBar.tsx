@@ -1,14 +1,21 @@
-import { Files } from 'lucide-react'
+import { Bot, Files } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface ActivityBarProps {
   sidebarVisible: boolean
+  agentPanelOpen?: boolean
   onToggleSidebar: () => void
+  onToggleAgentPanel?: () => void
 }
 
-/** 左侧活动栏：侧栏隐藏后仍保留入口，点击可再次打开（类似 VS Code） */
-export function ActivityBar({ sidebarVisible, onToggleSidebar }: ActivityBarProps) {
+/** 左侧活动栏：资源管理器 + Agent（类似 VS Code） */
+export function ActivityBar({
+  sidebarVisible,
+  agentPanelOpen = false,
+  onToggleSidebar,
+  onToggleAgentPanel,
+}: ActivityBarProps) {
   return (
     <aside
       className="flex w-12 shrink-0 flex-col items-center border-r border-border/60 bg-sidebar pt-1"
@@ -29,6 +36,23 @@ export function ActivityBar({ sidebarVisible, onToggleSidebar }: ActivityBarProp
       >
         <Files className="size-5" />
       </Button>
+      {onToggleAgentPanel ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'size-10 rounded-none border-l-2 border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+            agentPanelOpen && 'border-primary bg-accent/40 text-foreground',
+          )}
+          aria-label={agentPanelOpen ? '关闭 Agent 面板' : '打开 Agent 面板'}
+          aria-pressed={agentPanelOpen}
+          title={agentPanelOpen ? '关闭 Agent (Ctrl+Shift+A)' : '打开 Agent (Ctrl+Shift+A)'}
+          onClick={onToggleAgentPanel}
+        >
+          <Bot className="size-5" />
+        </Button>
+      ) : null}
     </aside>
   )
 }

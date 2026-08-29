@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { ActivityBar } from '@/components/layout/ActivityBar'
 import { FileExplorer } from '@/components/layout/FileExplorer'
 import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
+import { AgentPanel } from '@/components/agent/AgentPanel'
 import { EpubViewer } from '@/components/reader/EpubViewer'
 import { MobiViewer } from '@/components/reader/MobiViewer'
 import { PdfViewer } from '@/components/reader/PdfViewer'
@@ -13,6 +15,7 @@ import {
 } from '@/components/ui/resizable'
 import { useSidebarPanelSync } from '@/hooks/useSidebarPanelSync'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { ReaderDocumentKind } from '@shared/types/document'
 import type { FileTreeNode } from '@shared/types/file'
 
@@ -62,6 +65,8 @@ export function ReaderLayout({
   const sidebarVisible = useEditorUiStore((state) => state.sidebarVisible)
   const setSidebarVisible = useEditorUiStore((state) => state.setSidebarVisible)
   const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
+  const agentPanelOpen = useAcpUiStore((state) => state.panelOpen)
+  const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
   const sidebarPanelRef = useSidebarPanelSync(sidebarVisible)
 
   const sidebarLayout = useDefaultLayout({
@@ -69,14 +74,27 @@ export function ReaderLayout({
     panelIds: ['sidebar', 'main'],
   })
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
+      if (event.key.toLowerCase() !== 'a') return
+      event.preventDefault()
+      toggleAgentPanel()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [toggleAgentPanel])
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <TitleBar
         theme={theme}
         recentFiles={recentFiles}
         sidebarVisible={sidebarVisible}
+        agentPanelOpen={agentPanelOpen}
         readOnly
         onToggleSidebar={toggleSidebar}
+        onToggleAgentPanel={toggleAgentPanel}
         onToggleTheme={onToggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
@@ -94,7 +112,13 @@ export function ReaderLayout({
       />
 
       <div className="flex min-h-0 flex-1">
-        <ActivityBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
+        <ActivityBar
+          sidebarVisible={sidebarVisible}
+          agentPanelOpen={agentPanelOpen}
+          onToggleSidebar={toggleSidebar}
+          onToggleAgentPanel={toggleAgentPanel}
+        />
+        {agentPanelOpen ? <AgentPanel workspaceRoot={workspaceRoot} /> : null}
 
         <ResizablePanelGroup
         id="reader-sidebar-main"

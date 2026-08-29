@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  Bot,
   Bug,
   FileCode2,
   FileText,
@@ -35,9 +36,11 @@ interface TitleBarProps {
   theme: 'dark' | 'light'
   recentFiles: string[]
   sidebarVisible?: boolean
+  agentPanelOpen?: boolean
   readOnly?: boolean
   onToggleTheme: () => void
   onToggleSidebar?: () => void
+  onToggleAgentPanel?: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
   onOpenRecentFile: (path: string) => void
@@ -57,9 +60,11 @@ export function TitleBar({
   theme,
   recentFiles,
   sidebarVisible = true,
+  agentPanelOpen = false,
   readOnly = false,
   onToggleTheme,
   onToggleSidebar,
+  onToggleAgentPanel,
   onOpenFile,
   onOpenFolder,
   onOpenRecentFile,
@@ -207,16 +212,35 @@ export function TitleBar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="ml-auto text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-        aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
-        title={theme === 'dark' ? '浅色主题' : '深色主题'}
-        onClick={onToggleTheme}
-      >
-        {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-      </Button>
+      <div className="ml-auto flex items-center gap-0.5">
+        {onToggleAgentPanel ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={
+              agentPanelOpen
+                ? 'bg-accent/40 text-foreground hover:bg-accent/60'
+                : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+            }
+            aria-label={agentPanelOpen ? '关闭 Agent 面板' : '打开 Agent 面板'}
+            aria-pressed={agentPanelOpen}
+            title={agentPanelOpen ? '关闭 Agent (Ctrl+Shift+A)' : '打开 Agent (Ctrl+Shift+A)'}
+            onClick={onToggleAgentPanel}
+          >
+            <Bot className="size-4" />
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
+          title={theme === 'dark' ? '浅色主题' : '深色主题'}
+          onClick={onToggleTheme}
+        >
+          {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </Button>
+      </div>
     </header>
   )
 }
