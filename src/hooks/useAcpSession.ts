@@ -170,6 +170,7 @@ export function useAcpSession(workspaceRoot?: string) {
       reportAppError(result.error)
       return
     }
+    useAcpUiStore.getState().clearPendingPermission()
     finishStreaming()
   }, [finishStreaming])
 

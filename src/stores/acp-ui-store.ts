@@ -213,7 +213,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           status,
           statusError: errorMessage,
           ...(status === 'disconnected' || status === 'error'
-            ? { prompting: false }
+            ? { prompting: false, pendingPermission: null }
             : {}),
         }),
 
