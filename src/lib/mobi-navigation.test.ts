@@ -4,6 +4,7 @@ import {
   buildReadableSpineChapters,
   decodeMobiTocHref,
   encodeMobiTocHref,
+  flattenMobiToc,
   pickReadableMobiChapterCandidates,
   resolveMobiChapterNav,
 } from './mobi-navigation'
@@ -37,6 +38,27 @@ describe('buildReadableSpineChapters', () => {
   })
 })
 
+describe('flattenMobiToc', () => {
+  it('保留 KF8 resolveHref 的章内 selector', () => {
+    const chapters = flattenMobiToc(
+      [
+        {
+          label: '二、四面其主',
+          href: 'chapter0002.html#sec2',
+          children: [],
+        },
+      ],
+      (href) =>
+        href.includes('sec2')
+          ? { id: '2', selector: '#sec2' }
+          : { id: '2' },
+    )
+
+    expect(chapters[0]?.selector).toBe('#sec2')
+    expect(chapters[0]?.id).toBe('2')
+  })
+})
+
 describe('buildMobiChapterList', () => {
   it('TOC 条目不可读时降级到可读 spine', () => {
     const htmlById: Record<string, string> = {
@@ -49,7 +71,7 @@ describe('buildMobiChapterList', () => {
       [{ id: '0' }, { id: '1' }],
       [{ label: '目录', href: 'filepos:100' }],
       loadHtml,
-      () => '0',
+      () => ({ id: '0' }),
     )
 
     expect(chapters).toHaveLength(1)

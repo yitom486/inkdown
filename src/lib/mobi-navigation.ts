@@ -13,6 +13,13 @@ export interface MobiChapterItem {
   id: string
   label: string
   level: number
+  /** KF8/AZW3：resolveHref 返回的章内锚点选择器 */
+  selector?: string
+}
+
+export interface MobiTocTarget {
+  id: string
+  selector?: string
 }
 
 export interface MobiTocItemLike {
@@ -41,16 +48,21 @@ export function isTocLikeMobiChapter(chapter: MobiChapterItem): boolean {
 
 export function flattenMobiToc(
   toc: MobiTocItemLike[],
-  resolveChapterId: (href: string) => string | undefined,
+  resolveTarget: (href: string) => MobiTocTarget | undefined,
   level = 0,
 ): MobiChapterItem[] {
   const result: MobiChapterItem[] = []
 
   const walk = (items: MobiTocItemLike[], depth: number) => {
     for (const item of items) {
-      const id = resolveChapterId(item.href)
-      if (id) {
-        result.push({ id, label: item.label.trim() || '未命名章节', level: depth })
+      const target = resolveTarget(item.href)
+      if (target?.id) {
+        result.push({
+          id: target.id,
+          label: item.label.trim() || '未命名章节',
+          level: depth,
+          selector: target.selector?.trim() || undefined,
+        })
       }
       if (item.children?.length) {
         walk(item.children, depth + 1)
@@ -100,9 +112,9 @@ export function buildMobiChapterList(
   spine: Array<{ id: string }>,
   toc: MobiTocItemLike[],
   loadHtml: (id: string) => string | undefined,
-  resolveChapterId: (href: string) => string | undefined,
+  resolveTarget: (href: string) => MobiTocTarget | undefined,
 ): MobiChapterItem[] {
-  const readableToc = flattenMobiToc(toc, resolveChapterId).filter((item) => {
+  const readableToc = flattenMobiToc(toc, resolveTarget).filter((item) => {
     const html = loadHtml(item.id)
     return Boolean(html && isMobiChapterReadable(html))
   })

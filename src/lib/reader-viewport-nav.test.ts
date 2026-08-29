@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   isHeadingLabelMatch,
   findFlatIndexFromViewport,
+  findHeadingElementByLabel,
+  findViewportEntryAnchor,
+  scrollToViewportEntry,
   type ViewportNavEntry,
 } from '@/lib/reader-viewport-nav'
 import { flattenEpubToc } from '@/lib/epub-navigation'
@@ -213,6 +216,36 @@ describe('reader-viewport-nav（跨格式）', () => {
       )
 
       expect(findFlatIndexFromViewport(document, entries, '3')).toBe(0)
+    })
+
+    it('KF8 selector 优先于标题文本匹配', () => {
+      const document = mockScrollDocument(
+        `<p id="sec2" class="calibre_2">二、四面其主：安史乱中的王伷</p><p class="calibre_2">正文</p>`,
+        [{ id: 'sec2', top: 800, height: 40 }],
+        0,
+      )
+
+      const entry: ViewportNavEntry = {
+        flatIndex: 2,
+        label: '二、四面其主：安史乱中的王伷',
+        loadKey: 'chapter2',
+        selector: '#sec2',
+      }
+
+      expect(findViewportEntryAnchor(document, entry)?.id).toBe('sec2')
+      expect(scrollToViewportEntry(document, entry, { behavior: 'auto' })).toBe(true)
+    })
+
+    it('calibre 段落标题可按标签文本定位', () => {
+      const document = mockScrollDocument(
+        `<p class="calibre_5">一、赵晔：《忠义传》中的“贰臣”</p>`,
+        [{ selector: 'p.calibre_5', top: 120, height: 36 }],
+        0,
+      )
+
+      expect(
+        findHeadingElementByLabel(document, '一、赵晔：《忠义传》中的“贰臣”')?.className,
+      ).toContain('calibre_5')
     })
   })
 })

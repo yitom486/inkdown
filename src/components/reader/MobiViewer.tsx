@@ -410,7 +410,14 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           spine,
           toc,
           (id) => mobi.loadChapter(id)?.html,
-          (href) => mobi.resolveHref(href)?.id,
+          (href) => {
+            const resolved = mobi.resolveHref(href)
+            if (!resolved?.id) return undefined
+            return {
+              id: resolved.id,
+              selector: resolved.selector?.trim() || undefined,
+            }
+          },
         )
         setChapters(nextChapters)
 

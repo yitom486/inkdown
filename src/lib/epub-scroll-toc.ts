@@ -49,6 +49,7 @@ export function buildMobiViewportEntries(
       flatIndex,
       label: chapter.label,
       loadKey: chapter.id,
+      selector: chapter.selector,
     }))
 }
 
@@ -104,6 +105,7 @@ export function scrollMobiChapterToFlatIndex(
       flatIndex,
       label: chapter.label,
       loadKey: chapter.id,
+      selector: chapter.selector,
     },
     options,
   )

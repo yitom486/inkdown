@@ -9,6 +9,8 @@ export interface ViewportNavEntry {
   /** EPUB：spine 基路径；MOBI/AZW3：章节 id */
   loadKey: string
   fragment?: string
+  /** MOBI/AZW3：resolveHref 章内 CSS 选择器 */
+  selector?: string
 }
 
 export function normalizeLoadKey(key: string): string {
@@ -63,10 +65,32 @@ export function findHeadingElementByLabel(document: Document, label: string): HT
     if (isHeadingLabelMatch(label, text)) return node
   }
 
+  // KF8/AZW3 常用 calibre 段落作标题，而非 h1–h6
+  for (const node of document.querySelectorAll('p[class*="calibre"], div[class*="calibre"]')) {
+    if (!(node instanceof HTMLElement)) continue
+    const text = normalizeHeadingText(node.textContent ?? '')
+    if (isHeadingLabelMatch(label, text)) return node
+  }
+
   return null
 }
 
+function findElementBySelector(document: Document, selector: string): HTMLElement | null {
+  const trimmed = selector.trim()
+  if (!trimmed) return null
+  try {
+    const node = document.querySelector(trimmed)
+    return node instanceof HTMLElement ? node : null
+  } catch {
+    return null
+  }
+}
+
 export function findViewportEntryAnchor(document: Document, entry: ViewportNavEntry): HTMLElement | null {
+  if (entry.selector) {
+    const bySelector = findElementBySelector(document, entry.selector)
+    if (bySelector) return bySelector
+  }
   if (entry.fragment) {
     const byFragment = findFragmentElement(document, entry.fragment)
     if (byFragment) return byFragment
@@ -121,6 +145,21 @@ function findPrimaryVisibleHeading(
     if (top > bestTop) {
       bestTop = top
       best = node
+    }
+  }
+
+  if (!best) {
+    for (const node of document.querySelectorAll('p[class*="calibre"], div[class*="calibre"]')) {
+      if (!(node instanceof HTMLElement)) continue
+      const text = normalizeHeadingText(node.textContent ?? '')
+      if (text.length < 4) continue
+
+      const top = resolveElementScrollTop(node, scrollRoot)
+      if (top < bandTop - 8 || top > bandBottom) continue
+      if (top > bestTop) {
+        bestTop = top
+        best = node
+      }
     }
   }
 

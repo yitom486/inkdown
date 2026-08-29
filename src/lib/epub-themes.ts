@@ -188,6 +188,36 @@ export function buildReaderLayoutCss(mode: EpubThemeMode): string {
       color: ${palette.h3} !important;
       background-color: transparent !important;
     }
+    body h1, body h2, body h3, body h4, body h5, body h6 {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      line-height: 1.4 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      margin-top: 1.1em !important;
+      margin-bottom: 0.65em !important;
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+    }
+    body h1 {
+      font-size: clamp(1.35rem, 4vw, 1.75rem) !important;
+      line-height: 1.35 !important;
+    }
+    body h2 {
+      font-size: clamp(1.2rem, 3.5vw, 1.45rem) !important;
+      line-height: 1.38 !important;
+    }
+    body h3 {
+      font-size: clamp(1.1rem, 3vw, 1.25rem) !important;
+    }
+    body p[class*="calibre"],
+    body div[class*="calibre"] {
+      line-height: 1.45 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+    }
     body a {
       color: ${palette.link} !important;
     }
