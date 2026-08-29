@@ -1,123 +1,72 @@
+import type { EpubChapter } from '@/lib/epub-navigation'
+import type { MobiChapterItem } from '@/lib/mobi-navigation'
 import {
-  type EpubChapter,
-  isTocLikeChapter,
-} from '@/lib/epub-navigation'
-
-export function normalizeSpineHref(href: string): string {
-  return href.split('#')[0]?.toLowerCase() ?? href.toLowerCase()
-}
+  findFlatIndexFromViewport,
+  findFragmentElement,
+  normalizeLoadKey,
+  scrollToViewportEntry,
+  type ViewportNavEntry,
+} from '@/lib/reader-viewport-nav'
+import { isTocLikeChapter } from '@/lib/epub-navigation'
+import { isTocLikeMobiChapter } from '@/lib/mobi-navigation'
 
 function hrefMatches(currentHref: string, chapterHref: string): boolean {
-  const current = normalizeSpineHref(currentHref)
-  const target = normalizeSpineHref(chapterHref)
+  const current = normalizeLoadKey(currentHref)
+  const target = normalizeLoadKey(chapterHref)
   return current === target || current.endsWith(target) || target.endsWith(current)
 }
 
-function decodeFragment(raw: string): string {
-  try {
-    return decodeURIComponent(raw)
-  } catch {
-    return raw
-  }
-}
-
-export function findFragmentElement(document: Document, fragment: string): HTMLElement | null {
-  const decoded = decodeFragment(fragment)
-  const candidates = [fragment, decoded]
-  for (const id of candidates) {
-    const byId = document.getElementById(id)
-    if (byId) return byId
-    const byQuery = document.querySelector(`#${CSS.escape(id)}`)
-    if (byQuery instanceof HTMLElement) return byQuery
-    const byName = document.querySelector(`a[name="${id}"]`)
-    if (byName instanceof HTMLElement) return byName
-  }
-  return null
-}
-
-function collectSameDocumentChapters(
+export function buildEpubViewportEntries(
   chapters: EpubChapter[],
   spineHref: string,
-): Array<{ chapter: EpubChapter; index: number }> {
-  const base = normalizeSpineHref(spineHref)
+): ViewportNavEntry[] {
+  const base = normalizeLoadKey(spineHref)
   return chapters
-    .map((chapter, index) => ({ chapter, index }))
+    .map((chapter, flatIndex) => ({ chapter, flatIndex }))
     .filter(({ chapter }) => {
       if (isTocLikeChapter(chapter)) return false
-      const chapterBase = normalizeSpineHref(chapter.href)
+      const chapterBase = normalizeLoadKey(chapter.href)
       return chapterBase === base || hrefMatches(spineHref, chapter.href)
     })
+    .map(({ chapter, flatIndex }) => ({
+      flatIndex,
+      label: chapter.label,
+      loadKey: base,
+      fragment: chapter.href.includes('#') ? chapter.href.split('#')[1] : undefined,
+    }))
 }
 
-function resolveScrollRoot(document: Document): HTMLElement {
-  return (document.scrollingElement ?? document.documentElement) as HTMLElement
+export function buildMobiViewportEntries(
+  chapters: MobiChapterItem[],
+  chapterId: string,
+): ViewportNavEntry[] {
+  return chapters
+    .map((chapter, flatIndex) => ({ chapter, flatIndex }))
+    .filter(({ chapter }) => chapter.id === chapterId && !isTocLikeMobiChapter(chapter))
+    .map(({ chapter, flatIndex }) => ({
+      flatIndex,
+      label: chapter.label,
+      loadKey: chapter.id,
+    }))
 }
 
-function measureHeadingTop(element: HTMLElement, scrollRoot: HTMLElement): number {
-  const rect = element.getBoundingClientRect()
-  const rootRect = scrollRoot.getBoundingClientRect()
-  return rect.top - rootRect.top + scrollRoot.scrollTop
-}
-
-/**
- * scrolled-doc：根据视口内可见锚点定位当前 TOC 节。
- * 1. 标准 scroll-spy：标题顶越过视口上方激活线
- * 2. 过渡提升：下一节标题已在视口内露出（如截图中底部已见「研究策略」）则切到该节
- */
 export function findEpubFlatIndexFromViewport(
   chapters: EpubChapter[],
   document: Document,
   spineHref?: string,
 ): number {
   if (!spineHref) return -1
+  const entries = buildEpubViewportEntries(chapters, spineHref)
+  return findFlatIndexFromViewport(document, entries, spineHref)
+}
 
-  const sameDoc = collectSameDocumentChapters(chapters, spineHref)
-  if (sameDoc.length === 0) return -1
-
-  const withFragment = sameDoc.filter(({ chapter }) => chapter.href.includes('#'))
-  if (withFragment.length === 0) return sameDoc[0]!.index
-
-  const scrollRoot = resolveScrollRoot(document)
-  const viewportHeight = scrollRoot.clientHeight || document.documentElement.clientHeight
-  const activationLine = Math.min(160, viewportHeight * 0.2)
-  const scrollTop = scrollRoot.scrollTop
-
-  let activeIndex = withFragment[0]!.index
-
-  for (const { chapter, index } of withFragment) {
-    const fragment = chapter.href.split('#')[1]
-    if (!fragment) continue
-    const element = findFragmentElement(document, fragment)
-    if (!element) continue
-
-    if (element.offsetTop <= scrollTop + activationLine) {
-      activeIndex = index
-    }
-  }
-
-  const viewportBottom = scrollTop + viewportHeight
-
-  for (let i = withFragment.length - 1; i >= 0; i -= 1) {
-    const { chapter, index } = withFragment[i]!
-    if (index <= activeIndex) break
-
-    const fragment = chapter.href.split('#')[1]
-    if (!fragment) continue
-    const element = findFragmentElement(document, fragment)
-    if (!element) continue
-
-    const top = element.offsetTop
-    const bottom = top + element.offsetHeight
-    const headingPeekVisible =
-      top < viewportBottom - 24 && bottom > scrollTop + activationLine * 0.75
-
-    if (headingPeekVisible) {
-      activeIndex = index
-      break
-    }
-  }
-
-  return activeIndex
+export function findMobiFlatIndexFromViewport(
+  chapters: MobiChapterItem[],
+  document: Document,
+  chapterId: string,
+): number {
+  const entries = buildMobiViewportEntries(chapters, chapterId)
+  return findFlatIndexFromViewport(document, entries, chapterId)
 }
 
 export function scrollEpubChapterToFragment(
@@ -127,22 +76,39 @@ export function scrollEpubChapterToFragment(
 ): boolean {
   const fragment = chapter.href.split('#')[1]
   if (!fragment) return false
+  return scrollToViewportEntry(
+    document,
+    {
+      flatIndex: -1,
+      label: chapter.label,
+      loadKey: normalizeLoadKey(chapter.href),
+      fragment,
+    },
+    options,
+  )
+}
 
-  const element = findFragmentElement(document, fragment)
-  if (!element) return false
-
-  const behavior = options?.behavior ?? 'smooth'
-  const scrollRoot = resolveScrollRoot(document)
-  const top = measureHeadingTop(element, scrollRoot)
-
-  element.scrollIntoView({ behavior, block: 'start' })
-  scrollRoot.scrollTo({ top, behavior })
-  return true
+export function scrollMobiChapterToFlatIndex(
+  document: Document,
+  chapters: MobiChapterItem[],
+  flatIndex: number,
+  options?: { behavior?: ScrollBehavior },
+): boolean {
+  const chapter = chapters[flatIndex]
+  if (!chapter) return false
+  return scrollToViewportEntry(
+    document,
+    {
+      flatIndex,
+      label: chapter.label,
+      loadKey: chapter.id,
+    },
+    options,
+  )
 }
 
 interface EpubRenditionContents {
   document?: Document
-  window?: Window
 }
 
 interface EpubRenditionLike {
@@ -167,13 +133,12 @@ function getRenditionContents(rendition: EpubRenditionLike): EpubRenditionConten
   return (Array.isArray(raw) ? raw : raw ? [raw] : []) as EpubRenditionContents[]
 }
 
-/** 同 spine 文件内：滚动到 fragment，避免 display 同文件时「下一节」无反应 */
 export function scrollEpubChapterInRendition(
   rendition: EpubRenditionLike,
   chapter: EpubChapter,
 ): boolean {
-  const targetBase = normalizeSpineHref(chapter.href)
-  const currentBase = normalizeSpineHref(resolveSpineHrefFromRendition(rendition) ?? '')
+  const targetBase = normalizeLoadKey(chapter.href)
+  const currentBase = normalizeLoadKey(resolveSpineHrefFromRendition(rendition) ?? '')
   if (!chapter.href.includes('#') || !targetBase || targetBase !== currentBase) return false
 
   for (const contents of getRenditionContents(rendition)) {
@@ -183,3 +148,5 @@ export function scrollEpubChapterInRendition(
 
   return false
 }
+
+export { normalizeLoadKey as normalizeSpineHref, findFragmentElement } from '@/lib/reader-viewport-nav'

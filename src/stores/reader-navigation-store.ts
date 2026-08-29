@@ -8,6 +8,7 @@ import {
   syncEpubNavigationFromViewport,
   syncEpubNavigationFromRendition,
   syncMobiNavigation,
+  syncMobiNavigationFromViewport,
   syncPdfNavigation,
   type ReaderFormat,
 } from '@/lib/reader-navigation-sync'
@@ -51,6 +52,7 @@ interface ReaderNavigationStore {
   syncEpubViewport: (units: EpubChapter[], document: Document, spineHref: string) => void
   syncEpubRendition: (units: EpubChapter[], rendition: EpubRenditionLike) => void
   syncMobi: (units: MobiChapterItem[], chapterId?: string, flatIndex?: number) => void
+  syncMobiViewport: (units: MobiChapterItem[], document: Document, chapterId: string) => void
   syncPdf: (units: ReaderUnit[], pageNum: number) => void
   syncFlatIndex: (flatIndex: number) => void
 }
@@ -106,6 +108,13 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
 
   syncMobi: (units, chapterId, flatIndex) => {
     const nav = syncMobiNavigation(units, chapterId, flatIndex)
+    const prev = get()
+    if (prev.format === 'mobi' && isSameNav(prev.nav, nav)) return
+    set({ units, format: 'mobi', nav })
+  },
+
+  syncMobiViewport: (units, document, chapterId) => {
+    const nav = syncMobiNavigationFromViewport(units, document, chapterId)
     const prev = get()
     if (prev.format === 'mobi' && isSameNav(prev.nav, nav)) return
     set({ units, format: 'mobi', nav })

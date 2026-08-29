@@ -243,7 +243,16 @@ export function resolveTopLevelChapterNav<T extends LeveledChapter>(
   return resolveReaderChapterNav(chapters, flatIndex, 0)
 }
 
-/** MOBI/AZW3：同一 spine 章节可对应多个 TOC 项，取最后一个匹配项 */
+/** MOBI/AZW3：同一 spine 章节可对应多个 TOC 项，取第一个匹配项（视口同步负责精确定位） */
+export function findFirstFlatIndexById<T extends LeveledChapter & { id: string }>(
+  chapters: T[],
+  currentId?: string,
+): number {
+  if (!currentId) return -1
+  return chapters.findIndex((chapter) => chapter.id === currentId)
+}
+
+/** @deprecated 同 spine 多 TOC 请优先 flatIndex / 视口同步，勿默认取最后一条 */
 export function findLastFlatIndexById<T extends LeveledChapter & { id: string }>(
   chapters: T[],
   currentId?: string,

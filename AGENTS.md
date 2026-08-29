@@ -211,6 +211,21 @@ EPUB / MOBI / PDF 阅读器中，**工具栏当前标题、底部上一节/下�
 - 导航解析逻辑集中在 `src/lib/reader-navigation-sync.ts` 与 `epub-navigation.ts` / `mobi-navigation.ts`；**禁止**在 Toolbar / Footer / 侧栏各自维护 `chapterNav` / `unitNav` 本地 state
 - EPUB `scrolled-doc` 同 HTML 多节：滚动与 `relocated` 时优先 `syncEpubViewport` / `syncEpubRendition`（视口锚点），不得仅用 spine href 或全书百分比推断当前节
 
+### 渲染分块 vs 导航分块（跨格式）
+
+电子书渲染按 **loadKey**（EPUB spine 文件 / MOBI·AZW3 章节 id）连续灌入 iframe，导航按 **TOC flatIndex** 切片。二者粒度不同是常态，**必须用同一套视口 scroll-spy 对齐**，禁止各格式各写一套：
+
+| 层 | 路径 | 职责 |
+|----|------|------|
+| 视口算法（共享） | `src/lib/reader-viewport-nav.ts` | `findFlatIndexFromViewport` / `scrollToViewportEntry` |
+| 格式适配 | `src/lib/epub-scroll-toc.ts` | EPUB fragment + MOBI 标题锚点 → `ViewportNavEntry[]` |
+| 同步入口 | `src/lib/reader-navigation-sync.ts` | `syncEpub*Viewport` / `syncMobiNavigationFromViewport` |
+| 状态 | `reader-navigation-store` | 工具栏 / 底部 / 侧栏唯一数据源 |
+
+- **MOBI / AZW3** 与 EPUB 相同问题：多个 TOC 项共用同一 `chapter.id`，同 spine 内点「下一节」须 **滚到标题锚点**，不得仅 `loadChapter` 因 id 相同而 early-return
+- **PDF** 按页码定位，无同 HTML 多节问题；保持 `syncPdf` 即可
+- 新增连续滚动格式时，先扩展 `ViewportNavEntry` 构建，再接入 store；**不得**在 Viewer 内单独写 nav 本地 state
+
 ### Zustand 选择器与无限重渲染（强制）
 
 本项目**至少两次**踩过同一坑（`editor-ui-store` 的 `useFileUiState`、`reader-navigation-store` 的 `useReaderNavTitles`），运行时表现为：

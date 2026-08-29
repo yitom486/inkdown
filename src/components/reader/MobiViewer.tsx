@@ -29,10 +29,11 @@ import {
   type MobiChapterItem,
 } from '@/lib/mobi-navigation'
 import {
-  findLastFlatIndexById,
+  findFirstFlatIndexById,
   findNextDistinctLoadTarget,
   findPreviousDistinctLoadTarget,
 } from '@/lib/reader-chapter-nav'
+import { scrollMobiChapterToFlatIndex } from '@/lib/epub-scroll-toc'
 import { readMobiSelection } from '@/lib/mobi-selection'
 import {
   bindDocumentSelectionCollapse,
@@ -161,9 +162,25 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       const item = chaptersRef.current[flatIndex]
       if (!item) return false
 
+      const sameSpine = item.id === currentChapterIdRef.current
+      if (sameSpine && !options?.forceReload) {
+        const doc = iframeRef.current?.contentDocument
+        if (doc && flatIndex !== currentTocFlatIndex) {
+          const scrolled = scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex)
+          if (scrolled) {
+            setCurrentTocFlatIndex(flatIndex)
+            useReaderNavigationStore
+              .getState()
+              .syncMobi(chaptersRef.current, item.id, flatIndex)
+            return true
+          }
+        }
+        if (flatIndex === currentTocFlatIndex) return true
+      }
+
       setCurrentTocFlatIndex(flatIndex)
 
-      if (!options?.forceReload && item.id === currentChapterIdRef.current) {
+      if (!options?.forceReload && sameSpine) {
         return true
       }
 
@@ -172,18 +189,25 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         const loaded = await loadChapterById(item.id)
         if (!loaded) {
           toast.error('该章节暂无正文')
+          return false
         }
-        return loaded
+        if (flatIndex !== findFirstFlatIndexById(chaptersRef.current, item.id)) {
+          const doc = iframeRef.current?.contentDocument
+          if (doc) {
+            scrollMobiChapterToFlatIndex(doc, chaptersRef.current, flatIndex)
+          }
+        }
+        return true
       } finally {
         setChapterLoading(false)
       }
     },
-    [loadChapterById],
+    [currentTocFlatIndex, loadChapterById],
   )
 
   const loadChapter = useCallback(
     async (chapterId: string) => {
-      const flatIndex = findLastFlatIndexById(chaptersRef.current, chapterId)
+      const flatIndex = findFirstFlatIndexById(chaptersRef.current, chapterId)
       if (flatIndex >= 0) {
         await loadChapterAtIndex(flatIndex, { forceReload: true })
         return
@@ -214,6 +238,16 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     },
     [nav.nextIndex, nav.previousIndex, loadChapterAtIndex],
   )
+
+  const syncMobiViewportNav = useCallback((doc: Document, chapterId: string) => {
+    if (chaptersRef.current.length === 0) return
+    const flatIndex = useReaderNavigationStore.getState().nav.flatIndex
+    useReaderNavigationStore.getState().syncMobiViewport(chaptersRef.current, doc, chapterId)
+    const nextFlatIndex = useReaderNavigationStore.getState().nav.flatIndex
+    if (nextFlatIndex >= 0 && nextFlatIndex !== flatIndex) {
+      setCurrentTocFlatIndex(nextFlatIndex)
+    }
+  }, [])
 
   const syncMobiMarkOverlays = useCallback(
     (doc: Document, chapterId: string) => {
@@ -305,6 +339,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       }
 
       const scrollRoot = doc.documentElement
+      const onScroll = () => {
+        if (currentChapterId) {
+          syncMobiViewportNav(doc, currentChapterId)
+        }
+      }
+
       const onWheel = (event: WheelEvent) => {
         const turn = resolveWheelPageTurn(event.deltaY, {
           scrollTop: scrollRoot.scrollTop,
@@ -327,7 +367,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         const activeFlatIndex =
           currentTocFlatIndex >= 0
             ? currentTocFlatIndex
-            : findLastFlatIndexById(chapters, currentChapterId)
+            : findFirstFlatIndexById(chapters, currentChapterId)
         const distinctTarget =
           turn === 'next'
             ? findNextDistinctLoadTarget(chapters, activeFlatIndex, navOptions)
@@ -341,20 +381,23 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('click', onClick)
       doc.addEventListener('mousemove', onMouseMove, { passive: true })
+      scrollRoot.addEventListener('scroll', onScroll, { passive: true })
       scrollRoot.addEventListener('wheel', onWheel, { passive: false })
+      requestAnimationFrame(() => onScroll())
 
       chapterCleanupRef.current = () => {
         doc.removeEventListener('mouseup', onMouseUp)
         onSelectionChange()
         doc.removeEventListener('click', onClick)
         doc.removeEventListener('mousemove', onMouseMove)
+        scrollRoot.removeEventListener('scroll', onScroll)
         scrollRoot.removeEventListener('wheel', onWheel)
         if (hoverRaf !== 0) {
           window.cancelAnimationFrame(hoverRaf)
         }
       }
     },
-    [chapters, clearTextSelection, currentChapterId, currentTocFlatIndex, loadChapterAtIndex, syncMobiMarkOverlays],
+    [chapters, clearTextSelection, currentChapterId, currentTocFlatIndex, loadChapterAtIndex, syncMobiMarkOverlays, syncMobiViewportNav],
   )
 
   useEffect(() => {
@@ -631,7 +674,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         onSelectUnit={(unit) => {
           const index = decodeMobiTocHref(unit.href)
           if (index !== null) {
-            void loadChapterAtIndex(index, { forceReload: true })
+            void loadChapterAtIndex(index)
           }
         }}
       >

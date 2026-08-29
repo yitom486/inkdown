@@ -3,7 +3,7 @@ import {
   type EpubChapter,
   type EpubLocationHint,
 } from '@/lib/epub-navigation'
-import { findEpubFlatIndexFromViewport } from '@/lib/epub-scroll-toc'
+import { findEpubFlatIndexFromViewport, findMobiFlatIndexFromViewport } from '@/lib/epub-scroll-toc'
 import { resolveMobiChapterNav, type MobiChapterItem } from '@/lib/mobi-navigation'
 import type { AdjacentFlatNavState } from '@/lib/reader-chapter-nav'
 import type { ReaderUnit } from '@/lib/reader-navigation'
@@ -79,6 +79,16 @@ export function syncEpubNavigationFromRendition(
   }
 
   return EMPTY_READER_NAV
+}
+
+export function syncMobiNavigationFromViewport(
+  units: MobiChapterItem[],
+  document: Document,
+  chapterId: string,
+): AdjacentFlatNavState<ReaderUnit> {
+  const flatIndex = findMobiFlatIndexFromViewport(units, document, chapterId)
+  if (flatIndex < 0) return EMPTY_READER_NAV
+  return syncMobiNavigation(units, chapterId, flatIndex)
 }
 
 export function syncMobiNavigation(

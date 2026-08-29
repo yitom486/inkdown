@@ -8,6 +8,7 @@ import {
   syncEpubNavigationFromRendition,
   syncEpubNavigationFromViewport,
   syncMobiNavigation,
+  syncMobiNavigationFromViewport,
   syncPdfNavigation,
 } from '@/lib/reader-navigation-sync'
 import type { ReaderUnit } from '@/lib/reader-navigation'
@@ -164,6 +165,28 @@ describe('reader-navigation-sync', () => {
       const nav = syncPdfNavigation(outline, 12)
       expect(nav.current?.label).toBe('第1章')
       expect(nav.next?.label).toBe('第2章')
+    })
+
+    it('MOBI/AZW3 视口同步与 EPUB 共用 scroll-spy 规则', () => {
+      const chapters: MobiChapterItem[] = [
+        { id: '1', label: '导言', level: 1 },
+        { id: '1', label: '研究策略', level: 1 },
+      ]
+
+      const document = window.document
+      document.body.innerHTML = `<h2>导言</h2><h2>研究策略</h2>`
+      const scrollRoot = document.scrollingElement ?? document.documentElement
+      Object.defineProperty(scrollRoot, 'clientHeight', { configurable: true, value: 800 })
+      Object.defineProperty(scrollRoot, 'scrollTop', { configurable: true, value: 1100, writable: true })
+
+      const headings = document.querySelectorAll('h2')
+      Object.defineProperty(headings[0]!, 'offsetTop', { configurable: true, value: 0 })
+      Object.defineProperty(headings[0]!, 'offsetHeight', { configurable: true, value: 1200 })
+      Object.defineProperty(headings[1]!, 'offsetTop', { configurable: true, value: 1400 })
+      Object.defineProperty(headings[1]!, 'offsetHeight', { configurable: true, value: 400 })
+
+      const nav = syncMobiNavigationFromViewport(chapters, document, '1')
+      expect(nav.current?.label).toBe('研究策略')
     })
   })
 })

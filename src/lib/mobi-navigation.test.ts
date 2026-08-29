@@ -93,10 +93,10 @@ describe('resolveMobiChapterNav', () => {
     expect(nav.next?.label).toBe('第二章 长安与魏州')
   })
 
-  it('仅 spine id 时回退到最后一个匹配项', () => {
+  it('仅 spine id 时回退到第一个匹配项（精确定位交给视口同步）', () => {
     const nav = resolveMobiChapterNav(chapters, '1')
-    expect(nav.current?.label).toBe('一、小引')
-    expect(nav.next?.label).toBe('第二章 长安与魏州')
+    expect(nav.current?.label).toBe('第一章 五星会聚')
+    expect(nav.next?.label).toBe('一、小引')
   })
 
   it('上一节跳过目录页', () => {

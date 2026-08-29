@@ -3,7 +3,7 @@ import {
   isMobiChapterReadable,
 } from '@/lib/mobi-chapter-html'
 import {
-  findLastFlatIndexById,
+  findFirstFlatIndexById,
   resolveAdjacentFlatNav,
   type AdjacentFlatNavState,
 } from '@/lib/reader-chapter-nav'
@@ -150,7 +150,7 @@ function resolveMobiFlatIndex(
     return flatIndex
   }
   if (currentId) {
-    return findLastFlatIndexById(chapters, currentId)
+    return findFirstFlatIndexById(chapters, currentId)
   }
   const initial = pickInitialMobiChapter(chapters)
   if (!initial) return -1
