@@ -1,6 +1,9 @@
 import type { AcpToolCallKind, AcpToolCallStatus } from '@shared/types/acp'
+import type { AcpPlanEntry } from '@/lib/acp-plan'
 
-export type AcpChatRole = 'user' | 'agent' | 'thought' | 'tool' | 'system'
+export type AcpChatRole = 'user' | 'agent' | 'thought' | 'tool' | 'plan' | 'system'
+
+export type { AcpPlanEntry }
 
 export interface AcpToolDiff {
   path: string
@@ -23,6 +26,8 @@ export interface AcpChatMessage {
   toolContentText?: string
   toolDiffs?: AcpToolDiff[]
   toolLocations?: Array<{ path: string; line?: number }>
+  /** plan 卡片 */
+  planEntries?: AcpPlanEntry[]
 }
 
 export function extractTextFromContent(content: unknown): string {

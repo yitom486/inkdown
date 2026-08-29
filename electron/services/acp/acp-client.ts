@@ -19,10 +19,7 @@ import {
   type PermissionDecision,
 } from './client-handlers'
 import { probeCodexAuth } from './codex-auth-preflight'
-import {
-  orderSilentAuthMethodIds,
-  shouldPromptAuthWizard,
-} from './auth-method-order'
+import { decideConnectAuth } from './connect-auth-decision'
 import {
   isJsonRpcNotification,
   isJsonRpcRequest,
@@ -349,28 +346,24 @@ export async function connectAcp(payload: {
 
     const authMethods = parseAuthMethods(initResult.authMethods)
     const preflight = probeCodexAuth()
+    const authDecision = decideConnectAuth(authMethods, preflight)
 
-    // 未检测到本机登录 → 弹向导；已有 auth.json / API Key 则静默认证，不打扰用户
-    if (shouldPromptAuthWizard(authMethods, preflight)) {
+    if (authDecision.action === 'needs_auth') {
       setStatus('awaiting_auth')
-      const ordered = orderSilentAuthMethodIds(authMethods, preflight)
-        .map((id) => authMethods.find((m) => m.id === id))
-        .filter((m): m is NonNullable<typeof m> => Boolean(m))
       return ok({
         phase: 'needs_auth',
         runtimeId: runtime.id,
         protocolVersion: negotiated,
         agentName: cachedAgentName,
         agentVersion: cachedAgentVersion,
-        authMethods: ordered.length > 0 ? ordered : authMethods,
+        authMethods: authDecision.methods,
         loadSessionSupported,
       })
     }
 
-    if (authMethods.length > 0) {
-      const methodIds = orderSilentAuthMethodIds(authMethods, preflight)
+    if (authDecision.action === 'silent') {
       let authed = false
-      for (const methodId of methodIds) {
+      for (const methodId of authDecision.methodIds) {
         try {
           await localTransport.request('authenticate', { methodId })
           authed = true
@@ -381,7 +374,6 @@ export async function connectAcp(payload: {
       }
 
       if (!authed) {
-        // 本机已有凭证时：再试一次直接 session/new（部分 Agent 继承 CODEX_HOME 即可）
         const direct = await openSessionAfterAuth(cwd, { keepAliveOnFailure: true })
         if (direct.ok) return direct
 

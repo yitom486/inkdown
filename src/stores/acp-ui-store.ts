@@ -12,6 +12,7 @@ import {
   parseToolDiffs,
   parseToolLocations,
 } from '@/stores/acp-chat-types'
+import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/acp-plan'
 
 export type { AcpChatMessage, AcpChatRole } from '@/stores/acp-chat-types'
 
@@ -362,6 +363,40 @@ export const useAcpUiStore = create<AcpUiStore>()(
           typeof update.sessionUpdate === 'string' ? update.sessionUpdate : ''
 
         if (kind === 'config_option_update' || kind === 'config_options_update') {
+          return
+        }
+
+        if (kind === 'plan' || kind === 'plan_update') {
+          const entries = parseAcpPlanEntries(update)
+          if (entries.length === 0 && kind === 'plan_update') {
+            // 空 entries 视为清空该计划卡片
+          }
+          const summary = summarizePlanProgress(entries)
+          set((s) =>
+            patchActiveThread(s, (t) => {
+              const messages = [...t.messages]
+              const idx = messages.findIndex((m) => m.role === 'plan')
+              const prev = idx >= 0 ? messages[idx] : undefined
+              const next: AcpChatMessage = {
+                id: prev?.id ?? newId('plan'),
+                role: 'plan',
+                text: entries.map((e) => e.content).join('\n'),
+                planEntries: entries,
+                createdAt: prev?.createdAt ?? Date.now(),
+                updatedAt: Date.now(),
+                streaming: summary.active,
+              }
+              if (idx >= 0) messages[idx] = next
+              else {
+                const emptyAgentIdx = messages.findIndex(
+                  (m) => m.role === 'agent' && m.streaming && !m.text.trim(),
+                )
+                if (emptyAgentIdx >= 0) messages.splice(emptyAgentIdx, 0, next)
+                else messages.push(next)
+              }
+              return { ...t, messages, updatedAt: Date.now() }
+            }),
+          )
           return
         }
 

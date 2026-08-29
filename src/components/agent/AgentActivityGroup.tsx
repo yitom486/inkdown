@@ -32,15 +32,17 @@ export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps)
   const stepCount = messages.length
   const toolCount = messages.filter((m) => m.role === 'tool').length
   const thoughtCount = messages.filter((m) => m.role === 'thought').length
+  const planCount = messages.filter((m) => m.role === 'plan').length
 
   const summary = active
     ? `工作中 · ${durationLabel}`
     : `工作了 ${durationLabel} · ${stepCount} 步`
 
   const sub =
-    !active && (toolCount > 0 || thoughtCount > 0)
+    !active && (toolCount > 0 || thoughtCount > 0 || planCount > 0)
       ? [
           thoughtCount > 0 ? `思考 ${thoughtCount}` : null,
+          planCount > 0 ? `计划 ${planCount}` : null,
           toolCount > 0 ? `工具 ${toolCount}` : null,
         ]
           .filter(Boolean)
@@ -106,7 +108,7 @@ export function groupAgentMessages(messages: AcpChatMessage[]): AgentTimelineIte
   }
 
   for (const msg of messages) {
-    if (msg.role === 'thought' || msg.role === 'tool') {
+    if (msg.role === 'thought' || msg.role === 'tool' || msg.role === 'plan') {
       buffer.push(msg)
       continue
     }

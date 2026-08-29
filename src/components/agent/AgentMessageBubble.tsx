@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
+import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
 import { useMermaidInContainer } from '@/hooks/useMermaidInContainer'
 import { renderAgentMarkdown, renderAgentMarkdownStreaming } from '@/lib/agent-markdown'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,10 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
 
   if (message.role === 'tool') {
     return <AgentToolCallCard message={message} />
+  }
+
+  if (message.role === 'plan') {
+    return <AgentPlanCard message={message} />
   }
 
   if (message.role === 'thought') {
