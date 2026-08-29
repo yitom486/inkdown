@@ -145,7 +145,8 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       const rendition = renditionRef.current
       if (rendition && units.length > 0) {
         useReaderNavigationStore.getState().syncEpubRendition(units, rendition)
-        if (useReaderNavigationStore.getState().nav.flatIndex >= 0) return
+        const syncedIndex = useReaderNavigationStore.getState().nav.flatIndex
+        if (syncedIndex >= 0) return
       }
 
       const hint =
@@ -154,11 +155,8 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           : {
               href: location?.start?.href,
               cfi: location?.start?.cfi,
-              percentage:
-                location != null
-                  ? (resolveGlobalProgress(bookRef.current, location) ?? undefined)
-                  : undefined,
             }
+      // 无显式 flatIndex 时不传全书 percentage，避免 21% 误匹配「小结」等尾部 TOC
       useReaderNavigationStore.getState().syncEpub(units, hint, flatIndex)
     },
     [],

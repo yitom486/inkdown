@@ -1,19 +1,34 @@
 /**
- * 阅读器视口分节（跨格式）：渲染按 loadKey（spine / 章节 id）连续滚动，
- * 导航按 TOC flatIndex 切片；scroll-spy 负责对齐二者。
+ * 阅读器视口分节（跨格式）：渲染按 loadKey 连续滚动，导航按 TOC flatIndex 切片。
+ * 核心原则：视口激活线处**可见标题**优先，禁止短标签模糊匹配（如「小结」≠「讨论与小结」）。
  */
 
 export interface ViewportNavEntry {
   flatIndex: number
   label: string
-  /** EPUB：spine 文件基路径；MOBI/AZW3：章节 id */
+  /** EPUB：spine 基路径；MOBI/AZW3：章节 id */
   loadKey: string
-  /** EPUB fragment；MOBI 通常无，改按标题匹配 */
   fragment?: string
 }
 
 export function normalizeLoadKey(key: string): string {
   return key.split('#')[0]?.toLowerCase() ?? key.toLowerCase()
+}
+
+export function normalizeHeadingText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/** 短标签（≤3 字）仅允许精确匹配，防止「小结」误命中「讨论与小结」 */
+export function isHeadingLabelMatch(label: string, headingText: string): boolean {
+  const target = normalizeHeadingText(label)
+  const text = normalizeHeadingText(headingText)
+  if (!target || !text) return false
+  if (text === target) return true
+  if (target.length <= 3 || text.length <= 3) return false
+  if (text.includes(target)) return true
+  if (target.includes(text) && text.length >= 5) return true
+  return false
 }
 
 function decodeFragment(raw: string): string {
@@ -37,11 +52,6 @@ export function findFragmentElement(document: Document, fragment: string): HTMLE
   return null
 }
 
-function normalizeHeadingText(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
-}
-
-/** MOBI/AZW3 等同 spine 多 TOC：按标题文本找锚点 */
 export function findHeadingElementByLabel(document: Document, label: string): HTMLElement | null {
   const target = normalizeHeadingText(label)
   if (!target) return null
@@ -50,10 +60,7 @@ export function findHeadingElementByLabel(document: Document, label: string): HT
   for (const node of headings) {
     if (!(node instanceof HTMLElement)) continue
     const text = normalizeHeadingText(node.textContent ?? '')
-    if (!text) continue
-    if (text === target || text.includes(target) || target.includes(text)) {
-      return node
-    }
+    if (isHeadingLabelMatch(label, text)) return node
   }
 
   return null
@@ -61,7 +68,8 @@ export function findHeadingElementByLabel(document: Document, label: string): HT
 
 export function findViewportEntryAnchor(document: Document, entry: ViewportNavEntry): HTMLElement | null {
   if (entry.fragment) {
-    return findFragmentElement(document, entry.fragment)
+    const byFragment = findFragmentElement(document, entry.fragment)
+    if (byFragment) return byFragment
   }
   return findHeadingElementByLabel(document, entry.label)
 }
@@ -75,10 +83,52 @@ function filterEntriesForLoadKey(entries: ViewportNavEntry[], loadKey: string): 
   return entries.filter((entry) => normalizeLoadKey(entry.loadKey) === base)
 }
 
+function findPrimaryVisibleHeading(
+  document: Document,
+  scrollTop: number,
+  activationLine: number,
+): HTMLElement | null {
+  let best: HTMLElement | null = null
+  let bestTop = -Infinity
+
+  for (const node of document.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
+    if (!(node instanceof HTMLElement)) continue
+    const text = normalizeHeadingText(node.textContent ?? '')
+    if (text.length < 2) continue
+
+    const top = node.offsetTop
+    if (top <= scrollTop + activationLine && top > bestTop) {
+      bestTop = top
+      best = node
+    }
+  }
+
+  return best
+}
+
+function matchEntryByVisibleHeading(
+  entries: ViewportNavEntry[],
+  heading: HTMLElement,
+): number {
+  const text = normalizeHeadingText(heading.textContent ?? '')
+  let bestIndex = -1
+  let bestScore = -1
+
+  for (const entry of entries) {
+    if (!isHeadingLabelMatch(entry.label, text)) continue
+    const score = Math.min(entry.label.length, text.length)
+    if (score > bestScore) {
+      bestScore = score
+      bestIndex = entry.flatIndex
+    }
+  }
+
+  return bestIndex
+}
+
 /**
- * 根据视口定位当前 TOC flatIndex。
- * 1. scroll-spy：锚点顶越过激活线
- * 2. 交界提升：下一节标题已在视口内露出
+ * 视口 scroll-spy：激活线处可见标题 > fragment 锚点 > 无锚点回退首条。
+ * 不做「底部瞄到下一节就切换」——当前节仍在视口主体时必须保持。
  */
 export function findFlatIndexFromViewport(
   document: Document,
@@ -88,41 +138,80 @@ export function findFlatIndexFromViewport(
   const scoped = filterEntriesForLoadKey(entries, loadKey)
   if (scoped.length === 0) return -1
 
-  const withAnchor = scoped.filter((entry) => findViewportEntryAnchor(document, entry) !== null)
-  const candidates = withAnchor.length > 0 ? withAnchor : scoped
-
   const scrollRoot = resolveScrollRoot(document)
   const viewportHeight = scrollRoot.clientHeight || document.documentElement.clientHeight
   const activationLine = Math.min(160, viewportHeight * 0.2)
   const scrollTop = scrollRoot.scrollTop
+  const activationY = scrollTop + activationLine
+
+  const hasFragmentEntry = scoped.some((entry) => entry.fragment)
+  const withAnchor = scoped.filter((entry) => findViewportEntryAnchor(document, entry) !== null)
+  const candidates = withAnchor.length > 0 ? withAnchor : scoped
+
+  if (hasFragmentEntry) {
+    let activeIndex = candidates[0]!.flatIndex
+    let activeTop = -Infinity
+
+    for (const entry of candidates) {
+      const element = findViewportEntryAnchor(document, entry)
+      if (!element) continue
+      const top = element.offsetTop
+      if (top <= activationY && top > activeTop) {
+        activeTop = top
+        activeIndex = entry.flatIndex
+      }
+    }
+
+    let nearestBelowIndex = -1
+    let nearestBelowDistance = Number.POSITIVE_INFINITY
+    for (const entry of candidates) {
+      const element = findViewportEntryAnchor(document, entry)
+      if (!element) continue
+      const top = element.offsetTop
+      if (top <= activationY) continue
+      const distance = top - activationY
+      if (distance < nearestBelowDistance) {
+        nearestBelowDistance = distance
+        nearestBelowIndex = entry.flatIndex
+      }
+    }
+
+    if (activeTop === -Infinity && nearestBelowIndex >= 0) {
+      return nearestBelowIndex
+    }
+
+    // 无 fragment 的父级标题在顶、正文已进入同页下一 fragment 节（如「第一单元」→「第2章」）
+    const activeEntry = candidates.find((entry) => entry.flatIndex === activeIndex)
+    if (
+      activeEntry &&
+      !activeEntry.fragment &&
+      activeTop >= 0 &&
+      activeTop <= activationLine &&
+      nearestBelowIndex >= 0 &&
+      nearestBelowDistance < viewportHeight * 0.45
+    ) {
+      return nearestBelowIndex
+    }
+
+    return activeIndex
+  }
+
+  const visibleHeading = findPrimaryVisibleHeading(document, scrollTop, activationLine)
+  if (visibleHeading) {
+    const fromHeading = matchEntryByVisibleHeading(scoped, visibleHeading)
+    if (fromHeading >= 0) return fromHeading
+  }
 
   let activeIndex = candidates[0]!.flatIndex
+  let activeTop = -Infinity
 
   for (const entry of candidates) {
     const element = findViewportEntryAnchor(document, entry)
     if (!element) continue
-    if (element.offsetTop <= scrollTop + activationLine) {
-      activeIndex = entry.flatIndex
-    }
-  }
-
-  const viewportBottom = scrollTop + viewportHeight
-
-  for (let i = candidates.length - 1; i >= 0; i -= 1) {
-    const entry = candidates[i]!
-    if (entry.flatIndex <= activeIndex) break
-
-    const element = findViewportEntryAnchor(document, entry)
-    if (!element) continue
-
     const top = element.offsetTop
-    const bottom = top + element.offsetHeight
-    const headingPeekVisible =
-      top < viewportBottom - 24 && bottom > scrollTop + activationLine * 0.75
-
-    if (headingPeekVisible) {
+    if (top <= activationY && top > activeTop) {
+      activeTop = top
       activeIndex = entry.flatIndex
-      break
     }
   }
 

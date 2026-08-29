@@ -223,6 +223,8 @@ EPUB / MOBI / PDF 阅读器中，**工具栏当前标题、底部上一节/下�
 | 状态 | `reader-navigation-store` | 工具栏 / 底部 / 侧栏唯一数据源 |
 
 - **MOBI / AZW3** 与 EPUB 相同问题：多个 TOC 项共用同一 `chapter.id`，同 spine 内点「下一节」须 **滚到标题锚点**，不得仅 `loadChapter` 因 id 相同而 early-return
+- **视口同步优先可见标题**：激活线处 `h1–h6` 与 TOC 标签匹配为准；**短标签（≤3 字如「小结」）仅精确匹配**，禁止模糊命中「讨论与小结」
+- **禁止用全书 percentage 回退导航**（`relocated` 无视口时只用 spine href），percentage 只用于进度环/持久化
 - **PDF** 按页码定位，无同 HTML 多节问题；保持 `syncPdf` 即可
 - 新增连续滚动格式时，先扩展 `ViewportNavEntry` 构建，再接入 store；**不得**在 Viewer 内单独写 nav 本地 state
 

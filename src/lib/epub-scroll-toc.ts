@@ -21,7 +21,7 @@ export function buildEpubViewportEntries(
   spineHref: string,
 ): ViewportNavEntry[] {
   const base = normalizeLoadKey(spineHref)
-  return chapters
+  const raw = chapters
     .map((chapter, flatIndex) => ({ chapter, flatIndex }))
     .filter(({ chapter }) => {
       if (isTocLikeChapter(chapter)) return false
@@ -34,6 +34,8 @@ export function buildEpubViewportEntries(
       loadKey: base,
       fragment: chapter.href.includes('#') ? chapter.href.split('#')[1] : undefined,
     }))
+
+  return raw
 }
 
 export function buildMobiViewportEntries(
