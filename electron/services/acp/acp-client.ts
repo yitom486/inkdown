@@ -2,6 +2,7 @@ import { app } from 'electron'
 import type { AppError } from '@shared/core/errors'
 import { err, ok, type Result } from '@shared/core/result'
 import type {
+  AcpAuthMethod,
   AcpConnectResult,
   AcpConnectionStatus,
   AcpPermissionOutcome,
@@ -17,6 +18,7 @@ import {
   pickAllowOptionId,
   type PermissionDecision,
 } from './client-handlers'
+import { probeCodexAuth } from './codex-auth-preflight'
 import {
   isJsonRpcNotification,
   isJsonRpcRequest,
@@ -38,6 +40,11 @@ let transport: JsonRpcTransport | null = null
 let processHandle: SpawnedAcpProcess | null = null
 let sessionId: string | null = null
 let runtimeId: string | null = null
+let workspaceRoot: string | null = null
+let loadSessionSupported = false
+let cachedAgentName: string | undefined
+let cachedAgentVersion: string | undefined
+let cachedProtocolVersion = PROTOCOL_VERSION
 let status: AcpConnectionStatus = 'disconnected'
 let permissionBridge: AcpPermissionBridge | null = null
 
@@ -76,11 +83,69 @@ function toProtocolError(error: unknown, fallback: string): AppError {
   return { code: 'ACP_PROTOCOL_ERROR', message: fallback }
 }
 
-function requireTransport(): Result<JsonRpcTransport, AppError> {
-  if (!transport || status !== 'connected') {
+function requireTransport(allowAuthPhase = false): Result<JsonRpcTransport, AppError> {
+  if (!transport) {
     return err({ code: 'ACP_NOT_CONNECTED', message: 'ACP Agent 未连接' })
   }
-  return ok(transport)
+  if (status === 'connected') return ok(transport)
+  if (allowAuthPhase && (status === 'connecting' || status === 'awaiting_auth')) {
+    return ok(transport)
+  }
+  return err({ code: 'ACP_NOT_CONNECTED', message: 'ACP Agent 未连接' })
+}
+
+function parseAuthMethods(raw: unknown): AcpAuthMethod[] {
+  if (!Array.isArray(raw)) return []
+  const methods: AcpAuthMethod[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    if (typeof row.id !== 'string' || !row.id) continue
+    methods.push({
+      id: row.id,
+      name: typeof row.name === 'string' ? row.name : row.id,
+      description: typeof row.description === 'string' ? row.description : undefined,
+      type: typeof row.type === 'string' ? row.type : undefined,
+    })
+  }
+  return methods
+}
+
+async function openSessionAfterAuth(
+  cwd: string,
+): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
+  const t = requireTransport(true)
+  if (!t.ok) return t
+  if (!runtimeId) {
+    return err({ code: 'ACP_NOT_CONNECTED', message: '运行时未知' })
+  }
+
+  const sessionResult = (await t.value.request('session/new', {
+    cwd,
+    mcpServers: [],
+  })) as Record<string, unknown>
+
+  const newSessionId =
+    typeof sessionResult.sessionId === 'string' ? sessionResult.sessionId : null
+  if (!newSessionId) {
+    await disconnectAcp('session/new 未返回 sessionId')
+    return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
+  }
+
+  sessionId = newSessionId
+  workspaceRoot = cwd
+  setStatus('connected')
+
+  return ok({
+    phase: 'ready',
+    runtimeId,
+    sessionId: newSessionId,
+    protocolVersion: cachedProtocolVersion,
+    agentName: cachedAgentName,
+    agentVersion: cachedAgentVersion,
+    configOptions: parseAcpConfigOptions(sessionResult.configOptions),
+    loadSessionSupported,
+  })
 }
 
 async function resolvePermission(params: Record<string, unknown>): Promise<PermissionDecision> {
@@ -175,13 +240,18 @@ export async function connectAcp(payload: {
   setStatus('connecting')
 
   const cwd = payload.cwd?.trim() || process.cwd()
+  workspaceRoot = cwd
 
   try {
     processHandle = spawnAcpProcess({
       runtime,
       cwd,
       onExit: () => {
-        if (status === 'connected' || status === 'connecting') {
+        if (
+          status === 'connected' ||
+          status === 'connecting' ||
+          status === 'awaiting_auth'
+        ) {
           void disconnectAcp('Agent 进程已退出')
         }
       },
@@ -199,8 +269,10 @@ export async function connectAcp(payload: {
       requestTimeoutMs: 120_000,
       onMessage: async (message) => {
         if (isJsonRpcRequest(message)) {
-          const router = createAcpClientMethodRouter(localTransport, ({ requestId, params }) =>
-            handlePermissionRequest(requestId, params),
+          const router = createAcpClientMethodRouter(
+            localTransport,
+            ({ requestId, params }) => handlePermissionRequest(requestId, params),
+            { getWorkspaceRoot: () => workspaceRoot },
           )
           await router(message)
           return
@@ -223,7 +295,12 @@ export async function connectAcp(payload: {
 
     const initResult = (await localTransport.request('initialize', {
       protocolVersion: PROTOCOL_VERSION,
-      clientCapabilities: {},
+      clientCapabilities: {
+        fs: {
+          readTextFile: true,
+          writeTextFile: true,
+        },
+      },
       clientInfo: {
         name: 'inkdown',
         title: '轻量阅读器',
@@ -241,51 +318,112 @@ export async function connectAcp(payload: {
       })
     }
 
+    cachedProtocolVersion = negotiated
+
     const agentInfo =
       initResult.agentInfo && typeof initResult.agentInfo === 'object'
         ? (initResult.agentInfo as Record<string, unknown>)
         : undefined
+    cachedAgentName = typeof agentInfo?.name === 'string' ? agentInfo.name : undefined
+    cachedAgentVersion = typeof agentInfo?.version === 'string' ? agentInfo.version : undefined
 
-    const authMethods = initResult.authMethods
-    if (Array.isArray(authMethods) && authMethods.length > 0) {
-      const first = authMethods[0] as Record<string, unknown> | undefined
-      const methodId = typeof first?.id === 'string' ? first.id : undefined
-      if (methodId) {
-        try {
-          await localTransport.request('authenticate', { methodId })
-        } catch (error) {
-          console.warn('[acp] authenticate 失败，继续尝试 session/new', error)
-        }
+    const caps =
+      initResult.agentCapabilities && typeof initResult.agentCapabilities === 'object'
+        ? (initResult.agentCapabilities as Record<string, unknown>)
+        : {}
+    loadSessionSupported = caps.loadSession === true
+
+    const authMethods = parseAuthMethods(initResult.authMethods)
+    const preflight = probeCodexAuth()
+
+    // 未检测到本机登录且 Agent 提供了认证方式 → 交给 UI 选择
+    if (authMethods.length > 0 && !preflight.looksLoggedIn) {
+      setStatus('awaiting_auth')
+      return ok({
+        phase: 'needs_auth',
+        runtimeId: runtime.id,
+        protocolVersion: negotiated,
+        agentName: cachedAgentName,
+        agentVersion: cachedAgentVersion,
+        authMethods,
+        loadSessionSupported,
+      })
+    }
+
+    if (authMethods.length > 0) {
+      const methodId = authMethods[0]!.id
+      try {
+        await localTransport.request('authenticate', { methodId })
+      } catch (error) {
+        console.warn('[acp] 静默 authenticate 失败，打开认证向导', error)
+        setStatus('awaiting_auth')
+        return ok({
+          phase: 'needs_auth',
+          runtimeId: runtime.id,
+          protocolVersion: negotiated,
+          agentName: cachedAgentName,
+          agentVersion: cachedAgentVersion,
+          authMethods,
+          loadSessionSupported,
+        })
       }
     }
 
-    const sessionResult = (await localTransport.request('session/new', {
-      cwd,
-      mcpServers: [],
-    })) as Record<string, unknown>
-
-    const newSessionId =
-      typeof sessionResult.sessionId === 'string' ? sessionResult.sessionId : null
-    if (!newSessionId) {
-      await disconnectAcp('session/new 未返回 sessionId')
-      return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
-    }
-
-    sessionId = newSessionId
-    setStatus('connected')
-
-    return ok({
-      runtimeId: runtime.id,
-      sessionId: newSessionId,
-      protocolVersion: negotiated,
-      agentName: typeof agentInfo?.name === 'string' ? agentInfo.name : undefined,
-      agentVersion: typeof agentInfo?.version === 'string' ? agentInfo.version : undefined,
-      configOptions: parseAcpConfigOptions(sessionResult.configOptions),
-    })
+    return await openSessionAfterAuth(cwd)
   } catch (error) {
     await disconnectAcp()
     setStatus('error', error instanceof Error ? error.message : String(error))
     return err(toProtocolError(error, '连接 ACP Agent 失败'))
+  }
+}
+
+export async function authenticateAcp(payload: {
+  methodId: string
+}): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
+  const t = requireTransport(true)
+  if (!t.ok) return t
+  const cwd = workspaceRoot?.trim() || process.cwd()
+
+  try {
+    await t.value.request('authenticate', { methodId: payload.methodId })
+    return await openSessionAfterAuth(cwd)
+  } catch (error) {
+    return err(toProtocolError(error, '认证失败'))
+  }
+}
+
+export async function loadAcpSession(payload: {
+  sessionId: string
+  cwd: string
+}): Promise<
+  Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>
+> {
+  const t = requireTransport()
+  if (!t.ok) return t
+  if (!loadSessionSupported) {
+    return err({
+      code: 'ACP_PROTOCOL_ERROR',
+      message: '当前 Agent 未声明 loadSession 能力',
+    })
+  }
+
+  try {
+    const result = (await t.value.request('session/load', {
+      sessionId: payload.sessionId,
+      cwd: payload.cwd,
+      mcpServers: [],
+    })) as Record<string, unknown>
+    const id =
+      typeof result.sessionId === 'string' ? result.sessionId : payload.sessionId
+    sessionId = id
+    workspaceRoot = payload.cwd
+    setStatus('connected')
+    return ok({
+      sessionId: id,
+      configOptions: parseAcpConfigOptions(result.configOptions),
+    })
+  } catch (error) {
+    return err(toProtocolError(error, '加载会话失败'))
   }
 }
 
@@ -303,6 +441,10 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
 
   sessionId = null
   runtimeId = null
+  workspaceRoot = null
+  loadSessionSupported = false
+  cachedAgentName = undefined
+  cachedAgentVersion = undefined
   setStatus('disconnected', reason)
   return ok(undefined)
 }
@@ -323,6 +465,7 @@ export async function createAcpSession(
       return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
     }
     sessionId = id
+    workspaceRoot = cwd
     setStatus('connected')
     return ok({
       sessionId: id,

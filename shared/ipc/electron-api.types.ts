@@ -22,9 +22,11 @@ import type {
 } from '@shared/types/reading-mark'
 import type {
   AcpAuthPreflightResult,
+  AcpAuthenticatePayload,
   AcpCancelPayload,
   AcpConnectPayload,
   AcpConnectResult,
+  AcpLoadSessionPayload,
   AcpPermissionRequestEvent,
   AcpPermissionResponsePayload,
   AcpPromptPayload,
@@ -76,6 +78,12 @@ export interface ElectronAPI {
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>
   acpAuthPreflight: () => Promise<Result<AcpAuthPreflightResult, AppError>>
   acpConnect: (payload: AcpConnectPayload) => Promise<Result<AcpConnectResult, AppError>>
+  acpAuthenticate: (
+    payload: AcpAuthenticatePayload,
+  ) => Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>>
+  acpLoadSession: (
+    payload: AcpLoadSessionPayload,
+  ) => Promise<Result<AcpSessionNewResult, AppError>>
   acpDisconnect: () => Promise<Result<void, AppError>>
   acpSessionNew: (payload: AcpSessionNewPayload) => Promise<Result<AcpSessionNewResult, AppError>>
   acpPrompt: (payload: AcpPromptPayload) => Promise<Result<AcpPromptResult, AppError>>

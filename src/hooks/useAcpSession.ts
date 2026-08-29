@@ -1,5 +1,6 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { isOk } from '@shared/core/result'
+import type { AcpAuthMethod } from '@shared/types/acp'
 import { acpApi } from '@/api/acp-api'
 import { reportAppError } from '@/lib/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
@@ -18,6 +19,11 @@ export function useAcpSession(workspaceRoot?: string) {
   const sessionId = useAcpUiStore((s) => s.sessionId)
   const prompting = useAcpUiStore((s) => s.prompting)
 
+  const [authOpen, setAuthOpen] = useState(false)
+  const [authMethods, setAuthMethods] = useState<AcpAuthMethod[]>([])
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+
   useEffect(() => {
     const offStatus = acpApi.onStatusChanged((event) => {
       setStatus(event.status, event.errorMessage)
@@ -25,6 +31,8 @@ export function useAcpSession(workspaceRoot?: string) {
       if (event.status === 'disconnected') {
         setSession(null)
         finishStreaming()
+        setAuthOpen(false)
+        setAuthMethods([])
       }
     })
     const offUpdate = acpApi.onSessionUpdate((event) => {
@@ -43,6 +51,7 @@ export function useAcpSession(workspaceRoot?: string) {
       return
     }
     setStatus('connecting')
+    setAuthError(null)
     appendSystemMessage(`正在连接 ${selectedRuntimeId}…`)
     const result = await acpApi.connect({ runtimeId: selectedRuntimeId, cwd })
     if (!isOk(result)) {
@@ -51,6 +60,15 @@ export function useAcpSession(workspaceRoot?: string) {
       appendSystemMessage(`连接失败：${result.error.message}`)
       return
     }
+
+    if (result.value.phase === 'needs_auth') {
+      setStatus('awaiting_auth')
+      setAuthMethods(result.value.authMethods)
+      setAuthOpen(true)
+      appendSystemMessage('需要认证：请选择登录方式')
+      return
+    }
+
     setSession(result.value.sessionId, result.value.configOptions ?? [])
     setStatus('connected')
     appendSystemMessage(
@@ -64,6 +82,38 @@ export function useAcpSession(workspaceRoot?: string) {
     workspaceRoot,
   ])
 
+  const completeAuth = useCallback(
+    async (methodId: string) => {
+      setAuthBusy(true)
+      setAuthError(null)
+      const result = await acpApi.authenticate({ methodId })
+      setAuthBusy(false)
+      if (!isOk(result)) {
+        setAuthError(result.error.message)
+        reportAppError(result.error)
+        return
+      }
+      setAuthOpen(false)
+      setAuthMethods([])
+      setSession(result.value.sessionId, result.value.configOptions ?? [])
+      setStatus('connected')
+      appendSystemMessage(
+        `已认证并连接${result.value.agentName ? `（${result.value.agentName}）` : ''}，会话 ${result.value.sessionId}`,
+      )
+    },
+    [appendSystemMessage, setSession, setStatus],
+  )
+
+  const cancelAuth = useCallback(async () => {
+    setAuthOpen(false)
+    setAuthMethods([])
+    setAuthError(null)
+    await acpApi.disconnect()
+    setSession(null)
+    setStatus('disconnected')
+    appendSystemMessage('已取消认证')
+  }, [appendSystemMessage, setSession, setStatus])
+
   const disconnect = useCallback(async () => {
     const result = await acpApi.disconnect()
     if (!isOk(result)) {
@@ -73,6 +123,7 @@ export function useAcpSession(workspaceRoot?: string) {
     setSession(null)
     setStatus('disconnected')
     finishStreaming()
+    setAuthOpen(false)
     appendSystemMessage('已断开连接')
   }, [appendSystemMessage, finishStreaming, setSession, setStatus])
 
@@ -141,5 +192,11 @@ export function useAcpSession(workspaceRoot?: string) {
     clearMessages,
     sessionId,
     prompting,
+    authOpen,
+    authMethods,
+    authBusy,
+    authError,
+    completeAuth,
+    cancelAuth,
   }
 }

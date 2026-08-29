@@ -12,8 +12,10 @@ import type {
   UpdateReadingMarkPayload,
 } from '@shared/types/reading-mark'
 import type {
+  AcpAuthenticatePayload,
   AcpCancelPayload,
   AcpConnectPayload,
+  AcpLoadSessionPayload,
   AcpPermissionResponsePayload,
   AcpPromptPayload,
   AcpSessionNewPayload,
@@ -48,10 +50,12 @@ import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-wat
 import { listAcpRuntimes } from '../services/acp/agent-registry'
 import { probeCodexAuth } from '../services/acp/codex-auth-preflight'
 import {
+  authenticateAcp,
   cancelAcp,
   connectAcp,
   createAcpSession,
   disconnectAcp,
+  loadAcpSession,
   onAcpSessionUpdate,
   onAcpStatusChanged,
   promptAcp,
@@ -126,6 +130,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
   ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, () => ok(probeCodexAuth()))
   ipcMain.handle(IPC.ACP_CONNECT, (_event, payload: AcpConnectPayload) => connectAcp(payload))
+  ipcMain.handle(IPC.ACP_AUTHENTICATE, (_event, payload: AcpAuthenticatePayload) =>
+    authenticateAcp(payload),
+  )
+  ipcMain.handle(IPC.ACP_LOAD_SESSION, (_event, payload: AcpLoadSessionPayload) =>
+    loadAcpSession(payload),
+  )
   ipcMain.handle(IPC.ACP_DISCONNECT, () => disconnectAcp())
   ipcMain.handle(IPC.ACP_SESSION_NEW, (_event, payload: AcpSessionNewPayload) =>
     createAcpSession(payload.cwd),

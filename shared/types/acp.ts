@@ -3,6 +3,7 @@
 export type AcpConnectionStatus =
   | 'disconnected'
   | 'connecting'
+  | 'awaiting_auth'
   | 'connected'
   | 'error'
 
@@ -23,13 +24,44 @@ export interface AcpConnectPayload {
   cwd?: string
 }
 
-export interface AcpConnectResult {
+export interface AcpAuthMethod {
+  id: string
+  name?: string
+  description?: string
+  /** chatgpt | api_key | terminal | … */
+  type?: string
+}
+
+export interface AcpConnectReadyResult {
+  phase: 'ready'
   runtimeId: string
   sessionId: string
   protocolVersion: number
   agentName?: string
   agentVersion?: string
   configOptions?: AcpConfigOption[]
+  loadSessionSupported?: boolean
+}
+
+export interface AcpConnectNeedsAuthResult {
+  phase: 'needs_auth'
+  runtimeId: string
+  protocolVersion: number
+  agentName?: string
+  agentVersion?: string
+  authMethods: AcpAuthMethod[]
+  loadSessionSupported?: boolean
+}
+
+export type AcpConnectResult = AcpConnectReadyResult | AcpConnectNeedsAuthResult
+
+export interface AcpAuthenticatePayload {
+  methodId: string
+}
+
+export interface AcpLoadSessionPayload {
+  sessionId: string
+  cwd: string
 }
 
 export interface AcpConfigOptionValue {

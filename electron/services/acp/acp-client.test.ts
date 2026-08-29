@@ -30,10 +30,14 @@ describe('createAcpClientMethodRouter', () => {
     const clientIn = new PassThrough()
     const transport = new JsonRpcTransport(agentOut, clientIn)
 
-    const router = createAcpClientMethodRouter(transport, async () => ({
-      outcome: 'selected',
-      optionId: 'allow-once',
-    }))
+    const router = createAcpClientMethodRouter(
+      transport,
+      async () => ({
+        outcome: 'selected',
+        optionId: 'allow-once',
+      }),
+      { getWorkspaceRoot: () => null },
+    )
 
     const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
       clientIn.on('data', (chunk) => {
@@ -72,9 +76,13 @@ describe('Acp client message routing (mock duplex)', () => {
     const transport = new JsonRpcTransport(agentOut, clientIn, {
       onMessage: async (message) => {
         if (!isJsonRpcRequest(message)) return
-        const router = createAcpClientMethodRouter(transport, async () => ({
-          outcome: 'cancelled',
-        }))
+        const router = createAcpClientMethodRouter(
+          transport,
+          async () => ({
+            outcome: 'cancelled',
+          }),
+          { getWorkspaceRoot: () => null },
+        )
         await router(message)
       },
     })

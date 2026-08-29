@@ -38,6 +38,8 @@ export const IPC = {
   ACP_SET_CONFIG_OPTION: 'acp:set-config-option',
   ACP_PERMISSION_RESPONSE: 'acp:permission-response',
   ACP_AUTH_PREFLIGHT: 'acp:auth-preflight',
+  ACP_AUTHENTICATE: 'acp:authenticate',
+  ACP_LOAD_SESSION: 'acp:load-session',
   ACP_SESSION_UPDATE: 'acp:session-update',
   ACP_STATUS_CHANGED: 'acp:status-changed',
   ACP_PERMISSION_REQUEST: 'acp:permission-request',

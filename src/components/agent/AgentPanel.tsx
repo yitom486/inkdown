@@ -15,6 +15,7 @@ import {
   AgentActivityGroup,
   groupAgentMessages,
 } from '@/components/agent/AgentActivityGroup'
+import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { Button } from '@/components/ui/button'
 import {
@@ -145,8 +146,20 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
   const view = useAcpChatView()
   const setSelectedRuntimeId = useAcpUiStore((s) => s.setSelectedRuntimeId)
   const setPanelOpen = useAcpUiStore((s) => s.setPanelOpen)
-  const { connect, disconnect, sendPrompt, cancel, setModel, clearMessages } =
-    useAcpSession(workspaceRoot)
+  const {
+    connect,
+    disconnect,
+    sendPrompt,
+    cancel,
+    setModel,
+    clearMessages,
+    authOpen,
+    authMethods,
+    authBusy,
+    authError,
+    completeAuth,
+    cancelAuth,
+  } = useAcpSession(workspaceRoot)
   const [draft, setDraft] = useState('')
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [authHint, setAuthHint] = useState<string | null>(null)
@@ -205,9 +218,11 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
       ? '已连接'
       : view.status === 'connecting'
         ? '连接中'
-        : view.status === 'error'
-          ? '错误'
-          : '未连接'
+        : view.status === 'awaiting_auth'
+          ? '待认证'
+          : view.status === 'error'
+            ? '错误'
+            : '未连接'
 
   const configsDisabled = view.status !== 'connected' || view.prompting
 
@@ -237,6 +252,8 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
                   'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
                 view.status === 'connecting' &&
                   'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+                view.status === 'awaiting_auth' &&
+                  'bg-sky-500/15 text-sky-700 dark:text-sky-400',
                 view.status === 'error' && 'bg-destructive/15 text-destructive',
                 view.status === 'disconnected' && 'bg-muted text-muted-foreground',
               )}
@@ -276,7 +293,7 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
               size="icon"
               className="size-7 rounded-lg"
               title="连接"
-              disabled={view.status === 'connecting'}
+              disabled={view.status === 'connecting' || view.status === 'awaiting_auth'}
               onClick={() => void connect()}
             >
               {view.status === 'connecting' ? (
@@ -402,7 +419,11 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
                     <DropdownMenuRadioItem
                       key={rt.id}
                       value={rt.id}
-                      disabled={view.status === 'connected' || view.status === 'connecting'}
+                      disabled={
+                        view.status === 'connected' ||
+                        view.status === 'connecting' ||
+                        view.status === 'awaiting_auth'
+                      }
                       className="text-xs"
                     >
                       {rt.name}
@@ -499,6 +520,15 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
           <p className="text-[10px] text-destructive">{view.statusError}</p>
         ) : null}
       </div>
+
+      <AgentAuthDialog
+        open={authOpen}
+        methods={authMethods}
+        busy={authBusy}
+        error={authError}
+        onSelect={(methodId) => void completeAuth(methodId)}
+        onCancel={() => void cancelAuth()}
+      />
     </aside>
   )
 }

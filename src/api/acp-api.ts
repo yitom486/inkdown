@@ -3,9 +3,11 @@ import { err, ok, type Result } from '@shared/core/result'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type {
   AcpAuthPreflightResult,
+  AcpAuthenticatePayload,
   AcpCancelPayload,
   AcpConnectPayload,
   AcpConnectResult,
+  AcpLoadSessionPayload,
   AcpPermissionRequestEvent,
   AcpPermissionResponsePayload,
   AcpPromptPayload,
@@ -74,6 +76,32 @@ export const acpApi = {
     const api = requireAcpBridge()
     if (!api.ok) return api
     return api.value.acpConnect(payload)
+  },
+
+  async authenticate(
+    payload: AcpAuthenticatePayload,
+  ): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.acpAuthenticate !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: 'ACP authenticate 未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.acpAuthenticate(payload)
+  },
+
+  async loadSession(payload: AcpLoadSessionPayload): Promise<Result<AcpSessionNewResult, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.acpLoadSession !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: 'ACP loadSession 未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.acpLoadSession(payload)
   },
 
   async disconnect(): Promise<Result<void, AppError>> {

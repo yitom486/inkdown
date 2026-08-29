@@ -34,8 +34,18 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
   const { file, shell } = resolveCommand(options.runtime.command)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    NO_BROWSER: '1',
     ...options.env,
+  }
+
+  // 默认允许本机浏览器 OAuth（对齐 VS Code/Zed）；无头/CI 才禁用
+  const forceNoBrowser =
+    process.env.INKDOWN_ACP_NO_BROWSER === '1' ||
+    process.env.CI === 'true' ||
+    process.env.CI === '1'
+  if (forceNoBrowser) {
+    env.NO_BROWSER = '1'
+  } else {
+    delete env.NO_BROWSER
   }
 
   const child = spawn(file, options.runtime.args, {
