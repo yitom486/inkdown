@@ -1,4 +1,7 @@
-import { pickReaderNavLevel, resolveReaderChapterNav } from '@/lib/reader-chapter-nav'
+import {
+  resolveAdjacentFlatNav,
+  type AdjacentFlatNavState,
+} from '@/lib/reader-chapter-nav'
 
 export interface EpubChapter {
   label: string
@@ -12,18 +15,19 @@ export interface EpubTocSource {
   subitems?: EpubTocSource[]
 }
 
-export interface EpubChapterNavState {
-  current: EpubChapter | null
-  previous: EpubChapter | null
-  next: EpubChapter | null
-  currentIndex: number
+export type EpubChapterNavState = AdjacentFlatNavState<EpubChapter>
+
+export interface EpubLocationHint {
+  href?: string
+  cfi?: string
+  /** 全书阅读进度 0–1，用于同文件多目录项时定位当前节 */
+  percentage?: number
 }
 
 const TOC_LIKE_PATTERN = /^(目录|目次|table of contents|contents|toc)$/i
 
 export function isTocLikeChapter(chapter: EpubChapter): boolean {
   if (TOC_LIKE_PATTERN.test(chapter.label.trim())) return true
-  // 只检查路径文件名，忽略 #toc_id_1 等 fragment，避免把正文章节误判为目录页
   const path = (chapter.href.split('#')[0] ?? chapter.href).toLowerCase()
   const fileName = path.split(/[/\\]/).pop() ?? path
   return /^(nav|toc|contents)([._-]|$)/i.test(fileName)
@@ -45,18 +49,19 @@ export function flattenEpubToc(items: EpubTocSource[], level = 0): EpubChapter[]
 /** 选择首个正文章节，尽量跳过纯目录页 */
 export function pickInitialChapter(chapters: EpubChapter[]): EpubChapter | null {
   if (chapters.length === 0) return null
-
-  const navLevel = pickReaderNavLevel(chapters, isTocLikeChapter)
-  const atNavLevel = chapters.find(
-    (chapter) => chapter.level === navLevel && !isTocLikeChapter(chapter),
-  )
-  if (atNavLevel) return atNavLevel
-
   return chapters.find((chapter) => !isTocLikeChapter(chapter)) ?? chapters[0]!
 }
 
 function normalizeHref(href: string): string {
   return href.split('#')[0]?.toLowerCase() ?? href.toLowerCase()
+}
+
+function shouldSkipEpubParentAdjacent(current: EpubChapter, candidate: EpubChapter): boolean {
+  if (!current.href.includes('#')) return false
+  const currentBase = normalizeHref(current.href)
+  const candidateBase = normalizeHref(candidate.href)
+  if (currentBase !== candidateBase) return false
+  return !candidate.href.includes('#')
 }
 
 function hrefMatches(currentHref: string, chapterHref: string): boolean {
@@ -65,77 +70,165 @@ function hrefMatches(currentHref: string, chapterHref: string): boolean {
   return current === target || current.endsWith(target) || target.endsWith(current)
 }
 
-/** 优先精确匹配（含 hash）；无 hash 时在同文件多条目中取最后一个（与 MOBI 一致） */
-export function findLastEpubFlatIndex(chapters: EpubChapter[], currentHref?: string): number {
-  if (!currentHref) return -1
-
+function collectSameDocumentCandidates(
+  chapters: EpubChapter[],
+  currentHref: string,
+): number[] {
   const currentHasFragment = currentHref.includes('#')
   const currentBase = normalizeHref(currentHref)
-  let lastIndex = -1
+  const candidates: number[] = []
 
   for (let i = 0; i < chapters.length; i += 1) {
     const chapter = chapters[i]!
-    const chapterHref = chapter.href
-
     if (currentHasFragment) {
-      if (chapterHref === currentHref) lastIndex = i
+      if (chapter.href === currentHref) candidates.push(i)
       continue
     }
-
-    const chapterBase = normalizeHref(chapterHref)
-    if (chapterBase === currentBase || hrefMatches(currentHref, chapterHref)) {
-      lastIndex = i
+    const chapterBase = normalizeHref(chapter.href)
+    if (chapterBase === currentBase || hrefMatches(currentHref, chapter.href)) {
+      candidates.push(i)
     }
   }
 
-  return lastIndex
+  return candidates
 }
 
-/** 根据当前 location.href 解析上一章 / 当前 / 下一章 */
-export function resolveChapterNav(
+function pickFirstNavigableCandidate(
   chapters: EpubChapter[],
-  currentHref?: string,
-): EpubChapterNavState {
-  if (chapters.length === 0) {
-    return { current: null, previous: null, next: null, currentIndex: -1 }
+  candidates: number[],
+): number {
+  const navigable = candidates.find((index) => !isTocLikeChapter(chapters[index]!))
+  return navigable ?? candidates[0]!
+}
+
+function pickCandidateByPercentage(
+  chapters: EpubChapter[],
+  candidates: number[],
+  percentage: number,
+): number {
+  const navigableIndices = chapters
+    .map((chapter, index) => ({ chapter, index }))
+    .filter(({ chapter }) => !isTocLikeChapter(chapter))
+    .map(({ index }) => index)
+
+  if (navigableIndices.length === 0) {
+    return pickFirstNavigableCandidate(chapters, candidates)
   }
 
-  const navLevel = pickReaderNavLevel(chapters, isTocLikeChapter)
+  const clamped = Math.min(1, Math.max(0, percentage))
+  const firstNav = navigableIndices[0]!
+  const lastNav = navigableIndices[navigableIndices.length - 1]!
+  const targetIndex = firstNav + clamped * (lastNav - firstNav)
 
-  if (!currentHref) {
-    const initial = pickInitialChapter(chapters)
-    const flatIndex = initial
-      ? chapters.findIndex((item) => item.href === initial.href && item.label === initial.label)
-      : 0
-    const nav = resolveReaderChapterNav(
-      chapters,
-      flatIndex >= 0 ? flatIndex : 0,
-      navLevel,
-      isTocLikeChapter,
-    )
-    return {
-      current: nav.current,
-      previous: nav.previous,
-      next: nav.next,
-      currentIndex: nav.currentIndex,
+  let best = candidates[0]!
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const index of candidates) {
+    if (isTocLikeChapter(chapters[index]!)) continue
+    const distance = Math.abs(index - targetIndex)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = index
     }
   }
 
-  const flatIndex = findLastEpubFlatIndex(chapters, currentHref)
-  if (flatIndex < 0) {
+  return best
+}
+
+function preferLeafCandidates(
+  chapters: EpubChapter[],
+  candidates: number[],
+  currentHref: string,
+): number[] {
+  if (currentHref.includes('#')) return candidates
+  const withFragment = candidates.filter((index) => chapters[index]!.href.includes('#'))
+  return withFragment.length > 0 ? withFragment : candidates
+}
+
+/** 根据 href / 阅读进度定位展平 TOC 中的当前节（同 HTML 多目录项时不取「最后一条」） */
+export function findEpubFlatIndex(
+  chapters: EpubChapter[],
+  hint: EpubLocationHint,
+): number {
+  const href = hint.href?.trim()
+  if (!href) return -1
+
+  if (href.includes('#')) {
+    const exactIndex = chapters.findIndex((chapter) => chapter.href === href)
+    if (exactIndex >= 0) return exactIndex
+  }
+
+  let candidates = collectSameDocumentCandidates(chapters, href)
+  if (candidates.length === 0) return -1
+  if (candidates.length === 1) return candidates[0]!
+
+  candidates = preferLeafCandidates(chapters, candidates, href)
+
+  if (typeof hint.percentage === 'number' && Number.isFinite(hint.percentage)) {
+    return pickCandidateByPercentage(chapters, candidates, hint.percentage)
+  }
+
+  return pickFirstNavigableCandidate(chapters, candidates)
+}
+
+/** @deprecated 请使用 findEpubFlatIndex */
+export function findLastEpubFlatIndex(chapters: EpubChapter[], currentHref?: string): number {
+  return findEpubFlatIndex(chapters, { href: currentHref })
+}
+
+function resolveFlatIndex(
+  chapters: EpubChapter[],
+  hint?: EpubLocationHint,
+  flatIndex?: number,
+): number {
+  if (typeof flatIndex === 'number' && flatIndex >= 0 && flatIndex < chapters.length) {
+    return flatIndex
+  }
+  if (hint?.href) {
+    return findEpubFlatIndex(chapters, hint)
+  }
+  const initial = pickInitialChapter(chapters)
+  if (!initial) return -1
+  return chapters.findIndex(
+    (item) => item.href === initial.href && item.label === initial.label,
+  )
+}
+
+/** 根据当前 location 在展平 TOC 中解析上一节 / 当前 / 下一节 */
+export function resolveChapterNav(
+  chapters: EpubChapter[],
+  hintOrHref?: EpubLocationHint | string,
+  flatIndex?: number,
+): EpubChapterNavState {
+  if (chapters.length === 0) {
     return {
       current: null,
       previous: null,
       next: null,
       currentIndex: -1,
+      previousIndex: -1,
+      nextIndex: -1,
+      flatIndex: -1,
     }
   }
 
-  const nav = resolveReaderChapterNav(chapters, flatIndex, navLevel, isTocLikeChapter)
-  return {
-    current: nav.current,
-    previous: nav.previous,
-    next: nav.next,
-    currentIndex: nav.currentIndex,
+  const hint =
+    typeof hintOrHref === 'string' ? { href: hintOrHref } : (hintOrHref ?? undefined)
+  const resolvedFlatIndex = resolveFlatIndex(chapters, hint, flatIndex)
+  if (resolvedFlatIndex < 0) {
+    return {
+      current: null,
+      previous: null,
+      next: null,
+      currentIndex: -1,
+      previousIndex: -1,
+      nextIndex: -1,
+      flatIndex: -1,
+    }
   }
+
+  return resolveAdjacentFlatNav(chapters, resolvedFlatIndex, {
+    isTocLike: isTocLikeChapter,
+    getLoadTargetKey: (chapter) => chapter.href,
+    shouldSkipAdjacent: shouldSkipEpubParentAdjacent,
+  })
 }

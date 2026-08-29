@@ -22,10 +22,17 @@ import { injectMobiMarkStyles } from '@/lib/reader-mark-geometry'
 import { findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from '@/lib/mobi-reading-marks'
 import {
   buildMobiChapterList,
+  decodeMobiTocHref,
+  encodeMobiTocHref,
+  isTocLikeMobiChapter,
   pickReadableMobiChapterCandidates,
-  resolveMobiChapterNav,
   type MobiChapterItem,
 } from '@/lib/mobi-navigation'
+import {
+  findLastFlatIndexById,
+  findNextDistinctLoadTarget,
+  findPreviousDistinctLoadTarget,
+} from '@/lib/reader-chapter-nav'
 import { readMobiSelection } from '@/lib/mobi-selection'
 import {
   bindDocumentSelectionCollapse,
@@ -39,6 +46,7 @@ import {
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
+import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/core/errors'
 import type { ReadingMark } from '@shared/types/reading-mark'
@@ -64,6 +72,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
   const [chapters, setChapters] = useState<MobiChapterItem[]>([])
   const [currentChapterId, setCurrentChapterId] = useState<string>()
+  const [currentTocFlatIndex, setCurrentTocFlatIndex] = useState(-1)
+  const chaptersRef = useRef<MobiChapterItem[]>([])
   const [chapterDocHtml, setChapterDocHtml] = useState('')
   const [chapterLoading, setChapterLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -91,20 +101,34 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
 
-  const chapterNav = useMemo(
-    () => resolveMobiChapterNav(chapters, currentChapterId),
-    [chapters, currentChapterId],
-  )
+  chaptersRef.current = chapters
+
+  const nav = useReaderNavigationStore((state) => state.nav)
 
   const outlineUnits: ReaderUnit[] = useMemo(
     () =>
-      chapters.map((chapter) => ({
+      chapters.map((chapter, index) => ({
         label: chapter.label,
-        href: chapter.id,
+        href: encodeMobiTocHref(index),
         level: chapter.level,
       })),
     [chapters],
   )
+
+  useEffect(() => {
+    useReaderNavigationStore.getState().beginSession(filePath, 'mobi')
+    return () => {
+      useReaderNavigationStore.getState().beginSession('', 'mobi')
+    }
+  }, [filePath])
+
+  useEffect(() => {
+    if (chapters.length === 0) return
+    useReaderNavigationStore.getState().setUnits(outlineUnits)
+    useReaderNavigationStore
+      .getState()
+      .syncMobi(chapters, currentChapterId, currentTocFlatIndex)
+  }, [chapters, currentChapterId, currentTocFlatIndex, outlineUnits])
 
   const loadChapterById = useCallback(async (chapterId: string): Promise<boolean> => {
     const mobi = mobiRef.current
@@ -132,8 +156,39 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     return true
   }, [filePath])
 
+  const loadChapterAtIndex = useCallback(
+    async (flatIndex: number, options?: { forceReload?: boolean }) => {
+      const item = chaptersRef.current[flatIndex]
+      if (!item) return false
+
+      setCurrentTocFlatIndex(flatIndex)
+
+      if (!options?.forceReload && item.id === currentChapterIdRef.current) {
+        return true
+      }
+
+      setChapterLoading(true)
+      try {
+        const loaded = await loadChapterById(item.id)
+        if (!loaded) {
+          toast.error('该章节暂无正文')
+        }
+        return loaded
+      } finally {
+        setChapterLoading(false)
+      }
+    },
+    [loadChapterById],
+  )
+
   const loadChapter = useCallback(
     async (chapterId: string) => {
+      const flatIndex = findLastFlatIndexById(chaptersRef.current, chapterId)
+      if (flatIndex >= 0) {
+        await loadChapterAtIndex(flatIndex, { forceReload: true })
+        return
+      }
+
       setChapterLoading(true)
       try {
         const loaded = await loadChapterById(chapterId)
@@ -144,19 +199,20 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         setChapterLoading(false)
       }
     },
-    [loadChapterById],
+    [loadChapterAtIndex, loadChapterById],
   )
 
   const loadAdjacentChapter = useCallback(
     async (direction: 'next' | 'prev') => {
-      const target = direction === 'next' ? chapterNav.next : chapterNav.previous
-      if (!target) {
-        toast.error(direction === 'next' ? '已是最后一章' : '已是第一章')
+      const targetIndex =
+        direction === 'next' ? nav.nextIndex : nav.previousIndex
+      if (targetIndex < 0) {
+        toast.error(direction === 'next' ? '已是最后一节' : '已是第一节')
         return
       }
-      await loadChapter(target.id)
+      await loadChapterAtIndex(targetIndex)
     },
-    [chapterNav.next, chapterNav.previous, loadChapter],
+    [nav.nextIndex, nav.previousIndex, loadChapterAtIndex],
   )
 
   const syncMobiMarkOverlays = useCallback(
@@ -264,9 +320,22 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           wheelCooldownRef.current = false
         }, 320)
 
-        const nav = resolveMobiChapterNav(chapters, currentChapterId)
-        if (turn === 'next' && nav.next) void loadAdjacentChapter('next')
-        else if (turn === 'prev' && nav.previous) void loadAdjacentChapter('prev')
+        const navOptions = {
+          isTocLike: isTocLikeMobiChapter,
+          getLoadTargetKey: (chapter: MobiChapterItem) => chapter.id,
+        }
+        const activeFlatIndex =
+          currentTocFlatIndex >= 0
+            ? currentTocFlatIndex
+            : findLastFlatIndexById(chapters, currentChapterId)
+        const distinctTarget =
+          turn === 'next'
+            ? findNextDistinctLoadTarget(chapters, activeFlatIndex, navOptions)
+            : findPreviousDistinctLoadTarget(chapters, activeFlatIndex, navOptions)
+
+        if (distinctTarget) {
+          void loadChapterAtIndex(distinctTarget.index, { forceReload: true })
+        }
       }
 
       doc.addEventListener('mouseup', onMouseUp)
@@ -285,7 +354,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         }
       }
     },
-    [chapters, clearTextSelection, currentChapterId, loadAdjacentChapter, syncMobiMarkOverlays],
+    [chapters, clearTextSelection, currentChapterId, currentTocFlatIndex, loadChapterAtIndex, syncMobiMarkOverlays],
   )
 
   useEffect(() => {
@@ -310,6 +379,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     setChapters([])
     setChapterDocHtml('')
     setCurrentChapterId(undefined)
+    setCurrentTocFlatIndex(-1)
     setLoadError(null)
     mobiRef.current?.destroy()
     mobiRef.current = null
@@ -343,10 +413,15 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         try {
           let loaded = false
           for (const candidate of candidates) {
-            if (await loadChapterById(candidate.id)) {
-              loaded = true
-              break
+            const candidateIndex = nextChapters.findIndex(
+              (item) => item.id === candidate.id && item.label === candidate.label,
+            )
+            if (candidateIndex >= 0) {
+              loaded = await loadChapterAtIndex(candidateIndex, { forceReload: true })
+            } else {
+              loaded = await loadChapterById(candidate.id)
             }
+            if (loaded) break
           }
           if (!loaded) {
             setLoadError('未能加载任何可读章节。若文件为旧版 MOBI，可尝试同书的 AZW3 格式。')
@@ -355,7 +430,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           setChapterLoading(false)
         }
 
-        if (!cancelled) setReady(true)
+        if (!cancelled) {
+          setReady(true)
+          useReaderNavigationStore.getState().setReady(true)
+        }
       } catch (cause) {
         if (!cancelled) {
           reportAppError({
@@ -377,7 +455,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       mobiRef.current?.destroy()
       mobiRef.current = null
     }
-  }, [data, filePath, loadChapterById])
+  }, [data, filePath, loadChapterAtIndex, loadChapterById])
 
   useEffect(() => {
     const iframe = iframeRef.current
@@ -435,10 +513,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       fileFingerprint,
       kind: 'bookmark',
       anchor: { format: 'mobi', chapterId: currentChapterId },
-      label: chapterNav.current?.label ?? '书签',
+      label: nav.current?.label ?? '书签',
     })
     if (isOk(result)) toast.success('已添加书签')
-  }, [chapterNav.current?.label, createMark, currentChapterId, fileFingerprint, filePath])
+  }, [nav.current?.label, createMark, currentChapterId, fileFingerprint, filePath])
 
   const handleSaveAnnotation = useCallback(
     async (note: string) => {
@@ -489,15 +567,15 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     [deleteMark],
   )
 
-  const currentTitle = chapterNav.current?.label ?? '—'
-
   const goPrevChapter = useCallback(() => {
-    if (chapterNav.previous) void loadAdjacentChapter('prev')
-  }, [chapterNav.previous, loadAdjacentChapter])
+    if (nav.previous) void loadAdjacentChapter('prev')
+  }, [nav.previous, loadAdjacentChapter])
 
   const goNextChapter = useCallback(() => {
-    if (chapterNav.next) void loadAdjacentChapter('next')
-  }, [chapterNav.next, loadAdjacentChapter])
+    if (nav.next) void loadAdjacentChapter('next')
+  }, [nav.next, loadAdjacentChapter])
+
+  const { currentUnitId } = useReaderNavTitles()
 
   const readerHost = (
     <PaneErrorBoundary name="MOBI 阅读" filePath={filePath}>
@@ -533,7 +611,6 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         onTocToggle={toggleToc}
         onMarksToggle={toggleMarks}
         onAddBookmark={() => void addChapterBookmark()}
-        currentTitle={currentTitle}
         trailing={
           isLoading || !ready ? (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -549,23 +626,19 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         onCloseMarks={closeMarks}
         tocOpen={tocOpen}
         units={outlineUnits}
-        currentUnitId={currentChapterId}
+        currentUnitId={currentUnitId}
         onCloseToc={closeToc}
-        onSelectUnit={(unit) => void loadChapter(unit.href)}
+        onSelectUnit={(unit) => {
+          const index = decodeMobiTocHref(unit.href)
+          if (index !== null) {
+            void loadChapterAtIndex(index, { forceReload: true })
+          }
+        }}
       >
         {readerHost}
       </ReaderContentShell>
 
-      <ReaderFooterNav
-        ready={ready}
-        currentTitle={currentTitle}
-        previousTitle={chapterNav.previous?.label ?? '—'}
-        nextTitle={chapterNav.next?.label ?? '—'}
-        previousDisabled={!chapterNav.previous}
-        nextDisabled={!chapterNav.next}
-        onPrevious={goPrevChapter}
-        onNext={goNextChapter}
-      />
+      <ReaderFooterNav ready={ready} onPrevious={goPrevChapter} onNext={goNextChapter} />
 
       {markTooltipPos && hoveredMark ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />

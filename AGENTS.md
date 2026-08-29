@@ -195,12 +195,21 @@ loadFile(result.value)
 |----------|------|------|
 | IPC / 后端数据 | **TanStack Query** | 工作区树、应用版本；文件操作用 `useMutation` |
 | 本地 UI 偏好 | **Zustand + persist** | 视图模式、滚动进度、目录折叠 |
+| 阅读器跨组件导航 | **Zustand** | 当前节、上一节/下一节、工具栏标题、侧栏 TOC 高亮（`reader-navigation-store`） |
 | 编辑器即时内容 | **useState** | 当前文档 content、dirty 标记 |
 
 - 渲染进程 **禁止** 在组件/hook 中直接调用 `window.electronAPI` 的文件方法；统一走 `src/api/file-api.ts`
 - 例外：`updateTitle`、`quit` 等 fire-and-forget 操作可在 hook 内直连 preload API
 - Query Key 集中定义在 `src/api/query-keys.ts`
 - 工作区等「仅用户操作触发、无自动 refetch」的数据：mutation 成功后 `setQueryData`
+
+### 阅读器导航状态（强制）
+
+EPUB / MOBI / PDF 阅读器中，**工具栏当前标题、底部上一节/下一节、侧栏目录高亮** 必须来自同一 Zustand store：`src/stores/reader-navigation-store.ts`。
+
+- Viewer（`EpubViewer` / `MobiViewer` / `PdfViewer`）负责 IO：滚动、翻页、`display` / `loadChapter`，并调用 store 的 `sync*` 方法
+- 导航解析逻辑集中在 `src/lib/reader-navigation-sync.ts` 与 `epub-navigation.ts` / `mobi-navigation.ts`；**禁止**在 Toolbar / Footer / 侧栏各自维护 `chapterNav` / `unitNav` 本地 state
+- EPUB `scrolled-doc` 同 HTML 多节：滚动与 `relocated` 时优先 `syncEpubViewport` / `syncEpubRendition`（视口锚点），不得仅用 spine href 或全书百分比推断当前节
 
 ## React 准则
 

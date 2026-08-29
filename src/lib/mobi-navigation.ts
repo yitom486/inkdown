@@ -4,8 +4,8 @@ import {
 } from '@/lib/mobi-chapter-html'
 import {
   findLastFlatIndexById,
-  pickReaderNavLevel,
-  resolveReaderChapterNav,
+  resolveAdjacentFlatNav,
+  type AdjacentFlatNavState,
 } from '@/lib/reader-chapter-nav'
 
 export interface MobiChapterItem {
@@ -21,6 +21,18 @@ export interface MobiTocItemLike {
 }
 
 const TOC_LIKE_PATTERN = /^(目录|目次|table of contents|contents|toc)$/i
+
+export const MOBI_TOC_HREF_PREFIX = 'mobi-toc:'
+
+export function encodeMobiTocHref(flatIndex: number): string {
+  return `${MOBI_TOC_HREF_PREFIX}${flatIndex}`
+}
+
+export function decodeMobiTocHref(href: string): number | null {
+  if (!href.startsWith(MOBI_TOC_HREF_PREFIX)) return null
+  const index = Number.parseInt(href.slice(MOBI_TOC_HREF_PREFIX.length), 10)
+  return Number.isFinite(index) && index >= 0 ? index : null
+}
 
 export function isTocLikeMobiChapter(chapter: MobiChapterItem): boolean {
   return TOC_LIKE_PATTERN.test(chapter.label.trim())
@@ -126,45 +138,59 @@ export function pickReadableMobiChapterCandidates(
 /** 跳过纯目录页；Viewer 内还会过滤 XML 脏章节 */
 export function pickInitialMobiChapter(chapters: MobiChapterItem[]): MobiChapterItem | null {
   if (chapters.length === 0) return null
-
-  const navLevel = pickReaderNavLevel(chapters, isTocLikeMobiChapter)
-  const atNavLevel = chapters.find(
-    (chapter) => chapter.level === navLevel && !isTocLikeMobiChapter(chapter),
-  )
-  if (atNavLevel) return atNavLevel
-
   return chapters.find((chapter) => !isTocLikeMobiChapter(chapter)) ?? chapters[0]!
+}
+
+function resolveMobiFlatIndex(
+  chapters: MobiChapterItem[],
+  currentId?: string,
+  flatIndex?: number,
+): number {
+  if (typeof flatIndex === 'number' && flatIndex >= 0 && flatIndex < chapters.length) {
+    return flatIndex
+  }
+  if (currentId) {
+    return findLastFlatIndexById(chapters, currentId)
+  }
+  const initial = pickInitialMobiChapter(chapters)
+  if (!initial) return -1
+  return chapters.findIndex(
+    (item) => item.id === initial.id && item.label === initial.label,
+  )
 }
 
 export function resolveMobiChapterNav(
   chapters: MobiChapterItem[],
   currentId?: string,
-) {
+  flatIndex?: number,
+): AdjacentFlatNavState<MobiChapterItem> {
   if (chapters.length === 0) {
     return {
       current: null,
       previous: null,
       next: null,
       currentIndex: -1,
+      previousIndex: -1,
+      nextIndex: -1,
       flatIndex: -1,
     }
   }
 
-  const navLevel = pickReaderNavLevel(chapters, isTocLikeMobiChapter)
-  const flatIndex = findLastFlatIndexById(chapters, currentId)
-
-  if (flatIndex < 0 && !currentId) {
-    const initial = pickInitialMobiChapter(chapters)
-    const initialIndex = initial
-      ? chapters.findIndex((item) => item.id === initial.id && item.label === initial.label)
-      : 0
-    return resolveReaderChapterNav(
-      chapters,
-      initialIndex >= 0 ? initialIndex : 0,
-      navLevel,
-      isTocLikeMobiChapter,
-    )
+  const resolvedFlatIndex = resolveMobiFlatIndex(chapters, currentId, flatIndex)
+  if (resolvedFlatIndex < 0) {
+    return {
+      current: null,
+      previous: null,
+      next: null,
+      currentIndex: -1,
+      previousIndex: -1,
+      nextIndex: -1,
+      flatIndex: -1,
+    }
   }
 
-  return resolveReaderChapterNav(chapters, flatIndex, navLevel, isTocLikeMobiChapter)
+  return resolveAdjacentFlatNav(chapters, resolvedFlatIndex, {
+    isTocLike: isTocLikeMobiChapter,
+    getLoadTargetKey: (chapter) => chapter.id,
+  })
 }

@@ -1,7 +1,125 @@
-/** 多级目录中，底部「上一章/下一章」在 pickReaderNavLevel 选定的层级间切换 */
+/** 多级目录：底部导航在展平 TOC 中逐步切换；可选按 load key 去重（MOBI 同 spine） */
 
 export interface LeveledChapter {
   level: number
+}
+
+export interface AdjacentFlatNavOptions<T extends LeveledChapter> {
+  isTocLike?: (chapter: T) => boolean
+  /** 加载目标 key；相同时仅更新目录位置而不重新加载（如 MOBI spine id） */
+  getLoadTargetKey?: (chapter: T) => string
+  /** 相邻节过滤（如 EPUB 同文件父级目录项） */
+  shouldSkipAdjacent?: (current: T, candidate: T) => boolean
+}
+
+export interface AdjacentFlatNavState<T extends LeveledChapter> {
+  current: T | null
+  previous: T | null
+  next: T | null
+  currentIndex: number
+  previousIndex: number
+  nextIndex: number
+  flatIndex: number
+}
+
+const EMPTY_ADJACENT_NAV = {
+  current: null,
+  previous: null,
+  next: null,
+  currentIndex: -1,
+  previousIndex: -1,
+  nextIndex: -1,
+  flatIndex: -1,
+}
+
+function isBlockedTocEntry<T extends LeveledChapter>(
+  chapter: T | undefined,
+  isTocLike?: (chapter: T) => boolean,
+): chapter is T {
+  return Boolean(chapter && !isTocLike?.(chapter))
+}
+
+/** 在展平 TOC 中取上一/下一可导航条目（最小目录步进） */
+export function resolveAdjacentFlatNav<T extends LeveledChapter>(
+  chapters: T[],
+  flatIndex: number,
+  options: AdjacentFlatNavOptions<T> = {},
+): AdjacentFlatNavState<T> {
+  if (chapters.length === 0 || flatIndex < 0 || flatIndex >= chapters.length) {
+    return { ...EMPTY_ADJACENT_NAV }
+  }
+
+  const current = chapters[flatIndex]!
+  if (!isBlockedTocEntry(current, options.isTocLike)) {
+    return { ...EMPTY_ADJACENT_NAV, flatIndex }
+  }
+
+  let previous: T | null = null
+  let previousIndex = -1
+  for (let i = flatIndex - 1; i >= 0; i -= 1) {
+    const chapter = chapters[i]!
+    if (!isBlockedTocEntry(chapter, options.isTocLike)) continue
+    if (options.shouldSkipAdjacent?.(current, chapter)) continue
+    previous = chapter
+    previousIndex = i
+    break
+  }
+
+  let next: T | null = null
+  let nextIndex = -1
+  for (let i = flatIndex + 1; i < chapters.length; i += 1) {
+    const chapter = chapters[i]!
+    if (!isBlockedTocEntry(chapter, options.isTocLike)) continue
+    if (options.shouldSkipAdjacent?.(current, chapter)) continue
+    next = chapter
+    nextIndex = i
+    break
+  }
+
+  return {
+    current,
+    previous,
+    next,
+    currentIndex: flatIndex,
+    previousIndex,
+    nextIndex,
+    flatIndex,
+  }
+}
+
+/** 滚轮/翻页：跳过与当前 load key 相同的条目，直到下一个 spine 切片 */
+export function findNextDistinctLoadTarget<T extends LeveledChapter>(
+  chapters: T[],
+  flatIndex: number,
+  options: AdjacentFlatNavOptions<T> = {},
+): { item: T; index: number } | null {
+  if (flatIndex < 0 || !options.getLoadTargetKey) return null
+  const currentKey = options.getLoadTargetKey(chapters[flatIndex]!)
+
+  for (let i = flatIndex + 1; i < chapters.length; i += 1) {
+    const chapter = chapters[i]!
+    if (!isBlockedTocEntry(chapter, options.isTocLike)) continue
+    if (options.getLoadTargetKey(chapter) === currentKey) continue
+    return { item: chapter, index: i }
+  }
+  return null
+}
+
+export function findPreviousDistinctLoadTarget<T extends LeveledChapter>(
+  chapters: T[],
+  flatIndex: number,
+  options: AdjacentFlatNavOptions<T> = {},
+): { item: T; index: number } | null {
+  if (flatIndex < 0 || !options.getLoadTargetKey) return null
+  const currentKey = options.getLoadTargetKey(chapters[flatIndex]!)
+
+  for (let i = flatIndex - 1; i >= 0; i -= 1) {
+    const chapter = chapters[i]!
+    if (!isBlockedTocEntry(chapter, options.isTocLike)) continue
+    if (options.getLoadTargetKey(chapter) === currentKey) continue
+    return { item: chapter, index: i }
+  }
+  return null
 }
 
 export function pickReaderNavLevel<T extends LeveledChapter>(
@@ -42,13 +160,18 @@ export function findPreviousNavChapter<T extends LeveledChapter>(
   chapters: T[],
   anchorIndex: number,
   navLevel: number,
-  isTocLike?: (chapter: T) => boolean,
+  options: {
+    isTocLike?: (chapter: T) => boolean
+    shouldSkipAdjacent?: (current: T, candidate: T) => boolean
+  } = {},
 ): T | null {
   if (anchorIndex < 0) return null
+  const current = chapters[anchorIndex]!
   for (let i = anchorIndex - 1; i >= 0; i -= 1) {
     const chapter = chapters[i]!
     if (chapter.level !== navLevel) continue
-    if (isTocLike?.(chapter)) continue
+    if (options.isTocLike?.(chapter)) continue
+    if (options.shouldSkipAdjacent?.(current, chapter)) continue
     return chapter
   }
   return null
@@ -58,13 +181,18 @@ export function findNextNavChapter<T extends LeveledChapter>(
   chapters: T[],
   anchorIndex: number,
   navLevel: number,
-  isTocLike?: (chapter: T) => boolean,
+  options: {
+    isTocLike?: (chapter: T) => boolean
+    shouldSkipAdjacent?: (current: T, candidate: T) => boolean
+  } = {},
 ): T | null {
   if (anchorIndex < 0) return null
+  const current = chapters[anchorIndex]!
   for (let i = anchorIndex + 1; i < chapters.length; i += 1) {
     const chapter = chapters[i]!
     if (chapter.level !== navLevel) continue
-    if (isTocLike?.(chapter)) continue
+    if (options.isTocLike?.(chapter)) continue
+    if (options.shouldSkipAdjacent?.(current, chapter)) continue
     return chapter
   }
   return null
@@ -86,8 +214,8 @@ export function resolveReaderChapterNav<T extends LeveledChapter>(
   const current = anchorIndex >= 0 ? chapters[anchorIndex]! : null
   return {
     current,
-    previous: findPreviousNavChapter(chapters, anchorIndex, navLevel, isTocLike),
-    next: findNextNavChapter(chapters, anchorIndex, navLevel, isTocLike),
+    previous: findPreviousNavChapter(chapters, anchorIndex, navLevel, { isTocLike }),
+    next: findNextNavChapter(chapters, anchorIndex, navLevel, { isTocLike }),
     currentIndex: anchorIndex,
     flatIndex,
   }

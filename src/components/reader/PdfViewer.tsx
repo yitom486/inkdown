@@ -20,7 +20,7 @@ import {
 } from '@/lib/pdf-page-metrics'
 import { pdfjsLib } from '@/lib/pdf-worker'
 import { shouldRenderPdfPage } from '@/lib/pdf-render'
-import { resolveUnitNav, type ReaderUnit } from '@/lib/reader-navigation'
+import type { ReaderUnit } from '@/lib/reader-navigation'
 import {
   copyTextToClipboard,
   getSelectionToolbarPosition,
@@ -35,6 +35,7 @@ import {
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
+import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
 import type { AppError } from '@shared/core/errors'
 import type { ReadingMark } from '@shared/types/reading-mark'
 import { isOk } from '@shared/core/result'
@@ -83,12 +84,26 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const ready = numPages > 0 && pdfDoc !== null
 
-  const unitNav = useMemo(
-    () => resolveUnitNav(outlineUnits, String(pageNum)),
-    [outlineUnits, pageNum],
-  )
+  const nav = useReaderNavigationStore((state) => state.nav)
+  const { currentUnitId } = useReaderNavTitles()
 
-  const currentTitle = unitNav.current?.label ?? (numPages > 0 ? `第 ${pageNum} 页` : '—')
+  useEffect(() => {
+    useReaderNavigationStore.getState().beginSession(filePath, 'pdf')
+    return () => {
+      useReaderNavigationStore.getState().beginSession('', 'pdf')
+    }
+  }, [filePath])
+
+  useEffect(() => {
+    if (outlineUnits.length === 0) return
+    useReaderNavigationStore.getState().syncPdf(outlineUnits, pageNum)
+  }, [outlineUnits, pageNum])
+
+  useEffect(() => {
+    if (ready) {
+      useReaderNavigationStore.getState().setReady(true)
+    }
+  }, [ready])
 
   const pageNumbers = useMemo(
     () => Array.from({ length: numPages }, (_, index) => index + 1),
@@ -358,12 +373,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       fileFingerprint,
       kind: 'bookmark',
       anchor: { format: 'pdf', page: pageNum },
-      label: unitNav.current?.label ?? `第 ${pageNum} 页`,
+      label: nav.current?.label ?? `第 ${pageNum} 页`,
     })
     if (isOk(result)) {
       toast.success('已添加书签')
     }
-  }, [createMark, fileFingerprint, filePath, numPages, pageNum, unitNav.current?.label])
+  }, [createMark, fileFingerprint, filePath, nav.current?.label, pageNum])
 
   const handleSaveAnnotation = useCallback(
     async (note: string) => {
@@ -426,7 +441,6 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           setMarksOpen((value) => !value)
         }}
         onAddBookmark={() => void addPageBookmark()}
-        currentTitle={currentTitle}
         center={
           <>
             <Button variant="ghost" size="icon-sm" disabled={pageNum <= 1} onClick={goPrev}>
@@ -472,7 +486,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         onCloseMarks={() => setMarksOpen(false)}
         tocOpen={tocOpen}
         units={outlineUnits}
-        currentUnitId={unitNav.current?.href ?? String(pageNum)}
+        currentUnitId={currentUnitId ?? String(pageNum)}
         onCloseToc={() => setTocOpen(false)}
         onSelectUnit={(unit) => {
           goToUnit(unit)
@@ -534,16 +548,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
       <ReaderFooterNav
         ready={ready}
-        previousLabel="上一节"
-        nextLabel="下一节"
-        currentLabel="当前位置"
-        currentTitle={currentTitle}
-        previousTitle={unitNav.previous?.label ?? '—'}
-        nextTitle={unitNav.next?.label ?? '—'}
-        previousDisabled={!unitNav.previous}
-        nextDisabled={!unitNav.next}
-        onPrevious={() => unitNav.previous && goToUnit(unitNav.previous)}
-        onNext={() => unitNav.next && goToUnit(unitNav.next)}
+        onPrevious={() => nav.previous && goToUnit(nav.previous)}
+        onNext={() => nav.next && goToUnit(nav.next)}
       />
 
       {selectionToolbarPos && selectionSnapshot ? (

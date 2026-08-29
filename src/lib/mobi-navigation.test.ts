@@ -2,10 +2,21 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMobiChapterList,
   buildReadableSpineChapters,
+  decodeMobiTocHref,
+  encodeMobiTocHref,
   pickReadableMobiChapterCandidates,
   resolveMobiChapterNav,
 } from './mobi-navigation'
 import type { MobiChapterItem } from './mobi-navigation'
+import { findNextDistinctLoadTarget } from './reader-chapter-nav'
+
+describe('mobi toc href', () => {
+  it('编码与解码 flat index', () => {
+    expect(encodeMobiTocHref(3)).toBe('mobi-toc:3')
+    expect(decodeMobiTocHref('mobi-toc:3')).toBe(3)
+    expect(decodeMobiTocHref('1')).toBeNull()
+  })
+})
 
 describe('buildReadableSpineChapters', () => {
   it('跳过空白 spine 切片并提取标题', () => {
@@ -75,37 +86,52 @@ describe('resolveMobiChapterNav', () => {
     { id: '2', label: '第二章 长安与魏州', level: 0 },
   ]
 
-  it('底部导航在一级标题间切换', () => {
-    const nav = resolveMobiChapterNav(chapters, '1')
-    expect(nav.current?.label).toBe('第一章 五星会聚')
+  it('指定 flat index 时精确匹配当前目录项', () => {
+    const nav = resolveMobiChapterNav(chapters, '1', 2)
+    expect(nav.current?.label).toBe('一、小引')
+    expect(nav.previous?.label).toBe('第一章 五星会聚')
     expect(nav.next?.label).toBe('第二章 长安与魏州')
   })
 
-  it('同一 spine 多 TOC 条目时取最后匹配并回溯到一级章', () => {
+  it('仅 spine id 时回退到最后一个匹配项', () => {
     const nav = resolveMobiChapterNav(chapters, '1')
-    expect(nav.current?.label).toBe('第一章 五星会聚')
-    expect(nav.previous).toBeNull()
+    expect(nav.current?.label).toBe('一、小引')
     expect(nav.next?.label).toBe('第二章 长安与魏州')
   })
 
-  it('上一章跳过目录页', () => {
+  it('上一节跳过目录页', () => {
     const nav = resolveMobiChapterNav(chapters, '2')
     expect(nav.current?.label).toBe('第二章 长安与魏州')
-    expect(nav.previous?.label).toBe('第一章 五星会聚')
-    expect(nav.previous?.label).not.toBe('目录')
+    expect(nav.previous?.label).toBe('一、小引')
   })
 
-  it('目录下挂二级正文时与 EPUB 一样按二级跳转', () => {
+  it('单元结构下按最小目录步进', () => {
     const nested: MobiChapterItem[] = [
       { id: '0', label: '目录', level: 0 },
-      { id: '0', label: '自序', level: 1 },
-      { id: '1', label: '第1章 导论', level: 1 },
-      { id: '2', label: '第2章 组织研究', level: 1 },
+      { id: '1', label: '自序', level: 1 },
+      { id: '2', label: '第1章 导论', level: 1 },
+      { id: '3', label: '第一单元', level: 1 },
+      { id: '3', label: '第2章', level: 2 },
+      { id: '3', label: '第3章', level: 2 },
+      { id: '3', label: '组织背景', level: 2 },
+      { id: '4', label: '第二单元', level: 1 },
+      { id: '5', label: '第三单元', level: 1 },
     ]
-    const nav = resolveMobiChapterNav(nested, '0')
-    expect(nav.current?.label).toBe('自序')
-    expect(nav.next?.label).toBe('第1章 导论')
-    expect(nav.previous).toBeNull()
+    const nav = resolveMobiChapterNav(nested, '4', 7)
+    expect(nav.current?.label).toBe('第二单元')
+    expect(nav.previous?.label).toBe('组织背景')
+    expect(nav.next?.label).toBe('第三单元')
+  })
+
+  it('滚轮翻页跳过同 spine 条目', () => {
+    const nested: MobiChapterItem[] = [
+      { id: '3', label: '第2章', level: 2 },
+      { id: '3', label: '第3章', level: 2 },
+      { id: '4', label: '第二单元', level: 1 },
+    ]
+    const next = findNextDistinctLoadTarget(nested, 0, {
+      getLoadTargetKey: (chapter) => chapter.id,
+    })
+    expect(next?.item.label).toBe('第二单元')
   })
 })
-

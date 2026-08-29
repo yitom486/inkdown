@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  findEpubFlatIndex,
   findLastEpubFlatIndex,
   flattenEpubToc,
   isTocLikeChapter,
@@ -23,6 +24,23 @@ function buildGovernanceToc() {
   ])
 }
 
+/** 同一 HTML 内含多节（scrolled-doc 常见）：href 无 fragment */
+function buildMonolithicChapterToc() {
+  return flattenEpubToc([
+    { label: '目录', href: 'nav.xhtml' },
+    {
+      label: '第1章 导论',
+      href: 'chapter01.html',
+      subitems: [
+        { label: '自序', href: 'chapter01.html#preface' },
+        { label: '问题提出', href: 'chapter01.html#intro' },
+        { label: '讨论与小结', href: 'chapter01.html#summary' },
+      ],
+    },
+    { label: '第2章 组织结构', href: 'chapter02.html' },
+  ])
+}
+
 describe('epub-navigation', () => {
   const chapters = flattenEpubToc([
     { label: '目录', href: 'nav.xhtml' },
@@ -43,14 +61,45 @@ describe('epub-navigation', () => {
     expect(nav.next).toBeNull()
   })
 
-  it('位于二级小节时下一章仍跳到下一同级标题', () => {
+  it('位于二级小节时按最小目录步进', () => {
     const nested = flattenEpubToc([
       { label: '第一章', href: 'ch1.xhtml', subitems: [{ label: '一、小引', href: 'ch1.xhtml#intro' }] },
       { label: '第二章', href: 'ch2.xhtml' },
     ])
     const nav = resolveChapterNav(nested, 'ch1.xhtml#intro')
-    expect(nav.current?.label).toBe('第一章')
+    expect(nav.current?.label).toBe('一、小引')
+    expect(nav.previous).toBeNull()
     expect(nav.next?.label).toBe('第二章')
+  })
+
+  describe('同 HTML 多目录项（scrolled-doc 回归）', () => {
+    const monolithic = buildMonolithicChapterToc()
+
+    it('1% 进度时匹配自序而非讨论与小结', () => {
+      const index = findEpubFlatIndex(monolithic, {
+        href: 'chapter01.html',
+        percentage: 0.01,
+      })
+      expect(monolithic[index]?.label).toBe('自序')
+    })
+
+    it('90% 进度时匹配讨论与小结', () => {
+      const index = findEpubFlatIndex(monolithic, {
+        href: 'chapter01.html',
+        percentage: 0.9,
+      })
+      expect(monolithic[index]?.label).toBe('讨论与小结')
+    })
+
+    it('底部导航与正文开头同步', () => {
+      const nav = resolveChapterNav(monolithic, {
+        href: 'chapter01.html',
+        percentage: 0.01,
+      })
+      expect(nav.current?.label).toBe('自序')
+      expect(nav.next?.label).toBe('问题提出')
+      expect(nav.previous).toBeNull()
+    })
   })
 
   describe('目录下挂自序/章（用户书回归）', () => {
@@ -65,13 +114,14 @@ describe('epub-navigation', () => {
       expect(pickInitialChapter(nested)?.label).toBe('自序')
     })
 
-    it('无 fragment 的同文件 href 匹配到自序而不是目录', () => {
+    it('无 fragment 的同文件 href 默认匹配首个正文章节', () => {
+      expect(findEpubFlatIndex(nested, { href: 'text00001.html' })).toBe(1)
       expect(findLastEpubFlatIndex(nested, 'text00001.html')).toBe(1)
       expect(nested[1]?.label).toBe('自序')
     })
 
     it('阅读自序时底部导航显示自序，下一章为第1章', () => {
-      const nav = resolveChapterNav(nested, 'text00001.html')
+      const nav = resolveChapterNav(nested, { href: 'text00001.html', percentage: 0.01 })
       expect(nav.current?.label).toBe('自序')
       expect(nav.next?.label).toBe('第1章 导论：中国国家治理的制度逻辑')
       expect(nav.previous).toBeNull()
@@ -83,21 +133,11 @@ describe('epub-navigation', () => {
       expect(nav.next?.label).toContain('第1章')
     })
 
-    it('在第1章时上一章为自序、下一章为第2章（按二级标题跳转）', () => {
+    it('在第1章时上一章为自序、下一章为第2章', () => {
       const nav = resolveChapterNav(nested, 'text00002.html')
       expect(nav.current?.label).toContain('第1章')
       expect(nav.previous?.label).toBe('自序')
       expect(nav.next?.label).toContain('第2章')
-    })
-
-    it('上一章/下一章不会落回「目录」占位项', () => {
-      const fromPreface = resolveChapterNav(nested, 'text00001.html')
-      const fromCh1 = resolveChapterNav(nested, 'text00002.html')
-
-      expect(fromPreface.previous).toBeNull()
-      expect(fromPreface.next?.label).not.toMatch(/^目录$/)
-      expect(fromCh1.previous?.label).not.toMatch(/^目录$/)
-      expect(fromCh1.current?.label).not.toMatch(/^目录$/)
     })
   })
 })

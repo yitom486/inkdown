@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Bookmark, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useReaderNavTitles } from '@/stores/reader-navigation-store'
 
 interface ReaderToolbarShellProps {
   ready?: boolean
@@ -9,7 +10,6 @@ interface ReaderToolbarShellProps {
   onMarksToggle: () => void
   onAddBookmark: () => void
   addBookmarkDisabled?: boolean
-  currentTitle: string
   center?: ReactNode
   trailing?: ReactNode
 }
@@ -21,10 +21,11 @@ export function ReaderToolbarShell({
   onMarksToggle,
   onAddBookmark,
   addBookmarkDisabled = false,
-  currentTitle,
   center,
   trailing,
 }: ReaderToolbarShellProps) {
+  const { currentTitle } = useReaderNavTitles()
+
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-2">
       <Button
