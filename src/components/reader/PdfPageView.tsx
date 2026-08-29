@@ -54,27 +54,31 @@ export function PdfPageView({
         const page = await pdf.getPage(pageNumber)
         if (cancelled) return
 
-        const { cssViewport, renderViewport } = createPdfPageViewport(page, scale)
-        canvas.width = Math.floor(renderViewport.width)
-        canvas.height = Math.floor(renderViewport.height)
-        canvas.style.width = `${cssViewport.width}px`
-        canvas.style.height = `${cssViewport.height}px`
+        const { cssViewport, cssWidth, cssHeight, canvasWidth, canvasHeight, transform } =
+          createPdfPageViewport(page, scale)
+        canvas.width = canvasWidth
+        canvas.height = canvasHeight
+        canvas.style.width = `${cssWidth}px`
+        canvas.style.height = `${cssHeight}px`
 
-        const context = canvas.getContext('2d')
+        const context = canvas.getContext('2d', { alpha: false })
         if (!context) return
+        context.setTransform(1, 0, 0, 1, 0, 0)
 
         const renderTask = page.render({
           canvasContext: context,
-          viewport: renderViewport,
+          viewport: cssViewport,
+          transform,
           canvas,
+          background: '#ffffff',
         })
         renderTaskRef.current = renderTask
         await renderTask.promise
         if (cancelled) return
 
         textLayerContainer.replaceChildren()
-        textLayerContainer.style.width = `${cssViewport.width}px`
-        textLayerContainer.style.height = `${cssViewport.height}px`
+        textLayerContainer.style.width = `${cssWidth}px`
+        textLayerContainer.style.height = `${cssHeight}px`
 
         const textLayer = new TextLayer({
           textContentSource: page.streamTextContent({

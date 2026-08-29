@@ -44,9 +44,35 @@ export function shouldRenderPdfPage(
   return pageNumber >= start && pageNumber <= end
 }
 
-/** 按 CSS 像素算视口，canvas 用 DPR 放大以保证清晰度 */
+/** 按 CSS 像素算视口；canvas 缓冲按整像素 × DPR，避免亚像素拉伸发糊 */
+export function resolvePdfCanvasPixelSize(
+  cssWidth: number,
+  cssHeight: number,
+  dpr = getPdfDevicePixelRatio(),
+): {
+  cssWidth: number
+  cssHeight: number
+  canvasWidth: number
+  canvasHeight: number
+  dpr: number
+  /** pdf.js 官方写法：viewport 用 CSS scale，再用 transform 乘 DPR */
+  transform: [number, number, number, number, number, number] | undefined
+} {
+  const width = Math.max(1, Math.floor(cssWidth))
+  const height = Math.max(1, Math.floor(cssHeight))
+  return {
+    cssWidth: width,
+    cssHeight: height,
+    canvasWidth: Math.max(1, Math.floor(width * dpr)),
+    canvasHeight: Math.max(1, Math.floor(height * dpr)),
+    dpr,
+    transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
+  }
+}
+
+/** 按 CSS 像素算视口，canvas 用 DPR transform 保证清晰度（避免浮点 CSS 拉伸） */
 export function createPdfPageViewport(page: PDFPageProxy, scale: number, dpr = getPdfDevicePixelRatio()) {
   const cssViewport = page.getViewport({ scale })
-  const renderViewport = page.getViewport({ scale: scale * dpr })
-  return { cssViewport, renderViewport, dpr }
+  const pixels = resolvePdfCanvasPixelSize(cssViewport.width, cssViewport.height, dpr)
+  return { cssViewport, ...pixels }
 }

@@ -43,6 +43,17 @@ describe('pdf continuous render window', () => {
     expect(getPdfDevicePixelRatio(0)).toBe(1)
   })
 
+  it('CSS 与 canvas 尺寸取整，避免亚像素拉伸', async () => {
+    const { resolvePdfCanvasPixelSize } = await import('./pdf-render')
+    const pixels = resolvePdfCanvasPixelSize(612.7, 792.3, 2)
+    expect(pixels.cssWidth).toBe(612)
+    expect(pixels.cssHeight).toBe(792)
+    expect(pixels.canvasWidth).toBe(1224)
+    expect(pixels.canvasHeight).toBe(1584)
+    expect(pixels.transform).toEqual([2, 0, 0, 2, 0, 0])
+    expect(resolvePdfCanvasPixelSize(100, 100, 1).transform).toBeUndefined()
+  })
+
   it('计算邻近页预渲染窗口', () => {
     expect(resolvePdfVisiblePageRange(1, 518)).toEqual({ start: 1, end: 3 })
     expect(resolvePdfVisiblePageRange(43, 518)).toEqual({ start: 41, end: 45 })
