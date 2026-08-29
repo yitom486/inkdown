@@ -41,7 +41,8 @@ src/components/  # ui | editor | preview | reader | layout | shared
 .cursor/rules/   # Agent 强制细则
 ```
 
-ACP（阶段 A/B）：主进程 `electron/services/acp/` + `src/api/acp-api.ts`；协议 v1，默认运行时 `bunx -y @agentclientprotocol/codex-acp`。
+ACP（阶段 A/B/C）：主进程 `electron/services/acp/` + `src/api/acp-api.ts` + `AgentPanel`；协议 v1，默认 `codex-acp`。  
+UI：**壳自研、皮复用**（shadcn + 可选开源消息渲染）；认证：**复用 `~/.codex` / ACP authMethods**（对齐 VS Code / Zed），详见 `.plan/2026-08-29-ACP客户端.md`「UI 与认证策略」。
 
 路径别名：`@/` → `src/`，`@shared/` → `shared/`。
 
