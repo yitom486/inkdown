@@ -692,18 +692,20 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!ready) return
       if (!(event.altKey || event.metaKey)) return
+      // 按键瞬间读 store，避免闭包里的 nav / index 过期
+      const { nav: currentNav } = useReaderNavigationStore.getState()
       if (event.key === 'ArrowLeft') {
         event.preventDefault()
-        goToChapter(nav.previous, nav.previousIndex)
+        goToChapter(currentNav.previous, currentNav.previousIndex)
       } else if (event.key === 'ArrowRight') {
         event.preventDefault()
-        goToChapter(nav.next, nav.nextIndex)
+        goToChapter(currentNav.next, currentNav.nextIndex)
       }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [nav.next, nav.previous, goToChapter, ready])
+  }, [goToChapter, ready])
 
   const { currentUnitId } = useReaderNavTitles()
 

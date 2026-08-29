@@ -637,12 +637,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   )
 
   const goPrevChapter = useCallback(() => {
-    if (nav.previous) void loadAdjacentChapter('prev')
-  }, [nav.previous, loadAdjacentChapter])
+    if (nav.previousIndex >= 0) void loadAdjacentChapter('prev')
+  }, [nav.previousIndex, loadAdjacentChapter])
 
   const goNextChapter = useCallback(() => {
-    if (nav.next) void loadAdjacentChapter('next')
-  }, [nav.next, loadAdjacentChapter])
+    if (nav.nextIndex >= 0) void loadAdjacentChapter('next')
+  }, [nav.nextIndex, loadAdjacentChapter])
 
   const { currentUnitId } = useReaderNavTitles()
 
