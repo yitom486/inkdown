@@ -72,5 +72,5 @@ YYYY-MM-DD-计划名称.md
 | [2026-08-28-电子书阅读支持.md](./2026-08-28-电子书阅读支持.md) | `in-progress` | PDF/EPUB 只读阅读，应用更名轻量阅读器 |
 | [2026-08-28-阅读标记与批注.md](./2026-08-28-阅读标记与批注.md) | `in-progress` | 书签、批注、选区工具条 |
 | [2026-08-29-PDF虚拟滚动优化.md](./2026-08-29-PDF虚拟滚动优化.md) | `pending` | PDF 虚拟列表 + 渲染缓存（按需实施） |
-| [2026-08-29-ACP客户端.md](./2026-08-29-ACP客户端.md) | `pending` | ACP Client + codex-acp（v0.2.x，不自研引擎） |
+| [2026-08-29-ACP客户端.md](./2026-08-29-ACP客户端.md) | `in-progress` | ACP Client + codex-acp（v0.2.x，阶段 A+B 已落地） |
 | [2026-08-29-GitHub发布与版本路线.md](./2026-08-29-GitHub发布与版本路线.md) | `pending` | v0.1 无 AI 首发 Release，v0.2 接入 Agent |

@@ -11,6 +11,13 @@ import type {
   CreateReadingMarkPayload,
   UpdateReadingMarkPayload,
 } from '@shared/types/reading-mark'
+import type {
+  AcpCancelPayload,
+  AcpConnectPayload,
+  AcpPermissionResponsePayload,
+  AcpPromptPayload,
+  AcpSessionNewPayload,
+} from '@shared/types/acp'
 import { ok } from '@shared/core/result'
 import {
   exportHtmlDocument,
@@ -37,9 +44,91 @@ import {
 } from '../services/reading-marks-service'
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
+import { listAcpRuntimes } from '../services/acp/agent-registry'
+import {
+  cancelAcp,
+  connectAcp,
+  createAcpSession,
+  disconnectAcp,
+  onAcpSessionUpdate,
+  onAcpStatusChanged,
+  promptAcp,
+  setAcpPermissionBridge,
+} from '../services/acp/acp-client'
+import { pickAllowOptionId } from '../services/acp/client-handlers'
+
+function broadcastToAllWindows(channel: string, payload: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, payload)
+    }
+  }
+}
 
 /** 集中注册 IPC；文件/书签等耗时操作均为 async，不阻塞主进程事件循环 */
 export function registerIpcHandlers(): void {
+  setAcpPermissionBridge(async ({ requestId, sessionId, params }) => {
+    const toolCall = params.toolCall
+    const title =
+      toolCall && typeof toolCall === 'object' && 'title' in toolCall
+        ? String((toolCall as { title?: unknown }).title ?? '工具调用')
+        : '工具调用'
+
+    broadcastToAllWindows(IPC.ACP_PERMISSION_REQUEST, {
+      requestId,
+      sessionId,
+      toolCall:
+        toolCall && typeof toolCall === 'object'
+          ? (toolCall as Record<string, unknown>)
+          : undefined,
+      options: Array.isArray(params.options) ? params.options : undefined,
+      rawParams: params,
+      summary: title,
+    })
+
+    return await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        cleanup()
+        const allowId = pickAllowOptionId(params)
+        if (allowId) resolve({ outcome: 'selected', optionId: allowId })
+        else resolve({ outcome: 'cancelled' })
+      }, 120_000)
+
+      const handler = (
+        _event: Electron.IpcMainEvent,
+        payload: AcpPermissionResponsePayload,
+      ): void => {
+        if (payload?.requestId !== requestId) return
+        cleanup()
+        resolve(payload.outcome)
+      }
+
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        ipcMain.removeListener(IPC.ACP_PERMISSION_RESPONSE, handler)
+      }
+
+      ipcMain.on(IPC.ACP_PERMISSION_RESPONSE, handler)
+    })
+  })
+
+  onAcpSessionUpdate((event) => {
+    broadcastToAllWindows(IPC.ACP_SESSION_UPDATE, event)
+  })
+
+  onAcpStatusChanged((event) => {
+    broadcastToAllWindows(IPC.ACP_STATUS_CHANGED, event)
+  })
+
+  ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
+  ipcMain.handle(IPC.ACP_CONNECT, (_event, payload: AcpConnectPayload) => connectAcp(payload))
+  ipcMain.handle(IPC.ACP_DISCONNECT, () => disconnectAcp())
+  ipcMain.handle(IPC.ACP_SESSION_NEW, (_event, payload: AcpSessionNewPayload) =>
+    createAcpSession(payload.cwd),
+  )
+  ipcMain.handle(IPC.ACP_PROMPT, (_event, payload: AcpPromptPayload) => promptAcp(payload))
+  ipcMain.handle(IPC.ACP_CANCEL, (_event, payload: AcpCancelPayload) => cancelAcp(payload))
+
   ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())
 
   ipcMain.on(IPC.APP_SET_DIRTY, (event, isDirty: boolean) => {

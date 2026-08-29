@@ -8,6 +8,7 @@ import { EditorLayout } from '@/components/layout/EditorLayout'
 import { ReaderLayout } from '@/components/layout/ReaderLayout'
 import { Toaster } from '@/components/ui/sonner'
 import { useAutoSave } from '@/hooks/useAutoSave'
+import { useAcpPermissionBridge } from '@/hooks/useAcpPermissionBridge'
 import { useDraftPersistence, clearDraftForFile } from '@/hooks/useDraftPersistence'
 import { useDraftRecoveryPrompt } from '@/hooks/useDraftRecovery'
 import { useExportDocument } from '@/hooks/useExportDocument'
@@ -79,6 +80,7 @@ function App() {
     isDirty,
   })
   useGlobalErrorHandlers(filePath)
+  useAcpPermissionBridge()
 
   const handleAutoSave = useCallback(async () => {
     if (!isMarkdownDocument || !filePath || !isDirty || isFileBusy) return

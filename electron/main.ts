@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import { createWindow } from './window/create-window'
 import { registerIpcHandlers } from './ipc/register-handlers'
+import { disposeAllAcp } from './services/acp/acp-client'
 import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
 
 app.whenReady().then(() => {
@@ -15,8 +16,13 @@ app.whenReady().then(() => {
   })
 })
 
+app.on('before-quit', () => {
+  disposeAllAcp()
+})
+
 app.on('window-all-closed', () => {
   disposeAllWorkspaceWatches()
+  disposeAllAcp()
   if (process.platform !== 'darwin') {
     app.quit()
   }

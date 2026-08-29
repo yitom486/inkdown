@@ -33,13 +33,15 @@ bunx shadcn@latest add <component>
 
 ```
 shared/          # 跨进程契约（ipc / types / core Result）
-electron/        # main、preload、ipc、window、services
-src/api/         # 渲染端 IPC 封装（禁止组件直调 window.electronAPI 文件 API）
+electron/        # main、preload、ipc、window、services（含 services/acp）
+src/api/         # 渲染端 IPC 封装（file-api、acp-api；禁止组件直调 window.electronAPI 文件 API）
 src/stores/      # Zustand
 src/components/  # ui | editor | preview | reader | layout | shared
 .plan/           # 可执行计划与进度（见 .plan/README.md）
 .cursor/rules/   # Agent 强制细则
 ```
+
+ACP（阶段 A/B）：主进程 `electron/services/acp/` + `src/api/acp-api.ts`；协议 v1，默认运行时 `bunx -y @agentclientprotocol/codex-acp`。
 
 路径别名：`@/` → `src/`，`@shared/` → `shared/`。
 

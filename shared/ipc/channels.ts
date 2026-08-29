@@ -29,6 +29,16 @@ export const IPC = {
   MARKS_CREATE: 'marks:create',
   MARKS_UPDATE: 'marks:update',
   MARKS_DELETE: 'marks:delete',
+  ACP_LIST_RUNTIMES: 'acp:list-runtimes',
+  ACP_CONNECT: 'acp:connect',
+  ACP_DISCONNECT: 'acp:disconnect',
+  ACP_SESSION_NEW: 'acp:session-new',
+  ACP_PROMPT: 'acp:prompt',
+  ACP_CANCEL: 'acp:cancel',
+  ACP_PERMISSION_RESPONSE: 'acp:permission-response',
+  ACP_SESSION_UPDATE: 'acp:session-update',
+  ACP_STATUS_CHANGED: 'acp:status-changed',
+  ACP_PERMISSION_REQUEST: 'acp:permission-request',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

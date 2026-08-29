@@ -20,6 +20,20 @@ import type {
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '@shared/types/reading-mark'
+import type {
+  AcpCancelPayload,
+  AcpConnectPayload,
+  AcpConnectResult,
+  AcpPermissionRequestEvent,
+  AcpPermissionResponsePayload,
+  AcpPromptPayload,
+  AcpPromptResult,
+  AcpRuntimeInfo,
+  AcpSessionNewPayload,
+  AcpSessionNewResult,
+  AcpSessionUpdateEvent,
+  AcpStatusChangedEvent,
+} from '@shared/types/acp'
 
 export interface ElectronAPI {
   platform: string
@@ -56,4 +70,16 @@ export interface ElectronAPI {
   createReadingMark: (payload: CreateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
   updateReadingMark: (payload: UpdateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
   deleteReadingMark: (id: string) => Promise<Result<void, AppError>>
+  listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>
+  acpConnect: (payload: AcpConnectPayload) => Promise<Result<AcpConnectResult, AppError>>
+  acpDisconnect: () => Promise<Result<void, AppError>>
+  acpSessionNew: (payload: AcpSessionNewPayload) => Promise<Result<AcpSessionNewResult, AppError>>
+  acpPrompt: (payload: AcpPromptPayload) => Promise<Result<AcpPromptResult, AppError>>
+  acpCancel: (payload: AcpCancelPayload) => Promise<Result<void, AppError>>
+  acpRespondPermission: (payload: AcpPermissionResponsePayload) => void
+  onAcpSessionUpdate: (callback: (event: AcpSessionUpdateEvent) => void) => () => void
+  onAcpStatusChanged: (callback: (event: AcpStatusChangedEvent) => void) => () => void
+  onAcpPermissionRequest: (
+    callback: (event: AcpPermissionRequestEvent & { summary?: string }) => void,
+  ) => () => void
 }

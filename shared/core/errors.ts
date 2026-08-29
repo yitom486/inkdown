@@ -6,6 +6,10 @@ export type AppErrorCode =
   | 'FILE_NOT_FOUND'
   | 'WORKSPACE_SCAN_ERROR'
   | 'UNSUPPORTED_FORMAT'
+  | 'ACP_SPAWN_ERROR'
+  | 'ACP_PROTOCOL_ERROR'
+  | 'ACP_NOT_CONNECTED'
+  | 'ACP_TIMEOUT'
   | 'UNKNOWN'
 
 export interface AppError {

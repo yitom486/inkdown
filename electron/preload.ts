@@ -75,6 +75,42 @@ const electronAPI: ElectronAPI = {
   createReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_CREATE, payload),
   updateReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_UPDATE, payload),
   deleteReadingMark: (id: string) => ipcRenderer.invoke(IPC.MARKS_DELETE, id),
+  listAcpRuntimes: () => ipcRenderer.invoke(IPC.ACP_LIST_RUNTIMES),
+  acpConnect: (payload) => ipcRenderer.invoke(IPC.ACP_CONNECT, payload),
+  acpDisconnect: () => ipcRenderer.invoke(IPC.ACP_DISCONNECT),
+  acpSessionNew: (payload) => ipcRenderer.invoke(IPC.ACP_SESSION_NEW, payload),
+  acpPrompt: (payload) => ipcRenderer.invoke(IPC.ACP_PROMPT, payload),
+  acpCancel: (payload) => ipcRenderer.invoke(IPC.ACP_CANCEL, payload),
+  acpRespondPermission: (payload) => {
+    ipcRenderer.send(IPC.ACP_PERMISSION_RESPONSE, payload)
+  },
+  onAcpSessionUpdate: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
+      callback(payload)
+    }
+    ipcRenderer.on(IPC.ACP_SESSION_UPDATE, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.ACP_SESSION_UPDATE, handler)
+    }
+  },
+  onAcpStatusChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
+      callback(payload)
+    }
+    ipcRenderer.on(IPC.ACP_STATUS_CHANGED, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.ACP_STATUS_CHANGED, handler)
+    }
+  },
+  onAcpPermissionRequest: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
+      callback(payload)
+    }
+    ipcRenderer.on(IPC.ACP_PERMISSION_REQUEST, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.ACP_PERMISSION_REQUEST, handler)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
