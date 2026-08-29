@@ -80,6 +80,28 @@ export interface AcpCancelPayload {
   sessionId: string
 }
 
+/** ACP tool_call / tool_call_update 状态 */
+export type AcpToolCallStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | string
+
+/** ACP tool kind（用于图标与文案） */
+export type AcpToolCallKind =
+  | 'read'
+  | 'edit'
+  | 'delete'
+  | 'move'
+  | 'search'
+  | 'execute'
+  | 'think'
+  | 'fetch'
+  | 'other'
+  | string
+
 /** 透传 session/update 的 update 对象，渲染端按 sessionUpdate 分支 */
 export interface AcpSessionUpdateEvent {
   sessionId: string

@@ -1,19 +1,28 @@
 import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
 import { renderAgentMarkdown } from '@/lib/agent-markdown'
 import { cn } from '@/lib/utils'
-import type { AcpChatMessage } from '@/stores/acp-ui-store'
+import type { AcpChatMessage } from '@/stores/acp-chat-types'
 
 interface AgentMessageBubbleProps {
   message: AcpChatMessage
 }
 
 export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
-  const [thoughtOpen, setThoughtOpen] = useState(true)
+  const [thoughtOpen, setThoughtOpen] = useState(Boolean(message.streaming))
   const html = useMemo(() => {
-    if (message.role === 'system' || message.role === 'user') return null
+    if (message.role === 'system' || message.role === 'user' || message.role === 'tool') {
+      return null
+    }
+    if (message.role === 'thought') return null
     return renderAgentMarkdown(message.text)
   }, [message.role, message.text])
+
+  useEffect(() => {
+    // 主流 IDE：思考进行中展开，结束后自动折叠，仍可手动点开
+    setThoughtOpen(Boolean(message.streaming))
+  }, [message.streaming])
 
   if (message.role === 'system') {
     return (
@@ -23,12 +32,23 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
     )
   }
 
+  if (message.role === 'tool') {
+    return <AgentToolCallCard message={message} />
+  }
+
   if (message.role === 'thought') {
+    const preview = message.text.replace(/\s+/g, ' ').trim()
+    const collapsedLabel = message.streaming
+      ? '思考中'
+      : preview
+        ? `思考 · ${preview.slice(0, 48)}${preview.length > 48 ? '…' : ''}`
+        : '思考'
+
     return (
-      <div className="rounded-lg border border-border/50 bg-muted/20 px-2.5 py-1.5">
+      <div className="rounded-xl border border-border/40 bg-muted/10">
         <button
           type="button"
-          className="flex w-full items-center gap-1.5 text-left text-[11px] font-medium text-muted-foreground"
+          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-muted-foreground"
           onClick={() => setThoughtOpen((v) => !v)}
         >
           {thoughtOpen ? (
@@ -37,17 +57,21 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
             <ChevronRight className="size-3.5 shrink-0" />
           )}
           <Sparkles className="size-3.5 shrink-0 text-amber-500/80" />
-          <span>思考</span>
+          <span className="min-w-0 flex-1 truncate">
+            {thoughtOpen ? (message.streaming ? '思考中' : '思考') : collapsedLabel}
+          </span>
           {message.streaming ? (
-            <span className="ml-1 inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+            <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
           ) : null}
         </button>
         {thoughtOpen ? (
-          <div className="mt-1.5 border-l-2 border-amber-500/30 pl-2.5 text-[11px] leading-relaxed text-muted-foreground italic">
-            {message.text}
-            {message.streaming ? (
-              <span className="ml-1 inline-block h-2.5 w-1 animate-pulse rounded-sm bg-amber-500/60 align-middle" />
-            ) : null}
+          <div className="border-t border-border/30 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground italic">
+            <div className="border-l-2 border-amber-500/30 pl-2.5">
+              {message.text}
+              {message.streaming ? (
+                <span className="ml-1 inline-block h-2.5 w-1 animate-pulse rounded-sm bg-amber-500/60 align-middle" />
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>

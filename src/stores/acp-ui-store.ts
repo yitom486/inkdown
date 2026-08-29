@@ -3,15 +3,16 @@ import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { DEFAULT_ACP_RUNTIME_ID } from '@shared/constants/acp-agents'
 import type { AcpConfigOption, AcpConnectionStatus } from '@shared/types/acp'
+import {
+  type AcpChatMessage,
+  type AcpChatRole,
+  extractTextFromContent,
+  flattenToolContent,
+  isToolActiveStatus,
+  parseToolLocations,
+} from '@/stores/acp-chat-types'
 
-export type AcpChatRole = 'user' | 'agent' | 'thought' | 'system'
-
-export interface AcpChatMessage {
-  id: string
-  role: AcpChatRole
-  text: string
-  streaming?: boolean
-}
+export type { AcpChatMessage, AcpChatRole } from '@/stores/acp-chat-types'
 
 interface AcpUiStore {
   panelOpen: boolean
@@ -40,20 +41,65 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function extractTextFromContent(content: unknown): string {
-  if (!content) return ''
-  if (typeof content === 'string') return content
-  if (typeof content === 'object' && content !== null) {
-    const row = content as Record<string, unknown>
-    if (typeof row.text === 'string') return row.text
-    if (row.content) return extractTextFromContent(row.content)
+function applyToolCallUpdate(
+  messages: AcpChatMessage[],
+  update: Record<string, unknown>,
+): AcpChatMessage[] {
+  const toolCallId =
+    typeof update.toolCallId === 'string'
+      ? update.toolCallId
+      : typeof update.tool_call_id === 'string'
+        ? update.tool_call_id
+        : ''
+  if (!toolCallId) return messages
+
+  const next = [...messages]
+  const idx = next.findIndex((m) => m.role === 'tool' && m.toolCallId === toolCallId)
+  const prev = idx >= 0 ? next[idx] : undefined
+
+  const status =
+    typeof update.status === 'string'
+      ? update.status
+      : (prev?.toolStatus ?? 'pending')
+  const title =
+    typeof update.title === 'string'
+      ? update.title
+      : (prev?.toolTitle ?? '工具调用')
+  const kind =
+    typeof update.kind === 'string' ? update.kind : (prev?.toolKind ?? 'other')
+
+  let contentText = prev?.toolContentText ?? prev?.text ?? ''
+  if ('content' in update) {
+    contentText = flattenToolContent(update.content)
   }
-  return ''
+
+  let locations = prev?.toolLocations
+  if ('locations' in update) {
+    locations = parseToolLocations(update.locations)
+  }
+
+  const active = isToolActiveStatus(status)
+  const message: AcpChatMessage = {
+    id: prev?.id ?? newId('tool'),
+    role: 'tool',
+    toolCallId,
+    toolKind: kind,
+    toolStatus: status,
+    toolTitle: title,
+    toolContentText: contentText,
+    toolLocations: locations,
+    text: contentText || title,
+    streaming: active,
+  }
+
+  if (idx >= 0) next[idx] = message
+  else next.push(message)
+  return next
 }
 
 export const useAcpUiStore = create<AcpUiStore>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       panelOpen: false,
       selectedRuntimeId: DEFAULT_ACP_RUNTIME_ID,
       status: 'disconnected',
@@ -100,25 +146,80 @@ export const useAcpUiStore = create<AcpUiStore>()(
       finishStreaming: () =>
         set((s) => ({
           prompting: false,
-          messages: s.messages.map((m) =>
-            m.streaming ? { ...m, streaming: false } : m,
-          ),
+          messages: s.messages.map((m) => {
+            if (!m.streaming) return m
+            if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
+              return {
+                ...m,
+                streaming: false,
+                toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
+              }
+            }
+            return { ...m, streaming: false }
+          }),
         })),
 
       applySessionUpdate: (update) => {
-        const kind = typeof update.sessionUpdate === 'string' ? update.sessionUpdate : ''
+        const kind =
+          typeof update.sessionUpdate === 'string' ? update.sessionUpdate : ''
 
         if (kind === 'config_option_update' || kind === 'config_options_update') {
-          const options = update.configOptions
-          if (Array.isArray(options)) {
-            // 渲染端再 parse 一次太重；这里假定主进程已规范化时可直接用
-            // 实际由 hook 在 connect 时设置；此处忽略非标准形状
-          }
+          return
+        }
+
+        if (kind === 'tool_call' || kind === 'tool_call_update') {
+          set((s) => ({ messages: applyToolCallUpdate(s.messages, update) }))
+          return
+        }
+
+        if (kind === 'tool_call_content_chunk') {
+          const toolCallId =
+            typeof update.toolCallId === 'string' ? update.toolCallId : ''
+          if (!toolCallId) return
+          const chunkText = flattenToolContent(
+            update.content !== undefined ? [update.content] : update.content,
+          )
+          if (!chunkText) return
+          set((s) => {
+            const messages = [...s.messages]
+            const idx = messages.findIndex(
+              (m) => m.role === 'tool' && m.toolCallId === toolCallId,
+            )
+            if (idx < 0) {
+              messages.push({
+                id: newId('tool'),
+                role: 'tool',
+                toolCallId,
+                toolTitle: '工具调用',
+                toolKind: 'other',
+                toolStatus: 'in_progress',
+                toolContentText: chunkText,
+                text: chunkText,
+                streaming: true,
+              })
+              return { messages }
+            }
+            const prev = messages[idx]
+            const merged = `${prev.toolContentText ?? prev.text ?? ''}${chunkText}`
+            messages[idx] = {
+              ...prev,
+              toolContentText: merged,
+              text: merged,
+              streaming: true,
+              toolStatus: prev.toolStatus ?? 'in_progress',
+            }
+            return { messages }
+          })
           return
         }
 
         const text = extractTextFromContent(update.content)
-        if (!text && kind !== 'agent_message_chunk' && kind !== 'agent_thought_chunk' && kind !== 'user_message_chunk') {
+        if (
+          !text &&
+          kind !== 'agent_message_chunk' &&
+          kind !== 'agent_thought_chunk' &&
+          kind !== 'user_message_chunk'
+        ) {
           return
         }
 
