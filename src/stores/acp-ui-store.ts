@@ -13,6 +13,7 @@ import {
   parseToolLocations,
 } from '@/stores/acp-chat-types'
 import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/acp-plan'
+import { pruneIntermediateAgentReplies } from '@/lib/acp-prune-agent-replies'
 import {
   toolCallIdFromPermission,
   type AcpPermissionOptionView,
@@ -38,7 +39,7 @@ export interface AcpChatThread {
   createdAt: number
   updatedAt: number
   workspaceRoot?: string
-  /** 关联的 ACP sessionId（仅作展示；本地历史不依赖 session/load） */
+  /** 关联的 ACP sessionId：断开后仍保留，供重连 resume/load */
   agentSessionId?: string | null
   messages: AcpChatMessage[]
 }
@@ -221,11 +222,14 @@ export const useAcpUiStore = create<AcpUiStore>()(
         set((s) => ({
           sessionId,
           ...(configOptions ? { configOptions } : {}),
-          ...patchActiveThread(s, (t) => ({
-            ...t,
-            agentSessionId: sessionId,
-            updatedAt: Date.now(),
-          })),
+          // 仅在拿到有效 session 时写入 thread；断开时保留 agentSessionId 以便恢复
+          ...(sessionId
+            ? patchActiveThread(s, (t) => ({
+                ...t,
+                agentSessionId: sessionId,
+                updatedAt: Date.now(),
+              }))
+            : {}),
         })),
 
       setConfigOptions: (options) => set({ configOptions: options }),
@@ -329,21 +333,23 @@ export const useAcpUiStore = create<AcpUiStore>()(
           prompting: false,
           ...patchActiveThread(s, (t) => {
             const now = Date.now()
+            const frozen = t.messages.map((m) => {
+              if (!m.streaming) return m
+              if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
+                return {
+                  ...m,
+                  streaming: false,
+                  updatedAt: now,
+                  toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
+                }
+              }
+              return { ...m, streaming: false, updatedAt: now }
+            })
             return {
               ...t,
               updatedAt: now,
-              messages: t.messages.map((m) => {
-                if (!m.streaming) return m
-                if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
-                  return {
-                    ...m,
-                    streaming: false,
-                    updatedAt: now,
-                    toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
-                  }
-                }
-                return { ...m, streaming: false, updatedAt: now }
-              }),
+              // 回合结束：中间 Agent 进度气泡去掉，只留最后一条答复（工具/思考进折叠组）
+              messages: pruneIntermediateAgentReplies(frozen),
             }
           }),
         })),

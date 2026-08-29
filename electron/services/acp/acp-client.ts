@@ -22,6 +22,11 @@ import { probeCodexAuth } from './codex-auth-preflight'
 import { runConnectAuthGate } from './connect-auth-gate'
 import { AcpTerminalManager } from './acp-terminal'
 import {
+  parseLoadSessionSupported,
+  parseResumeSessionSupported,
+} from './session-capabilities'
+import { restoreOrCreateAcpSession } from './session-open'
+import {
   isJsonRpcNotification,
   isJsonRpcRequest,
   JsonRpcTransport,
@@ -45,6 +50,13 @@ let sessionId: string | null = null
 let runtimeId: string | null = null
 let workspaceRoot: string | null = null
 let loadSessionSupported = false
+let resumeSessionSupported = false
+/** 本次连接周期内希望恢复的旧 session（来自 UI thread.agentSessionId） */
+let pendingResumeSessionId: string | null = null
+/** session/load 回放历史时压制转发，避免与本地气泡重复 */
+let suppressSessionUpdates = false
+/** 防止连点「连接」时旧 disconnect 拆掉新 transport */
+let connectGeneration = 0
 let cachedAgentName: string | undefined
 let cachedAgentVersion: string | undefined
 let cachedProtocolVersion = PROTOCOL_VERSION
@@ -124,40 +136,46 @@ async function openSessionAfterAuth(
     return err({ code: 'ACP_NOT_CONNECTED', message: '运行时未知' })
   }
 
+  const resumeId = pendingResumeSessionId?.trim() || null
+
   try {
-    const sessionResult = (await t.value.request('session/new', {
+    const opened = await restoreOrCreateAcpSession({
+      request: (method, params) => t.value.request(method, params),
       cwd,
-      mcpServers: [],
-    })) as Record<string, unknown>
+      resumeSessionId: resumeId,
+      resumeSupported: resumeSessionSupported,
+      loadSupported: loadSessionSupported,
+      onSuppressUpdates: (suppress) => {
+        suppressSessionUpdates = suppress
+      },
+    })
 
-    const newSessionId =
-      typeof sessionResult.sessionId === 'string' ? sessionResult.sessionId : null
-    if (!newSessionId) {
-      if (!options?.keepAliveOnFailure) {
-        await disconnectAcp('session/new 未返回 sessionId')
-      }
-      return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
-    }
-
-    sessionId = newSessionId
+    sessionId = opened.sessionId
     workspaceRoot = cwd
+    pendingResumeSessionId = null
     setStatus('connected')
 
     return ok({
       phase: 'ready',
       runtimeId,
-      sessionId: newSessionId,
+      sessionId: opened.sessionId,
       protocolVersion: cachedProtocolVersion,
       agentName: cachedAgentName,
       agentVersion: cachedAgentVersion,
-      configOptions: parseAcpConfigOptions(sessionResult.configOptions),
+      configOptions: parseAcpConfigOptions(opened.configOptions),
       loadSessionSupported,
+      resumeSessionSupported,
+      sessionRestored: opened.sessionRestored,
+      restoreMethod: opened.restoreMethod,
+      requestedSessionId: opened.requestedSessionId,
+      restoreAttempts:
+        opened.restoreAttempts.length > 0 ? opened.restoreAttempts : undefined,
     })
   } catch (error) {
     if (!options?.keepAliveOnFailure) {
       await disconnectAcp()
     }
-    return err(toProtocolError(error, '创建会话失败'))
+    return err(toProtocolError(error, '创建或恢复会话失败'))
   }
 }
 
@@ -172,8 +190,19 @@ async function handlePermissionRequest(
   params: Record<string, unknown>,
 ): Promise<PermissionDecision> {
   const numericId = typeof requestId === 'number' ? requestId : Number(requestId)
+  console.info('[acp] handlePermissionRequest', {
+    requestId,
+    numericId,
+    hasBridge: Boolean(permissionBridge),
+    optionCount: Array.isArray(params.options) ? params.options.length : 0,
+  })
   if (!permissionBridge || !Number.isFinite(numericId)) {
-    return resolvePermission(params)
+    const fallback = await resolvePermission(params)
+    console.warn('[acp] permissionBridge 不可用，自动决议（不会弹出审批 UI）', {
+      requestId,
+      fallback,
+    })
+    return fallback
   }
 
   return await new Promise<PermissionDecision>((resolve) => {
@@ -186,17 +215,20 @@ async function handlePermissionRequest(
       .then((outcome) => {
         if (!pendingPermissions.has(numericId)) return
         pendingPermissions.delete(numericId)
+        console.info('[acp] permissionBridge 返回', { requestId: numericId, outcome })
         resolve(outcome)
       })
-      .catch(() => {
+      .catch((error) => {
         if (!pendingPermissions.has(numericId)) return
         pendingPermissions.delete(numericId)
+        console.error('[acp] permissionBridge 异常，cancelled', error)
         resolve({ outcome: 'cancelled' })
       })
   })
 }
 
 function emitSessionUpdate(params: Record<string, unknown>): void {
+  if (suppressSessionUpdates) return
   const sid = typeof params.sessionId === 'string' ? params.sessionId : (sessionId ?? '')
   const update =
     params.update && typeof params.update === 'object'
@@ -241,15 +273,32 @@ export function getAcpSessionId(): string | null {
 export async function connectAcp(payload: {
   runtimeId: string
   cwd?: string
+  resumeSessionId?: string
 }): Promise<Result<AcpConnectResult, AppError>> {
   const runtime = getAcpRuntime(payload.runtimeId)
   if (!runtime) {
     return err({ code: 'ACP_SPAWN_ERROR', message: `未知运行时: ${payload.runtimeId}` })
   }
 
+  const gen = ++connectGeneration
+  console.info('[acp] connect start', {
+    gen,
+    runtimeId: payload.runtimeId,
+    resumeSessionId: payload.resumeSessionId,
+  })
+
   await disconnectAcp()
+  if (gen !== connectGeneration) {
+    return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
+  }
+  // 给旧进程/stdio 一点时间收尾，降低「传输已销毁」竞态
+  await new Promise((resolve) => setTimeout(resolve, 80))
+  if (gen !== connectGeneration) {
+    return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
+  }
 
   runtimeId = runtime.id
+  pendingResumeSessionId = payload.resumeSessionId?.trim() || null
   setStatus('connecting')
 
   const cwd = payload.cwd?.trim() || process.cwd()
@@ -260,6 +309,7 @@ export async function connectAcp(payload: {
       runtime,
       cwd,
       onExit: () => {
+        if (gen !== connectGeneration) return
         if (
           status === 'connected' ||
           status === 'connecting' ||
@@ -269,6 +319,12 @@ export async function connectAcp(payload: {
         }
       },
     })
+
+    if (gen !== connectGeneration) {
+      processHandle.kill()
+      processHandle = null
+      return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
+    }
 
     const child = processHandle.child
     if (!child.stdout || !child.stdin) {
@@ -348,7 +404,8 @@ export async function connectAcp(payload: {
       initResult.agentCapabilities && typeof initResult.agentCapabilities === 'object'
         ? (initResult.agentCapabilities as Record<string, unknown>)
         : {}
-    loadSessionSupported = caps.loadSession === true
+    loadSessionSupported = parseLoadSessionSupported(caps)
+    resumeSessionSupported = parseResumeSessionSupported(caps)
 
     const authMethods = parseAuthMethods(initResult.authMethods)
     const preflight = probeCodexAuth()
@@ -377,6 +434,7 @@ export async function connectAcp(payload: {
         agentVersion: cachedAgentVersion,
         authMethods: gate.methods,
         loadSessionSupported,
+        resumeSessionSupported,
       })
     }
 
@@ -386,6 +444,9 @@ export async function connectAcp(payload: {
 
     return await openSessionAfterAuth(cwd)
   } catch (error) {
+    if (gen !== connectGeneration) {
+      return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
+    }
     await disconnectAcp()
     setStatus('error', error instanceof Error ? error.message : String(error))
     return err(toProtocolError(error, '连接 ACP Agent 失败'))
@@ -460,6 +521,9 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
   runtimeId = null
   workspaceRoot = null
   loadSessionSupported = false
+  resumeSessionSupported = false
+  pendingResumeSessionId = null
+  suppressSessionUpdates = false
   cachedAgentName = undefined
   cachedAgentVersion = undefined
   setStatus('disconnected', reason)

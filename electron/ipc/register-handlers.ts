@@ -81,6 +81,13 @@ export function registerIpcHandlers(): void {
         ? String((toolCall as { title?: unknown }).title ?? '工具调用')
         : '工具调用'
 
+    console.info('[acp] 广播权限请求到渲染进程', {
+      requestId,
+      sessionId,
+      summary: title,
+      optionCount: Array.isArray(params.options) ? params.options.length : 0,
+    })
+
     broadcastToAllWindows(IPC.ACP_PERMISSION_REQUEST, {
       requestId,
       sessionId,
@@ -97,6 +104,10 @@ export function registerIpcHandlers(): void {
       const timer = setTimeout(() => {
         cleanup()
         const allowId = pickAllowOptionId(params)
+        console.warn('[acp] 权限请求 120s 超时，自动决议', {
+          requestId,
+          allowId,
+        })
         if (allowId) resolve({ outcome: 'selected', optionId: allowId })
         else resolve({ outcome: 'cancelled' })
       }, 120_000)
@@ -107,6 +118,7 @@ export function registerIpcHandlers(): void {
       ): void => {
         if (payload?.requestId !== requestId) return
         cleanup()
+        console.info('[acp] 收到渲染进程权限响应', payload)
         resolve(payload.outcome)
       }
 

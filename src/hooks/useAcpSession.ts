@@ -2,8 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { isOk } from '@shared/core/result'
 import type { AcpAuthMethod } from '@shared/types/acp'
 import { acpApi } from '@/api/acp-api'
+import { formatAcpConnectedMessage } from '@/lib/acp-session-restore'
 import { reportAppError } from '@/lib/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
+
+function activeThreadAgentSessionId(): string | undefined {
+  const s = useAcpUiStore.getState()
+  const thread = s.threads.find((t) => t.id === s.activeThreadId)
+  return thread?.agentSessionId?.trim() || undefined
+}
 
 export function useAcpSession(workspaceRoot?: string) {
   const setStatus = useAcpUiStore((s) => s.setStatus)
@@ -30,6 +37,7 @@ export function useAcpSession(workspaceRoot?: string) {
       setStatus(event.status, event.errorMessage)
       if (event.sessionId) setSession(event.sessionId)
       if (event.status === 'disconnected') {
+        // 清「当前连接」；勿清 thread.agentSessionId（setSession(null) 已保留）
         setSession(null)
         finishStreaming()
         setAuthOpen(false)
@@ -51,10 +59,24 @@ export function useAcpSession(workspaceRoot?: string) {
       appendSystemMessage('请先打开工作区文件夹，再连接 Agent。')
       return
     }
+    const statusNow = useAcpUiStore.getState().status
+    if (statusNow === 'connecting' || statusNow === 'awaiting_auth') {
+      appendSystemMessage('正在连接中，请稍候…')
+      return
+    }
     setStatus('connecting')
     setAuthError(null)
-    appendSystemMessage(`正在连接 ${selectedRuntimeId}…`)
-    const result = await acpApi.connect({ runtimeId: selectedRuntimeId, cwd })
+    const resumeSessionId = activeThreadAgentSessionId()
+    appendSystemMessage(
+      resumeSessionId
+        ? `正在连接 ${selectedRuntimeId}（尝试恢复会话 ${resumeSessionId.slice(0, 8)}…）…`
+        : `正在连接 ${selectedRuntimeId}…`,
+    )
+    const result = await acpApi.connect({
+      runtimeId: selectedRuntimeId,
+      cwd,
+      resumeSessionId,
+    })
     if (!isOk(result)) {
       setStatus('error', result.error.message)
       reportAppError(result.error)
@@ -72,9 +94,14 @@ export function useAcpSession(workspaceRoot?: string) {
 
     setSession(result.value.sessionId, result.value.configOptions ?? [])
     setStatus('connected')
-    appendSystemMessage(
-      `已连接${result.value.agentName ? `（${result.value.agentName}）` : ''}，会话 ${result.value.sessionId}`,
-    )
+    appendSystemMessage(formatAcpConnectedMessage(result.value, '已连接'))
+    if (
+      result.value.requestedSessionId &&
+      !result.value.sessionRestored &&
+      (result.value.restoreAttempts?.length ?? 0) > 0
+    ) {
+      console.warn('[acp-ui] session restore fell back to new', result.value)
+    }
   }, [
     appendSystemMessage,
     selectedRuntimeId,
@@ -98,9 +125,7 @@ export function useAcpSession(workspaceRoot?: string) {
       setAuthMethods([])
       setSession(result.value.sessionId, result.value.configOptions ?? [])
       setStatus('connected')
-      appendSystemMessage(
-        `已认证并连接${result.value.agentName ? `（${result.value.agentName}）` : ''}，会话 ${result.value.sessionId}`,
-      )
+      appendSystemMessage(formatAcpConnectedMessage(result.value, '已认证并连接'))
     },
     [appendSystemMessage, setSession, setStatus],
   )
@@ -125,7 +150,7 @@ export function useAcpSession(workspaceRoot?: string) {
     setStatus('disconnected')
     finishStreaming()
     setAuthOpen(false)
-    appendSystemMessage('已断开连接')
+    appendSystemMessage('已断开连接（本对话会话 id 已保留，重连时可恢复）')
   }, [appendSystemMessage, finishStreaming, setSession, setStatus])
 
   const sendPrompt = useCallback(

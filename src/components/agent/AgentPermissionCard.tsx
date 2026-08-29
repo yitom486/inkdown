@@ -56,6 +56,7 @@ export function AgentPermissionCard({
         compact ? 'mt-2 px-2 py-2' : 'px-3 py-2.5',
         className,
       )}
+      data-testid="agent-permission-card"
     >
       <div className="flex items-start gap-2">
         <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />

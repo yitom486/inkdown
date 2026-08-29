@@ -84,7 +84,7 @@ export function AgentHistoryMenu({ workspaceRoot, disabled }: AgentHistoryMenuPr
         </div>
         <DropdownMenuSeparator />
         <p className="px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
-          仅保存在本机。与 Agent 侧 session/load 无关；生成中不可切换。
+          气泡保存在本机；Agent 侧会话 id 挂在本对话上，重连时优先 resume。
         </p>
       </DropdownMenuContent>
     </DropdownMenu>

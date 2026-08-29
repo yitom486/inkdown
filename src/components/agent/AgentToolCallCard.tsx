@@ -18,6 +18,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { AgentDiffPreview } from '@/components/agent/AgentDiffPreview'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
 import { cn } from '@/lib/utils'
+import { toolMessageNeedsApproval } from '@/lib/acp-permission-ui'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { isToolActiveStatus } from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'
@@ -70,10 +71,7 @@ interface AgentToolCallCardProps {
 
 export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
   const pendingPermission = useAcpPendingPermission()
-  const needsApproval =
-    pendingPermission != null &&
-    Boolean(message.toolCallId) &&
-    pendingPermission.toolCallId === message.toolCallId
+  const needsApproval = toolMessageNeedsApproval(message, pendingPermission)
   const active =
     Boolean(message.streaming) || isToolActiveStatus(message.toolStatus) || needsApproval
   const [open, setOpen] = useState(active)

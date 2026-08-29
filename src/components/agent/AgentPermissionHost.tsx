@@ -22,6 +22,12 @@ export function AgentPermissionHost() {
           ? event.toolCall
           : undefined
       const options = parsePermissionOptions(event.options)
+      console.info('[acp-ui] 收到权限请求 IPC', {
+        requestId: event.requestId,
+        summary: event.summary,
+        toolCallId: toolCallIdFromPermission(toolCall),
+        optionCount: options.length,
+      })
       ingestPermissionRequest({
         requestId: event.requestId,
         sessionId: event.sessionId,

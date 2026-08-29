@@ -48,10 +48,52 @@ export function createAcpClientMethodRouter(
   context: AcpClientHandlerContext,
 ): (message: JsonRpcRequest) => Promise<void> {
   return async (message) => {
+    const params = asParams(message)
+    // 诊断：哪些 Client 方法真正被 Agent 调到（权限是否压根没来）
+    if (
+      message.method === 'session/request_permission' ||
+      message.method.startsWith('fs/') ||
+      message.method.startsWith('terminal/')
+    ) {
+      const toolCall = params.toolCall
+      const toolHint =
+        toolCall && typeof toolCall === 'object'
+          ? {
+              id:
+                typeof (toolCall as { toolCallId?: unknown }).toolCallId === 'string'
+                  ? (toolCall as { toolCallId: string }).toolCallId
+                  : typeof (toolCall as { id?: unknown }).id === 'string'
+                    ? (toolCall as { id: string }).id
+                    : undefined,
+              title:
+                typeof (toolCall as { title?: unknown }).title === 'string'
+                  ? (toolCall as { title: string }).title
+                  : undefined,
+              kind:
+                typeof (toolCall as { kind?: unknown }).kind === 'string'
+                  ? (toolCall as { kind: string }).kind
+                  : undefined,
+            }
+          : undefined
+      console.info('[acp] ← Agent request', {
+        id: message.id,
+        method: message.method,
+        path: typeof params.path === 'string' ? params.path : undefined,
+        toolCall: toolHint,
+        optionCount: Array.isArray(params.options) ? params.options.length : undefined,
+      })
+    }
+
     if (message.method === 'session/request_permission') {
-      const params = asParams(message)
       try {
+        console.info('[acp] session/request_permission 开始等待 UI 审批', {
+          requestId: message.id,
+        })
         const decision = await onPermission({ requestId: message.id, params })
+        console.info('[acp] session/request_permission 已决议', {
+          requestId: message.id,
+          decision,
+        })
         transport.respond(message.id, { outcome: decision })
       } catch (error) {
         transport.respond(message.id, {
@@ -63,7 +105,6 @@ export function createAcpClientMethodRouter(
     }
 
     if (message.method === 'fs/read_text_file') {
-      const params = asParams(message)
       const workspaceRoot = context.getWorkspaceRoot()
       const filePath = typeof params.path === 'string' ? params.path : ''
       if (!workspaceRoot || !filePath) {
@@ -80,6 +121,7 @@ export function createAcpClientMethodRouter(
           line: typeof params.line === 'number' ? params.line : undefined,
           limit: typeof params.limit === 'number' ? params.limit : undefined,
         })
+        console.info('[acp] fs/read_text_file ok', { path: filePath })
         transport.respond(message.id, result)
       } catch (error) {
         transport.respondError(message.id, {
@@ -91,7 +133,6 @@ export function createAcpClientMethodRouter(
     }
 
     if (message.method === 'fs/write_text_file') {
-      const params = asParams(message)
       const workspaceRoot = context.getWorkspaceRoot()
       const filePath = typeof params.path === 'string' ? params.path : ''
       const content = typeof params.content === 'string' ? params.content : null
@@ -103,6 +144,12 @@ export function createAcpClientMethodRouter(
         return
       }
       try {
+        // 注意：ACP 约定敏感写操作应由 Agent 先 session/request_permission；
+        // 若此处直接写入且从未见 request_permission，说明 Agent 认为工作区内写无需再问。
+        console.info('[acp] fs/write_text_file（无内嵌审批，依赖 Agent 是否先 request_permission）', {
+          path: filePath,
+          bytes: content.length,
+        })
         const result = await acpWriteTextFile({
           path: filePath,
           content,

@@ -22,6 +22,11 @@ export interface AcpConnectPayload {
   runtimeId: string
   /** 覆盖默认 cwd；缺省用 process.cwd() */
   cwd?: string
+  /**
+   * 当前聊天线程关联的 Agent sessionId。
+   * 若 Agent 支持 resume/load，连接时优先恢复，避免重连后失忆。
+   */
+  resumeSessionId?: string
 }
 
 export interface AcpAuthMethod {
@@ -30,6 +35,16 @@ export interface AcpAuthMethod {
   description?: string
   /** chatgpt | api_key | terminal | … */
   type?: string
+}
+
+export type AcpSessionRestoreMethod = 'resume' | 'load' | 'new'
+
+export interface AcpSessionRestoreAttempt {
+  method: 'resume' | 'load'
+  ok: boolean
+  /** 重试次数（含首次，至少为 1） */
+  tries: number
+  error?: string
 }
 
 export interface AcpConnectReadyResult {
@@ -41,6 +56,14 @@ export interface AcpConnectReadyResult {
   agentVersion?: string
   configOptions?: AcpConfigOption[]
   loadSessionSupported?: boolean
+  resumeSessionSupported?: boolean
+  /** 是否成功恢复到请求的旧 session */
+  sessionRestored?: boolean
+  restoreMethod?: AcpSessionRestoreMethod
+  /** 本想恢复的旧 id（若有） */
+  requestedSessionId?: string
+  /** resume/load 尝试明细（便于 UI / 日志） */
+  restoreAttempts?: AcpSessionRestoreAttempt[]
 }
 
 export interface AcpConnectNeedsAuthResult {
@@ -51,6 +74,7 @@ export interface AcpConnectNeedsAuthResult {
   agentVersion?: string
   authMethods: AcpAuthMethod[]
   loadSessionSupported?: boolean
+  resumeSessionSupported?: boolean
 }
 
 export type AcpConnectResult = AcpConnectReadyResult | AcpConnectNeedsAuthResult

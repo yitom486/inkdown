@@ -61,12 +61,16 @@ describe('createAcpClientMethodRouter', () => {
     const clientIn = new PassThrough()
     const transport = new JsonRpcTransport(agentOut, clientIn)
 
+    let seenParams: Record<string, unknown> | null = null
     const router = createAcpClientMethodRouter(
       transport,
-      async () => ({
-        outcome: 'selected',
-        optionId: 'allow-once',
-      }),
+      async ({ params }) => {
+        seenParams = params as Record<string, unknown>
+        return {
+          outcome: 'selected',
+          optionId: 'allow-once',
+        }
+      },
       testContext(null),
     )
 
@@ -81,11 +85,14 @@ describe('createAcpClientMethodRouter', () => {
       id: 5,
       method: 'session/request_permission',
       params: {
+        toolCall: { toolCallId: 'tc-1', title: 'Delete file', kind: 'delete' },
         options: [{ optionId: 'allow-once', kind: 'allow_once' }],
       },
     })
 
     const response = await responsePromise
+    expect(seenParams).not.toBeNull()
+    expect(seenParams!.toolCall).toMatchObject({ toolCallId: 'tc-1' })
     expect(response).toMatchObject({
       id: 5,
       result: {
@@ -94,6 +101,45 @@ describe('createAcpClientMethodRouter', () => {
           optionId: 'allow-once',
         },
       },
+    })
+    transport.dispose()
+  })
+
+  it('permission handler can reject via optionId', async () => {
+    const agentOut = new PassThrough()
+    const clientIn = new PassThrough()
+    const transport = new JsonRpcTransport(agentOut, clientIn)
+
+    const router = createAcpClientMethodRouter(
+      transport,
+      async () => ({
+        outcome: 'selected',
+        optionId: 'reject-once',
+      }),
+      testContext(null),
+    )
+
+    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
+      clientIn.on('data', (chunk) => {
+        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
+      })
+    })
+
+    await router({
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'session/request_permission',
+      params: {
+        options: [
+          { optionId: 'allow-once', kind: 'allow_once' },
+          { optionId: 'reject-once', kind: 'reject_once' },
+        ],
+      },
+    })
+
+    const response = await responsePromise
+    expect(response).toMatchObject({
+      result: { outcome: { outcome: 'selected', optionId: 'reject-once' } },
     })
     transport.dispose()
   })

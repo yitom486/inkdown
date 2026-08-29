@@ -21,6 +21,7 @@ import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
 import { Button } from '@/components/ui/button'
+import { shouldShowOrphanPermissionCard } from '@/lib/acp-permission-ui'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -200,13 +201,10 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [view.messages, view.prompting, view.pendingPermission])
 
-  const pendingOrphan =
-    view.pendingPermission != null &&
-    (!view.pendingPermission.toolCallId ||
-      !view.messages.some(
-        (m) =>
-          m.role === 'tool' && m.toolCallId === view.pendingPermission?.toolCallId,
-      ))
+  const pendingOrphan = shouldShowOrphanPermissionCard(
+    view.pendingPermission,
+    view.messages,
+  )
 
   useEffect(() => {
     if (!view.prompting) return
@@ -261,7 +259,9 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
   return (
     <aside
       className="flex h-full w-[22rem] shrink-0 flex-col border-r border-border/50 bg-sidebar/95 backdrop-blur-sm"
+      role="region"
       aria-label="Agent 聊天"
+      data-testid="agent-panel"
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/50 px-3">
         <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">

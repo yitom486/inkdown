@@ -18,6 +18,49 @@ describe('acp-ui-store history + plan', () => {
     })
   })
 
+  it('setSession(null) keeps thread.agentSessionId for reconnect', () => {
+    useAcpUiStore.getState().setSession('sess-keep-me')
+    const threadId = useAcpUiStore.getState().activeThreadId
+    expect(
+      useAcpUiStore.getState().threads.find((t) => t.id === threadId)?.agentSessionId,
+    ).toBe('sess-keep-me')
+    useAcpUiStore.getState().setSession(null)
+    const state = useAcpUiStore.getState()
+    expect(state.sessionId).toBeNull()
+    expect(state.threads.find((t) => t.id === threadId)?.agentSessionId).toBe('sess-keep-me')
+  })
+
+  it('ingestPermissionRequest surfaces pending + tool card for approval UI', () => {
+    useAcpUiStore.getState().ingestPermissionRequest({
+      requestId: 42,
+      summary: 'Delete demo.md',
+      toolCallId: 'tc-del',
+      options: [
+        { optionId: 'allow-once', name: '允许', kind: 'allow_once' },
+        { optionId: 'reject-once', name: '拒绝', kind: 'reject_once' },
+      ],
+      toolCall: {
+        toolCallId: 'tc-del',
+        title: 'Delete demo.md',
+        kind: 'delete',
+        status: 'pending',
+      },
+    })
+
+    const state = useAcpUiStore.getState()
+    expect(state.pendingPermission?.requestId).toBe(42)
+    expect(state.pendingPermission?.toolCallId).toBe('tc-del')
+    const tool = state.threads
+      .find((t) => t.id === state.activeThreadId)
+      ?.messages.find((m) => m.role === 'tool' && m.toolCallId === 'tc-del')
+    expect(tool?.toolTitle).toBe('Delete demo.md')
+    expect(tool?.toolStatus).toBe('pending')
+    expect(tool?.streaming).toBe(true)
+
+    useAcpUiStore.getState().clearPendingPermission(42)
+    expect(useAcpUiStore.getState().pendingPermission).toBeNull()
+  })
+
   it('createThread switches to empty conversation', () => {
     useAcpUiStore.getState().appendUserMessage('hello')
     const id = useAcpUiStore.getState().createThread()
@@ -38,6 +81,51 @@ describe('acp-ui-store history + plan', () => {
     expect(state.activeThreadId).toBe(firstId)
     expect(state.threads.find((t) => t.id === firstId)?.messages[0]?.text).toBe('first thread')
     expect(state.threads.find((t) => t.id === secondId)?.messages[0]?.text).toBe('second thread')
+  })
+
+  it('finishStreaming prunes intermediate agent replies in the current turn', () => {
+    useAcpUiStore.getState().appendUserMessage('retry please')
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'agent_thought_chunk',
+      content: { type: 'text', text: 'plan' },
+    })
+    useAcpUiStore.setState((s) => {
+      const thread = s.threads.find((t) => t.id === s.activeThreadId)
+      if (!thread) return s
+      const messages = [
+        ...thread.messages,
+        {
+          id: 'a-mid',
+          role: 'agent' as const,
+          text: '中间进度：准备重试',
+          createdAt: Date.now(),
+          streaming: false,
+        },
+        {
+          id: 'a-final',
+          role: 'agent' as const,
+          text: '最终结果：已完成',
+          createdAt: Date.now(),
+          streaming: true,
+        },
+      ]
+      return {
+        threads: s.threads.map((t) =>
+          t.id === s.activeThreadId ? { ...t, messages } : t,
+        ),
+      }
+    })
+
+    useAcpUiStore.getState().finishStreaming()
+    const messages =
+      useAcpUiStore.getState().threads.find(
+        (t) => t.id === useAcpUiStore.getState().activeThreadId,
+      )?.messages ?? []
+    const agents = messages.filter((m) => m.role === 'agent')
+    expect(agents).toHaveLength(1)
+    expect(agents[0]?.text).toBe('最终结果：已完成')
+    expect(agents[0]?.streaming).toBe(false)
+    expect(messages.some((m) => m.role === 'thought')).toBe(true)
   })
 
   it('applies plan sessionUpdate and replaces entries', () => {
