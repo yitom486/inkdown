@@ -19,7 +19,7 @@ import {
   type PermissionDecision,
 } from './client-handlers'
 import { probeCodexAuth } from './codex-auth-preflight'
-import { decideConnectAuth } from './connect-auth-decision'
+import { runConnectAuthGate } from './connect-auth-gate'
 import {
   isJsonRpcNotification,
   isJsonRpcRequest,
@@ -346,9 +346,22 @@ export async function connectAcp(payload: {
 
     const authMethods = parseAuthMethods(initResult.authMethods)
     const preflight = probeCodexAuth()
-    const authDecision = decideConnectAuth(authMethods, preflight)
+    let openedWithoutAuth: Extract<AcpConnectResult, { phase: 'ready' }> | null = null
+    const gate = await runConnectAuthGate(authMethods, preflight, {
+      authenticate: async (methodId) => {
+        await localTransport.request('authenticate', { methodId })
+      },
+      tryOpenSessionWithoutAuth: async () => {
+        const direct = await openSessionAfterAuth(cwd, { keepAliveOnFailure: true })
+        if (direct.ok) {
+          openedWithoutAuth = direct.value
+          return true
+        }
+        return false
+      },
+    })
 
-    if (authDecision.action === 'needs_auth') {
+    if (gate.outcome === 'needs_auth') {
       setStatus('awaiting_auth')
       return ok({
         phase: 'needs_auth',
@@ -356,38 +369,13 @@ export async function connectAcp(payload: {
         protocolVersion: negotiated,
         agentName: cachedAgentName,
         agentVersion: cachedAgentVersion,
-        authMethods: authDecision.methods,
+        authMethods: gate.methods,
         loadSessionSupported,
       })
     }
 
-    if (authDecision.action === 'silent') {
-      let authed = false
-      for (const methodId of authDecision.methodIds) {
-        try {
-          await localTransport.request('authenticate', { methodId })
-          authed = true
-          break
-        } catch (error) {
-          console.warn(`[acp] 静默 authenticate(${methodId}) 失败，尝试下一方式`, error)
-        }
-      }
-
-      if (!authed) {
-        const direct = await openSessionAfterAuth(cwd, { keepAliveOnFailure: true })
-        if (direct.ok) return direct
-
-        setStatus('awaiting_auth')
-        return ok({
-          phase: 'needs_auth',
-          runtimeId: runtime.id,
-          protocolVersion: negotiated,
-          agentName: cachedAgentName,
-          agentVersion: cachedAgentVersion,
-          authMethods,
-          loadSessionSupported,
-        })
-      }
+    if (gate.outcome === 'session_without_auth' && openedWithoutAuth) {
+      return ok(openedWithoutAuth)
     }
 
     return await openSessionAfterAuth(cwd)
