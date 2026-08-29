@@ -211,6 +211,77 @@ EPUB / MOBI / PDF 阅读器中，**工具栏当前标题、底部上一节/下�
 - 导航解析逻辑集中在 `src/lib/reader-navigation-sync.ts` 与 `epub-navigation.ts` / `mobi-navigation.ts`；**禁止**在 Toolbar / Footer / 侧栏各自维护 `chapterNav` / `unitNav` 本地 state
 - EPUB `scrolled-doc` 同 HTML 多节：滚动与 `relocated` 时优先 `syncEpubViewport` / `syncEpubRendition`（视口锚点），不得仅用 spine href 或全书百分比推断当前节
 
+### Zustand 选择器与无限重渲染（强制）
+
+本项目**至少两次**踩过同一坑（`editor-ui-store` 的 `useFileUiState`、`reader-navigation-store` 的 `useReaderNavTitles`），运行时表现为：
+
+```text
+Maximum update depth exceeded
+… forceStoreRerender / updateStoreInstance …
+```
+
+**根因（机制，不是「React 抽风」）**
+
+Zustand 的 `useStore(selector)` 默认用 **`Object.is`** 比较 selector 的**前后两次返回值**：
+
+| selector 返回值 | 每次 render 是否「变」 | 结果 |
+|----------------|----------------------|------|
+| 原始值（`string` / `number` / `boolean`） | 值相同 → 不变 | 安全 |
+| store 内已有对象的**同一引用**（如 `state.nav`） | 引用相同 → 不变 | 安全 |
+| **新对象 / 新数组**（`{ a, b }`、`[...]`、展开 `{ ...x }`） | 引用必不同 → **永远变** | 订阅组件强制重渲染 → 再跑 selector → 再出新对象 → **无限循环** |
+
+典型错误写法：
+
+```typescript
+// ❌ 每次调用都 new 一个对象 → 必炸
+export function useReaderNavTitles() {
+  return useReaderNavigationStore((state) => ({
+    currentTitle: state.nav.current?.label ?? '—',
+    previousTitle: state.nav.previous?.label ?? '—',
+  }))
+}
+```
+
+**为何会在本项目反复出现**
+
+1. **模式太自然**：从 store「派生」多个字段时，直觉会写 `return { ... }`，和 React 里 `useMemo` 派生对象一样写，但 Zustand **不会**帮你 memo。
+2. **单元测试测不出来**：在 vitest 里直接 `selectReaderNavTitles(getState())` 不经过 React 订阅，**不会触发**无限重渲染；只有 Electron 里挂载 `ReaderToolbarShell` + `ReaderFooterNav` 等多个订阅者时才爆。
+3. **已有先例但未上升为全局准则**：`editor-ui-store` 已用 `useShallow` 修过，新增 store 时若未对照现有写法，会再犯。
+
+**强制写法（按优先级）**
+
+1. **selector 返回对象/数组 → 必须 `useShallow`**（项目内标准做法）：
+
+```typescript
+import { useShallow } from 'zustand/react/shallow'
+
+export function useReaderNavTitles() {
+  return useReaderNavigationStore(useShallow(selectReaderNavTitles))
+}
+```
+
+2. **或拆成多个原始值 selector**（无需 shallow）：
+
+```typescript
+const currentTitle = useReaderNavigationStore((s) => s.nav.current?.label ?? '—')
+```
+
+3. **或 selector 只返回 store 里已有的稳定引用**（如 `state.nav`），派生放组件内 `useMemo`。
+
+4. **`action` / `sync*` 侧**：导航或 UI 状态**未变时不要 `set`**（见 `reader-navigation-store` 的 `isSameNav`），避免滚动等高频 IO 制造无意义订阅风暴。
+
+**Agent 新增/修改 Zustand hook 时的检查清单**
+
+- [ ] selector 是否返回 `{ ... }` / `[ ... ]` / 展开对象？→ 加 `useShallow` 或改拆字段
+- [ ] 是否多个组件（Toolbar、Footer、侧栏）订阅同一「派生对象」hook？→ 高风险，优先对照 `editor-ui-store` / `reader-navigation-store`
+- [ ] 是否在 `useEffect` 里每次 render 都 `set` 相同逻辑值？→ action 内加相等判断
+- [ ] 是否只写了 store 单测、未在渲染进程打开对应 UI？→ 阅读器/编辑器相关改动应 `bun run dev` 冒烟
+
+**参考实现**
+
+- `src/stores/editor-ui-store.ts` → `useFileUiState`（`useShallow` + 注释）
+- `src/stores/reader-navigation-store.ts` → `useReaderNavTitles` / `selectReaderNavTitles` / `isSameNav`
+
 ## React 准则
 
 - 仅使用函数组件，禁止 class 组件

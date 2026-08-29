@@ -13,6 +13,7 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
+import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
 import {
   flattenEpubToc,
   pickInitialChapter,
@@ -210,16 +211,31 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
   const goToChapter = useCallback((chapter: EpubChapter | null, flatIndex?: number) => {
     if (!chapter || !renditionRef.current) return
+    const rendition = renditionRef.current
     const resolvedIndex =
       typeof flatIndex === 'number' && flatIndex >= 0
         ? flatIndex
         : chaptersRef.current.findIndex(
             (item) => item.href === chapter.href && item.label === chapter.label,
           )
+
+    const scrolledInPlace = scrollEpubChapterInRendition(rendition, chapter)
+    if (scrolledInPlace) {
+      if (resolvedIndex >= 0) {
+        useReaderNavigationStore.getState().syncFlatIndex(resolvedIndex)
+      }
+      window.requestAnimationFrame(() => {
+        useReaderNavigationStore
+          .getState()
+          .syncEpubRendition(chaptersRef.current, rendition)
+      })
+      return
+    }
+
     if (resolvedIndex >= 0) {
       useReaderNavigationStore.getState().syncFlatIndex(resolvedIndex)
     }
-    void renditionRef.current.display(chapter.href)
+    void rendition.display(chapter.href)
   }, [])
 
   const markHoverHandlers = useCallback((): EpubMarkHoverHandlers => {

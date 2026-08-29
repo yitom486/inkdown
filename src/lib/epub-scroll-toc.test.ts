@@ -90,6 +90,37 @@ describe('epub-scroll-toc', () => {
     expect(monolithic[index]?.label).toBe('讨论与小结')
   })
 
+  it('下一节标题在视口底部露出时，当前节应切到下一节（导言→研究策略）', () => {
+    const chapters = flattenEpubToc([
+      { label: '序', href: 'intro.html' },
+      { label: '导言', href: 'intro.html#preface' },
+      { label: '研究策略', href: 'intro.html#strategy' },
+    ])
+
+    const document = window.document
+    document.body.innerHTML = `
+      <section id="preface"><h2>导言</h2><p>导言正文</p></section>
+      <section id="strategy"><h2>研究策略</h2><p>策略正文</p></section>
+    `
+
+    const scrollRoot = document.scrollingElement ?? document.documentElement
+    Object.defineProperty(scrollRoot, 'clientHeight', { configurable: true, value: 800 })
+    Object.defineProperty(scrollRoot, 'scrollTop', { configurable: true, value: 1100, writable: true })
+
+    for (const [id, top, height] of [
+      ['preface', 0, 1200],
+      ['strategy', 1400, 400],
+    ] as const) {
+      const element = document.getElementById(id)
+      if (!element) continue
+      Object.defineProperty(element, 'offsetTop', { configurable: true, value: top })
+      Object.defineProperty(element, 'offsetHeight', { configurable: true, value: height })
+    }
+
+    const index = findEpubFlatIndexFromViewport(chapters, document, 'intro.html')
+    expect(chapters[index]?.label).toBe('研究策略')
+  })
+
   it('同 HTML 多节：视口在第2章锚点时底部导航应显示第2章而非讨论与小结', () => {
     const chapters = flattenEpubToc([
       { label: '目录', href: 'nav.xhtml' },
