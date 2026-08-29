@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Copy, ClipboardPaste, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,45 +20,52 @@ export function SelectionToolbar({
   onAnnotate,
   onDismiss,
 }: SelectionToolbarProps) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onDismiss()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onDismiss])
+
   return (
-    <>
-      <div className="fixed inset-0 z-40" onMouseDown={onDismiss} aria-hidden />
-      <div
-        className="fixed z-50 flex -translate-x-1/2 items-center gap-0.5 rounded-md border border-border/80 bg-popover p-1 shadow-md"
-        style={{ left: x, top: Math.max(8, y - 48) }}
-        role="toolbar"
-        aria-label="选区操作"
+    <div
+      className="fixed z-50 flex -translate-x-1/2 items-center gap-0.5 rounded-md border border-border/80 bg-popover p-1 shadow-md"
+      style={{ left: x, top: Math.max(8, y - 48) }}
+      role="toolbar"
+      aria-label="选区操作"
+      // 避免点工具栏时失焦导致选区被清掉、复制拿不到文本
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 gap-1 px-2 text-xs"
+        onClick={onCopy}
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={onCopy}
-        >
-          <Copy className="size-3.5" />
-          复制
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn('h-7 gap-1 px-2 text-xs', readOnly && 'opacity-40')}
-          disabled={readOnly}
-          title={readOnly ? '阅读模式下不可粘贴' : undefined}
-          onClick={() => undefined}
-        >
-          <ClipboardPaste className="size-3.5" />
-          粘贴
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 px-2 text-xs"
-          onClick={onAnnotate}
-        >
-          <MessageSquarePlus className="size-3.5" />
-          批注
-        </Button>
-      </div>
-    </>
+        <Copy className="size-3.5" />
+        复制
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn('h-7 gap-1 px-2 text-xs', readOnly && 'opacity-40')}
+        disabled={readOnly}
+        title={readOnly ? '阅读模式下不可粘贴' : undefined}
+        onClick={() => undefined}
+      >
+        <ClipboardPaste className="size-3.5" />
+        粘贴
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 gap-1 px-2 text-xs"
+        onClick={onAnnotate}
+      >
+        <MessageSquarePlus className="size-3.5" />
+        批注
+      </Button>
+    </div>
   )
 }
