@@ -22,7 +22,7 @@ import {
 import { markdownFormattingKeymap } from '@/lib/markdown-editor-commands'
 import { markdownLintGutter, markdownSyntaxLinter } from '@/lib/codemirror-syntax-linter'
 import { reportRuntimeError } from '@/lib/error-reporter'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Compartment, EditorState, Transaction } from '@codemirror/state'
 import {
   drawSelection,
   dropCursor,
@@ -143,9 +143,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       if (!containerRef.current) return
 
       const updateListener = EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
-          onChangeRef.current(update.state.doc.toString())
-        }
+        if (!update.docChanged) return
+        // 外部 setValue 同步时不回写，避免 CRLF→LF 等归一化造成误判 dirty
+        if (update.transactions.every((tr) => tr.annotation(Transaction.remote))) return
+        onChangeRef.current(update.state.doc.toString())
       })
 
       const state = EditorState.create({
@@ -245,6 +246,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       try {
         view.dispatch({
           changes: { from: 0, to: current.length, insert: value },
+          annotations: Transaction.remote.of(true),
         })
       } catch (error) {
         reportRuntimeError(error, { source: 'editor', filePath, silentToast: true })

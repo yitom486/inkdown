@@ -16,6 +16,7 @@ import { err, isOk, ok, type Result } from '@shared/core/result'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { clearDraftForFile } from '@/hooks/useDraftPersistence'
 import { getOpenDialogDefaultPath } from '@/lib/dialog-default-path'
+import { normalizeNewlines } from '@/lib/text-normalize'
 import type { DocumentDraft } from '@/lib/draft-utils'
 
 function getFileName(filePath?: string): string {
@@ -76,9 +77,10 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   const loadFile = useCallback(
     (result: { filePath: string; content: string }) => {
+      const content = normalizeNewlines(result.content)
       setFilePath(result.filePath)
-      setContent(result.content)
-      setSavedContent(result.content)
+      setContent(content)
+      setSavedContent(content)
       syncTitle(result.filePath, false)
       trackOpenedPath(result.filePath)
     },
@@ -292,10 +294,12 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   const restoreDraft = useCallback(
     (draft: DocumentDraft) => {
+      const content = normalizeNewlines(draft.content)
+      const baseline = normalizeNewlines(draft.baselineContent)
       setFilePath(draft.filePath)
-      setContent(draft.content)
-      setSavedContent(draft.baselineContent)
-      syncTitle(draft.filePath, draft.content !== draft.baselineContent)
+      setContent(content)
+      setSavedContent(baseline)
+      syncTitle(draft.filePath, content !== baseline)
     },
     [syncTitle],
   )
