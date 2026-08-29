@@ -18,6 +18,7 @@ import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { ReaderDocumentKind } from '@shared/types/document'
 import type { FileTreeNode } from '@shared/types/file'
+import type { useFileTreeActions } from '@/hooks/useFileTreeActions'
 
 interface ReaderLayoutProps {
   filePath: string
@@ -26,6 +27,7 @@ interface ReaderLayoutProps {
   workspaceRoot?: string
   fileTree: FileTreeNode[]
   recentFiles: string[]
+  treeActions?: ReturnType<typeof useFileTreeActions>
   onOpenFile: () => void
   onOpenFolder: () => void
   onRescanWorkspace?: () => void
@@ -48,6 +50,7 @@ export function ReaderLayout({
   workspaceRoot,
   fileTree,
   recentFiles,
+  treeActions,
   onOpenFile,
   onOpenFolder,
   onRescanWorkspace,
@@ -146,6 +149,7 @@ export function ReaderLayout({
               isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
               onHideSidebar={() => setSidebarVisible(false)}
+              treeActions={treeActions}
             />
           </ResizablePanel>
 

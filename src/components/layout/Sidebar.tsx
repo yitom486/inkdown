@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/resizable'
 import type { MarkdownHeading } from '@/lib/markdown-headings'
 import type { FileTreeNode } from '@shared/types/file'
+import type { useFileTreeActions } from '@/hooks/useFileTreeActions'
 
 interface SidebarProps {
   workspaceRoot?: string
@@ -23,6 +24,7 @@ interface SidebarProps {
   onSelectFile: (path: string) => void
   onSelectHeading: (heading: MarkdownHeading) => void
   onHideSidebar?: () => void
+  treeActions?: ReturnType<typeof useFileTreeActions>
 }
 
 export function Sidebar({
@@ -39,6 +41,7 @@ export function Sidebar({
   onSelectFile,
   onSelectHeading,
   onHideSidebar,
+  treeActions,
 }: SidebarProps) {
   const outlineLayout = useDefaultLayout({
     id: 'markdown-editor-explorer-outline',
@@ -65,6 +68,7 @@ export function Sidebar({
               isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
               onHideSidebar={onHideSidebar}
+              treeActions={treeActions}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
@@ -89,6 +93,7 @@ export function Sidebar({
               isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
               onHideSidebar={onHideSidebar}
+              treeActions={treeActions}
             />
           </div>
           <DocumentOutline

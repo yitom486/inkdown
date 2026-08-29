@@ -70,3 +70,41 @@ export interface ExportDocumentPayload {
 export interface ExportDocumentResult {
   filePath: string
 }
+
+export interface WorkspaceFsPathResult {
+  path: string
+}
+
+export interface WorkspaceFsCreateFilePayload {
+  workspaceRoot: string
+  path: string
+  content?: string
+}
+
+export interface WorkspaceFsCreateDirPayload {
+  workspaceRoot: string
+  path: string
+}
+
+export interface WorkspaceFsRenamePayload {
+  workspaceRoot: string
+  fromPath: string
+  toPath: string
+}
+
+export interface WorkspaceFsDeletePayload {
+  workspaceRoot: string
+  path: string
+}
+
+export interface WorkspaceFsCopyPayload {
+  workspaceRoot: string
+  fromPath: string
+  toPath: string
+}
+
+export interface WorkspaceFsMovePayload {
+  workspaceRoot: string
+  fromPath: string
+  toPath: string
+}

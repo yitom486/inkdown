@@ -66,5 +66,5 @@ export async function scanWorkspace(
     })
   }
 
-  return pruneEmptyDirectories(nodes)
+  return nodes
 }

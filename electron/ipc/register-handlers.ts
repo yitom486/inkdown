@@ -5,6 +5,12 @@ import type {
   OpenDialogOptions,
   SaveFilePayload,
   SavePastedImagePayload,
+  WorkspaceFsCopyPayload,
+  WorkspaceFsCreateDirPayload,
+  WorkspaceFsCreateFilePayload,
+  WorkspaceFsDeletePayload,
+  WorkspaceFsMovePayload,
+  WorkspaceFsRenamePayload,
 } from '@shared/types/file'
 import type { RendererErrorPayload } from '@shared/types/error-log'
 import type {
@@ -34,6 +40,14 @@ import {
   saveFileDialog,
   savePastedImage,
 } from '../services/file-service'
+import {
+  workspaceCopy,
+  workspaceCreateDirectory,
+  workspaceCreateFile,
+  workspaceDelete,
+  workspaceMove,
+  workspaceRename,
+} from '../services/workspace-fs'
 import { getAppVersion } from '../services/app-service'
 import { appendRendererErrorLog, getErrorLogFilePath } from '../services/error-log-service'
 import { createWindow, getWindowInitByWebContents } from '../window/create-window'
@@ -200,6 +214,24 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.FILE_SAVE_PASTED_IMAGE, (_event, payload: SavePastedImagePayload) =>
     savePastedImage(payload),
+  )
+  ipcMain.handle(IPC.FILE_CREATE, (_event, payload: WorkspaceFsCreateFilePayload) =>
+    workspaceCreateFile(payload),
+  )
+  ipcMain.handle(IPC.FILE_CREATE_DIR, (_event, payload: WorkspaceFsCreateDirPayload) =>
+    workspaceCreateDirectory(payload),
+  )
+  ipcMain.handle(IPC.FILE_RENAME, (_event, payload: WorkspaceFsRenamePayload) =>
+    workspaceRename(payload),
+  )
+  ipcMain.handle(IPC.FILE_DELETE, (_event, payload: WorkspaceFsDeletePayload) =>
+    workspaceDelete(payload),
+  )
+  ipcMain.handle(IPC.FILE_COPY, (_event, payload: WorkspaceFsCopyPayload) =>
+    workspaceCopy(payload),
+  )
+  ipcMain.handle(IPC.FILE_MOVE, (_event, payload: WorkspaceFsMovePayload) =>
+    workspaceMove(payload),
   )
   ipcMain.handle(IPC.FILE_EXPORT_HTML, (_event, payload: ExportDocumentPayload) =>
     exportHtmlDocument(payload),

@@ -11,6 +11,13 @@ import type {
   SaveFileResult,
   SavePastedImagePayload,
   SavePastedImageResult,
+  WorkspaceFsCopyPayload,
+  WorkspaceFsCreateDirPayload,
+  WorkspaceFsCreateFilePayload,
+  WorkspaceFsDeletePayload,
+  WorkspaceFsMovePayload,
+  WorkspaceFsPathResult,
+  WorkspaceFsRenamePayload,
 } from '@shared/types/file'
 import type { AppError } from '@shared/core/errors'
 import type { RendererErrorPayload } from '@shared/types/error-log'
@@ -62,6 +69,22 @@ export interface ElectronAPI {
   savePastedImage: (
     payload: SavePastedImagePayload,
   ) => Promise<Result<SavePastedImageResult, AppError>>
+  createWorkspaceFile: (
+    payload: WorkspaceFsCreateFilePayload,
+  ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  createWorkspaceDirectory: (
+    payload: WorkspaceFsCreateDirPayload,
+  ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  renameWorkspacePath: (
+    payload: WorkspaceFsRenamePayload,
+  ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  deleteWorkspacePath: (payload: WorkspaceFsDeletePayload) => Promise<Result<void, AppError>>
+  copyWorkspacePath: (
+    payload: WorkspaceFsCopyPayload,
+  ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  moveWorkspacePath: (
+    payload: WorkspaceFsMovePayload,
+  ) => Promise<Result<WorkspaceFsPathResult, AppError>>
   exportHtml: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
   exportPdf: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void

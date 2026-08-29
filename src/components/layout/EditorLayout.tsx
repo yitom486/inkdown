@@ -33,6 +33,7 @@ import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import type { FileTreeNode } from '@shared/types/file'
+import type { useFileTreeActions } from '@/hooks/useFileTreeActions'
 
 interface EditorLayoutProps {
   filePath?: string
@@ -41,6 +42,7 @@ interface EditorLayoutProps {
   workspaceRoot?: string
   fileTree: FileTreeNode[]
   recentFiles: string[]
+  treeActions?: ReturnType<typeof useFileTreeActions>
   onContentChange: (value: string) => void
   onOpenFile: () => void
   onOpenFolder: () => void
@@ -67,6 +69,7 @@ export function EditorLayout({
   workspaceRoot,
   fileTree,
   recentFiles,
+  treeActions,
   onContentChange,
   onOpenFile,
   onOpenFolder,
@@ -319,6 +322,7 @@ export function EditorLayout({
               onSelectFile={onSelectFile}
               onSelectHeading={handleSelectHeading}
               onHideSidebar={() => setSidebarVisible(false)}
+              treeActions={treeActions}
             />
           </ResizablePanel>
 

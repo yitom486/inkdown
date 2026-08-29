@@ -12,6 +12,7 @@ import { useAutoSave } from '@/hooks/useAutoSave'
 import { useDraftPersistence, clearDraftForFile } from '@/hooks/useDraftPersistence'
 import { useDraftRecoveryPrompt } from '@/hooks/useDraftRecovery'
 import { useExportDocument } from '@/hooks/useExportDocument'
+import { useFileTreeActions } from '@/hooks/useFileTreeActions'
 import { useGlobalErrorHandlers } from '@/hooks/useGlobalErrorHandlers'
 import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
 import { pickLatestRecoverableDraft } from '@/lib/draft-utils'
@@ -69,9 +70,20 @@ function App() {
     cancelUnsavedPrompt,
     discardUnsavedChanges,
     saveUnsavedChanges,
+    notifyPathDeleted,
+    notifyPathRenamed,
   } = useFileOperations(reportAppError)
 
   const { exportHtml, exportPdf } = useExportDocument(content, filePath)
+
+  const treeActions = useFileTreeActions({
+    workspaceRoot,
+    tree: fileTree,
+    rescanWorkspace,
+    onOpenFile: (path) => void openFileFromTree(path),
+    onPathRemoved: notifyPathDeleted,
+    onPathRenamed: notifyPathRenamed,
+  })
 
   useDraftPersistence({
     filePath: isMarkdownDocument ? filePath : undefined,
@@ -186,6 +198,7 @@ function App() {
     onRescanWorkspace: () => void rescanWorkspace(),
     isRescanningWorkspace: isFileBusy,
     onSelectFile: (path: string) => void openFileFromTree(path),
+    treeActions,
     onOpenRecentFile: (path: string) => void openRecentFile(path),
     onOpenSettings: () => setSettingsOpen(true),
     onOpenErrorLog: () => setErrorLogOpen(true),

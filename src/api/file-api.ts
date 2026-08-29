@@ -12,6 +12,13 @@ import type {
   SaveFileResult,
   SavePastedImagePayload,
   SavePastedImageResult,
+  WorkspaceFsCopyPayload,
+  WorkspaceFsCreateDirPayload,
+  WorkspaceFsCreateFilePayload,
+  WorkspaceFsDeletePayload,
+  WorkspaceFsMovePayload,
+  WorkspaceFsPathResult,
+  WorkspaceFsRenamePayload,
 } from '@shared/types/file'
 import { err, ok, type Result } from '@shared/core/result'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
@@ -82,6 +89,54 @@ export const fileApi = {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.savePastedImage(payload)
+  },
+
+  async createWorkspaceFile(
+    payload: WorkspaceFsCreateFilePayload,
+  ): Promise<Result<WorkspaceFsPathResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.createWorkspaceFile(payload)
+  },
+
+  async createWorkspaceDirectory(
+    payload: WorkspaceFsCreateDirPayload,
+  ): Promise<Result<WorkspaceFsPathResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.createWorkspaceDirectory(payload)
+  },
+
+  async renameWorkspacePath(
+    payload: WorkspaceFsRenamePayload,
+  ): Promise<Result<WorkspaceFsPathResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.renameWorkspacePath(payload)
+  },
+
+  async deleteWorkspacePath(
+    payload: WorkspaceFsDeletePayload,
+  ): Promise<Result<void, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.deleteWorkspacePath(payload)
+  },
+
+  async copyWorkspacePath(
+    payload: WorkspaceFsCopyPayload,
+  ): Promise<Result<WorkspaceFsPathResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.copyWorkspacePath(payload)
+  },
+
+  async moveWorkspacePath(
+    payload: WorkspaceFsMovePayload,
+  ): Promise<Result<WorkspaceFsPathResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.moveWorkspacePath(payload)
   },
 
   async exportHtml(

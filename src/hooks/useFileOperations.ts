@@ -402,6 +402,46 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isMarkdownDocument, openFile, openFolder, saveFile, saveFileAs])
 
+  const notifyPathDeleted = useCallback(
+    (path: string) => {
+      if (!filePath) return
+      const normalized = filePath.replace(/\\/g, '/')
+      const removed = path.replace(/\\/g, '/')
+      if (
+        normalized === removed ||
+        normalized.startsWith(`${removed}/`)
+      ) {
+        setFilePath(undefined)
+        setContent('')
+        setSavedContent('')
+        syncTitle(undefined, false)
+      }
+    },
+    [filePath, syncTitle],
+  )
+
+  const notifyPathRenamed = useCallback(
+    (from: string, to: string) => {
+      if (!filePath) return
+      const normalized = filePath.replace(/\\/g, '/')
+      const src = from.replace(/\\/g, '/')
+      const dest = to.replace(/\\/g, '/')
+      if (normalized === src) {
+        setFilePath(to)
+        syncTitle(to, content !== savedContent)
+        trackOpenedPath(to)
+        return
+      }
+      if (normalized.startsWith(`${src}/`)) {
+        const next = dest + filePath.slice(from.length)
+        setFilePath(next)
+        syncTitle(next, content !== savedContent)
+        trackOpenedPath(next)
+      }
+    },
+    [content, filePath, savedContent, syncTitle, trackOpenedPath],
+  )
+
   return {
     content,
     setContent,
@@ -434,6 +474,8 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     cancelUnsavedPrompt,
     discardUnsavedChanges,
     saveUnsavedChanges,
+    notifyPathDeleted,
+    notifyPathRenamed,
   }
 }
 

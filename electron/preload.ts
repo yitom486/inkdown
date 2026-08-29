@@ -50,6 +50,12 @@ const electronAPI: ElectronAPI = {
   saveFileAs: (payload: SaveFilePayload) => ipcRenderer.invoke(IPC.FILE_SAVE_AS, payload),
   savePastedImage: (payload: SavePastedImagePayload) =>
     ipcRenderer.invoke(IPC.FILE_SAVE_PASTED_IMAGE, payload),
+  createWorkspaceFile: (payload) => ipcRenderer.invoke(IPC.FILE_CREATE, payload),
+  createWorkspaceDirectory: (payload) => ipcRenderer.invoke(IPC.FILE_CREATE_DIR, payload),
+  renameWorkspacePath: (payload) => ipcRenderer.invoke(IPC.FILE_RENAME, payload),
+  deleteWorkspacePath: (payload) => ipcRenderer.invoke(IPC.FILE_DELETE, payload),
+  copyWorkspacePath: (payload) => ipcRenderer.invoke(IPC.FILE_COPY, payload),
+  moveWorkspacePath: (payload) => ipcRenderer.invoke(IPC.FILE_MOVE, payload),
   exportHtml: (payload: ExportDocumentPayload) =>
     ipcRenderer.invoke(IPC.FILE_EXPORT_HTML, payload),
   exportPdf: (payload: ExportDocumentPayload) => ipcRenderer.invoke(IPC.FILE_EXPORT_PDF, payload),
