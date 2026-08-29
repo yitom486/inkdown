@@ -23,6 +23,19 @@ $env:GIT_COMMITTER_NAME="yitom486"
 $env:GIT_COMMITTER_EMAIL="yitom486@gmail.com"
 ```
 
+## 禁止冻结提交时间
+
+- **不要**在 shell 中长期设置 `GIT_AUTHOR_DATE` / `GIT_COMMITTER_DATE`
+- 普通 `git commit` **只改 name/email**，让 Git 使用当前真实时间
+- 若发现环境变量已残留，提交前先清除：
+
+```powershell
+Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
+```
+
+- 否则 GitHub / 本地历史会显示「数小时前」的同一时间戳（曾误伤多枚提交）
+
 ## Attribution
 
 - **禁止**在 commit message 中保留或添加 `Co-authored-by: Cursor`
@@ -33,4 +46,4 @@ $env:GIT_COMMITTER_EMAIL="yitom486@gmail.com"
 
 - Commit message：简体中文，`type: 描述`
 - 仅在用户明确要求时 commit / push
-- 已 push 的历史作者需改写时，先征得用户同意再 force push
+- 已 push 的历史作者或时间需改写时，先征得用户同意再 force push
