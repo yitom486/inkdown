@@ -1,8 +1,17 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
-import { renderAgentMarkdown, renderAgentMarkdownStreaming } from './agent-markdown'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  renderAgentMarkdown,
+  renderAgentMarkdownStreaming,
+  splitAgentMarkdownParts,
+} from './agent-markdown'
 
-describe('renderAgentMarkdown', () => {
+describe('renderAgentMarkdown + splitAgentMarkdownParts', () => {
+  beforeEach(() => {
+    // 单测里关掉 mermaid 诊断噪音
+    window.localStorage.setItem('inkdown:mermaid-debug', '0')
+  })
+
   it('highlights fenced code with hljs (shared preview pipeline)', () => {
     const html = renderAgentMarkdown(['```ts', 'const answer = 42', '```'].join('\n'))
     expect(html).toContain('code-block-toolbar')
@@ -27,5 +36,102 @@ describe('renderAgentMarkdown', () => {
     expect(html).toContain('code-block')
     expect(html).toContain('hljs-keyword')
     expect(html).toContain('hljs-number')
+  })
+
+  it('splits mermaid out of mixed markdown html', () => {
+    const html = renderAgentMarkdown(
+      ['段落', '', '```mermaid', 'flowchart LR', 'A --> B', '```', '', '结尾'].join('\n'),
+    )
+    const parts = splitAgentMarkdownParts(html)
+    const mermaid = parts.find((p) => p.type === 'mermaid')
+    expect(mermaid?.type).toBe('mermaid')
+    if (mermaid?.type === 'mermaid') {
+      expect(mermaid.source).toContain('flowchart LR')
+      expect(mermaid.source).toContain('A --> B')
+    }
+    expect(parts.some((p) => p.type === 'html' && p.html.includes('段落'))).toBe(true)
+  })
+
+  it('splits mermaid nested under a wrapper div (DOMPurify 外层残留)', () => {
+    const nested = [
+      '<div>',
+      '<p>前</p>',
+      '<pre class="mermaid">flowchart LR\nA --> B\n</pre>',
+      '<p>后</p>',
+      '</div>',
+    ].join('')
+    const parts = splitAgentMarkdownParts(nested)
+    expect(parts.filter((p) => p.type === 'mermaid')).toHaveLength(1)
+    const mermaid = parts.find((p) => p.type === 'mermaid')
+    expect(mermaid && mermaid.type === 'mermaid' && mermaid.source).toContain('flowchart LR')
+    expect(
+      parts
+        .filter((p) => p.type === 'html')
+        .some((p) => p.type === 'html' && /class=["'][^"']*\bmermaid\b/.test(p.html)),
+    ).toBe(false)
+  })
+
+  it('splits Chinese flowchart from real markdown pipeline', () => {
+    const md = [
+      '块级公式已上',
+      '',
+      '```mermaid',
+      'flowchart LR',
+      'A[用户提出需求] --> B[分析任务]',
+      'B --> C{需要工具吗？}',
+      'C -->|是| D[执行并验证]',
+      'C -->|否| E[直接回答]',
+      'D --> F[交付结果]',
+      'E --> F',
+      '```',
+      '',
+      '如果你的界面支持 Mermaid',
+    ].join('\n')
+    const html = renderAgentMarkdown(md)
+    const parts = splitAgentMarkdownParts(html)
+    expect(parts.filter((p) => p.type === 'mermaid')).toHaveLength(1)
+    const mermaid = parts.find((p) => p.type === 'mermaid')
+    expect(mermaid?.type).toBe('mermaid')
+    if (mermaid?.type === 'mermaid') {
+      expect(mermaid.source).toContain('用户提出需求')
+      expect(mermaid.source).toContain('需要工具吗？')
+    }
+    // 回归：html 段不得再藏 .mermaid，否则会只显示源码灰框
+    for (const part of parts) {
+      if (part.type === 'html') {
+        expect(part.html).not.toMatch(/class=["'][^"']*\bmermaid\b/)
+      }
+    }
+  })
+
+  it('splits multiple mermaid blocks in order', () => {
+    const html = [
+      '<p>一</p>',
+      '<pre class="mermaid">graph TD\nA-->B</pre>',
+      '<p>中</p>',
+      '<pre class="mermaid">flowchart LR\nX-->Y</pre>',
+      '<p>尾</p>',
+    ].join('')
+    const parts = splitAgentMarkdownParts(html)
+    const mermaids = parts.filter((p) => p.type === 'mermaid')
+    expect(mermaids).toHaveLength(2)
+    expect(mermaids[0]).toMatchObject({ type: 'mermaid' })
+    expect(mermaids[1]).toMatchObject({ type: 'mermaid' })
+    if (mermaids[0]?.type === 'mermaid' && mermaids[1]?.type === 'mermaid') {
+      expect(mermaids[0].source).toContain('graph TD')
+      expect(mermaids[1].source).toContain('flowchart LR')
+    }
+  })
+
+  it('deeply nested mermaid under multiple wrappers still extracts', () => {
+    const html =
+      '<div><section><div class="x"><pre class="mermaid">flowchart LR\nA-->B</pre></div></section></div>'
+    const parts = splitAgentMarkdownParts(html)
+    expect(parts.some((p) => p.type === 'mermaid')).toBe(true)
+    expect(
+      parts
+        .filter((p) => p.type === 'html')
+        .every((p) => p.type === 'html' && !/class=["'][^"']*\bmermaid\b/.test(p.html)),
+    ).toBe(true)
   })
 })

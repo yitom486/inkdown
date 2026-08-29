@@ -1,50 +1,64 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
+import { hydrateMermaidInElement } from '@/lib/mermaid-hydrate'
+import { mermaidLog } from '@/lib/mermaid-debug'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
-import type { AppTheme } from '@/stores/editor-ui-store'
 
-let mermaidInitialized = false
-let mermaidTheme: AppTheme = 'dark'
-
-/** 在容器内渲染 `.mermaid` 节点；流式期间应 disabled，结束后再跑 */
+/**
+ * 在容器内渲染 `.mermaid` 节点（预览等仍可用）。
+ * Agent 气泡已改为独立 AgentMermaidBlock，避免整段 HTML 重灌竞态。
+ */
 export function useMermaidInContainer(
   containerRef: RefObject<HTMLElement | null>,
   html: string | null,
   enabled: boolean,
 ): void {
   const theme = useEditorUiStore((s) => s.theme)
+  const themeRef = useRef(theme)
 
   useEffect(() => {
-    if (!enabled || !html) return
+    if (!enabled || !html) {
+      mermaidLog('hook:disabled', { enabled, hasHtml: Boolean(html) })
+      return
+    }
     const preview = containerRef.current
-    if (!preview) return
-
-    const diagrams = preview.querySelectorAll<HTMLElement>('.mermaid')
-    if (diagrams.length === 0) return
-
-    let cancelled = false
-
-    const run = async () => {
-      try {
-        const { default: mermaid } = await import('mermaid')
-        if (cancelled) return
-        if (!mermaidInitialized || mermaidTheme !== theme) {
-          mermaid.initialize({
-            startOnLoad: false,
-            securityLevel: 'strict',
-            theme: theme === 'dark' ? 'dark' : 'neutral',
-          })
-          mermaidInitialized = true
-          mermaidTheme = theme
-        }
-        await mermaid.run({ nodes: diagrams, suppressErrors: true })
-      } catch (error) {
-        console.error('[agent] Mermaid 渲染失败', error)
-      }
+    if (!preview) {
+      mermaidLog('hook:no-container')
+      return
     }
 
-    void run()
+    const themeChanged = themeRef.current !== theme
+    themeRef.current = theme
+
+    let alive = true
+    const cancelled = () => !alive
+
+    mermaidLog('hook:effect', {
+      theme,
+      themeChanged,
+      htmlChars: html.length,
+    })
+
+    void (async () => {
+      try {
+        await hydrateMermaidInElement(preview, theme, {
+          force: themeChanged,
+          cancelled,
+          reason: 'preview-hook',
+        })
+        if (!alive) return
+        await hydrateMermaidInElement(preview, theme, {
+          force: false,
+          cancelled,
+          reason: 'preview-hook-retry',
+        })
+      } catch (error) {
+        if (alive) console.error('[mermaid] hook 失败', error)
+      }
+    })()
+
     return () => {
-      cancelled = true
+      alive = false
+      mermaidLog('hook:cleanup')
     }
   }, [containerRef, enabled, html, theme])
 }

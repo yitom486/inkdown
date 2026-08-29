@@ -71,6 +71,37 @@ describe('acp-ui-store history + plan', () => {
     expect(state.threads.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('createThread drops the previous blank draft', () => {
+    const first = useAcpUiStore.getState().activeThreadId
+    const second = useAcpUiStore.getState().createThread()
+    expect(useAcpUiStore.getState().threads.some((t) => t.id === first)).toBe(false)
+    expect(useAcpUiStore.getState().activeThreadId).toBe(second)
+    expect(useAcpUiStore.getState().threads).toHaveLength(1)
+  })
+
+  it('opening panel starts a blank draft when active has content', () => {
+    useAcpUiStore.getState().appendUserMessage('旧会话')
+    const oldId = useAcpUiStore.getState().activeThreadId
+    useAcpUiStore.getState().setPanelOpen(true)
+    const state = useAcpUiStore.getState()
+    expect(state.panelOpen).toBe(true)
+    expect(state.activeThreadId).not.toBe(oldId)
+    expect(state.threads.find((t) => t.id === state.activeThreadId)?.messages).toEqual([])
+    expect(state.threads.some((t) => t.id === oldId)).toBe(true)
+  })
+
+  it('closing panel prunes blank drafts', () => {
+    useAcpUiStore.getState().appendUserMessage('保留')
+    useAcpUiStore.getState().createThread()
+    expect(useAcpUiStore.getState().threads.length).toBeGreaterThanOrEqual(2)
+    useAcpUiStore.getState().setPanelOpen(false)
+    const state = useAcpUiStore.getState()
+    expect(state.panelOpen).toBe(false)
+    expect(state.threads.every((t) => t.messages.some((m) => m.role === 'user'))).toBe(
+      true,
+    )
+  })
+
   it('switchThread restores prior messages', () => {
     useAcpUiStore.getState().appendUserMessage('first thread')
     const firstId = useAcpUiStore.getState().activeThreadId

@@ -257,7 +257,8 @@
   padding: 0.45em 0;
 }
 
-.markdown-preview .mermaid {
+.markdown-preview .mermaid,
+.markdown-preview .mermaid-hydrating {
   display: flex;
   justify-content: center;
   overflow-x: auto;

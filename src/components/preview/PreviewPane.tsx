@@ -3,6 +3,7 @@ import { Eye } from 'lucide-react'
 import { useCodeBlockCopy } from '@/hooks/useCodeBlockCopy'
 import { useHighlightTheme } from '@/hooks/useHighlightTheme'
 import { applyScrollRatio, collectPreviewHeadingPositions, scrollRatio } from '@/lib/markdown-headings'
+import { hydrateMermaidInElement } from '@/lib/mermaid-hydrate'
 import type { AppTheme } from '@/stores/editor-ui-store'
 import '@/styles/markdown-preview.css'
 
@@ -21,13 +22,11 @@ interface PreviewPaneProps {
   onHeadingActivate?: (headingId: string) => void
 }
 
-let mermaidInitialized = false
-let mermaidTheme: AppTheme = 'dark'
-
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
   function PreviewPane({ html, theme = 'dark', onScroll, onHeadingActivate }, ref) {
     const previewRef = useRef<HTMLDivElement>(null)
     const onScrollRef = useRef(onScroll)
+    const themeRef = useRef(theme)
     const onHeadingActivateRef = useRef(onHeadingActivate)
 
     useHighlightTheme(theme)
@@ -87,36 +86,28 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
       const preview = previewRef.current
       if (!preview || !html) return
 
-      const diagrams = preview.querySelectorAll<HTMLElement>('.mermaid')
-      if (diagrams.length === 0) return
+      const themeChanged = themeRef.current !== theme
+      themeRef.current = theme
 
       let cancelled = false
+      const isCancelled = () => cancelled
 
-      const renderDiagrams = async (): Promise<void> => {
+      const renderDiagrams = async (force: boolean): Promise<void> => {
         try {
-          const { default: mermaid } = await import('mermaid')
-          if (cancelled) return
-
-          if (!mermaidInitialized || mermaidTheme !== theme) {
-            mermaid.initialize({
-              startOnLoad: false,
-              securityLevel: 'strict',
-              theme: theme === 'dark' ? 'dark' : 'neutral',
-            })
-            mermaidInitialized = true
-            mermaidTheme = theme
-          }
-
-          await mermaid.run({ nodes: diagrams, suppressErrors: true })
+          await hydrateMermaidInElement(preview, theme, { force, cancelled: isCancelled })
         } catch (error) {
-          console.error('Mermaid 图表渲染失败：', error)
+          if (!cancelled) console.error('Mermaid 图表渲染失败：', error)
         }
       }
 
-      void renderDiagrams()
+      void renderDiagrams(themeChanged)
+      const raf = window.requestAnimationFrame(() => {
+        if (!cancelled) void renderDiagrams(themeChanged)
+      })
 
       return () => {
         cancelled = true
+        window.cancelAnimationFrame(raf)
       }
     }, [html, theme])
 

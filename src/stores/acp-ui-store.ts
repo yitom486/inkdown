@@ -18,6 +18,7 @@ import {
   rememberPreferredConfig,
   type AcpPreferredConfigMap,
 } from '@/lib/acp-config-preferences'
+import { isBlankThread, pruneBlankThreads } from '@/lib/acp-thread-prune'
 import {
   toolCallIdFromPermission,
   type AcpPermissionOptionView,
@@ -125,6 +126,32 @@ function freezeMessages(messages: AcpChatMessage[]): AcpChatMessage[] {
   )
 }
 
+function ensureThreadList(threads: AcpChatThread[], workspaceRoot?: string): {
+  threads: AcpChatThread[]
+  activeThreadId: string
+} {
+  if (threads.length === 0) {
+    const fresh = createEmptyThread(workspaceRoot)
+    return { threads: [fresh], activeThreadId: fresh.id }
+  }
+  return { threads, activeThreadId: threads[0]!.id }
+}
+
+function openPanelWithBlankDraft(
+  state: Pick<AcpUiStore, 'threads' | 'activeThreadId'>,
+  workspaceRoot?: string,
+): Pick<AcpUiStore, 'threads' | 'activeThreadId' | 'historyOpen'> {
+  // 打开面板：丢掉其它空白草稿，若当前有内容则再开一条空白
+  let threads = pruneBlankThreads(state.threads)
+  const active = threads.find((t) => t.id === state.activeThreadId)
+  if (active && isBlankThread(active)) {
+    return { threads, activeThreadId: active.id, historyOpen: false }
+  }
+  const fresh = createEmptyThread(workspaceRoot ?? active?.workspaceRoot)
+  threads = [fresh, ...threads].slice(0, MAX_THREADS)
+  return { threads, activeThreadId: fresh.id, historyOpen: false }
+}
+
 function patchActiveThread(
   state: Pick<AcpUiStore, 'threads' | 'activeThreadId'>,
   patch: (thread: AcpChatThread) => AcpChatThread,
@@ -134,6 +161,7 @@ function patchActiveThread(
   )
   return { threads }
 }
+
 
 function applyToolCallUpdate(
   messages: AcpChatMessage[],
@@ -220,8 +248,32 @@ export const useAcpUiStore = create<AcpUiStore>()(
       preferredConfigByRuntime: {},
       pendingPermission: null,
 
-      setPanelOpen: (open) => set({ panelOpen: open }),
-      togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
+      setPanelOpen: (open) =>
+        set((s) => {
+          if (!open) {
+            const workspaceRoot = s.threads.find(
+              (t) => t.id === s.activeThreadId,
+            )?.workspaceRoot
+            const next = ensureThreadList(pruneBlankThreads(s.threads), workspaceRoot)
+            const activeThreadId = next.threads.some((t) => t.id === s.activeThreadId)
+              ? s.activeThreadId
+              : next.activeThreadId
+            return {
+              panelOpen: false,
+              historyOpen: false,
+              threads: next.threads,
+              activeThreadId,
+            }
+          }
+          return {
+            panelOpen: true,
+            ...openPanelWithBlankDraft(s),
+          }
+        }),
+      togglePanel: () => {
+        const open = !get().panelOpen
+        get().setPanelOpen(open)
+      },
       setHistoryOpen: (open) => set({ historyOpen: open }),
       setSelectedRuntimeId: (id) => set({ selectedRuntimeId: id }),
 
@@ -386,7 +438,9 @@ export const useAcpUiStore = create<AcpUiStore>()(
               ? { ...t, messages: freezeMessages(t.messages), updatedAt: Date.now() }
               : t,
           )
-          const threads = [thread, ...frozen].slice(0, MAX_THREADS)
+          // 新建时丢掉其它空白草稿（含刚离开的空会话）
+          const kept = pruneBlankThreads(frozen)
+          const threads = [thread, ...kept].slice(0, MAX_THREADS)
           return {
             threads,
             activeThreadId: thread.id,
@@ -402,15 +456,18 @@ export const useAcpUiStore = create<AcpUiStore>()(
         if (threadId === s.activeThreadId) return
         if (s.prompting) return
         if (!s.threads.some((t) => t.id === threadId)) return
+        const frozen = s.threads.map((t) =>
+          t.id === s.activeThreadId
+            ? { ...t, messages: freezeMessages(t.messages), updatedAt: Date.now() }
+            : t,
+        )
+        // 切走时若原会话空白则删除；目标会话即使空白也保留
+        const threads = pruneBlankThreads(frozen, { keepId: threadId })
         set({
           activeThreadId: threadId,
           prompting: false,
           historyOpen: false,
-          threads: s.threads.map((t) =>
-            t.id === s.activeThreadId
-              ? { ...t, messages: freezeMessages(t.messages), updatedAt: Date.now() }
-              : t,
-          ),
+          threads,
         })
       },
 
@@ -605,26 +662,30 @@ export const useAcpUiStore = create<AcpUiStore>()(
     {
       name: 'inkdown-acp-ui',
       partialize: (state) => ({
-        panelOpen: state.panelOpen,
+        // panelOpen 不持久化：新窗口 / 重启默认收起 Agent（对齐 Cursor）
         selectedRuntimeId: state.selectedRuntimeId,
         preferredConfigByRuntime: state.preferredConfigByRuntime,
         activeThreadId: state.activeThreadId,
-        threads: state.threads.map((t) => ({
-          ...t,
-          messages: freezeMessages(t.messages),
-        })),
+        threads: pruneBlankThreads(state.threads)
+          .map((t) => ({
+            ...t,
+            messages: freezeMessages(t.messages),
+          }))
+          .slice(0, MAX_THREADS),
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<AcpUiStore>
-        const threads =
+        const rawThreads =
           Array.isArray(p.threads) && p.threads.length > 0
             ? p.threads
             : current.threads
+        const pruned = pruneBlankThreads(rawThreads)
+        const ensured = pruned.length > 0 ? pruned : current.threads
         const activeThreadId =
           typeof p.activeThreadId === 'string' &&
-          threads.some((t) => t.id === p.activeThreadId)
+          ensured.some((t) => t.id === p.activeThreadId)
             ? p.activeThreadId
-            : threads[0]!.id
+            : ensured[0]!.id
         const preferredConfigByRuntime =
           p.preferredConfigByRuntime && typeof p.preferredConfigByRuntime === 'object'
             ? p.preferredConfigByRuntime
@@ -632,7 +693,8 @@ export const useAcpUiStore = create<AcpUiStore>()(
         return {
           ...current,
           ...p,
-          threads,
+          panelOpen: false,
+          threads: ensured,
           activeThreadId,
           preferredConfigByRuntime,
           prompting: false,

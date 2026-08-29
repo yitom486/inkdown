@@ -1,9 +1,14 @@
 import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { AgentMermaidBlock } from '@/components/agent/AgentMermaidBlock'
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
 import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
-import { useMermaidInContainer } from '@/hooks/useMermaidInContainer'
-import { renderAgentMarkdown, renderAgentMarkdownStreaming } from '@/lib/agent-markdown'
+import {
+  renderAgentMarkdown,
+  renderAgentMarkdownStreaming,
+  splitAgentMarkdownParts,
+} from '@/lib/agent-markdown'
+import { mermaidLog } from '@/lib/mermaid-debug'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import '@/styles/markdown-preview.css'
@@ -14,17 +19,30 @@ interface AgentMessageBubbleProps {
 
 export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
   const [thoughtOpen, setThoughtOpen] = useState(Boolean(message.streaming))
-  const mdRef = useRef<HTMLDivElement>(null)
   const deferredText = useDeferredValue(message.text)
+  /** 非流式用最终文本，避免 deferred 滞后导致 Mermaid 用到半截 fence */
+  const textForMd = message.streaming ? deferredText : message.text
 
   const html = useMemo(() => {
     if (message.role !== 'agent') return null
-    if (!deferredText.trim() && message.streaming) return null
-    if (message.streaming) return renderAgentMarkdownStreaming(deferredText)
-    return renderAgentMarkdown(deferredText)
-  }, [deferredText, message.role, message.streaming])
+    if (!textForMd.trim() && message.streaming) return null
+    if (message.streaming) return renderAgentMarkdownStreaming(textForMd)
+    return renderAgentMarkdown(textForMd)
+  }, [textForMd, message.role, message.streaming])
 
-  useMermaidInContainer(mdRef, html, message.role === 'agent' && !message.streaming && Boolean(html))
+  /** 结束后拆出 Mermaid，独立组件出图；流式仍整段 HTML（不做 Mermaid） */
+  const parts = useMemo(() => {
+    if (!html || message.streaming) {
+      return null
+    }
+    return splitAgentMarkdownParts(html)
+  }, [html, message.streaming])
+
+  useEffect(() => {
+    if (message.streaming) {
+      mermaidLog('bubble:streaming', { textChars: textForMd.length })
+    }
+  }, [message.streaming, textForMd.length])
 
   useEffect(() => {
     setThoughtOpen(Boolean(message.streaming))
@@ -129,15 +147,27 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
           </div>
         ) : (
           <div
-            ref={mdRef}
             className={cn(
               'markdown-preview agent-md break-words text-[12px]',
-              /* 段距略松，避免行内 KaTeX 分式顶到上一行；含 .katex 的 p 由 CSS :has 再放宽 */
               '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
               '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
             )}
-            dangerouslySetInnerHTML={{ __html: html ?? '' }}
-          />
+          >
+            {parts
+              ? parts.map((part, index) =>
+                  part.type === 'mermaid' ? (
+                    <AgentMermaidBlock key={part.id} source={part.source} />
+                  ) : (
+                    <div
+                      key={`html-${index}`}
+                      dangerouslySetInnerHTML={{ __html: part.html }}
+                    />
+                  ),
+                )
+              : (
+                <div dangerouslySetInnerHTML={{ __html: html ?? '' }} />
+              )}
+          </div>
         )}
         {message.streaming && !isUser && !showEmptyStreaming ? (
           <span className="mt-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-foreground/60 align-middle" />
