@@ -20,6 +20,10 @@ import {
 } from './client-handlers'
 import { probeCodexAuth } from './codex-auth-preflight'
 import {
+  orderSilentAuthMethodIds,
+  shouldPromptAuthWizard,
+} from './auth-method-order'
+import {
   isJsonRpcNotification,
   isJsonRpcRequest,
   JsonRpcTransport,
@@ -113,6 +117,7 @@ function parseAuthMethods(raw: unknown): AcpAuthMethod[] {
 
 async function openSessionAfterAuth(
   cwd: string,
+  options?: { keepAliveOnFailure?: boolean },
 ): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
   const t = requireTransport(true)
   if (!t.ok) return t
@@ -120,32 +125,41 @@ async function openSessionAfterAuth(
     return err({ code: 'ACP_NOT_CONNECTED', message: '运行时未知' })
   }
 
-  const sessionResult = (await t.value.request('session/new', {
-    cwd,
-    mcpServers: [],
-  })) as Record<string, unknown>
+  try {
+    const sessionResult = (await t.value.request('session/new', {
+      cwd,
+      mcpServers: [],
+    })) as Record<string, unknown>
 
-  const newSessionId =
-    typeof sessionResult.sessionId === 'string' ? sessionResult.sessionId : null
-  if (!newSessionId) {
-    await disconnectAcp('session/new 未返回 sessionId')
-    return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
+    const newSessionId =
+      typeof sessionResult.sessionId === 'string' ? sessionResult.sessionId : null
+    if (!newSessionId) {
+      if (!options?.keepAliveOnFailure) {
+        await disconnectAcp('session/new 未返回 sessionId')
+      }
+      return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
+    }
+
+    sessionId = newSessionId
+    workspaceRoot = cwd
+    setStatus('connected')
+
+    return ok({
+      phase: 'ready',
+      runtimeId,
+      sessionId: newSessionId,
+      protocolVersion: cachedProtocolVersion,
+      agentName: cachedAgentName,
+      agentVersion: cachedAgentVersion,
+      configOptions: parseAcpConfigOptions(sessionResult.configOptions),
+      loadSessionSupported,
+    })
+  } catch (error) {
+    if (!options?.keepAliveOnFailure) {
+      await disconnectAcp()
+    }
+    return err(toProtocolError(error, '创建会话失败'))
   }
-
-  sessionId = newSessionId
-  workspaceRoot = cwd
-  setStatus('connected')
-
-  return ok({
-    phase: 'ready',
-    runtimeId,
-    sessionId: newSessionId,
-    protocolVersion: cachedProtocolVersion,
-    agentName: cachedAgentName,
-    agentVersion: cachedAgentVersion,
-    configOptions: parseAcpConfigOptions(sessionResult.configOptions),
-    loadSessionSupported,
-  })
 }
 
 async function resolvePermission(params: Record<string, unknown>): Promise<PermissionDecision> {
@@ -336,26 +350,41 @@ export async function connectAcp(payload: {
     const authMethods = parseAuthMethods(initResult.authMethods)
     const preflight = probeCodexAuth()
 
-    // 未检测到本机登录且 Agent 提供了认证方式 → 交给 UI 选择
-    if (authMethods.length > 0 && !preflight.looksLoggedIn) {
+    // 未检测到本机登录 → 弹向导；已有 auth.json / API Key 则静默认证，不打扰用户
+    if (shouldPromptAuthWizard(authMethods, preflight)) {
       setStatus('awaiting_auth')
+      const ordered = orderSilentAuthMethodIds(authMethods, preflight)
+        .map((id) => authMethods.find((m) => m.id === id))
+        .filter((m): m is NonNullable<typeof m> => Boolean(m))
       return ok({
         phase: 'needs_auth',
         runtimeId: runtime.id,
         protocolVersion: negotiated,
         agentName: cachedAgentName,
         agentVersion: cachedAgentVersion,
-        authMethods,
+        authMethods: ordered.length > 0 ? ordered : authMethods,
         loadSessionSupported,
       })
     }
 
     if (authMethods.length > 0) {
-      const methodId = authMethods[0]!.id
-      try {
-        await localTransport.request('authenticate', { methodId })
-      } catch (error) {
-        console.warn('[acp] 静默 authenticate 失败，打开认证向导', error)
+      const methodIds = orderSilentAuthMethodIds(authMethods, preflight)
+      let authed = false
+      for (const methodId of methodIds) {
+        try {
+          await localTransport.request('authenticate', { methodId })
+          authed = true
+          break
+        } catch (error) {
+          console.warn(`[acp] 静默 authenticate(${methodId}) 失败，尝试下一方式`, error)
+        }
+      }
+
+      if (!authed) {
+        // 本机已有凭证时：再试一次直接 session/new（部分 Agent 继承 CODEX_HOME 即可）
+        const direct = await openSessionAfterAuth(cwd, { keepAliveOnFailure: true })
+        if (direct.ok) return direct
+
         setStatus('awaiting_auth')
         return ok({
           phase: 'needs_auth',
