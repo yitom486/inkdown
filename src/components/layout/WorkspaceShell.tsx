@@ -1,33 +1,34 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { ActivityBar } from '@/components/layout/ActivityBar'
-import { FileExplorer } from '@/components/layout/FileExplorer'
-import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
+import { Sidebar } from '@/components/layout/Sidebar'
 import { AgentPanel } from '@/components/agent/AgentPanel'
-import { EpubViewer } from '@/components/reader/EpubViewer'
-import { MobiViewer } from '@/components/reader/MobiViewer'
-import { PdfViewer } from '@/components/reader/PdfViewer'
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import { useCollapsiblePanelSync } from '@/hooks/useSidebarPanelSync'
+import type { MarkdownHeading } from '@/lib/markdown-headings'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
-import type { ReaderDocumentKind } from '@shared/types/document'
 import type { FileTreeNode } from '@shared/types/file'
 import type { useFileTreeActions } from '@/hooks/useFileTreeActions'
 
-interface ReaderLayoutProps {
-  filePath: string
-  documentKind: ReaderDocumentKind
+export interface WorkspaceShellProps {
   theme: 'dark' | 'light'
   workspaceRoot?: string
   fileTree: FileTreeNode[]
+  activeFilePath?: string
   recentFiles: string[]
   treeActions?: ReturnType<typeof useFileTreeActions>
+  /** Markdown 大纲；阅读器模式传空数组即可 */
+  headings?: MarkdownHeading[]
+  activeHeadingId?: string
+  onSelectHeading?: (heading: MarkdownHeading) => void
+  /** 阅读器：禁用保存/导出 */
+  readOnly?: boolean
   onOpenFile: () => void
   onOpenFolder: () => void
   onRescanWorkspace?: () => void
@@ -35,22 +36,34 @@ interface ReaderLayoutProps {
   onSelectFile: (path: string) => void
   onOpenRecentFile: (path: string) => void
   onToggleTheme: () => void
+  onSave: () => void
+  onSaveAs: () => void
+  onExportHtml: () => void
+  onExportPdf: () => void
   onOpenSettings: () => void
   onOpenErrorLog: () => void
   onOpenDevTools: () => void
   onAbout: () => void
   onNewWindow: () => void
   onQuit: () => void
+  children: ReactNode
 }
 
-export function ReaderLayout({
-  filePath,
-  documentKind,
+/**
+ * 工作区外壳：TitleBar / ActivityBar / 侧栏 / Agent 常驻。
+ * 切换 Markdown ↔ PDF 时只替换 children（主区），避免 Agent 面板整树卸载。
+ */
+export function WorkspaceShell({
   theme,
   workspaceRoot,
   fileTree,
+  activeFilePath,
   recentFiles,
   treeActions,
+  headings = [],
+  activeHeadingId,
+  onSelectHeading,
+  readOnly = false,
   onOpenFile,
   onOpenFolder,
   onRescanWorkspace,
@@ -58,23 +71,30 @@ export function ReaderLayout({
   onSelectFile,
   onOpenRecentFile,
   onToggleTheme,
+  onSave,
+  onSaveAs,
+  onExportHtml,
+  onExportPdf,
   onOpenSettings,
   onOpenErrorLog,
   onOpenDevTools,
   onAbout,
   onNewWindow,
   onQuit,
-}: ReaderLayoutProps) {
+  children,
+}: WorkspaceShellProps) {
   const sidebarVisible = useEditorUiStore((state) => state.sidebarVisible)
   const setSidebarVisible = useEditorUiStore((state) => state.setSidebarVisible)
   const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
+  const outlineExpanded = useEditorUiStore((state) => state.outlineExpanded)
+  const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
   const agentPanelOpen = useAcpUiStore((state) => state.panelOpen)
   const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
   const sidebarPanelRef = useCollapsiblePanelSync(sidebarVisible)
   const agentPanelRef = useCollapsiblePanelSync(agentPanelOpen)
 
   const shellLayout = useDefaultLayout({
-    id: 'reader-shell',
+    id: 'workspace-shell',
     panelIds: ['sidebar', 'main', 'agent'],
   })
 
@@ -96,17 +116,17 @@ export function ReaderLayout({
         recentFiles={recentFiles}
         sidebarVisible={sidebarVisible}
         agentPanelOpen={agentPanelOpen}
-        readOnly
+        readOnly={readOnly}
         onToggleSidebar={toggleSidebar}
         onToggleAgentPanel={toggleAgentPanel}
         onToggleTheme={onToggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
         onOpenRecentFile={onOpenRecentFile}
-        onSave={() => undefined}
-        onSaveAs={() => undefined}
-        onExportHtml={() => undefined}
-        onExportPdf={() => undefined}
+        onSave={onSave}
+        onSaveAs={onSaveAs}
+        onExportHtml={onExportHtml}
+        onExportPdf={onExportPdf}
         onOpenSettings={onOpenSettings}
         onOpenErrorLog={onOpenErrorLog}
         onOpenDevTools={onOpenDevTools}
@@ -124,7 +144,7 @@ export function ReaderLayout({
         />
 
         <ResizablePanelGroup
-          id="reader-shell"
+          id="workspace-shell"
           orientation="horizontal"
           defaultLayout={shellLayout.defaultLayout}
           onLayoutChanged={shellLayout.onLayoutChanged}
@@ -140,14 +160,19 @@ export function ReaderLayout({
             maxSize="36%"
             className="min-w-0"
           >
-            <FileExplorer
+            <Sidebar
               workspaceRoot={workspaceRoot}
-              tree={fileTree}
-              activeFilePath={filePath}
+              fileTree={fileTree}
+              activeFilePath={activeFilePath}
+              headings={headings}
+              activeHeadingId={activeHeadingId}
+              outlineExpanded={outlineExpanded && headings.length > 0}
+              onOutlineToggle={() => setOutlineExpanded(!outlineExpanded)}
               onOpenFolder={onOpenFolder}
               onRescanWorkspace={onRescanWorkspace}
-              isRescanning={isRescanningWorkspace}
+              isRescanningWorkspace={isRescanningWorkspace}
               onSelectFile={onSelectFile}
+              onSelectHeading={onSelectHeading ?? (() => undefined)}
               onHideSidebar={() => setSidebarVisible(false)}
               treeActions={treeActions}
             />
@@ -156,18 +181,7 @@ export function ReaderLayout({
           {sidebarVisible ? <ResizableHandle withHandle /> : null}
 
           <ResizablePanel id="main" defaultSize="57%" minSize="30%" className="min-w-0">
-            <div className="flex h-full min-h-0 flex-col">
-              <FileBreadcrumb filePath={filePath} isDirty={false} />
-              <main className="min-h-0 flex-1 bg-editor">
-                {documentKind === 'pdf' ? (
-                  <PdfViewer filePath={filePath} theme={theme} />
-                ) : documentKind === 'mobi' ? (
-                  <MobiViewer filePath={filePath} theme={theme} />
-                ) : (
-                  <EpubViewer filePath={filePath} theme={theme} />
-                )}
-              </main>
-            </div>
+            {children}
           </ResizablePanel>
 
           {agentPanelOpen ? <ResizableHandle withHandle /> : null}

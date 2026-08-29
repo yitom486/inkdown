@@ -5,8 +5,13 @@ import { ErrorLogDialog } from '@/components/shared/ErrorLogDialog'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { AgentPermissionHost } from '@/components/agent/AgentPermissionHost'
-import { EditorLayout } from '@/components/layout/EditorLayout'
-import { ReaderLayout } from '@/components/layout/ReaderLayout'
+import {
+  EditorWorkspaceMain,
+  type EditorOutlineState,
+  type EditorWorkspaceMainHandle,
+} from '@/components/layout/EditorWorkspaceMain'
+import { ReaderWorkspaceMain } from '@/components/layout/ReaderWorkspaceMain'
+import { WorkspaceShell } from '@/components/layout/WorkspaceShell'
 import { Toaster } from '@/components/ui/sonner'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useDraftPersistence, clearDraftForFile } from '@/hooks/useDraftPersistence'
@@ -22,11 +27,14 @@ import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { isMarkdownEditorFocused } from '@/lib/editor-focus'
+import type { MarkdownHeading } from '@/lib/markdown-headings'
 
 function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [errorLogOpen, setErrorLogOpen] = useState(false)
+  const [outline, setOutline] = useState<EditorOutlineState>({ headings: [] })
+  const editorMainRef = useRef<EditorWorkspaceMainHandle>(null)
   const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
   const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
@@ -129,6 +137,14 @@ function App() {
     dismissRecovery()
   }, [dismissRecovery, recoveryDraftKey, removeDraft])
 
+  const handleOutlineChange = useCallback((next: EditorOutlineState) => {
+    setOutline(next)
+  }, [])
+
+  const handleSelectHeading = useCallback((heading: MarkdownHeading) => {
+    editorMainRef.current?.selectHeading(heading)
+  }, [])
+
   useEffect(() => {
     if (appMeta?.error) {
       reportAppError(appMeta.error)
@@ -176,6 +192,12 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [toggleSidebar])
 
+  useEffect(() => {
+    if (readerDocumentKind && filePath) {
+      setOutline({ headings: [] })
+    }
+  }, [filePath, readerDocumentKind])
+
   if (!window.electronAPI) {
     const isElectron = navigator.userAgent.includes('Electron')
     return (
@@ -189,50 +211,64 @@ function App() {
     )
   }
 
-  const layoutProps = {
-    workspaceRoot,
-    fileTree,
-    recentFiles,
-    onOpenFile: () => void openFile(),
-    onOpenFolder: () => void openFolder(),
-    onRescanWorkspace: () => void rescanWorkspace(),
-    isRescanningWorkspace: isFileBusy,
-    onSelectFile: (path: string) => void openFileFromTree(path),
-    treeActions,
-    onOpenRecentFile: (path: string) => void openRecentFile(path),
-    onOpenSettings: () => setSettingsOpen(true),
-    onOpenErrorLog: () => setErrorLogOpen(true),
-    onOpenDevTools: () => appApi.toggleDevTools(),
-    onAbout: () => setAboutOpen(true),
-    onNewWindow: () => appApi.newWindow(),
-    onQuit: quitApp,
-  }
+  const isReader = Boolean(readerDocumentKind && filePath)
 
   return (
     <>
       <Toaster theme={theme} richColors closeButton position="top-right" />
       <AgentPermissionHost />
-      {readerDocumentKind && filePath ? (
-        <ReaderLayout
-          filePath={filePath}
-          documentKind={readerDocumentKind}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          {...layoutProps}
-        />
-      ) : (
-        <EditorLayout
-          filePath={filePath}
-          isDirty={isDirty}
-          content={content}
-          onContentChange={setContent}
-          onSave={() => void saveFile()}
-          onSaveAs={() => void saveFileAs()}
-          onExportHtml={handleExportHtml}
-          onExportPdf={handleExportPdf}
-          {...layoutProps}
-        />
-      )}
+
+      <WorkspaceShell
+        theme={theme}
+        workspaceRoot={workspaceRoot}
+        fileTree={fileTree}
+        activeFilePath={filePath}
+        recentFiles={recentFiles}
+        treeActions={treeActions}
+        headings={isReader ? [] : outline.headings}
+        activeHeadingId={isReader ? undefined : outline.activeHeadingId}
+        onSelectHeading={isReader ? undefined : handleSelectHeading}
+        readOnly={isReader}
+        onOpenFile={() => void openFile()}
+        onOpenFolder={() => void openFolder()}
+        onRescanWorkspace={() => void rescanWorkspace()}
+        isRescanningWorkspace={isFileBusy}
+        onSelectFile={(path) => void openFileFromTree(path)}
+        onOpenRecentFile={(path) => void openRecentFile(path)}
+        onToggleTheme={toggleTheme}
+        onSave={() => void saveFile()}
+        onSaveAs={() => void saveFileAs()}
+        onExportHtml={handleExportHtml}
+        onExportPdf={handleExportPdf}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenErrorLog={() => setErrorLogOpen(true)}
+        onOpenDevTools={() => appApi.toggleDevTools()}
+        onAbout={() => setAboutOpen(true)}
+        onNewWindow={() => appApi.newWindow()}
+        onQuit={quitApp}
+      >
+        {isReader && readerDocumentKind && filePath ? (
+          <ReaderWorkspaceMain
+            filePath={filePath}
+            documentKind={readerDocumentKind}
+            theme={theme}
+          />
+        ) : (
+          <EditorWorkspaceMain
+            ref={editorMainRef}
+            filePath={filePath}
+            isDirty={isDirty}
+            content={content}
+            workspaceRoot={workspaceRoot}
+            recentFiles={recentFiles}
+            onContentChange={setContent}
+            onOpenFile={() => void openFile()}
+            onOpenFolder={() => void openFolder()}
+            onOpenRecentFile={(path) => void openRecentFile(path)}
+            onOutlineChange={handleOutlineChange}
+          />
+        )}
+      </WorkspaceShell>
 
       <AboutDialog
         open={aboutOpen}

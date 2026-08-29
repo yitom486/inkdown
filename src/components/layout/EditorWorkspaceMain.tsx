@@ -1,0 +1,328 @@
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { reportRuntimeError } from '@/lib/error-reporter'
+import { useDefaultLayout } from 'react-resizable-panels'
+import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
+import { WelcomePage } from '@/components/layout/WelcomePage'
+import { ViewModeToggle } from '@/components/layout/ViewModeToggle'
+import {
+  MarkdownEditor,
+  type MarkdownEditorHandle,
+} from '@/components/editor/MarkdownEditor'
+import { FindReplaceBar } from '@/components/editor/FindReplaceBar'
+import { PreviewPane, type PreviewPaneHandle } from '@/components/preview/PreviewPane'
+import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable'
+import { useScrollSync } from '@/hooks/useScrollSync'
+import { useMarkdownPreview } from '@/hooks/useMarkdownPreview'
+import { usePasteImage } from '@/hooks/usePasteImage'
+import {
+  findActiveHeading,
+  parseMarkdownHeadings,
+  type MarkdownHeading,
+} from '@/lib/markdown-headings'
+import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
+
+export interface EditorWorkspaceMainHandle {
+  selectHeading: (heading: MarkdownHeading) => void
+}
+
+export interface EditorOutlineState {
+  headings: MarkdownHeading[]
+  activeHeadingId?: string
+}
+
+interface EditorWorkspaceMainProps {
+  filePath?: string
+  isDirty: boolean
+  content: string
+  workspaceRoot?: string
+  recentFiles: string[]
+  onContentChange: (value: string) => void
+  onOpenFile: () => void
+  onOpenFolder: () => void
+  onOpenRecentFile: (path: string) => void
+  onOutlineChange?: (state: EditorOutlineState) => void
+}
+
+export const EditorWorkspaceMain = forwardRef<
+  EditorWorkspaceMainHandle,
+  EditorWorkspaceMainProps
+>(function EditorWorkspaceMain(
+  {
+    filePath,
+    isDirty,
+    content,
+    workspaceRoot,
+    recentFiles,
+    onContentChange,
+    onOpenFile,
+    onOpenFolder,
+    onOpenRecentFile,
+    onOutlineChange,
+  },
+  ref,
+) {
+  const editorRef = useRef<MarkdownEditorHandle>(null)
+  const previewRef = useRef<PreviewPaneHandle>(null)
+  const fileState = useFileUiState(filePath)
+  const setViewMode = useEditorUiStore((state) => state.setViewMode)
+  const theme = useEditorUiStore((state) => state.theme)
+  const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
+  const tabSize = useAppSettingsStore((state) => state.tabSize)
+  const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
+
+  const viewMode = fileState.viewMode
+  const previewHtml = useMarkdownPreview(content, filePath, previewDebounceMs)
+  const { handlePasteImage } = usePasteImage(filePath)
+  const headings = useMemo(() => {
+    try {
+      return parseMarkdownHeadings(content)
+    } catch (error) {
+      reportRuntimeError(error, { source: 'outline', filePath, silentToast: true })
+      return []
+    }
+  }, [content, filePath])
+  const [activeHeadingId, setActiveHeadingId] = useState<string>()
+  const [findReplace, setFindReplace] = useState<{ open: boolean; mode: 'find' | 'replace' }>({
+    open: false,
+    mode: 'find',
+  })
+
+  const showEditor = Boolean(filePath) && (viewMode === 'editor' || viewMode === 'split')
+  const showPreview = Boolean(filePath) && (viewMode === 'preview' || viewMode === 'split')
+  const showWelcome = !filePath
+
+  const contentPanelIds = useMemo(() => {
+    if (showEditor && showPreview) return ['editor', 'preview']
+    if (showEditor) return ['editor']
+    return ['preview-full']
+  }, [showEditor, showPreview])
+
+  const contentLayout = useDefaultLayout({
+    id: `markdown-editor-content-${viewMode}`,
+    panelIds: contentPanelIds,
+  })
+
+  const updateActiveHeading = useCallback(() => {
+    const visibleLine = editorRef.current?.getTopVisibleLine() ?? 0
+    const active = findActiveHeading(headings, visibleLine)
+    setActiveHeadingId(active?.id)
+  }, [headings])
+
+  const { onEditorScroll, onPreviewScroll, jumpToHeading } = useScrollSync({
+    filePath,
+    viewMode,
+    previewHtml,
+    editorRef,
+    previewRef,
+  })
+
+  const handleEditorScroll = useCallback(() => {
+    onEditorScroll()
+    if (viewMode !== 'preview') {
+      updateActiveHeading()
+    }
+  }, [onEditorScroll, updateActiveHeading, viewMode])
+
+  const updateActiveHeadingFromPreview = useCallback(() => {
+    const activeId = previewRef.current?.getActiveHeadingId()
+    if (activeId) {
+      setActiveHeadingId(activeId)
+    }
+  }, [])
+
+  const handlePreviewScroll = useCallback(() => {
+    onPreviewScroll()
+    if (viewMode !== 'editor') {
+      updateActiveHeadingFromPreview()
+    }
+  }, [onPreviewScroll, updateActiveHeadingFromPreview, viewMode])
+
+  const handlePreviewHeadingActivate = useCallback(
+    (headingId: string) => {
+      setActiveHeadingId(headingId)
+      const heading = headings.find((item) => item.id === headingId)
+      if (!heading || viewMode === 'preview') return
+      editorRef.current?.scrollToLine(heading.line)
+    },
+    [headings, viewMode],
+  )
+
+  const handleSelectHeading = useCallback(
+    (heading: MarkdownHeading) => {
+      jumpToHeading(heading)
+      setActiveHeadingId(heading.id)
+    },
+    [jumpToHeading],
+  )
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      selectHeading: handleSelectHeading,
+    }),
+    [handleSelectHeading],
+  )
+
+  useEffect(() => {
+    onOutlineChange?.({ headings, activeHeadingId })
+  }, [activeHeadingId, headings, onOutlineChange])
+
+  useEffect(() => {
+    if (viewMode === 'preview' && previewHtml) {
+      requestAnimationFrame(() => {
+        updateActiveHeadingFromPreview()
+      })
+    }
+  }, [previewHtml, updateActiveHeadingFromPreview, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== 'preview') {
+      updateActiveHeading()
+    }
+  }, [headings, updateActiveHeading, viewMode])
+
+  useEffect(() => {
+    if (!filePath) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'f') {
+        event.preventDefault()
+        setFindReplace({ open: true, mode: 'find' })
+        return
+      }
+      if (key === 'h') {
+        event.preventDefault()
+        setFindReplace({ open: true, mode: 'replace' })
+        return
+      }
+
+      const shortcuts: Record<string, EditorViewMode> = {
+        '1': 'editor',
+        '2': 'split',
+        '3': 'preview',
+      }
+      const nextMode = shortcuts[event.key]
+      if (!nextMode) return
+
+      event.preventDefault()
+      setViewMode(filePath, nextMode)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [filePath, setViewMode])
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <FileBreadcrumb
+        filePath={filePath}
+        isDirty={isDirty}
+        welcome={showWelcome}
+        trailing={
+          showWelcome ? undefined : (
+            <ViewModeToggle mode={viewMode} onChange={(mode) => setViewMode(filePath, mode)} />
+          )
+        }
+      />
+
+      <main className="min-h-0 flex-1 bg-editor">
+        {showWelcome ? (
+          <WelcomePage
+            recentFiles={recentFiles}
+            workspaceRoot={workspaceRoot}
+            onOpenFile={onOpenFile}
+            onOpenFolder={onOpenFolder}
+            onOpenRecentFile={onOpenRecentFile}
+          />
+        ) : (
+          <ResizablePanelGroup
+            id={`markdown-editor-content-${viewMode}`}
+            orientation="horizontal"
+            defaultLayout={contentLayout.defaultLayout}
+            onLayoutChanged={contentLayout.onLayoutChanged}
+            className="h-full min-h-0"
+          >
+            {showEditor && (
+              <ResizablePanel
+                id="editor"
+                defaultSize={showPreview ? '50%' : '100%'}
+                minSize={showPreview ? '28%' : '100%'}
+                className="min-w-0"
+              >
+                <div className="relative h-full min-h-0">
+                  <FindReplaceBar
+                    open={findReplace.open}
+                    mode={findReplace.mode}
+                    editorView={editorRef.current?.getView() ?? null}
+                    onClose={() => setFindReplace((state) => ({ ...state, open: false }))}
+                  />
+                  <PaneErrorBoundary name="编辑器" filePath={filePath}>
+                    <MarkdownEditor
+                      ref={editorRef}
+                      value={content}
+                      filePath={filePath}
+                      theme={theme}
+                      tabSize={tabSize}
+                      fontSize={editorFontSize}
+                      onChange={onContentChange}
+                      onScroll={handleEditorScroll}
+                      onPasteImage={handlePasteImage}
+                    />
+                  </PaneErrorBoundary>
+                </div>
+              </ResizablePanel>
+            )}
+
+            {showEditor && showPreview && (
+              <>
+                <ResizableHandle withHandle />
+                <ResizablePanel id="preview" defaultSize="50%" minSize="28%" className="min-w-0">
+                  <PaneErrorBoundary name="预览" filePath={filePath}>
+                    <PreviewPane
+                      ref={previewRef}
+                      html={previewHtml}
+                      theme={theme}
+                      onScroll={handlePreviewScroll}
+                      onHeadingActivate={handlePreviewHeadingActivate}
+                    />
+                  </PaneErrorBoundary>
+                </ResizablePanel>
+              </>
+            )}
+
+            {!showEditor && showPreview && (
+              <ResizablePanel id="preview-full" defaultSize="100%" className="min-w-0">
+                <PaneErrorBoundary name="预览" filePath={filePath}>
+                  <PreviewPane
+                    ref={previewRef}
+                    html={previewHtml}
+                    theme={theme}
+                    onScroll={handlePreviewScroll}
+                    onHeadingActivate={handlePreviewHeadingActivate}
+                  />
+                </PaneErrorBoundary>
+              </ResizablePanel>
+            )}
+          </ResizablePanelGroup>
+        )}
+      </main>
+    </div>
+  )
+})
