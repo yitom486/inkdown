@@ -6,7 +6,7 @@ import {
   ListTodo,
   Loader2,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { AgentChatItem, AgentChatItemBody, useAgentChatOpen } from '@/components/agent/AgentChatItem'
 import { cn } from '@/lib/utils'
 import { summarizePlanProgress } from '@/lib/acp-plan'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
@@ -32,26 +32,24 @@ export function AgentPlanCard({ message }: AgentPlanCardProps) {
   const entries = message.planEntries ?? []
   const summary = summarizePlanProgress(entries)
   const active = Boolean(message.streaming) || summary.active
-  const [open, setOpen] = useState(active)
-
-  useEffect(() => {
-    setOpen(active)
-  }, [active])
+  const [open, setOpen] = useAgentChatOpen(active)
 
   const title = active
     ? `计划 · ${summary.completed}/${summary.total}`
     : `计划完成 · ${summary.completed}/${summary.total}`
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-border/50 bg-muted/10',
-        active && 'border-sky-500/25 bg-sky-500/5',
-      )}
+    <AgentChatItem
+      variant="card"
+      tone="plan"
+      streaming={active}
+      probe="plan"
+      messageId={message.id}
+      role="plan"
     >
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+        className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left"
         onClick={() => setOpen((v) => !v)}
       >
         {active ? (
@@ -68,33 +66,35 @@ export function AgentPlanCard({ message }: AgentPlanCardProps) {
       </button>
 
       {open ? (
-        <ul className="space-y-1 border-t border-border/40 px-2.5 py-2">
-          {entries.map((entry, index) => (
-            <li
-              key={`${index}-${entry.content.slice(0, 24)}`}
-              className="flex items-start gap-2 text-[11px] leading-relaxed"
-            >
-              <StatusIcon status={entry.status} />
-              <span
-                className={cn(
-                  'min-w-0 flex-1',
-                  entry.status === 'completed' && 'text-muted-foreground line-through',
-                  entry.status === 'in_progress' && 'text-foreground',
-                  entry.status === 'pending' && 'text-muted-foreground',
-                )}
+        <AgentChatItemBody className="space-y-1">
+          <ul className="space-y-1">
+            {entries.map((entry, index) => (
+              <li
+                key={`${index}-${entry.content.slice(0, 24)}`}
+                className="flex items-start gap-2 text-[11px] leading-relaxed"
               >
-                {entry.content}
-                {entry.priority ? (
-                  <span className="ml-1.5 text-[10px] opacity-60">{entry.priority}</span>
-                ) : null}
-              </span>
-            </li>
-          ))}
-          {entries.length === 0 ? (
-            <li className="text-[10px] text-muted-foreground">暂无计划条目</li>
-          ) : null}
-        </ul>
+                <StatusIcon status={entry.status} />
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 break-words [overflow-wrap:anywhere]',
+                    entry.status === 'completed' && 'text-muted-foreground line-through',
+                    entry.status === 'in_progress' && 'text-foreground',
+                    entry.status === 'pending' && 'text-muted-foreground',
+                  )}
+                >
+                  {entry.content}
+                  {entry.priority ? (
+                    <span className="ml-1.5 text-[10px] opacity-60">{entry.priority}</span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+            {entries.length === 0 ? (
+              <li className="text-[10px] text-muted-foreground">暂无计划条目</li>
+            ) : null}
+          </ul>
+        </AgentChatItemBody>
       ) : null}
-    </div>
+    </AgentChatItem>
   )
 }

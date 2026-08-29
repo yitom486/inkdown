@@ -25,20 +25,21 @@ export function MarkdownContent({ html, className, deferMermaid = false }: Markd
   if (!parts) {
     return (
       <div
-        className={cn(className)}
+        className={cn('min-w-0 max-w-full', className)}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     )
   }
 
   return (
-    <div className={cn(className)}>
+    <div className={cn('min-w-0 max-w-full', className)}>
       {parts.map((part, index) =>
         part.type === 'mermaid' ? (
           <MermaidBlock key={part.id} source={part.source} />
         ) : (
           <div
             key={`html-${index}`}
+            className="min-w-0 max-w-full"
             dangerouslySetInnerHTML={{ __html: part.html }}
           />
         ),

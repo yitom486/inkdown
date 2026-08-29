@@ -1,13 +1,14 @@
 import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import {
+  AgentChatItem,
+  AgentChatItemBody,
+  useAgentChatOpen,
+} from '@/components/agent/AgentChatItem'
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
 import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
-import {
-  renderAgentMarkdown,
-  renderAgentMarkdownStreaming,
-} from '@/lib/agent-markdown'
-import { mermaidLog } from '@/lib/mermaid-debug'
+import { renderAgentMarkdown } from '@/lib/agent-markdown'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import '@/styles/markdown-preview.css'
@@ -17,33 +18,20 @@ interface AgentMessageBubbleProps {
 }
 
 export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
-  const [thoughtOpen, setThoughtOpen] = useState(Boolean(message.streaming))
-  const deferredText = useDeferredValue(message.text)
-  /** 非流式用最终文本，避免 deferred 滞后导致 Mermaid 用到半截 fence */
-  const textForMd = message.streaming ? deferredText : message.text
+  const [thoughtOpen, setThoughtOpen] = useAgentChatOpen(Boolean(message.streaming))
 
   const html = useMemo(() => {
     if (message.role !== 'agent') return null
-    if (!textForMd.trim() && message.streaming) return null
-    if (message.streaming) return renderAgentMarkdownStreaming(textForMd)
-    return renderAgentMarkdown(textForMd)
-  }, [textForMd, message.role, message.streaming])
-
-  useEffect(() => {
-    if (message.streaming) {
-      mermaidLog('bubble:streaming', { textChars: textForMd.length })
-    }
-  }, [message.streaming, textForMd.length])
-
-  useEffect(() => {
-    setThoughtOpen(Boolean(message.streaming))
-  }, [message.streaming])
+    if (!message.text.trim() && message.streaming) return null
+    // 流式与完成共用同一渲染管线，仅 streaming 时补全未闭合 fence
+    return renderAgentMarkdown(message.text, { streaming: Boolean(message.streaming) })
+  }, [message.text, message.role, message.streaming])
 
   if (message.role === 'system') {
     return (
-      <div className="px-1 py-0.5 text-center text-[10px] text-muted-foreground/70">
+      <AgentChatItem variant="system" probe="system" messageId={message.id} role="system">
         {message.text}
-      </div>
+      </AgentChatItem>
     )
   }
 
@@ -64,10 +52,17 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
         : '思考'
 
     return (
-      <div className="rounded-xl border border-border/40 bg-muted/10">
+      <AgentChatItem
+        variant="card"
+        tone="thought"
+        streaming={Boolean(message.streaming)}
+        probe="thought"
+        messageId={message.id}
+        role="thought"
+      >
         <button
           type="button"
-          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-muted-foreground"
+          className="flex w-full min-w-0 items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-muted-foreground"
           onClick={() => setThoughtOpen((v) => !v)}
         >
           {thoughtOpen ? (
@@ -84,16 +79,16 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
           ) : null}
         </button>
         {thoughtOpen ? (
-          <div className="border-t border-border/30 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground italic">
-            <div className="border-l-2 border-amber-500/30 pl-2.5 whitespace-pre-wrap">
+          <AgentChatItemBody className="border-border/30 text-[11px] leading-relaxed text-muted-foreground italic">
+            <div className="min-w-0 break-words border-l-2 border-amber-500/30 pl-2.5 whitespace-pre-wrap [overflow-wrap:anywhere]">
               {message.text}
               {message.streaming ? (
                 <span className="ml-1 inline-block h-2.5 w-1 animate-pulse rounded-sm bg-amber-500/60 align-middle" />
               ) : null}
             </div>
-          </div>
+          </AgentChatItemBody>
         ) : null}
-      </div>
+      </AgentChatItem>
     )
   }
 
@@ -101,83 +96,78 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
   const showEmptyStreaming = !isUser && message.streaming && !message.text.trim()
 
   return (
-    <div
-      className={cn(
-        'group flex flex-col gap-1',
-        isUser ? 'items-end' : 'items-start',
-      )}
+    <AgentChatItem
+      variant="bubble"
+      tone={isUser ? 'user' : 'agent'}
+      align={isUser ? 'end' : 'start'}
+      streaming={Boolean(message.streaming)}
+      probe={isUser ? 'user' : 'agent'}
+      messageId={message.id}
+      role={message.role}
     >
-      <div
-        className={cn(
-          'max-w-[95%] rounded-2xl px-3 py-2 text-[12px] leading-relaxed shadow-sm',
-          isUser
-            ? 'rounded-br-md bg-primary text-primary-foreground'
-            : 'rounded-bl-md border border-border/60 bg-card text-card-foreground',
-          message.streaming && !isUser && 'ring-1 ring-emerald-500/20',
-        )}
-      >
-        {!isUser ? (
-          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-            Agent
-            {message.streaming ? (
-              <Loader2 className="size-3 animate-spin text-emerald-500" />
-            ) : null}
-          </div>
-        ) : null}
+      {!isUser ? (
+        <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+          Agent
+          {message.streaming ? (
+            <Loader2 className="size-3 animate-spin text-emerald-500" />
+          ) : null}
+        </div>
+      ) : null}
 
-        {isUser ? (
-          <div className="flex flex-col gap-1.5">
-            {(message.attachments?.length ?? 0) > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {message.attachments!.map((att) => (
-                  <div
-                    key={att.id}
-                    className={cn(
-                      'inline-flex max-w-[11rem] items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
-                      'border-primary-foreground/30 bg-primary-foreground/12',
-                    )}
-                    title={att.absolutePath ?? att.name}
-                  >
-                    {att.kind === 'image' && att.previewUrl ? (
-                      <img
-                        src={att.previewUrl}
-                        alt=""
-                        className="size-5 shrink-0 rounded object-cover"
-                      />
-                    ) : null}
-                    <span className="min-w-0 truncate">{att.name}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {message.text.trim() ? (
-              <div className="whitespace-pre-wrap break-words">{message.text}</div>
-            ) : null}
-          </div>
-        ) : showEmptyStreaming ? (
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span className="inline-flex gap-1">
-              <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.2s]" />
-              <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.1s]" />
-              <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70" />
-            </span>
-            正在生成
-          </div>
-        ) : (
-          <MarkdownContent
-            html={html ?? ''}
-            deferMermaid={Boolean(message.streaming)}
-            className={cn(
-              'markdown-preview agent-md break-words text-[12px]',
-              '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
-              '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
-            )}
-          />
-        )}
-        {message.streaming && !isUser && !showEmptyStreaming ? (
-          <span className="mt-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-foreground/60 align-middle" />
-        ) : null}
-      </div>
-    </div>
+      {isUser ? (
+        <div className="flex min-w-0 flex-col gap-1.5">
+          {(message.attachments?.length ?? 0) > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {message.attachments!.map((att) => (
+                <div
+                  key={att.id}
+                  className={cn(
+                    'inline-flex max-w-[11rem] items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+                    'border-primary-foreground/30 bg-primary-foreground/12',
+                  )}
+                  title={att.absolutePath ?? att.name}
+                >
+                  {att.kind === 'image' && att.previewUrl ? (
+                    <img
+                      src={att.previewUrl}
+                      alt=""
+                      className="size-5 shrink-0 rounded object-cover"
+                    />
+                  ) : null}
+                  <span className="min-w-0 truncate">{att.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {message.text.trim() ? (
+            <div className="min-w-0 break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {message.text}
+            </div>
+          ) : null}
+        </div>
+      ) : showEmptyStreaming ? (
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="inline-flex gap-1">
+            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.2s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70 [animation-delay:-0.1s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70" />
+          </span>
+          正在生成
+        </div>
+      ) : (
+        <MarkdownContent
+          html={html ?? ''}
+          deferMermaid={Boolean(message.streaming)}
+          className={cn(
+            'markdown-preview agent-md min-w-0 max-w-full break-words text-[12px] [overflow-wrap:anywhere]',
+            '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+            '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
+          )}
+        />
+      )}
+      {message.streaming && !isUser && !showEmptyStreaming ? (
+        <span className="mt-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-foreground/60 align-middle" />
+      ) : null}
+    </AgentChatItem>
   )
 }

@@ -14,10 +14,15 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import {
+  AgentChatItem,
+  AgentChatItemBody,
+  AGENT_CHAT_PRE_CLASS,
+  useAgentChatOpen,
+} from '@/components/agent/AgentChatItem'
 import { AgentDiffPreview } from '@/components/agent/AgentDiffPreview'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
-import { cn } from '@/lib/utils'
 import { toolMessageNeedsApproval } from '@/lib/acp-permission-ui'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { isToolActiveStatus } from '@/stores/acp-chat-types'
@@ -74,16 +79,12 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
   const needsApproval = toolMessageNeedsApproval(message, pendingPermission)
   const active =
     Boolean(message.streaming) || isToolActiveStatus(message.toolStatus) || needsApproval
-  const [open, setOpen] = useState(active)
+  const [open, setOpen] = useAgentChatOpen(active)
   const diffs = message.toolDiffs ?? []
   const detail = message.toolContentText || message.text
   const hasTextDetail = Boolean(detail && detail !== message.toolTitle && diffs.length === 0)
   const locations = message.toolLocations ?? []
   const hasBody = hasTextDetail || diffs.length > 0 || locations.length > 0 || needsApproval
-
-  useEffect(() => {
-    setOpen(active)
-  }, [active])
 
   const title = message.toolTitle || '工具调用'
   const locationHint =
@@ -98,16 +99,17 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
             : null
 
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-border/50 bg-muted/15 transition-colors',
-        active && 'border-amber-500/25 bg-amber-500/5',
-        needsApproval && 'border-amber-500/45 bg-amber-500/[0.07]',
-      )}
+    <AgentChatItem
+      variant="card"
+      tone={needsApproval ? 'tool-pending' : 'tool'}
+      streaming={active}
+      probe="tool"
+      messageId={message.id}
+      role="tool"
     >
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+        className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left"
         onClick={() => setOpen((v) => !v)}
       >
         {statusIcon(message.toolStatus, message.streaming || needsApproval)}
@@ -133,9 +135,9 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
       </button>
 
       {open && hasBody ? (
-        <div className="space-y-1.5 border-t border-border/40 px-2.5 py-2">
+        <AgentChatItemBody>
           {locations.length > 0 && diffs.length === 0 ? (
-            <ul className="space-y-0.5">
+            <ul className="min-w-0 space-y-0.5">
               {locations.map((loc) => (
                 <li
                   key={`${loc.path}:${loc.line ?? ''}`}
@@ -149,16 +151,12 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
             </ul>
           ) : null}
           {diffs.length > 0 ? <AgentDiffPreview diffs={diffs} /> : null}
-          {hasTextDetail ? (
-            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-muted-foreground">
-              {detail}
-            </pre>
-          ) : null}
+          {hasTextDetail ? <pre className={AGENT_CHAT_PRE_CLASS}>{detail}</pre> : null}
           {needsApproval && pendingPermission ? (
             <AgentPermissionCard pending={pendingPermission} compact />
           ) : null}
-        </div>
+        </AgentChatItemBody>
       ) : null}
-    </div>
+    </AgentChatItem>
   )
 }

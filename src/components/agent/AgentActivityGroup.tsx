@@ -1,7 +1,11 @@
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import {
+  AgentChatItem,
+  AgentChatItemBody,
+  useAgentChatOpen,
+} from '@/components/agent/AgentChatItem'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
-import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { formatDuration } from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'
@@ -21,11 +25,7 @@ export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps)
       m.toolCallId === pendingPermission.toolCallId,
   )
   const active = messages.some((m) => m.streaming) || awaitingPermission
-  const [open, setOpen] = useState(active)
-
-  useEffect(() => {
-    setOpen(active)
-  }, [active])
+  const [open, setOpen] = useAgentChatOpen(active)
 
   const startedAt = messages[0]?.createdAt ?? Date.now()
   const endedAt = useMemo(() => {
@@ -59,16 +59,20 @@ export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps)
           .join(' · ')
       : null
 
+  const groupId = messages.map((m) => m.id).join('+')
+
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-border/40 bg-muted/10',
-        active && 'border-amber-500/20 bg-amber-500/[0.04]',
-      )}
+    <AgentChatItem
+      variant="card"
+      tone={active ? 'activity-active' : 'activity'}
+      streaming={active}
+      probe="activity"
+      messageId={groupId}
+      role="activity"
     >
       <button
         type="button"
-        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left"
+        className="flex w-full min-w-0 items-center gap-1.5 px-2.5 py-1.5 text-left"
         onClick={() => setOpen((v) => !v)}
       >
         {active ? (
@@ -85,13 +89,13 @@ export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps)
       </button>
 
       {open ? (
-        <div className="space-y-2 border-t border-border/30 px-2 py-2">
+        <AgentChatItemBody className="space-y-2 border-border/30 px-2 py-2">
           {messages.map((msg) => (
             <AgentMessageBubble key={msg.id} message={msg} />
           ))}
-        </div>
+        </AgentChatItemBody>
       ) : null}
-    </div>
+    </AgentChatItem>
   )
 }
 
@@ -106,14 +110,7 @@ export function groupAgentMessages(messages: AcpChatMessage[]): AgentTimelineIte
 
   const flush = () => {
     if (buffer.length === 0) return
-    if (buffer.length === 1 && buffer[0]!.role === 'thought') {
-      // 单条思考仍进活动组，统一折叠体验
-      items.push({ type: 'activity', messages: buffer })
-    } else if (buffer.length === 1) {
-      items.push({ type: 'activity', messages: buffer })
-    } else {
-      items.push({ type: 'activity', messages: buffer })
-    }
+    items.push({ type: 'activity', messages: buffer })
     buffer = []
   }
 

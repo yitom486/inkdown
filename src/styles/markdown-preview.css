@@ -69,6 +69,10 @@
   border-radius: 0.5rem;
   background: var(--muted);
   padding: 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .markdown-preview .code-block {
@@ -255,6 +259,45 @@
 .markdown-preview.agent-md .katex-display {
   margin: 1rem 0;
   padding: 0.45em 0;
+}
+
+/* Agent 气泡：流式/完成同一套换行约束，避免长词/半截 fence 把侧栏撑开 */
+.markdown-preview.agent-md {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-preview.agent-md p,
+.markdown-preview.agent-md li,
+.markdown-preview.agent-md blockquote,
+.markdown-preview.agent-md td,
+.markdown-preview.agent-md th {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-preview.agent-md pre,
+.markdown-preview.agent-md .code-block,
+.markdown-preview.agent-md table {
+  max-width: 100%;
+}
+
+.markdown-preview.agent-md table {
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-preview.agent-md .code-block-body {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.markdown-preview.agent-md .code-block pre code.hljs {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .markdown-preview .mermaid,

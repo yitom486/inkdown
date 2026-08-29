@@ -19,8 +19,10 @@ import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
+import { AGENT_CHAT_COL_CLASS } from '@/components/agent/AgentChatItem'
 import { Button } from '@/components/ui/button'
 import { shouldShowOrphanPermissionCard } from '@/lib/acp-permission-ui'
+import { logAcpLayoutProbe } from '@/lib/acp-layout-probe'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -189,9 +191,39 @@ const AgentMessageList = memo(function AgentMessageList({
     return () => window.clearInterval(id)
   }, [prompting])
 
+  const streamingAny = messages.some((m) => m.streaming) || prompting
+  const prevStreamingAny = useRef(streamingAny)
+
+  useEffect(() => {
+    const flipped = prevStreamingAny.current !== streamingAny
+    prevStreamingAny.current = streamingAny
+    const id = window.requestAnimationFrame(() => {
+      logAcpLayoutProbe(messagesRef.current, {
+        tag: 'AgentMessageList',
+        role: 'list',
+        streaming: streamingAny,
+        force: flipped,
+      })
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [messages, messagesRef, streamingAny])
+
   return (
-    <ScrollArea className="min-h-0 flex-1">
-      <div ref={messagesRef} className="flex flex-col gap-3 px-3 py-3">
+    <ScrollArea
+      className={cn(
+        'min-h-0 min-w-0 flex-1 overflow-x-hidden',
+        // Radix Viewport 内层常为 display:table + min-width:100%，长内容会撑开整列
+        '[&_[data-slot=scroll-area-viewport]]:min-w-0',
+        '[&_[data-slot=scroll-area-viewport]>div]:!block',
+        '[&_[data-slot=scroll-area-viewport]>div]:!min-w-0',
+        '[&_[data-slot=scroll-area-viewport]>div]:max-w-full',
+      )}
+    >
+      <div
+        ref={messagesRef}
+        data-acp-probe="message-list"
+        className={cn('flex flex-col gap-3 px-3 py-3', AGENT_CHAT_COL_CLASS)}
+      >
         {messages.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-3 py-4 text-center">
             <AgentMark className="mx-auto mb-2 size-6 text-muted-foreground/60" />

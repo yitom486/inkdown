@@ -32,10 +32,17 @@ describe('renderAgentMarkdown + splitAgentMarkdownParts', () => {
   })
 
   it('closes unclosed fence while streaming', () => {
-    const html = renderAgentMarkdownStreaming(['```ts', 'const x = 1'].join('\n'))
+    const html = renderAgentMarkdown(['```ts', 'const x = 1'].join('\n'), { streaming: true })
     expect(html).toContain('code-block')
     expect(html).toContain('hljs-keyword')
     expect(html).toContain('hljs-number')
+  })
+
+  it('streaming and final share the same renderer for closed markdown', () => {
+    const md = ['## 标题', '', '- 一项', '', '> 引用文字'].join('\n')
+    const streaming = renderAgentMarkdown(md, { streaming: true })
+    const final = renderAgentMarkdown(md)
+    expect(streaming).toBe(final)
   })
 
   it('splits mermaid out of mixed markdown html', () => {

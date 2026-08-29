@@ -14,7 +14,7 @@ export function AgentDiffPreview({ diffs }: AgentDiffPreviewProps) {
   if (diffs.length === 0) return null
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 max-w-full space-y-2">
       {diffs.map((diff) => {
         const lines = buildSimpleDiffLines(diff.oldText, diff.newText)
         const added = lines.filter((l) => l.kind === 'add').length
@@ -22,7 +22,7 @@ export function AgentDiffPreview({ diffs }: AgentDiffPreviewProps) {
         return (
           <div
             key={diff.path}
-            className="overflow-hidden rounded-lg border border-border/50 bg-background/60"
+            className="min-w-0 max-w-full overflow-hidden rounded-lg border border-border/50 bg-background/60"
           >
             <div className="flex items-center gap-2 border-b border-border/40 px-2 py-1">
               <span className="truncate font-mono text-[10px] font-medium" title={diff.path}>
@@ -34,7 +34,7 @@ export function AgentDiffPreview({ diffs }: AgentDiffPreviewProps) {
                 <span className="text-red-600 dark:text-red-400">−{removed}</span>
               </span>
             </div>
-            <pre className="max-h-48 overflow-auto text-[10px] leading-relaxed">
+            <pre className="max-h-48 max-w-full overflow-x-auto overflow-y-auto text-[10px] leading-relaxed">
               {lines.map((line, i) => (
                 <div
                   key={`${i}-${line.kind}-${line.text.slice(0, 24)}`}

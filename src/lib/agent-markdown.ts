@@ -20,18 +20,27 @@ function sanitizeAgentHtml(html: string): string {
   return String(DOMPurify.sanitize(`<div>${html}</div>`, AGENT_SANITIZE_OPTIONS))
 }
 
-/** Agent 气泡完整 Markdown（含 mermaid fence → pre.mermaid） */
-export function renderAgentMarkdown(text: string): string {
-  if (!text.trim()) return ''
-  return sanitizeAgentHtml(markdownParser.render(text))
+/** 流式未闭合的 ``` fence 先补全，避免半截内容被吞或整段挤进异常节点 */
+export function patchStreamingMarkdownFences(text: string): string {
+  if (!text.trim()) return text
+  const fenceCount = (text.match(/^```/gm) ?? []).length
+  return fenceCount % 2 === 1 ? `${text}\n\`\`\`` : text
 }
 
 /**
- * 流式中的轻量渲染：仍走 markdown-it；未闭合 fence 先补全，减少吞内容。
+ * Agent 气泡统一 Markdown 渲染（流式 / 完成共用同一套 markdown-it + 消毒）。
+ * 流式仅额外补全未闭合 fence，避免结束后换渲染器导致整页重排。
  */
-export function renderAgentMarkdownStreaming(text: string): string {
+export function renderAgentMarkdown(
+  text: string,
+  options?: { streaming?: boolean },
+): string {
   if (!text.trim()) return ''
-  const fenceCount = (text.match(/^```/gm) ?? []).length
-  const patched = fenceCount % 2 === 1 ? `${text}\n\`\`\`` : text
-  return sanitizeAgentHtml(markdownParser.render(patched))
+  const source = options?.streaming ? patchStreamingMarkdownFences(text) : text
+  return sanitizeAgentHtml(markdownParser.render(source))
+}
+
+/** @deprecated 使用 renderAgentMarkdown(text, { streaming: true }) */
+export function renderAgentMarkdownStreaming(text: string): string {
+  return renderAgentMarkdown(text, { streaming: true })
 }
