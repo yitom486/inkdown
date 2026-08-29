@@ -1,5 +1,6 @@
 import type { JsonRpcId, JsonRpcRequest, JsonRpcTransport } from './jsonrpc-transport'
 import { acpReadTextFile, acpWriteTextFile } from './acp-fs'
+import type { AcpTerminalManager } from './acp-terminal'
 
 export type PermissionDecision =
   | { outcome: 'selected'; optionId: string }
@@ -12,10 +13,34 @@ export type PermissionRequestHandler = (payload: {
 
 export interface AcpClientHandlerContext {
   getWorkspaceRoot: () => string | null
+  terminals: AcpTerminalManager
+}
+
+function asParams(message: JsonRpcRequest): Record<string, unknown> {
+  return message.params && typeof message.params === 'object'
+    ? (message.params as Record<string, unknown>)
+    : {}
+}
+
+function parseEnv(raw: unknown): Array<{ name: string; value: string }> | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const rows: Array<{ name: string; value: string }> = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Record<string, unknown>
+    if (typeof row.name !== 'string' || typeof row.value !== 'string') continue
+    rows.push({ name: row.name, value: row.value })
+  }
+  return rows.length > 0 ? rows : undefined
+}
+
+function parseArgs(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  return raw.filter((item): item is string => typeof item === 'string')
 }
 
 /**
- * 处理 Agent → Client 的请求：permission + fs（声明能力后才会收到）。
+ * 处理 Agent → Client 的请求：permission + fs + terminal（声明能力后才会收到）。
  */
 export function createAcpClientMethodRouter(
   transport: JsonRpcTransport,
@@ -24,10 +49,7 @@ export function createAcpClientMethodRouter(
 ): (message: JsonRpcRequest) => Promise<void> {
   return async (message) => {
     if (message.method === 'session/request_permission') {
-      const params =
-        message.params && typeof message.params === 'object'
-          ? (message.params as Record<string, unknown>)
-          : {}
+      const params = asParams(message)
       try {
         const decision = await onPermission({ requestId: message.id, params })
         transport.respond(message.id, { outcome: decision })
@@ -41,10 +63,7 @@ export function createAcpClientMethodRouter(
     }
 
     if (message.method === 'fs/read_text_file') {
-      const params =
-        message.params && typeof message.params === 'object'
-          ? (message.params as Record<string, unknown>)
-          : {}
+      const params = asParams(message)
       const workspaceRoot = context.getWorkspaceRoot()
       const filePath = typeof params.path === 'string' ? params.path : ''
       if (!workspaceRoot || !filePath) {
@@ -72,10 +91,7 @@ export function createAcpClientMethodRouter(
     }
 
     if (message.method === 'fs/write_text_file') {
-      const params =
-        message.params && typeof message.params === 'object'
-          ? (message.params as Record<string, unknown>)
-          : {}
+      const params = asParams(message)
       const workspaceRoot = context.getWorkspaceRoot()
       const filePath = typeof params.path === 'string' ? params.path : ''
       const content = typeof params.content === 'string' ? params.content : null
@@ -102,11 +118,135 @@ export function createAcpClientMethodRouter(
       return
     }
 
+    if (message.method === 'terminal/create') {
+      const params = asParams(message)
+      const workspaceRoot = context.getWorkspaceRoot()
+      const sessionId = typeof params.sessionId === 'string' ? params.sessionId : ''
+      const command = typeof params.command === 'string' ? params.command : ''
+      if (!workspaceRoot || !sessionId || !command) {
+        transport.respondError(message.id, {
+          code: -32602,
+          message: 'terminal/create 需要 sessionId、command 与已连接工作区',
+        })
+        return
+      }
+      try {
+        const result = context.terminals.create({
+          sessionId,
+          command,
+          args: parseArgs(params.args),
+          env: parseEnv(params.env),
+          cwd: typeof params.cwd === 'string' ? params.cwd : undefined,
+          outputByteLimit:
+            typeof params.outputByteLimit === 'number' ? params.outputByteLimit : undefined,
+          workspaceRoot,
+        })
+        transport.respond(message.id, result)
+      } catch (error) {
+        transport.respondError(message.id, {
+          code: -32000,
+          message: error instanceof Error ? error.message : '创建终端失败',
+        })
+      }
+      return
+    }
+
+    if (message.method === 'terminal/output') {
+      const params = asParams(message)
+      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
+      if (!terminalId) {
+        transport.respondError(message.id, {
+          code: -32602,
+          message: 'terminal/output 需要 terminalId',
+        })
+        return
+      }
+      try {
+        transport.respond(message.id, context.terminals.getOutput(terminalId))
+      } catch (error) {
+        transport.respondError(message.id, {
+          code: -32000,
+          message: error instanceof Error ? error.message : '读取终端输出失败',
+        })
+      }
+      return
+    }
+
+    if (message.method === 'terminal/wait_for_exit') {
+      const params = asParams(message)
+      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
+      if (!terminalId) {
+        transport.respondError(message.id, {
+          code: -32602,
+          message: 'terminal/wait_for_exit 需要 terminalId',
+        })
+        return
+      }
+      try {
+        const status = await context.terminals.waitForExit(terminalId)
+        transport.respond(message.id, status)
+      } catch (error) {
+        transport.respondError(message.id, {
+          code: -32000,
+          message: error instanceof Error ? error.message : '等待终端退出失败',
+        })
+      }
+      return
+    }
+
+    if (message.method === 'terminal/kill') {
+      const params = asParams(message)
+      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
+      if (!terminalId) {
+        transport.respondError(message.id, {
+          code: -32602,
+          message: 'terminal/kill 需要 terminalId',
+        })
+        return
+      }
+      try {
+        transport.respond(message.id, context.terminals.kill(terminalId))
+      } catch (error) {
+        transport.respondError(message.id, {
+          code: -32000,
+          message: error instanceof Error ? error.message : '终止终端失败',
+        })
+      }
+      return
+    }
+
+    if (message.method === 'terminal/release') {
+      const params = asParams(message)
+      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
+      if (!terminalId) {
+        transport.respondError(message.id, {
+          code: -32602,
+          message: 'terminal/release 需要 terminalId',
+        })
+        return
+      }
+      try {
+        transport.respond(message.id, context.terminals.release(terminalId))
+      } catch (error) {
+        transport.respondError(message.id, {
+          code: -32000,
+          message: error instanceof Error ? error.message : '释放终端失败',
+        })
+      }
+      return
+    }
+
     transport.respondError(message.id, {
       code: -32601,
       message: `Client 未实现方法: ${message.method}`,
     })
   }
+}
+
+function permissionOptionId(option: Record<string, unknown>): string | null {
+  if (typeof option.optionId === 'string') return option.optionId
+  if (typeof option.id === 'string') return option.id
+  return null
 }
 
 /** 从 permission options 中挑一个「允许」类 optionId，否则 cancelled */
@@ -116,7 +256,7 @@ export function pickAllowOptionId(params: Record<string, unknown>): string | nul
   for (const item of options) {
     if (!item || typeof item !== 'object') continue
     const option = item as Record<string, unknown>
-    const id = typeof option.optionId === 'string' ? option.optionId : null
+    const id = permissionOptionId(option)
     const kind = typeof option.kind === 'string' ? option.kind : ''
     if (id && (kind.includes('allow') || kind === 'allow_once' || kind === 'allow_always')) {
       return id
@@ -124,8 +264,8 @@ export function pickAllowOptionId(params: Record<string, unknown>): string | nul
   }
   for (const item of options) {
     if (!item || typeof item !== 'object') continue
-    const option = item as Record<string, unknown>
-    if (typeof option.optionId === 'string') return option.optionId
+    const id = permissionOptionId(item as Record<string, unknown>)
+    if (id) return id
   }
   return null
 }

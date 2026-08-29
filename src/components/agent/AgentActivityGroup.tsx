@@ -4,6 +4,7 @@ import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { formatDuration } from '@/stores/acp-chat-types'
+import { useAcpPendingPermission } from '@/stores/acp-ui-store'
 
 interface AgentActivityGroupProps {
   messages: AcpChatMessage[]
@@ -12,7 +13,14 @@ interface AgentActivityGroupProps {
 }
 
 export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps) {
-  const active = messages.some((m) => m.streaming)
+  const pendingPermission = useAcpPendingPermission()
+  const awaitingPermission = messages.some(
+    (m) =>
+      m.role === 'tool' &&
+      pendingPermission?.toolCallId &&
+      m.toolCallId === pendingPermission.toolCallId,
+  )
+  const active = messages.some((m) => m.streaming) || awaitingPermission
   const [open, setOpen] = useState(active)
 
   useEffect(() => {
@@ -35,7 +43,9 @@ export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps)
   const planCount = messages.filter((m) => m.role === 'plan').length
 
   const summary = active
-    ? `工作中 · ${durationLabel}`
+    ? awaitingPermission
+      ? `等待批准 · ${durationLabel}`
+      : `工作中 · ${durationLabel}`
     : `工作了 ${durationLabel} · ${stepCount} 步`
 
   const sub =

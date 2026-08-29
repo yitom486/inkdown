@@ -224,10 +224,37 @@
   pointer-events: none;
 }
 
+/*
+ * 行内公式：高分式/根号会撑破默认行盒；过小 line-height 或父级 overflow
+ * 会与相邻行叠在一起，看起来像「遮挡」。
+ */
+.markdown-preview .katex {
+  line-height: normal;
+}
+
+.markdown-preview p:has(> .katex),
+.markdown-preview p:has(.katex),
+.markdown-preview li:has(.katex) {
+  line-height: 1.95;
+}
+
 .markdown-preview .katex-display {
-  margin: 1rem 0;
+  margin: 1.25rem 0;
+  padding: 0.35em 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
+}
+
+/* Agent 气泡字号更小、段距更紧，单独放宽含公式的段落 */
+.markdown-preview.agent-md p:has(.katex),
+.markdown-preview.agent-md li:has(.katex) {
+  line-height: 2.05;
+  margin-block: 0.85rem;
+}
+
+.markdown-preview.agent-md .katex-display {
+  margin: 1rem 0;
+  padding: 0.45em 0;
 }
 
 .markdown-preview .mermaid {

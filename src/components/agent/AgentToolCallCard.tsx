@@ -16,9 +16,11 @@ import {
 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { AgentDiffPreview } from '@/components/agent/AgentDiffPreview'
+import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { isToolActiveStatus } from '@/stores/acp-chat-types'
+import { useAcpPendingPermission } from '@/stores/acp-ui-store'
 
 function kindIcon(kind: string | undefined): ReactNode {
   const className = 'size-3.5 shrink-0'
@@ -67,13 +69,19 @@ interface AgentToolCallCardProps {
 }
 
 export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
-  const active = Boolean(message.streaming) || isToolActiveStatus(message.toolStatus)
+  const pendingPermission = useAcpPendingPermission()
+  const needsApproval =
+    pendingPermission != null &&
+    Boolean(message.toolCallId) &&
+    pendingPermission.toolCallId === message.toolCallId
+  const active =
+    Boolean(message.streaming) || isToolActiveStatus(message.toolStatus) || needsApproval
   const [open, setOpen] = useState(active)
   const diffs = message.toolDiffs ?? []
   const detail = message.toolContentText || message.text
   const hasTextDetail = Boolean(detail && detail !== message.toolTitle && diffs.length === 0)
   const locations = message.toolLocations ?? []
-  const hasBody = hasTextDetail || diffs.length > 0 || locations.length > 0
+  const hasBody = hasTextDetail || diffs.length > 0 || locations.length > 0 || needsApproval
 
   useEffect(() => {
     setOpen(active)
@@ -96,6 +104,7 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
       className={cn(
         'rounded-xl border border-border/50 bg-muted/15 transition-colors',
         active && 'border-amber-500/25 bg-amber-500/5',
+        needsApproval && 'border-amber-500/45 bg-amber-500/[0.07]',
       )}
     >
       <button
@@ -103,12 +112,17 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
         className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
         onClick={() => setOpen((v) => !v)}
       >
-        {statusIcon(message.toolStatus, message.streaming)}
+        {statusIcon(message.toolStatus, message.streaming || needsApproval)}
         <span className="text-muted-foreground">{kindIcon(message.toolKind)}</span>
         <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground/90">
           {title}
           {locationHint ? (
             <span className="ml-1.5 font-normal text-muted-foreground">{locationHint}</span>
+          ) : null}
+          {needsApproval ? (
+            <span className="ml-1.5 font-normal text-amber-700 dark:text-amber-400">
+              · 待批准
+            </span>
           ) : null}
         </span>
         {hasBody ? (
@@ -141,6 +155,9 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
             <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-muted-foreground">
               {detail}
             </pre>
+          ) : null}
+          {needsApproval && pendingPermission ? (
+            <AgentPermissionCard pending={pendingPermission} compact />
           ) : null}
         </div>
       ) : null}

@@ -1,12 +1,20 @@
 import { PassThrough } from 'node:stream'
-import { describe, expect, it, vi } from 'vitest'
-import { pickAllowOptionId } from './client-handlers'
+import { resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { createAcpClientMethodRouter, pickAllowOptionId } from './client-handlers'
 import {
   encodeJsonRpcMessage,
   JsonRpcTransport,
   isJsonRpcRequest,
 } from './jsonrpc-transport'
-import { createAcpClientMethodRouter } from './client-handlers'
+import { AcpTerminalManager } from './acp-terminal'
+
+function testContext(workspaceRoot: string | null = null) {
+  return {
+    getWorkspaceRoot: () => workspaceRoot,
+    terminals: new AcpTerminalManager(),
+  }
+}
 
 describe('pickAllowOptionId', () => {
   it('prefers allow_once kind', () => {
@@ -19,8 +27,31 @@ describe('pickAllowOptionId', () => {
     expect(id).toBe('allow-once')
   })
 
+  it('falls back to id when optionId missing', () => {
+    const id = pickAllowOptionId({
+      options: [{ id: 'allow-once', kind: 'allow_once' }],
+    })
+    expect(id).toBe('allow-once')
+  })
+
   it('returns null when no options', () => {
     expect(pickAllowOptionId({})).toBeNull()
+  })
+})
+
+describe('AcpTerminalManager path guard', () => {
+  it('rejects cwd outside workspace', () => {
+    const mgr = new AcpTerminalManager()
+    const root = process.cwd()
+    expect(() =>
+      mgr.create({
+        sessionId: 's1',
+        command: process.execPath,
+        args: ['-e', ''],
+        cwd: resolve(root, '..', `__acp_term_outside_${Date.now()}`),
+        workspaceRoot: root,
+      }),
+    ).toThrow(/工作区/)
   })
 })
 
@@ -36,7 +67,7 @@ describe('createAcpClientMethodRouter', () => {
         outcome: 'selected',
         optionId: 'allow-once',
       }),
-      { getWorkspaceRoot: () => null },
+      testContext(null),
     )
 
     const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
@@ -66,6 +97,38 @@ describe('createAcpClientMethodRouter', () => {
     })
     transport.dispose()
   })
+
+  it('terminal/create without workspace returns RPC error', async () => {
+    const agentOut = new PassThrough()
+    const clientIn = new PassThrough()
+    const transport = new JsonRpcTransport(agentOut, clientIn)
+
+    const router = createAcpClientMethodRouter(
+      transport,
+      async () => ({ outcome: 'cancelled' }),
+      testContext(null),
+    )
+
+    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
+      clientIn.on('data', (chunk) => {
+        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
+      })
+    })
+
+    await router({
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'terminal/create',
+      params: { sessionId: 'sess_1', command: 'echo' },
+    })
+
+    const response = await responsePromise
+    expect(response).toMatchObject({
+      id: 12,
+      error: { code: -32602 },
+    })
+    transport.dispose()
+  })
 })
 
 describe('Acp client message routing (mock duplex)', () => {
@@ -81,7 +144,7 @@ describe('Acp client message routing (mock duplex)', () => {
           async () => ({
             outcome: 'cancelled',
           }),
-          { getWorkspaceRoot: () => null },
+          testContext(null),
         )
         await router(message)
       },
@@ -115,7 +178,6 @@ describe('Acp client message routing (mock duplex)', () => {
     const clientIn = new PassThrough()
     const transport = new JsonRpcTransport(agentOut, clientIn, { requestTimeoutMs: 5_000 })
 
-    // Agent simulator
     clientIn.on('data', (chunk) => {
       const lines = chunk.toString('utf8').split('\n').filter(Boolean)
       for (const line of lines) {

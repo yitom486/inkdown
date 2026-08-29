@@ -19,6 +19,7 @@ import {
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
+import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -197,7 +198,15 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [view.messages, view.prompting])
+  }, [view.messages, view.prompting, view.pendingPermission])
+
+  const pendingOrphan =
+    view.pendingPermission != null &&
+    (!view.pendingPermission.toolCallId ||
+      !view.messages.some(
+        (m) =>
+          m.role === 'tool' && m.toolCallId === view.pendingPermission?.toolCallId,
+      ))
 
   useEffect(() => {
     if (!view.prompting) return
@@ -405,6 +414,9 @@ export function AgentPanel({ workspaceRoot }: AgentPanelProps) {
               <Loader2 className="size-3 animate-spin" />
               正在生成…
             </div>
+          ) : null}
+          {pendingOrphan && view.pendingPermission ? (
+            <AgentPermissionCard pending={view.pendingPermission} />
           ) : null}
           <div ref={bottomRef} />
         </div>

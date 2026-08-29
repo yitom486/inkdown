@@ -132,7 +132,8 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
             ref={mdRef}
             className={cn(
               'markdown-preview agent-md break-words text-[12px]',
-              '[&_p]:my-1.5 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+              /* 段距略松，避免行内 KaTeX 分式顶到上一行；含 .katex 的 p 由 CSS :has 再放宽 */
+              '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
               '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
             )}
             dangerouslySetInnerHTML={{ __html: html ?? '' }}

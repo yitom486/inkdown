@@ -1,99 +1,52 @@
-import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { useEffect } from 'react'
 import { acpApi } from '@/api/acp-api'
+import {
+  parsePermissionOptions,
+  permissionSummaryFromToolCall,
+  toolCallIdFromPermission,
+} from '@/lib/acp-permission'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
 
-interface PendingPermission {
-  requestId: number
-  summary: string
-  allowId: string
-  rejectId?: string
-}
-
-/** 挂在 App 根：订阅权限请求并用 Dialog 确认 */
+/**
+ * 挂在 App 根：订阅 ACP 权限请求，写入 store，供聊天内联审批卡使用。
+ * （不再用全局 Dialog 作为主路径——用户期望按钮出现在气泡/工具卡上。）
+ */
 export function AgentPermissionHost() {
-  const [pending, setPending] = useState<PendingPermission | null>(null)
+  const ingestPermissionRequest = useAcpUiStore((s) => s.ingestPermissionRequest)
+  const clearPendingPermission = useAcpUiStore((s) => s.clearPendingPermission)
 
   useEffect(() => {
     return acpApi.onPermissionRequest((event) => {
-      const options = Array.isArray(event.options) ? event.options : []
-      const allowOption = options.find((item) => {
-        if (!item || typeof item !== 'object') return false
-        const kind = (item as { kind?: string }).kind
-        return kind === 'allow_once' || kind === 'allow_always' || kind?.includes('allow')
-      })
-      const rejectOption = options.find((item) => {
-        if (!item || typeof item !== 'object') return false
-        const kind = (item as { kind?: string }).kind
-        return kind === 'reject_once' || kind === 'reject_always' || kind?.includes('reject')
-      })
-      const allowId =
-        allowOption && typeof allowOption === 'object' && 'optionId' in allowOption
-          ? String((allowOption as { optionId: string }).optionId)
-          : 'allow-once'
-      const rejectId =
-        rejectOption && typeof rejectOption === 'object' && 'optionId' in rejectOption
-          ? String((rejectOption as { optionId: string }).optionId)
+      const toolCall =
+        event.toolCall && typeof event.toolCall === 'object'
+          ? event.toolCall
           : undefined
-
-      setPending({
+      const options = parsePermissionOptions(event.options)
+      ingestPermissionRequest({
         requestId: event.requestId,
-        summary: event.summary ?? 'Agent 请求执行工具',
-        allowId,
-        rejectId,
+        sessionId: event.sessionId,
+        toolCallId: toolCallIdFromPermission(toolCall),
+        summary:
+          event.summary ??
+          permissionSummaryFromToolCall(toolCall, 'Agent 请求执行工具'),
+        options,
+        toolCall,
       })
     })
-  }, [])
+  }, [clearPendingPermission, ingestPermissionRequest])
 
-  const respond = (allowed: boolean) => {
-    if (!pending) return
-    const { requestId, allowId, rejectId } = pending
-    setPending(null)
-    acpApi.respondPermission({
-      requestId,
-      outcome: allowed
-        ? { outcome: 'selected', optionId: allowId }
-        : rejectId
-          ? { outcome: 'selected', optionId: rejectId }
-          : { outcome: 'cancelled' },
+  useEffect(() => {
+    return acpApi.onStatusChanged((event) => {
+      if (event.status === 'disconnected' || event.status === 'error') {
+        clearPendingPermission()
+      }
     })
-  }
+  }, [clearPendingPermission])
 
-  return (
-    <Dialog
-      open={pending !== null}
-      onOpenChange={(open) => {
-        if (!open && pending) respond(false)
-      }}
-    >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>允许工具调用？</DialogTitle>
-          <DialogDescription className="whitespace-pre-wrap break-words">
-            {pending?.summary}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => respond(false)}>
-            拒绝
-          </Button>
-          <Button type="button" onClick={() => respond(true)}>
-            允许
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
+  return null
 }
 
 /** @deprecated 使用 AgentPermissionHost 组件 */
 export function useAcpPermissionBridge(): void {
-  // 保留空实现以免旧调用崩溃；实际 UI 由 AgentPermissionHost 负责
+  // 保留空实现以免旧调用崩溃；实际由 AgentPermissionHost 负责
 }

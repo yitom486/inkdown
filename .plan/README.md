@@ -74,3 +74,5 @@ YYYY-MM-DD-计划名称.md
 | [2026-08-29-PDF虚拟滚动优化.md](./2026-08-29-PDF虚拟滚动优化.md) | `pending` | PDF 虚拟列表 + 渲染缓存（按需实施） |
 | [2026-08-29-ACP客户端.md](./2026-08-29-ACP客户端.md) | `in-progress` | ACP v1 主路径 + 本地历史；下一步包选型 / Terminal |
 | [2026-08-29-GitHub发布与版本路线.md](./2026-08-29-GitHub发布与版本路线.md) | `pending` | v0.1 无 AI 首发 Release，v0.2 接入 Agent |
+| [2026-08-29-Markdown旁注与批注.md](./2026-08-29-Markdown旁注与批注.md) | `pending` | MD 旁注（快照+侧栏）；v0.3+，不照搬阅读器划词 |
+| [2026-08-29-书架.md](./2026-08-29-书架.md) | `pending` | 阅读书架 MVP；目标 v0.3.x |

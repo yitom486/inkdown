@@ -153,6 +153,8 @@ export interface AcpPermissionRequestEvent {
   toolCall?: Record<string, unknown>
   options?: unknown[]
   rawParams: Record<string, unknown>
+  /** 主进程整理的摘要标题，便于 UI 展示 */
+  summary?: string
 }
 
 export type AcpPermissionOutcome =

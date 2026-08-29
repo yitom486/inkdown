@@ -13,6 +13,19 @@ import {
   parseToolLocations,
 } from '@/stores/acp-chat-types'
 import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/acp-plan'
+import {
+  toolCallIdFromPermission,
+  type AcpPermissionOptionView,
+} from '@/lib/acp-permission'
+
+export interface AcpPendingPermission {
+  requestId: number
+  sessionId?: string
+  toolCallId?: string
+  summary: string
+  options: AcpPermissionOptionView[]
+  toolCall?: Record<string, unknown>
+}
 
 export type { AcpChatMessage, AcpChatRole } from '@/stores/acp-chat-types'
 
@@ -41,6 +54,8 @@ interface AcpUiStore {
   threads: AcpChatThread[]
   activeThreadId: string
   historyOpen: boolean
+  /** 当前待用户审批的工具权限（不持久化） */
+  pendingPermission: AcpPendingPermission | null
   setPanelOpen: (open: boolean) => void
   togglePanel: () => void
   setHistoryOpen: (open: boolean) => void
@@ -49,6 +64,10 @@ interface AcpUiStore {
   setSession: (sessionId: string | null, configOptions?: AcpConfigOption[]) => void
   setConfigOptions: (options: AcpConfigOption[]) => void
   setPrompting: (prompting: boolean) => void
+  setPendingPermission: (pending: AcpPendingPermission | null) => void
+  /** 把 permission 请求里的 toolCall 写入时间线，保证审批卡能挂上工具气泡 */
+  ingestPermissionRequest: (pending: AcpPendingPermission) => void
+  clearPendingPermission: (requestId?: number) => void
   appendUserMessage: (text: string) => void
   appendSystemMessage: (text: string) => void
   beginAgentReply: () => void
@@ -211,6 +230,38 @@ export const useAcpUiStore = create<AcpUiStore>()(
 
       setConfigOptions: (options) => set({ configOptions: options }),
       setPrompting: (prompting) => set({ prompting }),
+      pendingPermission: null,
+      setPendingPermission: (pending) => set({ pendingPermission: pending }),
+      clearPendingPermission: (requestId) =>
+        set((s) => {
+          if (
+            requestId != null &&
+            s.pendingPermission &&
+            s.pendingPermission.requestId !== requestId
+          ) {
+            return s
+          }
+          return { pendingPermission: null }
+        }),
+      ingestPermissionRequest: (pending) => {
+        set({ pendingPermission: pending })
+        const toolCall = pending.toolCall
+        if (!toolCall) return
+        const toolCallId = pending.toolCallId ?? toolCallIdFromPermission(toolCall)
+        if (!toolCallId) return
+        const update: Record<string, unknown> = {
+          sessionUpdate: 'tool_call',
+          toolCallId,
+          title:
+            typeof toolCall.title === 'string' ? toolCall.title : pending.summary,
+          kind: typeof toolCall.kind === 'string' ? toolCall.kind : 'other',
+          status:
+            typeof toolCall.status === 'string' ? toolCall.status : 'pending',
+        }
+        if ('content' in toolCall) update.content = toolCall.content
+        if ('locations' in toolCall) update.locations = toolCall.locations
+        get().applySessionUpdate(update)
+      },
 
       appendUserMessage: (text) =>
         set((s) =>
@@ -552,6 +603,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           status: 'disconnected',
           sessionId: null,
           configOptions: [],
+          pendingPermission: null,
         }
       },
     },
@@ -571,6 +623,10 @@ export function useAcpActiveMessages(): AcpChatMessage[] {
   )
 }
 
+export function useAcpPendingPermission() {
+  return useAcpUiStore((s) => s.pendingPermission)
+}
+
 export function useAcpChatView() {
   return useAcpUiStore(
     useShallow((s) => {
@@ -586,6 +642,7 @@ export function useAcpChatView() {
         activeThreadId: s.activeThreadId,
         threads: s.threads,
         historyOpen: s.historyOpen,
+        pendingPermission: s.pendingPermission,
       }
     }),
   )

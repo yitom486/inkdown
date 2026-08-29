@@ -20,6 +20,7 @@ import {
 } from './client-handlers'
 import { probeCodexAuth } from './codex-auth-preflight'
 import { runConnectAuthGate } from './connect-auth-gate'
+import { AcpTerminalManager } from './acp-terminal'
 import {
   isJsonRpcNotification,
   isJsonRpcRequest,
@@ -38,6 +39,7 @@ export type AcpPermissionBridge = (payload: {
 }) => Promise<AcpPermissionOutcome>
 
 let transport: JsonRpcTransport | null = null
+let terminalManager = new AcpTerminalManager()
 let processHandle: SpawnedAcpProcess | null = null
 let sessionId: string | null = null
 let runtimeId: string | null = null
@@ -283,7 +285,10 @@ export async function connectAcp(payload: {
           const router = createAcpClientMethodRouter(
             localTransport,
             ({ requestId, params }) => handlePermissionRequest(requestId, params),
-            { getWorkspaceRoot: () => workspaceRoot },
+            {
+              getWorkspaceRoot: () => workspaceRoot,
+              terminals: terminalManager,
+            },
           )
           await router(message)
           return
@@ -311,6 +316,7 @@ export async function connectAcp(payload: {
           readTextFile: true,
           writeTextFile: true,
         },
+        terminal: true,
       },
       clientInfo: {
         name: 'inkdown',
@@ -441,6 +447,8 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
     pending.resolve({ outcome: 'cancelled' })
   }
   pendingPermissions.clear()
+
+  terminalManager.releaseAll()
 
   transport?.dispose()
   transport = null
