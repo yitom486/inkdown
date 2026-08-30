@@ -1,6 +1,6 @@
 {
   "name": "markdown-editor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Electron 轻量阅读器（Markdown 编辑 + PDF/EPUB 阅读）",
   "main": "out/main/main.js",
   "type": "module",

@@ -1,5 +1,5 @@
 import type { AcpContentBlock } from '@shared/types/acp'
-import { collectActiveDocument, collectReadingState } from './collect-turn-context'
+import { collectActiveDocument, collectReadingState, collectTocTopLevelForDocument } from './collect-turn-context'
 import { INKDOWN_STATIC_SKILL } from './inkdown-static-skill'
 import { beginPromptSelectionCycle } from './reader-selection-registry'
 import { takeTurnContextDecision } from './should-attach-turn-context'
@@ -23,6 +23,7 @@ export function buildInkdownPromptPrefix(threadId: string): AcpContentBlock[] {
   )
   if (!decision.attach) return blocks
 
+  const tocTopLevel = collectTocTopLevelForDocument(activeDocument)
   blocks.push({
     type: 'text',
     text: formatTurnContextBlock({
@@ -30,6 +31,7 @@ export function buildInkdownPromptPrefix(threadId: string): AcpContentBlock[] {
       activeDocument,
       reading: collectReadingState(activeDocument),
       ...(hasSelection ? { hasSelection: true } : {}),
+      ...(tocTopLevel ? { tocTopLevel } : {}),
     }),
   })
   return blocks

@@ -29,6 +29,8 @@ export interface InkdownTurnContext {
   reading?: InkdownReadingState
   /** 发送时用户是否选中了文本（不含选区正文，正文走 inkdown_get_selection） */
   hasSelection?: boolean
+  /** 目录顶层标题（最多约 10 条），便于记住全书结构；完整目录仍走 inkdown_get_toc */
+  tocTopLevel?: string[]
 }
 
 const OPEN_TAG = '<inkdown-turn-context>'
@@ -58,14 +60,18 @@ export function formatTurnContextBlock(
 
   const candidates: InkdownTurnContext[] = [
     { ...context, reading },
-    // 退化 1：只保留进度与当前位置
+    // 退化 1：丢掉顶层目录（可选、体积最大）
+    { ...context, reading, tocTopLevel: undefined },
+    // 退化 2：只保留进度与当前位置
     {
-      ...context,
+      documentChanged: context.documentChanged,
+      activeDocument: context.activeDocument,
+      ...(context.hasSelection ? { hasSelection: true } : {}),
       reading: reading
         ? compactReading({ percent: reading.percent, current: reading.current })
         : undefined,
     },
-    // 退化 2：只剩文件本身
+    // 退化 3：只剩文件本身
     { documentChanged: context.documentChanged, activeDocument: context.activeDocument },
   ]
 

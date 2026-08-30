@@ -3,6 +3,9 @@ import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
 
+export const TOC_TOP_LEVEL_LIMIT = 10
+export const TOC_TOP_LEVEL_LABEL_MAX = 40
+
 export function baseName(filePath: string): string {
   const index = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
   return index === -1 ? filePath : filePath.slice(index + 1)
@@ -16,6 +19,39 @@ export function collectActiveDocument(): InkdownActiveDocument | null {
     kind: getDocumentKind(filePath),
     name: baseName(filePath),
   }
+}
+
+function clipLabel(label: string, max = TOC_TOP_LEVEL_LABEL_MAX): string {
+  const trimmed = label.replace(/\s+/g, ' ').trim()
+  if (trimmed.length <= max) return trimmed
+  return `${trimmed.slice(0, max)}…`
+}
+
+/**
+ * 取目录顶层标题（最少缩进那一层），最多 {@link TOC_TOP_LEVEL_LIMIT} 条。
+ * 扁平目录则取前 N 条。无可用标题时返回 undefined。
+ */
+export function collectTocTopLevel(
+  units: readonly { label: string; level?: number }[],
+  limit = TOC_TOP_LEVEL_LIMIT,
+): string[] | undefined {
+  if (units.length === 0) return undefined
+
+  const minLevel = Math.min(...units.map((unit) => unit.level ?? 0))
+  const top = units.filter((unit) => (unit.level ?? 0) === minLevel)
+  const source = top.length > 0 ? top : units
+
+  const labels: string[] = []
+  const seen = new Set<string>()
+  for (const unit of source) {
+    const label = clipLabel(unit.label)
+    if (!label || seen.has(label)) continue
+    seen.add(label)
+    labels.push(label)
+    if (labels.length >= limit) break
+  }
+
+  return labels.length > 0 ? labels : undefined
 }
 
 /** 阅读器进度：只有当阅读器确实停在同一个文件上时才给，避免报陈旧状态 */
@@ -40,4 +76,14 @@ export function collectReadingState(
     next: reader.nav.next?.label,
     unitCount: unitCount > 0 ? unitCount : undefined,
   }
+}
+
+/** 当前打开电子书的顶层目录；Markdown / 未就绪阅读器不附带 */
+export function collectTocTopLevelForDocument(
+  doc: InkdownActiveDocument | null,
+): string[] | undefined {
+  if (!doc) return undefined
+  const reader = useReaderNavigationStore.getState()
+  if (!reader.ready || reader.filePath !== doc.path) return undefined
+  return collectTocTopLevel(reader.units)
 }

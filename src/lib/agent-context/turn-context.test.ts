@@ -46,8 +46,18 @@ describe('formatTurnContextBlock', () => {
     expect(text.length).toBeLessThanOrEqual(TURN_CONTEXT_MAX_CHARS)
   })
 
-  it('常规上下文远小于体积上限', () => {
-    expect(formatTurnContextBlock(sample).length).toBeLessThan(400)
+  it('含 tocTopLevel 时仍可解析，超长时优先丢掉该字段', () => {
+    const titles = Array.from({ length: 10 }, (_, i) => `很长的章名${'字'.repeat(40)}${i}`)
+    const text = formatTurnContextBlock({
+      ...sample,
+      tocTopLevel: titles,
+    })
+    expect(text.length).toBeLessThanOrEqual(TURN_CONTEXT_MAX_CHARS)
+    const json = JSON.parse(text.slice(text.indexOf('\n') + 1, text.lastIndexOf('\n'))) as {
+      tocTopLevel?: string[]
+    }
+    // 10 条超长标题会超限，应退化掉 tocTopLevel 仍保留文件信息
+    expect(json).toMatchObject({ activeDocument: { kind: 'epub' } })
   })
 })
 
@@ -73,6 +83,7 @@ describe('INKDOWN_STATIC_SKILL', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('normal workspace file read/write')
     expect(INKDOWN_STATIC_SKILL).toContain('Do **not** call tools only to "prove"')
     expect(INKDOWN_STATIC_SKILL).toContain('inkdown_list_marks')
+    expect(INKDOWN_STATIC_SKILL).toContain('tocTopLevel')
     expect(INKDOWN_STATIC_SKILL).toContain('Match the **language of the user')
     expect(INKDOWN_STATIC_SKILL).not.toContain('默认使用简体中文')
   })
