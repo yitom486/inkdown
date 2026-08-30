@@ -132,6 +132,38 @@ describe('export-reading-notes', () => {
     expect(result!.markdown).toContain('## 第二章')
   })
 
+  it('重点+批注导出为「重点：」前缀；纯批注不加', () => {
+    const result = buildReadingNotesExport({
+      marks: [
+        mark({
+          id: 'hn',
+          kind: 'highlight',
+          note: '测试一下重点+批注',
+          excerpt: '原文甲',
+          anchor: { format: 'epub', cfi: 'a', href: 'chap1.xhtml' },
+        }),
+        mark({
+          id: 'n',
+          kind: 'note',
+          note: '测试一下批注',
+          excerpt: '原文乙',
+          createdAt: 2,
+          anchor: { format: 'epub', cfi: 'b', href: 'chap1.xhtml' },
+        }),
+      ],
+      toc,
+      contentKind: 'combined',
+      scope: 'book',
+      bookTitle: '示例书',
+      resolveChapter: resolveEpubChapter,
+      now: new Date(2026, 7, 30, 18, 5),
+    })
+
+    expect(result!.markdown).toContain('**重点**：测试一下重点+批注')
+    expect(result!.markdown).toContain('测试一下批注')
+    expect(result!.markdown).not.toContain('**重点**：测试一下批注')
+  })
+
   it('全书按目录层级：章 ##、节 ###，空叶不写、祖先标题保留', () => {
     const nestedToc = tocFromEpubUnits([
       { href: 'p1.xhtml', label: '第一部分', level: 0 },
@@ -248,9 +280,9 @@ describe('export-reading-notes', () => {
       resolveChapter: resolveEpubChapter,
       now: new Date(2026, 7, 30, 18, 5),
     })
-    expect(result!.markdown).toContain('两世更迭')
+    expect(result!.markdown).toContain('**重点**：两世更迭')
     expect(result!.markdown).toContain('> 在中国人的观念里')
-    expect(result!.markdown).not.toContain('**重点**')
+    expect(result!.markdown).not.toMatch(/\*\*重点\*\*\n/)
     expect(result!.markCount).toBe(1)
   })
 

@@ -20,12 +20,10 @@ import {
   type ReadingNotesContentKind,
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
-import {
-  getReadingMarkDisplayKind,
-  getReadingMarkLabel,
-  getReadingMarkStatusLabel,
-} from '@/lib/reader/reading-mark-labels'
+import { getReadingMarkDisplayKind, getReadingMarkLabel, getReadingMarkStatusLabel } from '@/lib/reader/reading-mark-labels'
 import { highlightSwatch } from '@/lib/reader/reading-mark-colors'
+import { useReadingMarkKindFilters } from '@/stores/reading-mark-panel-store'
+import { markMatchesKindFilters } from '@/lib/reader/reading-mark-kind-filters'
 import { cn } from '@/lib/utils'
 
 function MarkKindIcon({ kind }: { kind: ReadingMark['kind'] }) {
@@ -37,6 +35,36 @@ function MarkKindIcon({ kind }: { kind: ReadingMark['kind'] }) {
     case 'note':
       return <MessageSquare className="size-3.5 shrink-0" />
   }
+}
+
+const FILTER_ITEMS = [
+  { key: 'highlights' as const, label: '重点' },
+  { key: 'notes' as const, label: '批注' },
+  { key: 'bookmarks' as const, label: '书签' },
+]
+
+function KindFilterChip({
+  label,
+  pressed,
+  onPressedChange,
+}: {
+  label: string
+  pressed: boolean
+  onPressedChange: (value: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      className={cn(
+        'rounded-md px-1.5 py-0.5 text-[10px]',
+        pressed ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted',
+      )}
+      onClick={() => onPressedChange(!pressed)}
+    >
+      {label}
+    </button>
+  )
 }
 
 const CONTENT_KIND_ITEMS: Array<{ kind: ReadingNotesContentKind; label: string }> = [
@@ -125,20 +153,34 @@ export function ReadingMarkPanel({
   currentChapterKey,
   resolveChapter,
 }: ReadingMarkPanelProps) {
+  const filters = useReadingMarkKindFilters()
+  const visibleMarks = useMemo(
+    () => marks.filter((mark) => markMatchesKindFilters(mark, filters)),
+    [filters, marks],
+  )
+
   const chapters = useMemo(() => {
-    if (!marksToc || !resolveChapter || marks.length === 0) return null
-    return groupMarksByChapter({ marks, toc: marksToc, resolveChapter })
-  }, [marks, marksToc, resolveChapter])
+    if (!marksToc || !resolveChapter || visibleMarks.length === 0) return null
+    return groupMarksByChapter({
+      marks: visibleMarks,
+      toc: marksToc,
+      resolveChapter,
+      includeAncestorHeadings: true,
+    })
+  }, [marksToc, resolveChapter, visibleMarks])
 
   const [openKeys, setOpenKeys] = useState<Set<string>>(() =>
     currentChapterKey ? new Set([currentChapterKey]) : new Set(),
   )
 
   useEffect(() => {
-    if (currentChapterKey) {
-      setOpenKeys(new Set([currentChapterKey]))
-    }
-  }, [currentChapterKey])
+    if (!currentChapterKey || !chapters?.length) return
+    const keys = chapters
+      .filter((chapter) => chapter.key === currentChapterKey || chapter.matchKey === currentChapterKey)
+      .map((chapter) => chapter.key)
+    if (keys.length === 0) return
+    setOpenKeys(new Set(keys))
+  }, [chapters, currentChapterKey])
 
   useEffect(() => {
     if (currentChapterKey) return
@@ -198,36 +240,68 @@ export function ReadingMarkPanel({
           </Button>
         </div>
       </div>
+      <div className="flex flex-wrap items-center gap-1 border-b border-border/50 px-3 py-1.5">
+        {FILTER_ITEMS.map((item) => (
+          <KindFilterChip
+            key={item.key}
+            label={item.label}
+            pressed={filters[item.key]}
+            onPressedChange={
+              item.key === 'highlights'
+                ? filters.setHighlights
+                : item.key === 'notes'
+                  ? filters.setNotes
+                  : filters.setBookmarks
+            }
+          />
+        ))}
+      </div>
       <ScrollArea className="min-h-0 flex-1">
         {marks.length === 0 ? (
           <p className="px-3 py-6 text-xs text-muted-foreground">暂无书签或批注</p>
+        ) : visibleMarks.length === 0 ? (
+          <p className="px-3 py-6 text-xs text-muted-foreground">当前筛选下没有条目</p>
         ) : chapters && chapters.length > 0 ? (
           <div className="py-1">
             {chapters.map((chapter) => {
               const open = openKeys.has(chapter.key)
-              const isCurrent = Boolean(currentChapterKey && chapter.key === currentChapterKey)
+              const isCurrent = Boolean(
+                currentChapterKey &&
+                  (chapter.key === currentChapterKey || chapter.matchKey === currentChapterKey),
+              )
+              const indent = Math.min(chapter.level, 4) * 10
+              const hasItems = chapter.marks.length > 0
               return (
                 <div key={chapter.key} className="border-b border-border/40 last:border-b-0">
                   <button
                     type="button"
                     className={cn(
-                      'flex w-full items-center gap-1 px-2 py-1.5 text-left hover:bg-accent/30',
+                      'flex w-full items-center gap-1 py-1.5 pr-2 text-left hover:bg-accent/30',
                       isCurrent && 'bg-accent/20',
                     )}
-                    onClick={() => toggleChapter(chapter.key)}
-                    aria-expanded={open}
+                    style={{ paddingLeft: 8 + indent }}
+                    onClick={() => {
+                      if (hasItems) toggleChapter(chapter.key)
+                    }}
+                    aria-expanded={hasItems ? open : undefined}
                   >
-                    {open ? (
-                      <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                    {hasItems ? (
+                      open ? (
+                        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                      )
                     ) : (
-                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="size-3.5 shrink-0" />
                     )}
                     <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
                       {chapter.label}
                     </span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{chapter.marks.length}</span>
+                    {hasItems ? (
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{chapter.marks.length}</span>
+                    ) : null}
                   </button>
-                  {open ? (
+                  {open && hasItems ? (
                     <ul className="divide-y divide-border/40 border-t border-border/30">
                       {chapter.marks.map((mark) => (
                         <MarkListItem
@@ -245,7 +319,7 @@ export function ReadingMarkPanel({
           </div>
         ) : (
           <ul className="divide-y divide-border/50">
-            {marks.map((mark) => (
+            {visibleMarks.map((mark) => (
               <MarkListItem key={mark.id} mark={mark} onSelect={onSelect} onDelete={onDelete} />
             ))}
           </ul>

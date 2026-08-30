@@ -53,7 +53,7 @@
 |------|------|
 | `reader-*` | 跨格式导航（flatIndex / 视口 / 翻页 / 目录树 / 选区关闭） |
 | `reading-mark-*` / `reader-mark-*` | 高亮颜色、命中、标签、几何 |
-| `reading-mark-passages` / `export-reading-notes` / `save-reading-notes-export` | 划重点收集、按章 Markdown 导出、另存为 |
+| `reading-mark-passages` / `export-reading-notes` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、侧栏类型筛选 |
 | `epub-*` | EPUB 目录、主题、选区、批注 overlay、滚动定位 |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay |
 | `mobi-*` / `kindle-*` / `azw3-*` | MOBI/Kindle 初始化、章节 HTML、导航、选区、批注 |

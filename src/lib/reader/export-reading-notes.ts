@@ -298,7 +298,9 @@ function renderMarkBlock(mark: ReadingMark): string {
   const note = passageNote(mark)
   const quote = `> ${excerpt.replace(/\n/g, '\n> ')}`
   if (note) {
-    return `${note}\n\n${quote}`
+    // 「重点」标签始终加粗；纯批注无此前缀
+    const body = mark.kind === 'highlight' ? `**重点**：${note}` : note
+    return `${body}\n\n${quote}`
   }
   return `**重点**\n\n${quote}`
 }
@@ -339,8 +341,8 @@ export function groupMarksByChapter(options: {
   resolveChapter: (mark: ReadingMark, toc: ReadingNotesChapterRef[]) => ReadingNotesChapterRef
   /** 全书导出：无笔记的祖先标题仍输出，以保留章/节层级 */
   includeAncestorHeadings?: boolean
-}): Array<{ key: string; label: string; level: number; marks: ReadingMark[] }> {
-  const buckets = new Map<string, { label: string; level: number; marks: ReadingMark[] }>()
+}): Array<{ key: string; matchKey: string; label: string; level: number; marks: ReadingMark[] }> {
+  const buckets = new Map<string, { matchKey: string; label: string; level: number; marks: ReadingMark[] }>()
 
   for (const mark of options.marks) {
     const chapter = options.resolveChapter(mark, options.toc)
@@ -350,13 +352,20 @@ export function groupMarksByChapter(options: {
       continue
     }
     buckets.set(chapter.key, {
+      matchKey: chapter.matchKey || chapter.key,
       label: chapter.label,
       level: chapter.level ?? 0,
       marks: [mark],
     })
   }
 
-  const ordered: Array<{ key: string; label: string; level: number; marks: ReadingMark[] }> = []
+  const ordered: Array<{
+    key: string
+    matchKey: string
+    label: string
+    level: number
+    marks: ReadingMark[]
+  }> = []
   const used = new Set<string>()
 
   options.toc.forEach((entry, index) => {
@@ -367,6 +376,7 @@ export function groupMarksByChapter(options: {
     if (ownMarks.length === 0 && !keepAncestor) return
     ordered.push({
       key: entry.key,
+      matchKey: entry.matchKey || entry.key,
       label: entry.label,
       level: entry.level ?? 0,
       marks: ownMarks,
@@ -376,7 +386,13 @@ export function groupMarksByChapter(options: {
 
   for (const [key, bucket] of buckets) {
     if (used.has(key) || bucket.marks.length === 0) continue
-    ordered.push({ key, label: bucket.label, level: bucket.level, marks: bucket.marks })
+    ordered.push({
+      key,
+      matchKey: bucket.matchKey,
+      label: bucket.label,
+      level: bucket.level,
+      marks: bucket.marks,
+    })
   }
 
   return ordered
