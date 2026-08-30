@@ -19,6 +19,8 @@ export function normalizeClientRects(
 
   for (const rect of items) {
     if (rect.width <= 0 || rect.height <= 0) continue
+    // 过滤异常碎块（偶发 0 宽高比的幽灵框）
+    if (rect.width < 0.5 || rect.height < 0.5) continue
     rects.push({
       x: (rect.left - layerRect.left) / layerRect.width,
       y: (rect.top - layerRect.top) / layerRect.height,
@@ -28,6 +30,60 @@ export function normalizeClientRects(
   }
 
   return rects
+}
+
+/**
+ * 将同一视觉行的碎矩形齐高、并横向合并。
+ * PDF text layer 中英混排时 getClientRects 高度不一致，直接画会呈锯齿。
+ */
+export function coalescePdfLineRects(
+  rects: PdfTextRect[],
+  yToleranceRatio = 0.55,
+  xGap = 0.012,
+): PdfTextRect[] {
+  if (rects.length <= 1) return rects.map((rect) => ({ ...rect }))
+
+  const sorted = [...rects].sort(
+    (a, b) => a.y + a.height / 2 - (b.y + b.height / 2) || a.x - b.x,
+  )
+  const groups: PdfTextRect[][] = []
+
+  for (const rect of sorted) {
+    const mid = rect.y + rect.height / 2
+    const group = groups.find((items) => {
+      const sample = items[0]!
+      const sampleMid = sample.y + sample.height / 2
+      const tol = Math.max(sample.height, rect.height) * yToleranceRatio
+      return Math.abs(sampleMid - mid) <= tol
+    })
+    if (group) group.push(rect)
+    else groups.push([rect])
+  }
+
+  const result: PdfTextRect[] = []
+  for (const group of groups) {
+    const top = Math.min(...group.map((item) => item.y))
+    const bottom = Math.max(...group.map((item) => item.y + item.height))
+    const height = Math.max(bottom - top, 0)
+    const byX = [...group].sort((a, b) => a.x - b.x)
+
+    for (const rect of byX) {
+      const prev = result[result.length - 1]
+      const sameLine =
+        prev &&
+        Math.abs(prev.y - top) < 1e-6 &&
+        Math.abs(prev.height - height) < 1e-6
+      if (sameLine && rect.x <= prev.x + prev.width + xGap) {
+        const right = Math.max(prev.x + prev.width, rect.x + rect.width)
+        prev.x = Math.min(prev.x, rect.x)
+        prev.width = right - prev.x
+      } else {
+        result.push({ x: rect.x, y: top, width: rect.width, height })
+      }
+    }
+  }
+
+  return result
 }
 
 export function unionClientRects(clientRects: DOMRect[]): DOMRect {
@@ -52,7 +108,7 @@ export function unionClientRects(clientRects: DOMRect[]): DOMRect {
 }
 
 function readRangeClientRects(range: Range): DOMRect[] {
-  return Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0)
+  return Array.from(range.getClientRects()).filter((rect) => rect.width > 0.5 && rect.height > 0.5)
 }
 
 function resolveSelectionLayer(rootElement: HTMLElement): HTMLElement {
@@ -60,7 +116,16 @@ function resolveSelectionLayer(rootElement: HTMLElement): HTMLElement {
   return textLayer instanceof HTMLElement ? textLayer : rootElement
 }
 
-/** 读取当前原生 Selection，不清除选区高亮 */
+/** 将 Range 的 client rects 规范为齐高的页面相对矩形 */
+export function rectsFromPdfRange(range: Range, layerElement: HTMLElement): PdfTextRect[] {
+  const clientRects = readRangeClientRects(range)
+  if (clientRects.length === 0) return []
+  const layerRect = layerElement.getBoundingClientRect()
+  if (layerRect.width <= 0 || layerRect.height <= 0) return []
+  return coalescePdfLineRects(normalizeClientRects(clientRects, layerRect))
+}
+
+/** 读取当前原生 Selection，不清除选区；rects 已按行齐高合并 */
 export function readPdfSelection(
   rootElement: HTMLElement,
   pageNum: number,
@@ -78,8 +143,7 @@ export function readPdfSelection(
   if (clientRects.length === 0) return null
 
   const layerElement = resolveSelectionLayer(rootElement)
-  const layerRect = layerElement.getBoundingClientRect()
-  const rects = normalizeClientRects(clientRects, layerRect)
+  const rects = rectsFromPdfRange(range, layerElement)
   if (rects.length === 0) return null
 
   const rect = unionClientRects(clientRects)

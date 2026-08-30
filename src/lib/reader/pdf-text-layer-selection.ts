@@ -1,11 +1,39 @@
 /**
  * pdf.js TextLayerBuilder 中与选区相关的最小逻辑。
- * 缺少 endOfContent + selecting 时，拖选无法延伸到行末，表现为每行只能选中一段固定宽度。
+ * 缺少 endOfContent + selecting 时，旧版 Chromium 拖选无法延伸到行末。
+ * Chromium ≥148 / Firefox 已不需要在 selectionchange 里挪动 endOfContent（挪动反而会塌选区）。
  */
 
 const textLayerRegistry = new Map<HTMLElement, HTMLElement>()
 let globalListenerAttached = false
 let prevRange: Range | null = null
+let firefoxOrModernChromium: boolean | undefined
+
+/** 与 pdf.js TextLayerBuilder 判定对齐：现代引擎跳过 endOfContent 插入 hack */
+export function shouldSkipPdfEndOfContentHack(
+  sample: HTMLElement,
+  userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '',
+  userAgentDataBrands?: ReadonlyArray<{ brand: string; version: string }>,
+): boolean {
+  if (getComputedStyle(sample).getPropertyValue('-moz-user-select') === 'none') {
+    return true
+  }
+
+  const brands =
+    userAgentDataBrands ??
+    (typeof navigator !== 'undefined'
+      ? (
+          navigator as Navigator & {
+            userAgentData?: { brands?: Array<{ brand: string; version: string }> }
+          }
+        ).userAgentData?.brands
+      : undefined)
+
+  const chromiumFromBrands = brands?.find(({ brand }) => brand === 'Chromium')?.version
+  const chromiumVersion =
+    chromiumFromBrands ?? /\bChrome\/(\d+)\b/.exec(userAgent)?.[1] ?? undefined
+  return Boolean(chromiumVersion && Number.parseInt(chromiumVersion, 10) >= 148)
+}
 
 function resetEndOfContent(endDiv: HTMLElement, textLayerDiv: HTMLElement): void {
   textLayerDiv.append(endDiv)
@@ -69,6 +97,14 @@ function attachGlobalSelectionListener(): void {
       } else {
         resetEndOfContent(endDiv, textLayerDiv)
       }
+    }
+
+    const sample = textLayerRegistry.values().next().value
+    if (sample && firefoxOrModernChromium === undefined) {
+      firefoxOrModernChromium = shouldSkipPdfEndOfContentHack(sample)
+    }
+    if (firefoxOrModernChromium) {
+      return
     }
 
     const range = selection.getRangeAt(0)
@@ -143,4 +179,6 @@ export function setupPdfTextLayerSelection(textLayerDiv: HTMLElement): () => voi
 export function teardownPdfTextLayerSelectionRegistry(): void {
   textLayerRegistry.clear()
   prevRange = null
+  firefoxOrModernChromium = undefined
+  // 全局 listener 一旦挂上就不拆（与 pdf.js 一致，避免多页反复绑定）
 }

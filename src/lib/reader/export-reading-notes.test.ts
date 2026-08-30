@@ -7,8 +7,11 @@ import {
   filterMarksForNotesExport,
   resolveEpubChapter,
   resolveMobiChapter,
+  resolvePdfChapter,
+  resolvePdfChapterByPage,
   tocFromEpubUnits,
   tocFromMobiUnits,
+  tocFromPdfUnits,
 } from './export-reading-notes'
 
 function mark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'id' | 'kind' | 'anchor'>): ReadingMark {
@@ -83,6 +86,68 @@ describe('export-reading-notes', () => {
         mobiToc,
       ),
     ).toMatchObject({ matchKey: 'c2', label: '中篇', level: 0 })
+  })
+
+  it('PDF resolveChapter：页码落入大纲区间，同页取最深层级', () => {
+    const pdfToc = tocFromPdfUnits([
+      { href: '1', label: '前言', level: 0 },
+      { href: '5', label: '第一章', level: 0 },
+      { href: '5', label: '1.1 节', level: 1 },
+      { href: '20', label: '第二章', level: 0 },
+    ])
+
+    expect(resolvePdfChapterByPage(3, pdfToc)).toMatchObject({ label: '前言', matchKey: '1' })
+    expect(resolvePdfChapterByPage(5, pdfToc)).toMatchObject({ label: '1.1 节', matchKey: '5', level: 1 })
+    expect(resolvePdfChapterByPage(12, pdfToc)).toMatchObject({ label: '1.1 节', matchKey: '5' })
+    expect(resolvePdfChapterByPage(25, pdfToc)).toMatchObject({ label: '第二章', matchKey: '20' })
+
+    expect(
+      resolvePdfChapter(
+        mark({
+          id: 'p',
+          kind: 'highlight',
+          excerpt: 'x',
+          anchor: { format: 'pdf', page: 12 },
+        }),
+        pdfToc,
+      ),
+    ).toMatchObject({ label: '1.1 节' })
+  })
+
+  it('PDF 全书导出按大纲分组；无大纲项时回退到页标签', () => {
+    const pdfToc = tocFromPdfUnits([
+      { href: '1', label: '开篇', level: 0 },
+      { href: '10', label: '正文', level: 0 },
+    ])
+    const result = buildReadingNotesExport({
+      marks: [
+        mark({
+          id: 'a',
+          kind: 'note',
+          note: '页内注',
+          excerpt: '甲',
+          anchor: { format: 'pdf', page: 2 },
+        }),
+        mark({
+          id: 'b',
+          kind: 'highlight',
+          excerpt: '乙',
+          anchor: { format: 'pdf', page: 15 },
+        }),
+      ],
+      toc: pdfToc,
+      contentKind: 'combined',
+      scope: 'book',
+      bookTitle: 'PDF书',
+      resolveChapter: resolvePdfChapter,
+      now: new Date(2026, 7, 30, 19, 0),
+    })
+
+    expect(result!.markdown).toContain('## 开篇')
+    expect(result!.markdown).toContain('## 正文')
+    expect(result!.markdown).toContain('页内注')
+    expect(result!.markdown).toContain('**重点**')
+    expect(result!.suggestedName).toBe('PDF书-20260830-1900.md')
   })
 
   it('全书综合：按章输出，空章跳过，块间 ---', () => {

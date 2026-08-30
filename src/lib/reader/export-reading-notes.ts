@@ -30,7 +30,7 @@ export interface ReadingNotesExportInput {
   /** 本章导出时必填 */
   currentChapter?: ReadingNotesChapterRef | null
   bookTitle: string
-  /** 解析器：把标记归到章；E1 仅 epub/mobi */
+  /** 解析器：把标记归到章（epub / mobi / pdf） */
   resolveChapter: (mark: ReadingMark, toc: ReadingNotesChapterRef[]) => ReadingNotesChapterRef
   now?: Date
   /** 同秒冲突时追加，默认不写 */
@@ -188,29 +188,67 @@ export function resolveMobiChapter(
   return unknownChapter(matchKey || 'unknown', matchKey || '未分章')
 }
 
-/** E2 面板预览：按页分组（导出 resolve 另议） */
-export function resolvePdfPageChapter(
+function tocEntryPage(entry: ReadingNotesChapterRef): number {
+  const raw = entry.matchKey || entry.key
+  const page = Number.parseInt(raw, 10)
+  return Number.isFinite(page) ? page : Number.NaN
+}
+
+/** 页码落入大纲：取 page ≤ 目标页的最后一项；同页取层级最深 */
+export function resolvePdfChapterByPage(
+  page: number,
+  toc: ReadingNotesChapterRef[],
+): ReadingNotesChapterRef {
+  if (!Number.isFinite(page) || page < 1) {
+    return unknownChapter()
+  }
+
+  let best: ReadingNotesChapterRef | undefined
+  let bestPage = -1
+  for (const entry of toc) {
+    const entryPage = tocEntryPage(entry)
+    if (!Number.isFinite(entryPage) || entryPage > page) continue
+    if (
+      !best ||
+      entryPage > bestPage ||
+      (entryPage === bestPage && (entry.level ?? 0) >= (best.level ?? 0))
+    ) {
+      best = entry
+      bestPage = entryPage
+    }
+  }
+
+  if (best) return best
+  const matchKey = String(page)
+  return { key: `page-${page}`, label: `第 ${page} 页`, level: 0, matchKey }
+}
+
+export function resolvePdfChapter(
   mark: ReadingMark,
-  _toc: ReadingNotesChapterRef[],
+  toc: ReadingNotesChapterRef[],
 ): ReadingNotesChapterRef {
   if (mark.anchor.format !== 'pdf') {
     return unknownChapter()
   }
-  const key = `page-${mark.anchor.page}`
-  return { key, label: `第 ${mark.anchor.page} 页`, level: 0, matchKey: key }
+  return resolvePdfChapterByPage(mark.anchor.page, toc)
 }
 
-export function tocFromPdfPages(marks: ReadingMark[]): ReadingNotesChapterRef[] {
-  const seen = new Set<string>()
+export function tocFromPdfUnits(
+  units: Array<{ href: string; label: string; level?: number }>,
+): ReadingNotesChapterRef[] {
   const toc: ReadingNotesChapterRef[] = []
-  for (const mark of marks) {
-    if (mark.anchor.format !== 'pdf') continue
-    const key = `page-${mark.anchor.page}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    toc.push({ key, matchKey: key, label: `第 ${mark.anchor.page} 页`, level: 0 })
-  }
-  return toc.sort((a, b) => a.key.localeCompare(b.key, 'en'))
+  units.forEach((unit, index) => {
+    const page = Number.parseInt(unit.href, 10)
+    if (!Number.isFinite(page) || page < 1) return
+    const matchKey = String(page)
+    toc.push({
+      key: `${index}:${matchKey}`,
+      matchKey,
+      label: unit.label.trim() || `第 ${page} 页`,
+      level: Math.max(0, unit.level ?? 0),
+    })
+  })
+  return toc
 }
 
 export function tocFromEpubUnits(

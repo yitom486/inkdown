@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import {
+  coalescePdfLineRects,
   normalizeClientRects,
   readPdfSelection,
   unionClientRects,
@@ -14,6 +15,24 @@ describe('normalizeClientRects', () => {
     expect(normalizeClientRects(clientRects, layerRect)).toEqual([
       { x: 0.05, y: 0.025, width: 0.2, height: 0.025 },
     ])
+  })
+})
+
+describe('coalescePdfLineRects', () => {
+  it('同行中英混排碎块齐高并横向合并', () => {
+    const coalesced = coalescePdfLineRects([
+      { x: 0.1, y: 0.2, width: 0.05, height: 0.02 },
+      { x: 0.16, y: 0.195, width: 0.08, height: 0.028 },
+      { x: 0.25, y: 0.198, width: 0.1, height: 0.022 },
+      { x: 0.1, y: 0.35, width: 0.2, height: 0.024 },
+    ])
+
+    expect(coalesced).toHaveLength(2)
+    expect(coalesced[0]!.y).toBeCloseTo(0.195, 5)
+    expect(coalesced[0]!.height).toBeCloseTo(0.028, 5)
+    expect(coalesced[0]!.x).toBeCloseTo(0.1, 5)
+    expect(coalesced[0]!.width).toBeCloseTo(0.25, 5)
+    expect(coalesced[1]!.y).toBeCloseTo(0.35, 5)
   })
 })
 
@@ -32,7 +51,7 @@ describe('unionClientRects', () => {
 })
 
 describe('readPdfSelection', () => {
-  it('读取原生选区且不清除高亮', () => {
+  it('读取原生选区且不清除高亮，rects 已齐高', () => {
     const page = document.createElement('div')
     const layer = document.createElement('div')
     layer.className = 'textLayer'
@@ -50,11 +69,17 @@ describe('readPdfSelection', () => {
     selection.removeAllRanges()
     selection.addRange(range)
 
-    range.getClientRects = () => [new DOMRect(10, 20, 60, 16)] as unknown as DOMRectList
+    range.getClientRects = () =>
+      [
+        new DOMRect(10, 20, 30, 12),
+        new DOMRect(42, 18, 40, 16),
+      ] as unknown as DOMRectList
 
     const snapshot = readPdfSelection(page, 3)
     expect(snapshot?.text).toBe('选中文字')
     expect(snapshot?.page).toBe(3)
+    expect(snapshot?.rects).toHaveLength(1)
+    expect(snapshot?.rects[0]!.height).toBeCloseTo(16 / 400, 5)
     expect(selection.rangeCount).toBe(1)
 
     selection.removeAllRanges()

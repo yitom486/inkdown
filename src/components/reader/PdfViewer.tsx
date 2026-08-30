@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
 import type { PDFDocumentProxy, PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
+import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { PdfPageView } from '@/components/reader/PdfPageView'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
@@ -15,7 +16,7 @@ import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
+import { openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/reader/pdf-outline'
@@ -26,7 +27,7 @@ import {
   type PdfPageCssSize,
 } from '@/lib/reader/pdf-page-metrics'
 import { openPdfDocument } from '@/lib/reader/pdf-document'
-import { findPdfMarksAtPoint } from '@/lib/reader/pdf-reading-marks'
+import { findPdfMarksAtPoint, findPdfNoteMarkAtPoint } from '@/lib/reader/pdf-reading-marks'
 import { shouldRenderPdfPage } from '@/lib/reader/pdf-render'
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
@@ -43,7 +44,14 @@ import {
 } from '@/lib/reader/reader-selection-dismiss'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
 import { reportAppError } from '@/lib/workspace/report-error'
-import { tocFromPdfPages, resolvePdfPageChapter } from '@/lib/reader/export-reading-notes'
+import {
+  resolvePdfChapter,
+  resolvePdfChapterByPage,
+  tocFromPdfUnits,
+  type ReadingNotesContentKind,
+  type ReadingNotesScope,
+} from '@/lib/reader/export-reading-notes'
+import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
 import type { AppError } from '@shared/core/errors'
@@ -80,7 +88,16 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   )
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [editingNoteMark, setEditingNoteMark] = useState<ReadingMark | null>(null)
+  const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
+  const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
+  /** UI 展示用（可被折叠清空） */
+  const selectionSnapshotRef = useRef<PdfSelectionSnapshot | null>(null)
+  /**
+   * 划重点 / 批注的业务快照：与原生 Selection 解耦。
+   * 对话框抢焦点会折叠 Selection，但不能丢掉这份数据。
+   */
+  const actionSnapshotRef = useRef<PdfSelectionSnapshot | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
@@ -89,6 +106,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   inspectorRef.current = inspector
 
   const clearTextSelection = useCallback(() => {
+    actionSnapshotRef.current = null
+    selectionSnapshotRef.current = null
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
     clearReaderSelection()
@@ -100,6 +119,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     clearWindowSelection(window)
     inspectorRef.current.close()
   }, [])
+
+  const captureSelectionSnapshot = useCallback((snapshot: PdfSelectionSnapshot) => {
+    actionSnapshotRef.current = snapshot
+    selectionSnapshotRef.current = snapshot
+    setSelectionSnapshot(snapshot)
+    commitReaderSelection(filePath, snapshot.text)
+    setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
+  }, [filePath])
 
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
@@ -296,24 +323,31 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [fitWidth, filePath, numPages])
 
   useEffect(() => {
+    actionSnapshotRef.current = null
+    selectionSnapshotRef.current = null
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
     clearReaderSelection()
   }, [filePath])
 
   useEffect(() => {
-    return bindDocumentSelectionCollapse(document, window, () => {
-      setSelectionToolbarPos(null)
-    })
+    // PDF 不在 selectionchange 时清业务选区：对话框/缩放会折叠原生 Selection，
+    // 划重点与批注只认 actionSnapshotRef，由空白单击 / 外侧单击 / Esc / 保存 显式清理。
+    return bindDocumentSelectionCollapse(document, window, () => {})
   }, [])
 
   useEffect(() => {
     return bindOutsideReaderPointerDismiss((target) => {
       const container = containerRef.current
       if (!container) return false
+      if (target.closest('[role="dialog"]')) return true
       return container.contains(target)
-    }, dimTextSelection)
-  }, [dimTextSelection])
+    }, () => {
+      if (noteDialogOpen) return
+      clearTextSelection()
+      inspectorRef.current.close()
+    })
+  }, [clearTextSelection, noteDialogOpen])
 
   useEffect(() => {
     return () => {
@@ -451,6 +485,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     pageElement: HTMLElement,
     point: { clientX: number; clientY: number },
   ) => {
+    // 同步快照：避免随后 DOM 变化把 Selection 清掉后读不到
+    const immediateSnapshot = readPdfSelection(pageElement, pageNumber)
+
     window.setTimeout(() => {
       if (isClickNotDrag(pointerOriginRef.current, point)) {
         const hits = findPdfMarksAtPoint(
@@ -462,30 +499,28 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         )
         if (hits.length > 0) {
           clearWindowSelection(window)
+          actionSnapshotRef.current = null
+          selectionSnapshotRef.current = null
           setSelectionToolbarPos(null)
+          setSelectionSnapshot(null)
           inspector.openAt(hits, point.clientX, point.clientY)
           return
         }
       }
 
-      const snapshot = readPdfSelection(pageElement, pageNumber)
+      const snapshot = immediateSnapshot ?? readPdfSelection(pageElement, pageNumber)
       if (!snapshot) {
         if (isClickNotDrag(pointerOriginRef.current, point)) {
           inspector.close()
+          clearTextSelection()
         }
         return
       }
 
       inspector.close()
-      setSelectionSnapshot(snapshot)
-      commitReaderSelection(filePath, snapshot.text)
-      focusAgentComposerOnReaderSelection()
-      setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
+      captureSelectionSnapshot(snapshot)
     }, 10)
-  }, [filePath, inspector, marks])
-
-  const selectionSnapshotRef = useRef(selectionSnapshot)
-  selectionSnapshotRef.current = selectionSnapshot
+  }, [captureSelectionSnapshot, clearTextSelection, inspector, marks])
 
   const addPageBookmark = useCallback(async () => {
     if (!fileFingerprint || numPages === 0) {
@@ -507,9 +542,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const handleSaveAnnotation = useCallback(
     async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
-      const snapshot = selectionSnapshotRef.current
-      if (!snapshot || !fileFingerprint) {
+      const snapshot = actionSnapshotRef.current
+      if (!snapshot) {
         throw new Error('当前没有可用选区，请先划选文本')
+      }
+      if (!fileFingerprint) {
+        throw new Error('文件尚未加载完成，请稍后再试')
       }
 
       const existing = findMarkForSelection(marks, {
@@ -588,6 +626,74 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     [deleteMark],
   )
 
+  const handlePdfMarkHoverMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (inspector.active || noteDialogOpen || selectionToolbarPos) {
+        if (hoveredMark) {
+          setHoveredMark(null)
+          setMarkTooltipPos(null)
+        }
+        return
+      }
+
+      const target = (event.target as HTMLElement | null)?.closest?.('[data-page]')
+      if (!(target instanceof HTMLElement)) {
+        if (hoveredMark) {
+          setHoveredMark(null)
+          setMarkTooltipPos(null)
+        }
+        return
+      }
+      const page = Number.parseInt(target.dataset.page ?? '', 10)
+      if (!Number.isFinite(page)) return
+
+      const pageElement = pageAnchorRefs.current.get(page)
+      if (!pageElement) return
+
+      const hit = findPdfNoteMarkAtPoint(marks, page, event.clientX, event.clientY, pageElement)
+      if (!hit) {
+        if (hoveredMark) {
+          setHoveredMark(null)
+          setMarkTooltipPos(null)
+        }
+        return
+      }
+      if (hoveredMark?.id === hit.id) {
+        setMarkTooltipPos({ x: event.clientX, y: event.clientY })
+        return
+      }
+      setHoveredMark(hit)
+      setMarkTooltipPos({ x: event.clientX, y: event.clientY })
+    },
+    [hoveredMark, inspector.active, marks, noteDialogOpen, selectionToolbarPos],
+  )
+
+  const handlePdfMarkHoverLeave = useCallback(() => {
+    setHoveredMark(null)
+    setMarkTooltipPos(null)
+  }, [])
+
+  const marksToc = useMemo(() => tocFromPdfUnits(outlineUnits), [outlineUnits])
+  const currentPdfChapter = useMemo(
+    () => resolvePdfChapterByPage(pageNum, marksToc),
+    [marksToc, pageNum],
+  )
+
+  const handleExportNotes = useCallback(
+    (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => {
+      void saveReadingNotesExport({
+        marks,
+        toc: marksToc,
+        contentKind,
+        scope,
+        currentChapter: scope === 'chapter' ? currentPdfChapter : null,
+        filePath,
+        resolveChapter: resolvePdfChapter,
+      })
+    },
+    [currentPdfChapter, filePath, marks, marksToc],
+  )
+
   const estimatedPageHeight = Math.max(120, scaledPageSize.height)
   const estimatedPageWidth = Math.max(120, scaledPageSize.width)
 
@@ -648,12 +754,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         onSelectMark={handleSelectMark}
         onDeleteMark={(mark) => void handleDeleteMark(mark)}
         onCloseMarks={() => setMarksOpen(false)}
-        onExportNotes={() => {
-          toast.message('PDF 笔记导出即将支持')
-        }}
-        marksToc={tocFromPdfPages(marks)}
-        marksCurrentChapterKey={`page-${pageNum}`}
-        marksResolveChapter={resolvePdfPageChapter}
+        onExportNotes={handleExportNotes}
+        marksToc={marksToc}
+        marksCurrentChapterKey={currentPdfChapter.key}
+        marksResolveChapter={resolvePdfChapter}
         tocOpen={tocOpen}
         units={outlineUnits}
         currentUnitId={currentUnitId ?? String(pageNum)}
@@ -666,6 +770,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         <div
           ref={containerRef}
           className={`h-full min-h-0 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
+          onMouseMove={handlePdfMarkHoverMove}
+          onMouseLeave={handlePdfMarkHoverLeave}
         >
           <PaneErrorBoundary name="PDF 阅读" filePath={filePath}>
             {isLoading || !pdfDoc ? (
@@ -725,6 +831,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         onNext={() => nav.nextIndex >= 0 && goToFlatIndex(nav.nextIndex)}
       />
 
+      {markTooltipPos && hoveredMark && !inspector.active ? (
+        <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
+      ) : null}
+
       {inspector.pos && inspector.active ? (
         <ReadingMarkPopover
           mark={inspector.active}
@@ -758,12 +868,24 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             dimTextSelection()
           }}
           onAnnotate={() => {
+            if (!actionSnapshotRef.current && !selectionSnapshot) {
+              toast.error('当前没有可用选区，请先划选文本')
+              return
+            }
+            if (selectionSnapshot) {
+              actionSnapshotRef.current = selectionSnapshot
+            }
             setEditingNoteMark(null)
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
           }}
           onHighlight={(color) => {
-            void handleSaveAnnotation('', color)
+            if (selectionSnapshot) {
+              actionSnapshotRef.current = selectionSnapshot
+            }
+            void handleSaveAnnotation('', color).catch((cause) => {
+              toast.error(cause instanceof Error ? cause.message : '添加高亮失败')
+            })
           }}
           onAddToChat={() => {
             addSelectionMarkerToComposer()
@@ -784,7 +906,16 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         title={editingNoteMark ? '编辑批注' : '添加批注'}
         onOpenChange={(open) => {
           setNoteDialogOpen(open)
-          if (!open) setEditingNoteMark(null)
+          if (!open) {
+            setEditingNoteMark(null)
+            // 取消「添加批注」且未保存：清掉业务快照
+            if (!editingNoteMark) {
+              const selection = window.getSelection()
+              if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+                clearTextSelection()
+              }
+            }
+          }
         }}
         onSave={(note) => {
           if (editingNoteMark) {
@@ -794,10 +925,17 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               kind: editingNoteMark.kind === 'highlight' ? 'highlight' : 'note',
             }).then((result) => {
               if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已清除批注')
+              else toast.error(result.error.message || '更新批注失败')
             })
             return
           }
           void handleSaveAnnotation(note)
+            .then(() => {
+              setNoteDialogOpen(false)
+            })
+            .catch((cause) => {
+              toast.error(cause instanceof Error ? cause.message : '保存批注失败')
+            })
         }}
       />
     </div>

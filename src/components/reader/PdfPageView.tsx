@@ -41,7 +41,8 @@ export function PdfPageView({
   useEffect(() => {
     const canvas = canvasRef.current
     const textLayerContainer = textLayerRef.current
-    if (!canvas || !textLayerContainer) return
+    const pageRoot = wrapperRef.current
+    if (!canvas || !textLayerContainer || !pageRoot) return
 
     let cancelled = false
     let teardownSelection: (() => void) | undefined
@@ -58,10 +59,16 @@ export function PdfPageView({
 
         const { cssViewport, cssWidth, cssHeight, canvasWidth, canvasHeight, transform } =
           createPdfPageViewport(page, scale)
+
+        pageRoot.style.setProperty('--scale-factor', String(cssViewport.scale))
+        pageRoot.style.width = `${cssWidth}px`
+        pageRoot.style.height = `${cssHeight}px`
+        textLayerContainer.style.setProperty('--scale-factor', String(cssViewport.scale))
+
         canvas.width = canvasWidth
         canvas.height = canvasHeight
-        canvas.style.width = `${cssWidth}px`
-        canvas.style.height = `${cssHeight}px`
+        canvas.style.width = '100%'
+        canvas.style.height = '100%'
 
         const context = canvas.getContext('2d', { alpha: false })
         if (!context) return
@@ -79,8 +86,8 @@ export function PdfPageView({
         if (cancelled) return
 
         textLayerContainer.replaceChildren()
-        textLayerContainer.style.width = `${cssWidth}px`
-        textLayerContainer.style.height = `${cssHeight}px`
+        textLayerContainer.style.width = ''
+        textLayerContainer.style.height = ''
 
         const textLayer = new TextLayer({
           textContentSource: page.streamTextContent({
@@ -92,6 +99,13 @@ export function PdfPageView({
         })
         textLayerInstanceRef.current = textLayer
         await textLayer.render()
+        if (cancelled) return
+
+        const layerWidth = textLayerContainer.offsetWidth || cssWidth
+        const layerHeight = textLayerContainer.offsetHeight || cssHeight
+        pageRoot.style.width = `${layerWidth}px`
+        pageRoot.style.height = `${layerHeight}px`
+
         teardownSelection = setupPdfTextLayerSelection(textLayerContainer)
       } catch (cause) {
         if (!cancelled && !isPdfRenderCancelled(cause)) {

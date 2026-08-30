@@ -1,9 +1,19 @@
 @import 'pdfjs-dist/web/pdf_viewer.css';
 
+/*
+  pdf.js textLayer 字号公式：
+  font-size = --total-scale-factor * --font-height
+  官方挂在 .pdfViewer .page 上；我们自研壳必须在页面根上提供同名变量。
+*/
 .pdf-page-wrapper {
   position: relative;
   display: inline-block;
   line-height: 1;
+  --scale-factor: 1;
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
 }
 
 .pdf-page-wrapper canvas {
@@ -18,6 +28,7 @@
   line-height: 1;
   user-select: text;
   pointer-events: auto;
+  z-index: 1;
 }
 
 .pdf-page-wrapper .textLayer.selecting .endOfContent {
@@ -33,18 +44,17 @@
   user-select: none;
 }
 
-.pdf-page-wrapper .textLayer ::selection {
-  background: rgba(250, 204, 21, 0.32);
-  color: transparent;
+/* 覆盖 pdf_viewer.css 的 AccentColor 选区，只保留一层黄色 */
+.pdf-page-wrapper .textLayer ::selection,
+.pdf-page-wrapper .textLayer *::selection {
+  background: rgba(250, 204, 21, 0.35) !important;
+  color: transparent !important;
 }
 
-.pdf-page-wrapper .textLayer span,
-.pdf-page-wrapper .textLayer br {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0 0;
+.pdf-page-wrapper .textLayer ::-moz-selection,
+.pdf-page-wrapper .textLayer *::-moz-selection {
+  background: rgba(250, 204, 21, 0.35) !important;
+  color: transparent !important;
 }
 
 .pdf-marks-layer {
@@ -52,6 +62,7 @@
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  z-index: 2;
 }
 
 .pdf-mark-highlight {
@@ -64,14 +75,17 @@
   background: rgba(253, 224, 71, 0.26);
 }
 
+/* 纯批注：透明底 + 虚线细条（由 JS 压成行底 underline rect） */
 .pdf-mark-note {
   position: absolute;
-  border-radius: 2px;
-  background: rgba(59, 130, 246, 0.12);
-  border-bottom: 1px dashed #2563eb;
+  border-radius: 0;
+  background: transparent !important;
+  border: none;
+  border-bottom: 2px dashed #d97706;
+  box-sizing: border-box;
 }
 
 .pdf-mark-note[data-theme='dark'] {
-  background: rgba(122, 162, 247, 0.18);
-  border-bottom-color: #7aa2f7;
+  background: transparent !important;
+  border-bottom-color: #fbbf24;
 }

@@ -69,24 +69,26 @@ export function ReadingMarkPopover({
         <p className="mb-1 line-clamp-3 px-1 text-xs text-foreground">{mark.note!.trim()}</p>
       ) : null}
 
-      <div className="flex items-center gap-1 px-1 py-1">
-        <span className="text-[10px] text-muted-foreground">颜色</span>
-        {HIGHLIGHT_COLORS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={cn(
-              'size-3.5 rounded-full ring-1 ring-black/25 dark:ring-white/30',
-              currentColor === item.id && 'ring-2 ring-foreground',
-            )}
-            style={{ backgroundColor: item.swatch }}
-            title={item.label}
-            aria-label={`颜色 ${item.label}`}
-            aria-pressed={currentColor === item.id}
-            onClick={() => onChangeColor(item.id)}
-          />
-        ))}
-      </div>
+      {mark.kind === 'highlight' ? (
+        <div className="flex items-center gap-1 px-1 py-1">
+          <span className="text-[10px] text-muted-foreground">颜色</span>
+          {HIGHLIGHT_COLORS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={cn(
+                'size-3.5 rounded-full ring-1 ring-black/25 dark:ring-white/30',
+                currentColor === item.id && 'ring-2 ring-foreground',
+              )}
+              style={{ backgroundColor: item.swatch }}
+              title={item.label}
+              aria-label={`颜色 ${item.label}`}
+              aria-pressed={currentColor === item.id}
+              onClick={() => onChangeColor(item.id)}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-0.5">
         <Button

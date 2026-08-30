@@ -47,6 +47,28 @@ describe('renderPdfMarkOverlays', () => {
     expect(layer.firstElementChild?.getAttribute('data-theme')).toBe('dark')
   })
 
+  it('批注用虚线细条，强制透明底', () => {
+    const layer = document.createElement('div')
+    const mark = createMark({
+      kind: 'note',
+      note: '测试批注',
+      color: 'yellow',
+      anchor: {
+        format: 'pdf',
+        page: 1,
+        rects: [{ x: 0, y: 0.1, width: 0.5, height: 0.05 }],
+      },
+    })
+
+    renderPdfMarkOverlays(layer, [mark], 1, 'light')
+    const overlay = layer.firstElementChild as HTMLElement
+    expect(overlay.className).toBe('pdf-mark-note')
+    expect(overlay.dataset.color).toBeUndefined()
+    expect(overlay.style.getPropertyValue('background')).toBe('transparent')
+    // 压成行底细条：top 应接近原 rect 底部
+    expect(Number.parseFloat(overlay.style.top)).toBeGreaterThan(12)
+  })
+
   it('高亮使用所选颜色的半透明底', () => {
     const layer = document.createElement('div')
     const mark = createMark({

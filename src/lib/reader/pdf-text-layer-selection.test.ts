@@ -2,6 +2,7 @@
 import { describe, expect, it, afterEach } from 'vitest'
 import {
   setupPdfTextLayerSelection,
+  shouldSkipPdfEndOfContentHack,
   teardownPdfTextLayerSelectionRegistry,
 } from './pdf-text-layer-selection'
 
@@ -24,5 +25,16 @@ describe('setupPdfTextLayerSelection', () => {
 
     teardown()
     layer.remove()
+  })
+
+  it('Chromium ≥148 / Firefox 跳过 endOfContent DOM hack', () => {
+    const sample = document.createElement('div')
+    document.body.append(sample)
+    expect(shouldSkipPdfEndOfContentHack(sample, 'Mozilla/5.0 Chrome/148.0.0.0')).toBe(true)
+    expect(shouldSkipPdfEndOfContentHack(sample, 'Mozilla/5.0 Chrome/120.0.0.0')).toBe(false)
+    expect(
+      shouldSkipPdfEndOfContentHack(sample, 'Mozilla/5.0', [{ brand: 'Chromium', version: '150' }]),
+    ).toBe(true)
+    sample.remove()
   })
 })
