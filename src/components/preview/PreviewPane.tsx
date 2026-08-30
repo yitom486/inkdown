@@ -27,6 +27,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
     const previewRef = useRef<HTMLDivElement>(null)
     const onScrollRef = useRef(onScroll)
     const onHeadingActivateRef = useRef(onHeadingActivate)
+    const hasPreview = Boolean(html)
 
     useHighlightTheme(theme)
 
@@ -88,7 +89,7 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
       const handleScroll = () => onScrollRef.current?.()
       container.addEventListener('scroll', handleScroll, { passive: true })
       return () => container.removeEventListener('scroll', handleScroll)
-    }, [html])
+    }, [hasPreview])
 
     useEffect(() => {
       const container = previewRef.current
@@ -123,9 +124,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
       return () => {
         container.removeEventListener('click', handleClick)
       }
-    }, [html])
+    }, [hasPreview])
 
-    useCodeBlockCopy(previewRef, html)
+    useCodeBlockCopy(previewRef, hasPreview)
 
     if (!html) {
       return (

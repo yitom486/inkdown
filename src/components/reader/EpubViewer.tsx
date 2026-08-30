@@ -16,6 +16,7 @@ import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
+import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
 import { extractDocumentText, extractViewportText } from '@/lib/agent/context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
@@ -140,6 +141,8 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   themeRef.current = theme
   const typographyRef = useRef(typography)
   typographyRef.current = typography
+  const filePathRef = useRef(filePath)
+  filePathRef.current = filePath
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
@@ -306,6 +309,13 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     replaceAllEpubMarksOnRendition(rendition, marksRef.current, theme)
   }, [theme])
 
+  const scheduleVisualMarkLayout = useDeferredReaderLayout(() => {
+    hoveredMarkIdRef.current = null
+    setHoveredMark(null)
+    setMarkTooltipPos(null)
+    syncVisualMarks()
+  })
+
   const selectionSnapshotRef = useRef<EpubSelectionSnapshot | null>(null)
   selectionSnapshotRef.current = selectionSnapshot
 
@@ -433,10 +443,10 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       markHoverCleanupRef.current?.()
 
       const handler = (contents: { document: Document; window: Window; cfiFromRange?: (range: Range) => string }) => {
-        injectReadingMarkStyles(contents.document, theme)
-        applyEpubReadingLayout(contents.document, theme, typography)
+        injectReadingMarkStyles(contents.document, themeRef.current)
+        applyEpubReadingLayout(contents.document, themeRef.current, typographyRef.current)
         requestAnimationFrame(() => {
-          applyEpubReadingLayout(contents.document, theme, typography)
+          applyEpubReadingLayout(contents.document, themeRef.current, typographyRef.current)
         })
         scrollCleanupRef.current?.()
         selectionCleanupRef.current?.()
@@ -506,7 +516,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
             inspectorRef.current.close()
             setSelectionSnapshot(snapshot)
-            commitReaderSelection(filePath, snapshot.text)
+            commitReaderSelection(filePathRef.current, snapshot.text)
             focusAgentComposerOnReaderSelection()
             setSelectionToolbarPos({
               x: (frameRect?.left ?? 0) + snapshot.rect.left + snapshot.rect.width / 2,
@@ -578,7 +588,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
       rendition.hooks.content.register(handler)
     },
-    [clearTextSelection, markHoverHandlers, scheduleReportLocation, theme, typography],
+    [markHoverHandlers, scheduleReportLocation],
   )
 
   useEffect(() => {
@@ -597,8 +607,16 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
   useEffect(() => {
     if (!ready) return
-    syncVisualMarks()
-  }, [marks, ready, syncVisualMarks])
+    scheduleVisualMarkLayout()
+  }, [marks, ready, readerFontSize, readerLineHeight, scheduleVisualMarkLayout, theme])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !ready) return
+    const observer = new ResizeObserver(() => scheduleVisualMarkLayout())
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [ready, scheduleVisualMarkLayout])
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -645,7 +663,6 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     const onRendered = () => {
       requestAnimationFrame(() => {
         applyReadingLayout(rendition)
-        syncVisualMarks()
         const pendingChapter = pendingNavChapterRef.current
         if (pendingChapter) {
           scrollEpubChapterInRendition(rendition, pendingChapter)
@@ -660,6 +677,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         }
         requestAnimationFrame(() => {
           applyReadingLayout(rendition)
+          scheduleVisualMarkLayout()
         })
       })
     }
@@ -802,15 +820,26 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     filePath,
     persistReadingProgress,
     schedulePersistReadingProgress,
+    scheduleVisualMarkLayout,
     syncChapterNav,
     updateGlobalProgress,
   ])
 
+  // 主题变化可能需要切换 epub.js 的主题注册；它不参与书籍初始化。
   useEffect(() => {
-    if (!renditionRef.current || !ready) return
-    applyTheme(renditionRef.current)
-    applyReadingLayout(renditionRef.current)
-  }, [applyReadingLayout, applyTheme, ready, theme, typography])
+    const rendition = renditionRef.current
+    if (!rendition || !ready) return
+    applyTheme(rendition)
+    applyReadingLayout(rendition)
+  }, [applyReadingLayout, applyTheme, ready, theme])
+
+  // 字号与行距只更新现有章节 iframe，不重新 select 主题，更不会重建 book。
+  useEffect(() => {
+    const rendition = renditionRef.current
+    if (!rendition || !ready) return
+    rendition.themes.fontSize(`${typographyRef.current.fontSize}px`)
+    applyReadingLayout(rendition)
+  }, [applyReadingLayout, ready, readerFontSize, readerLineHeight])
 
   useEffect(() => {
     return registerReaderContent({

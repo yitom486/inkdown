@@ -21,6 +21,7 @@ import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
+import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import { resolveWheelPageTurn } from '@/lib/reader/reader-wheel-navigation'
 import {
@@ -83,6 +84,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const themeRef = useRef(theme)
   themeRef.current = theme
+  const filePathRef = useRef(filePath)
+  filePathRef.current = filePath
   const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
   const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
   const typographyRef = useRef({ fontSize: readerFontSize, lineHeight: readerLineHeight })
@@ -292,12 +295,30 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     [],
   )
 
+  const scheduleMobiMarkLayout = useDeferredReaderLayout(() => {
+    const doc = iframeRef.current?.contentDocument
+    const chapterId = currentChapterIdRef.current
+    if (!doc?.body || !chapterId) return
+    hoveredMarkIdRef.current = null
+    setHoveredMark(null)
+    setMarkTooltipPos(null)
+    syncMobiMarkOverlays(doc, chapterId)
+  })
+
   useEffect(() => {
     const doc = iframeRef.current?.contentDocument
     if (!doc?.body || !currentChapterId) return
     applyEpubReadingLayout(doc, theme, typographyRef.current)
-    syncMobiMarkOverlays(doc, currentChapterId)
-  }, [currentChapterId, readerFontSize, readerLineHeight, syncMobiMarkOverlays, theme])
+    scheduleMobiMarkLayout()
+  }, [currentChapterId, readerFontSize, readerLineHeight, scheduleMobiMarkLayout, theme])
+
+  useEffect(() => {
+    const iframe = iframeRef.current
+    if (!iframe || !ready) return
+    const observer = new ResizeObserver(() => scheduleMobiMarkLayout())
+    observer.observe(iframe)
+    return () => observer.disconnect()
+  }, [ready, scheduleMobiMarkLayout])
 
   const bindChapterFrame = useCallback(
     (iframe: HTMLIFrameElement) => {
@@ -305,9 +326,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
       const doc = iframe.contentDocument
       const win = iframe.contentWindow
-      if (!doc || !win || !doc.body || !currentChapterId) return
+      const chapterId = currentChapterIdRef.current
+      if (!doc || !win || !doc.body || !chapterId) return
 
-      syncMobiMarkOverlays(doc, currentChapterId)
+      scheduleMobiMarkLayout()
 
       const frameRect = iframe.getBoundingClientRect()
 
@@ -317,7 +339,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
       const onMouseUp = (event: MouseEvent) => {
         window.setTimeout(() => {
-          if (!currentChapterId) return
+          const activeChapterId = currentChapterIdRef.current
+          if (!activeChapterId) return
 
           if (isClickNotDrag(pointerOriginRef.current, event)) {
             const hits = findMobiMarksAtPoint(doc, event.clientX, event.clientY)
@@ -345,7 +368,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
           inspectorRef.current.close()
           setSelectionSnapshot(snapshot)
-          commitReaderSelection(filePath, snapshot.text)
+          commitReaderSelection(filePathRef.current, snapshot.text)
           focusAgentComposerOnReaderSelection()
           setSelectionToolbarPos({
             x: frameRect.left + snapshot.toolbarX,
@@ -407,8 +430,9 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       const scrollRoot = doc.documentElement
       const onScroll = () => {
         if (isNavIntentLocked(useReaderNavigationStore.getState().navIntent)) return
-        if (currentChapterId) {
-          syncMobiViewportNav(doc, currentChapterId)
+        const activeChapterId = currentChapterIdRef.current
+        if (activeChapterId) {
+          syncMobiViewportNav(doc, activeChapterId)
         }
       }
 
@@ -455,7 +479,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         }
       }
     },
-    [chapters, clearTextSelection, currentChapterId, loadChapterAtIndex, syncMobiMarkOverlays, syncMobiViewportNav],
+    [loadChapter, loadChapterAtIndex, scheduleMobiMarkLayout, syncMobiViewportNav],
   )
 
   useEffect(() => {
@@ -574,7 +598,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       mobiRef.current?.destroy()
       mobiRef.current = null
     }
-  }, [data, filePath, loadChapterAtIndex, loadChapterById])
+  }, [data, filePath, loadChapterById])
 
   useEffect(() => {
     const iframe = iframeRef.current
@@ -631,10 +655,9 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   }, [bindChapterFrame, chapterDocHtml])
 
   useEffect(() => {
-    const doc = iframeRef.current?.contentDocument
-    if (!doc?.body || !currentChapterId) return
-    syncMobiMarkOverlays(doc, currentChapterId)
-  }, [chapterDocHtml, currentChapterId, marks, syncMobiMarkOverlays])
+    if (!chapterDocHtml || !currentChapterId) return
+    scheduleMobiMarkLayout()
+  }, [chapterDocHtml, currentChapterId, marks, scheduleMobiMarkLayout])
 
   useEffect(() => {
     return registerReaderContent({
@@ -672,21 +695,6 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       getSelectionText: () => readSelectionText(filePath),
     })
   }, [filePath])
-
-  const prevThemeRef = useRef(theme)
-  useEffect(() => {
-    if (prevThemeRef.current === theme) return
-    prevThemeRef.current = theme
-    if (!currentChapterId || !ready) return
-    setChapterLoading(true)
-    void (async () => {
-      try {
-        await loadChapterById(currentChapterId)
-      } finally {
-        setChapterLoading(false)
-      }
-    })()
-  }, [theme, currentChapterId, ready, loadChapterById])
 
   const selectionSnapshotRef = useRef(selectionSnapshot)
   selectionSnapshotRef.current = selectionSnapshot

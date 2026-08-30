@@ -39,6 +39,7 @@
 |------|------|
 | `useReaderBinary` | TanStack Query 读电子书二进制 |
 | `useReadingMarks` | 当前文档书签 / 高亮 / 批注的 list + create/update/delete |
+| `useDeferredReaderLayout` | 等待 iframe 排版稳定后合并执行标记几何重算 |
 | `useReadingMarkInspector` | 点击高亮后的浮层：命中栈、当前标记、位置 |
 | `useReaderSidePanels` | 目录侧栏与标记侧栏互斥开关 |
 | `useReaderWheelNavigation` | 滚轮到顶/底翻页。逻辑已抽出，Viewer 里仍有内联调用，此 Hook **暂无引用** |
