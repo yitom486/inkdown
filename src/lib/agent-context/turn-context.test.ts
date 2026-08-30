@@ -84,6 +84,7 @@ describe('INKDOWN_STATIC_SKILL', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('Do **not** call tools only to "prove"')
     expect(INKDOWN_STATIC_SKILL).toContain('inkdown_list_marks')
     expect(INKDOWN_STATIC_SKILL).toContain('tocTopLevel')
+    expect(INKDOWN_STATIC_SKILL).toContain('「选区」')
     expect(INKDOWN_STATIC_SKILL).toContain('Match the **language of the user')
     expect(INKDOWN_STATIC_SKILL).not.toContain('默认使用简体中文')
   })

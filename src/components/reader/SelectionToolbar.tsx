@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
-import { BotMessageSquare, ClipboardPaste, Copy, MessageSquarePlus } from 'lucide-react'
+import { BotMessageSquare, ClipboardPaste, Copy, Highlighter, MessageSquarePlus, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 export interface SelectionToolbarProps {
   x: number
@@ -11,6 +10,10 @@ export interface SelectionToolbarProps {
   onAnnotate: () => void
   /** 打开 Agent 面板并带着当前选区去提问 */
   onAskAgent?: () => void
+  /** 在输入框插入「选区」短标记（不贴正文） */
+  onAddToChat?: () => void
+  /** 将当前选区存为高亮，不打开批注对话框 */
+  onHighlight?: () => void
   onDismiss: () => void
 }
 
@@ -21,6 +24,8 @@ export function SelectionToolbar({
   onCopy,
   onAnnotate,
   onAskAgent,
+  onAddToChat,
+  onHighlight,
   onDismiss,
 }: SelectionToolbarProps) {
   useEffect(() => {
@@ -49,26 +54,26 @@ export function SelectionToolbar({
         <Copy className="size-3.5" />
         复制
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className={cn('h-7 gap-1 px-2 text-xs', readOnly && 'opacity-40')}
-        disabled={readOnly}
-        title={readOnly ? '阅读模式下不可粘贴' : undefined}
-        onClick={() => undefined}
-      >
-        <ClipboardPaste className="size-3.5" />
-        粘贴
-      </Button>
-      {onAskAgent ? (
+      {readOnly ? null : (
         <Button
           variant="ghost"
           size="sm"
           className="h-7 gap-1 px-2 text-xs"
-          onClick={onAskAgent}
+          onClick={() => undefined}
         >
-          <BotMessageSquare className="size-3.5" />
-          问 Agent
+          <ClipboardPaste className="size-3.5" />
+          粘贴
+        </Button>
+      )}
+      {onHighlight ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs"
+          onClick={onHighlight}
+        >
+          <Highlighter className="size-3.5" />
+          划重点
         </Button>
       ) : null}
       <Button
@@ -80,6 +85,29 @@ export function SelectionToolbar({
         <MessageSquarePlus className="size-3.5" />
         批注
       </Button>
+      {onAddToChat ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs"
+          title="在输入框插入「选区」标记，正文由 Agent 读取"
+          onClick={onAddToChat}
+        >
+          <Quote className="size-3.5" />
+          加入对话
+        </Button>
+      ) : null}
+      {onAskAgent ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs"
+          onClick={onAskAgent}
+        >
+          <BotMessageSquare className="size-3.5" />
+          问 Agent
+        </Button>
+      ) : null}
     </div>
   )
 }

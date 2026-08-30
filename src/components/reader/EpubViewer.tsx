@@ -17,7 +17,7 @@ import { extractDocumentText, extractViewportText } from '@/lib/agent-context/ex
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection } from '@/lib/agent-context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
 import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
 import {
   collectEpubSpineItems,
@@ -886,6 +886,13 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+          }}
+          onHighlight={() => {
+            void handleSaveAnnotation('')
+          }}
+          onAddToChat={() => {
+            addSelectionMarkerToComposer()
+            dimTextSelection()
           }}
           onAskAgent={() => {
             openAgentComposerToAskSelection()

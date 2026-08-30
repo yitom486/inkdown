@@ -13,7 +13,7 @@ import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection } from '@/lib/agent-context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
 import {
@@ -665,6 +665,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+          }}
+          onHighlight={() => {
+            void handleSaveAnnotation('')
+          }}
+          onAddToChat={() => {
+            addSelectionMarkerToComposer()
+            dimTextSelection()
           }}
           onAskAgent={() => {
             openAgentComposerToAskSelection()

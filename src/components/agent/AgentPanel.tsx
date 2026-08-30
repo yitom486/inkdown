@@ -23,6 +23,7 @@ import { AGENT_CHAT_COL_CLASS } from '@/components/agent/AgentChatItem'
 import { Button } from '@/components/ui/button'
 import { shouldShowOrphanPermissionCard } from '@/lib/acp-permission-ui'
 import { logAcpLayoutProbe } from '@/lib/acp-layout-probe'
+import { appendSelectionChatMarker } from '@/lib/agent-context/selection-chat-marker'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -293,11 +294,17 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
   } = useAcpSession(workspaceRoot)
   const [draft, setDraft] = useState('')
   const [authHint, setAuthHint] = useState<string | null>(null)
+  const composerInsertNonce = useAcpUiStore((s) => s.composerInsertNonce)
   const bottomRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   const theme = useEditorUiStore((s) => s.theme)
 
   useHighlightTheme(theme)
+
+  useEffect(() => {
+    if (composerInsertNonce === 0) return
+    setDraft((prev) => appendSelectionChatMarker(prev))
+  }, [composerInsertNonce])
 
   const { primary, secondary } = useMemo(
     () => splitConfigOptions(view.configOptions),

@@ -18,6 +18,23 @@ win:
   target:
     - nsis
 
+# 默认 oneClick 会一键装进 %LOCALAPPDATA%，没有选目录页
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # 默认按当前用户安装（不强制管理员）；选 Program Files 等系统目录时仍会提权
+  perMachine: false
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 轻量阅读器
+  installerLanguages:
+    - zh_CN
+    - en_US
+  language: 2052
+  # 卸载时保留阅读进度 / 书签，避免误清用户数据
+  deleteAppDataOnUninstall: false
+
 mac:
   icon: resources/icon.png
   category: public.app-category.productivity

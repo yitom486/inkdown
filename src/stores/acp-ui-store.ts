@@ -76,12 +76,16 @@ interface AcpUiStore {
   pendingPermission: AcpPendingPermission | null
   /** 递增以触发 AgentComposer 聚焦（不持久化） */
   composerFocusNonce: number
+  /** 递增以在输入框追加「选区」短标记（不持久化） */
+  composerInsertNonce: number
   setPanelOpen: (open: boolean) => void
   togglePanel: () => void
   /** 面板已打开时聚焦输入框；不会强行打开面板（阅读器划选等场景） */
   requestComposerFocus: () => void
   /** 打开 Agent 面板并聚焦输入框（选区「问 Agent」） */
   openPanelAndFocusComposer: () => void
+  /** 打开面板、聚焦，并通知输入框插入选区短标记 */
+  insertComposerSelectionMarker: () => void
   setHistoryOpen: (open: boolean) => void
   setSelectedRuntimeId: (id: string) => void
   setStatus: (status: AcpConnectionStatus, errorMessage?: string) => void
@@ -276,6 +280,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
       preferredConfigByRuntime: {},
       pendingPermission: null,
       composerFocusNonce: 0,
+      composerInsertNonce: 0,
 
       setPanelOpen: (open) =>
         set((s) => {
@@ -314,6 +319,14 @@ export const useAcpUiStore = create<AcpUiStore>()(
             ? { panelOpen: true }
             : { panelOpen: true, ...openPanelWithBlankDraft(s) }),
           composerFocusNonce: s.composerFocusNonce + 1,
+        })),
+      insertComposerSelectionMarker: () =>
+        set((s) => ({
+          ...(s.panelOpen
+            ? { panelOpen: true }
+            : { panelOpen: true, ...openPanelWithBlankDraft(s) }),
+          composerFocusNonce: s.composerFocusNonce + 1,
+          composerInsertNonce: s.composerInsertNonce + 1,
         })),
       setHistoryOpen: (open) => set({ historyOpen: open }),
       setSelectedRuntimeId: (id) => set({ selectedRuntimeId: id }),
@@ -746,6 +759,8 @@ export const useAcpUiStore = create<AcpUiStore>()(
           activeThreadId,
           preferredConfigByRuntime,
           prompting: false,
+          composerFocusNonce: 0,
+          composerInsertNonce: 0,
           status: 'disconnected',
           sessionId: null,
           configOptions: [],

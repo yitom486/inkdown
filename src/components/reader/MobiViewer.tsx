@@ -13,7 +13,7 @@ import { extractDocumentText, extractViewportText, htmlToText } from '@/lib/agen
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection } from '@/lib/agent-context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import type { ReaderUnit } from '@/lib/reader-navigation'
@@ -802,6 +802,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+          }}
+          onHighlight={() => {
+            void handleSaveAnnotation('')
+          }}
+          onAddToChat={() => {
+            addSelectionMarkerToComposer()
+            dimTextSelection()
           }}
           onAskAgent={() => {
             openAgentComposerToAskSelection()
