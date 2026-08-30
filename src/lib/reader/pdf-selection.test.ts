@@ -1,11 +1,16 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import {
+  PdfTextLayerMappingSink,
+  coalescePdfTextQuads,
   coalescePdfLineRects,
   normalizeClientRects,
   readPdfSelection,
+  registerPdfPageTextGeometry,
   unionClientRects,
 } from './pdf-selection'
+import type { PageViewport } from 'pdfjs-dist'
+import type { TextContent } from 'pdfjs-dist/types/src/display/api'
 
 describe('normalizeClientRects', () => {
   it('将 client rect 转为相对 layer 坐标', () => {
@@ -84,5 +89,88 @@ describe('readPdfSelection', () => {
 
     selection.removeAllRanges()
     page.remove()
+  })
+
+  it('用 text item 位置和 transform 生成 V2 PDF Quad', () => {
+    const page = document.createElement('div')
+    page.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100)
+    const layer = document.createElement('div')
+    layer.className = 'textLayer'
+    layer.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100)
+    const span = document.createElement('span')
+    span.textContent = 'abcd'
+    layer.append(span)
+    page.append(layer)
+    document.body.append(page)
+
+    const mapping = new PdfTextLayerMappingSink()
+    mapping.setTextMapping([span])
+    mapping.enable()
+    const viewport = {
+      width: 100,
+      height: 100,
+      convertToPdfPoint: (x: number, y: number) => [x, y],
+    } as PageViewport
+    const unregister = registerPdfPageTextGeometry(page, viewport, {
+      items: [{
+        str: 'abcd',
+        dir: 'ltr',
+        transform: [10, 0, 0, 10, 10, 50],
+        width: 40,
+        height: 10,
+        fontName: 'f1',
+        hasEOL: false,
+      }],
+      styles: {
+        f1: { ascent: 0.8, descent: -0.2, vertical: false, fontFamily: 'sans-serif' },
+      },
+      lang: null,
+    } as TextContent)
+
+    const range = document.createRange()
+    range.setStart(span.firstChild!, 1)
+    range.setEnd(span.firstChild!, 3)
+    range.getClientRects = () => [new DOMRect(20, 42, 20, 10)] as unknown as DOMRectList
+    const selection = document.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const snapshot = readPdfSelection(page, 1)
+    expect(snapshot?.begin).toEqual({ itemIndex: 0, offset: 1 })
+    expect(snapshot?.end).toEqual({ itemIndex: 0, offset: 3 })
+    expect(snapshot?.quote?.exact).toBe('bc')
+    expect(snapshot?.quads?.[0]?.points).toEqual([
+      { x: 20, y: 58 },
+      { x: 40, y: 58 },
+      { x: 40, y: 48 },
+      { x: 20, y: 48 },
+    ])
+
+    selection.removeAllRanges()
+    unregister()
+    page.remove()
+  })
+})
+
+describe('coalescePdfTextQuads', () => {
+  it('按 PDF 基线合并同行并统一高度', () => {
+    const result = coalescePdfTextQuads([
+      {
+        points: [
+          { x: 10, y: 60 }, { x: 20, y: 60 }, { x: 20, y: 48 }, { x: 10, y: 48 },
+        ],
+        baseline: [{ x: 10, y: 50 }, { x: 20, y: 50 }],
+      },
+      {
+        points: [
+          { x: 21, y: 58 }, { x: 35, y: 58 }, { x: 35, y: 47 }, { x: 21, y: 47 },
+        ],
+        baseline: [{ x: 21, y: 50 }, { x: 35, y: 50 }],
+      },
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0]!.points).toEqual([
+      { x: 10, y: 60 }, { x: 35, y: 60 }, { x: 35, y: 47 }, { x: 10, y: 47 },
+    ])
   })
 })

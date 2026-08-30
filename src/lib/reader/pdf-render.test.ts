@@ -43,12 +43,12 @@ describe('pdf continuous render window', () => {
     expect(getPdfDevicePixelRatio(0)).toBe(1)
   })
 
-  it('CSS 与 canvas 尺寸取整，避免亚像素拉伸', async () => {
+  it('保留 viewport 的 CSS 浮点尺寸，只对 canvas backing store 取整', async () => {
     const { resolvePdfCanvasPixelSize } = await import('./pdf-render')
     const pixels = resolvePdfCanvasPixelSize(612.7, 792.3, 2)
-    expect(pixels.cssWidth).toBe(612)
-    expect(pixels.cssHeight).toBe(792)
-    expect(pixels.canvasWidth).toBe(1224)
+    expect(pixels.cssWidth).toBe(612.7)
+    expect(pixels.cssHeight).toBe(792.3)
+    expect(pixels.canvasWidth).toBe(1225)
     expect(pixels.canvasHeight).toBe(1584)
     expect(pixels.transform).toEqual([2, 0, 0, 2, 0, 0])
     expect(resolvePdfCanvasPixelSize(100, 100, 1).transform).toBeUndefined()

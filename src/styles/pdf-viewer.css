@@ -10,6 +10,7 @@
   display: inline-block;
   line-height: 1;
   --scale-factor: 1;
+  /* PdfPageView 会用 viewport.userUnit 覆盖该回退值。 */
   --user-unit: 1;
   --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
   --scale-round-x: 1px;
@@ -20,28 +21,15 @@
   display: block;
 }
 
-.pdf-page-wrapper .textLayer {
+.pdf-text-layer-host {
   position: absolute;
   inset: 0;
-  overflow: clip;
-  opacity: 1;
-  line-height: 1;
-  user-select: text;
-  pointer-events: auto;
   z-index: 1;
 }
 
-.pdf-page-wrapper .textLayer.selecting .endOfContent {
-  top: 0;
-}
-
-.pdf-page-wrapper .textLayer .endOfContent {
-  display: block;
-  position: absolute;
-  inset: 100% 0 0;
-  z-index: 0;
-  cursor: text;
-  user-select: none;
+.pdf-page-wrapper .textLayer {
+  pointer-events: auto;
+  user-select: text;
 }
 
 /* 覆盖 pdf_viewer.css 的 AccentColor 选区，只保留一层黄色 */
@@ -60,32 +48,26 @@
 .pdf-marks-layer {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   overflow: hidden;
   z-index: 2;
 }
 
 .pdf-mark-highlight {
-  position: absolute;
-  border-radius: 2px;
-  background: rgba(250, 204, 21, 0.38);
+  shape-rendering: geometricPrecision;
 }
 
-.pdf-mark-highlight[data-theme='dark'] {
-  background: rgba(253, 224, 71, 0.26);
+.pdf-mark-transient-selection {
+  shape-rendering: geometricPrecision;
 }
 
-/* 纯批注：透明底 + 虚线细条（由 JS 压成行底 underline rect） */
+/* 纯批注：沿文字基线绘制 SVG 虚线，不再压缩 HTML 矩形。 */
 .pdf-mark-note {
-  position: absolute;
-  border-radius: 0;
-  background: transparent !important;
-  border: none;
-  border-bottom: 2px dashed #d97706;
-  box-sizing: border-box;
-}
-
-.pdf-mark-note[data-theme='dark'] {
-  background: transparent !important;
-  border-bottom-color: #fbbf24;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }

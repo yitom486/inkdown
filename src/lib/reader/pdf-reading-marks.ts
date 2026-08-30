@@ -1,73 +1,239 @@
-import type { PdfTextRect } from '@shared/types/reading-mark'
-import type { ReadingMark } from '@shared/types/reading-mark'
-import { applyHighlightSurface } from '@/lib/reader/reading-mark-colors'
-import { coalescePdfLineRects } from '@/lib/reader/pdf-selection'
+import type { PageViewport } from 'pdfjs-dist'
+import type { PdfTextQuad, PdfTextRect, ReadingMark } from '@shared/types/reading-mark'
+import {
+  LIVE_SELECTION_BACKGROUND,
+  highlightFill,
+  highlightSwatch,
+  normalizeHighlightColor,
+} from '@/lib/reader/reading-mark-colors'
+import { coalescePdfLineRects, type PdfSelectionSnapshot } from '@/lib/reader/pdf-selection'
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+interface ViewportPoint {
+  x: number
+  y: number
+}
+
+function viewportPoint(viewport: PageViewport, x: number, y: number): ViewportPoint {
+  const [viewportX, viewportY] = viewport.convertToViewportPoint(x, y)
+  return { x: viewportX, y: viewportY }
+}
+
+function quadToViewport(quad: PdfTextQuad, viewport: PageViewport): {
+  points: [ViewportPoint, ViewportPoint, ViewportPoint, ViewportPoint]
+  baseline?: [ViewportPoint, ViewportPoint]
+} {
+  return {
+    points: quad.points.map((item) => viewportPoint(viewport, item.x, item.y)) as [
+      ViewportPoint,
+      ViewportPoint,
+      ViewportPoint,
+      ViewportPoint,
+    ],
+    baseline: quad.baseline?.map((item) => viewportPoint(viewport, item.x, item.y)) as
+      | [ViewportPoint, ViewportPoint]
+      | undefined,
+  }
+}
+
+function rectToViewportQuad(rect: PdfTextRect, viewport: PageViewport): {
+  points: [ViewportPoint, ViewportPoint, ViewportPoint, ViewportPoint]
+} {
+  const left = rect.x * viewport.width
+  const top = rect.y * viewport.height
+  const right = (rect.x + rect.width) * viewport.width
+  const bottom = (rect.y + rect.height) * viewport.height
+  return {
+    points: [
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: right, y: bottom },
+      { x: left, y: bottom },
+    ],
+  }
+}
+
+function appendPolygon(
+  layer: SVGSVGElement,
+  points: ViewportPoint[],
+  options: { className: string; fill: string; markId?: string; color?: string; theme?: string },
+): void {
+  const polygon = document.createElementNS(SVG_NS, 'polygon')
+  polygon.setAttribute('class', options.className)
+  polygon.setAttribute('points', points.map(({ x, y }) => `${x},${y}`).join(' '))
+  polygon.setAttribute('fill', options.fill)
+  if (options.markId) polygon.dataset.markId = options.markId
+  if (options.color) polygon.dataset.color = options.color
+  if (options.theme) polygon.dataset.theme = options.theme
+  layer.append(polygon)
+}
+
+function underlineEndpoints(
+  quad: ReturnType<typeof quadToViewport> | ReturnType<typeof rectToViewportQuad>,
+): [ViewportPoint, ViewportPoint] {
+  const baseline = 'baseline' in quad ? quad.baseline : undefined
+  const start = baseline?.[0] ?? quad.points[3]
+  const end = baseline?.[1] ?? quad.points[2]
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const length = Math.hypot(dx, dy) || 1
+  // 视口 y 轴向下；让虚线略低于文字基线，避免穿过字形。
+  const normalX = -dy / length
+  const normalY = dx / length
+  const direction = normalY < 0 ? -1 : 1
+  const offset = 1.5
+  return [
+    { x: start.x + normalX * offset * direction, y: start.y + normalY * offset * direction },
+    { x: end.x + normalX * offset * direction, y: end.y + normalY * offset * direction },
+  ]
+}
+
+function appendUnderline(
+  layer: SVGSVGElement,
+  quad: ReturnType<typeof quadToViewport> | ReturnType<typeof rectToViewportQuad>,
+  mark: ReadingMark,
+  theme: 'dark' | 'light',
+): void {
+  const [start, end] = underlineEndpoints(quad)
+  const line = document.createElementNS(SVG_NS, 'line')
+  line.setAttribute('class', 'pdf-mark-note')
+  line.setAttribute('x1', String(start.x))
+  line.setAttribute('y1', String(start.y))
+  line.setAttribute('x2', String(end.x))
+  line.setAttribute('y2', String(end.y))
+  line.setAttribute('stroke', highlightSwatch(mark.color))
+  line.dataset.markId = mark.id
+  line.dataset.theme = theme
+  layer.append(line)
+}
+
+function visualQuadsForMark(
+  mark: ReadingMark,
+  viewport: PageViewport,
+): Array<ReturnType<typeof quadToViewport> | ReturnType<typeof rectToViewportQuad>> {
+  if (mark.anchor.format !== 'pdf') return []
+  if (mark.anchor.quads?.length) {
+    return mark.anchor.quads.map((quad) => quadToViewport(quad, viewport))
+  }
+  return coalescePdfLineRects(mark.anchor.rects ?? []).map((rect) =>
+    rectToViewportQuad(rect, viewport),
+  )
+}
 
 export function renderPdfMarkOverlays(
-  layer: HTMLElement,
+  layer: SVGSVGElement,
   marks: ReadingMark[],
   pageNum: number,
   theme: 'dark' | 'light',
+  viewport: PageViewport,
+  transientSelection?: PdfSelectionSnapshot | null,
 ): void {
   layer.replaceChildren()
+  layer.setAttribute('viewBox', `0 0 ${viewport.width} ${viewport.height}`)
 
   for (const mark of marks) {
-    if (mark.anchor.format !== 'pdf') continue
-    if (mark.anchor.page !== pageNum) continue
-    if (mark.kind === 'bookmark' || !mark.anchor.rects?.length) continue
+    if (mark.anchor.format !== 'pdf' || mark.anchor.page !== pageNum) continue
+    if (mark.kind === 'bookmark') continue
 
-    const isNote = mark.kind === 'note'
-    const className = isNote ? 'pdf-mark-note' : 'pdf-mark-highlight'
-    const rects = coalescePdfLineRects(mark.anchor.rects)
-    for (const rect of rects) {
-      // 批注只画行底细条（虚线下划线），避免整块矩形看起来像重点底
-      const paintRect = isNote ? underlineRect(rect) : rect
-      layer.appendChild(
-        createOverlayRect(
-          paintRect,
-          className,
+    const quads = visualQuadsForMark(mark, viewport)
+    for (const quad of quads) {
+      if (mark.kind === 'note') {
+        appendUnderline(layer, quad, mark, theme)
+      } else {
+        const color = normalizeHighlightColor(mark.color)
+        appendPolygon(layer, quad.points, {
+          className: 'pdf-mark-highlight',
+          fill: highlightFill(color, theme),
+          markId: mark.id,
+          color,
           theme,
-          mark.id,
-          isNote ? undefined : mark.color,
-        ),
-      )
+        })
+      }
+    }
+  }
+
+  if (transientSelection?.page === pageNum) {
+    const transientQuads = transientSelection.quads?.length
+      ? transientSelection.quads.map((quad) => quadToViewport(quad, viewport))
+      : transientSelection.rects.map((rect) => rectToViewportQuad(rect, viewport))
+    for (const quad of transientQuads) {
+      appendPolygon(layer, quad.points, {
+        className: 'pdf-mark-transient-selection',
+        fill: LIVE_SELECTION_BACKGROUND,
+      })
     }
   }
 }
 
-/** 将行矩形压成底部下划线带（归一化高度） */
-function underlineRect(rect: PdfTextRect): PdfTextRect {
-  const height = Math.min(Math.max(rect.height * 0.18, 0.0035), rect.height)
-  return {
-    x: rect.x,
-    y: rect.y + rect.height - height,
-    width: rect.width,
-    height,
-  }
+function parsePoints(value: string): ViewportPoint[] {
+  return value
+    .trim()
+    .split(/\s+/)
+    .map((pair) => pair.split(',').map(Number))
+    .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+    .map(([x, y]) => ({ x: x!, y: y! }))
 }
 
-function createOverlayRect(
-  rect: PdfTextRect,
-  className: string,
-  theme: 'dark' | 'light',
-  markId: string,
-  color?: string,
-): HTMLDivElement {
-  const element = document.createElement('div')
-  element.className = className
-  element.dataset.theme = theme
-  element.dataset.markId = markId
-  element.style.left = `${rect.x * 100}%`
-  element.style.top = `${rect.y * 100}%`
-  element.style.width = `${rect.width * 100}%`
-  element.style.height = `${rect.height * 100}%`
-  if (className === 'pdf-mark-highlight') {
-    applyHighlightSurface(element, color, theme)
-  } else {
-    // 清掉可能残留的 inline !important 黄底
-    element.style.setProperty('background', 'transparent', 'important')
+function pointInPolygon(point: ViewportPoint, polygon: ViewportPoint[]): boolean {
+  let inside = false
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const currentPoint = polygon[index]!
+    const previousPoint = polygon[previous]!
+    const crosses =
+      currentPoint.y > point.y !== previousPoint.y > point.y &&
+      point.x <
+        ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) /
+          (previousPoint.y - currentPoint.y || Number.EPSILON) +
+          currentPoint.x
+    if (crosses) inside = !inside
   }
-  return element
+  return inside
+}
+
+function distanceToSegment(point: ViewportPoint, start: ViewportPoint, end: ViewportPoint): number {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared === 0) return Math.hypot(point.x - start.x, point.y - start.y)
+  const ratio = Math.min(
+    1,
+    Math.max(0, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared),
+  )
+  return Math.hypot(point.x - (start.x + ratio * dx), point.y - (start.y + ratio * dy))
+}
+
+function findRenderedMarkIdsAtPoint(
+  pageElement: HTMLElement,
+  clientX: number,
+  clientY: number,
+): Set<string> | null {
+  const layer = pageElement.querySelector<SVGSVGElement>('svg.pdf-marks-layer')
+  if (!layer) return null
+  const pageBox = layer.getBoundingClientRect()
+  const fallbackBox = pageElement.getBoundingClientRect()
+  const box = pageBox.width > 0 && pageBox.height > 0 ? pageBox : fallbackBox
+  if (box.width <= 0 || box.height <= 0) return new Set()
+  const viewBox = (layer.getAttribute('viewBox') ?? '').split(/\s+/).map(Number)
+  const width = viewBox[2] || box.width
+  const height = viewBox[3] || box.height
+  const point = {
+    x: ((clientX - box.left) / box.width) * width,
+    y: ((clientY - box.top) / box.height) * height,
+  }
+  const ids = new Set<string>()
+  for (const element of layer.querySelectorAll<SVGElement>('[data-mark-id]')) {
+    const markId = element.dataset.markId
+    if (!markId) continue
+    if (element.tagName.toLowerCase() === 'polygon') {
+      if (pointInPolygon(point, parsePoints(element.getAttribute('points') ?? ''))) ids.add(markId)
+    } else if (element.tagName.toLowerCase() === 'line') {
+      const start = { x: Number(element.getAttribute('x1')), y: Number(element.getAttribute('y1')) }
+      const end = { x: Number(element.getAttribute('x2')), y: Number(element.getAttribute('y2')) }
+      if (distanceToSegment(point, start, end) <= 5) ids.add(markId)
+    }
+  }
+  return ids
 }
 
 function pointInRect(x: number, y: number, rect: PdfTextRect, padY = 0): boolean {
@@ -86,21 +252,30 @@ export function findPdfMarksAtPoint(
   clientY: number,
   pageElement: HTMLElement,
 ): ReadingMark[] {
+  const renderedIds = findRenderedMarkIdsAtPoint(pageElement, clientX, clientY)
+  if (renderedIds) {
+    return marks.filter(
+      (mark) =>
+        mark.anchor.format === 'pdf' &&
+        mark.anchor.page === pageNum &&
+        renderedIds.has(mark.id),
+    )
+  }
+
+  // 未挂载 SVG 的旧测试/降级路径。
   const box = pageElement.getBoundingClientRect()
   if (box.width <= 0 || box.height <= 0) return []
   const x = (clientX - box.left) / box.width
   const y = (clientY - box.top) / box.height
-
   return marks.filter((mark) => {
     if (mark.anchor.format !== 'pdf' || mark.anchor.page !== pageNum) return false
     if (mark.kind === 'bookmark' || !mark.anchor.rects?.length) return false
-    const rects = coalescePdfLineRects(mark.anchor.rects)
     const padY = mark.kind === 'note' ? 0.008 : 0
-    return rects.some((rect) => pointInRect(x, y, rect, padY))
+    return coalescePdfLineRects(mark.anchor.rects).some((rect) => pointInRect(x, y, rect, padY))
   })
 }
 
-/** 优先返回带批注文案的标记（hover 气泡） */
+/** 优先返回带批注文案的标记（hover 气泡）。 */
 export function findPdfNoteMarkAtPoint(
   marks: ReadingMark[],
   pageNum: number,

@@ -44,7 +44,7 @@ export function shouldRenderPdfPage(
   return pageNumber >= start && pageNumber <= end
 }
 
-/** 按 CSS 像素算视口；canvas 缓冲按整像素 × DPR，避免亚像素拉伸发糊 */
+/** 页面 CSS 尺寸保留 viewport 浮点值；仅 canvas backing store 按 DPR 取整。 */
 export function resolvePdfCanvasPixelSize(
   cssWidth: number,
   cssHeight: number,
@@ -58,8 +58,8 @@ export function resolvePdfCanvasPixelSize(
   /** pdf.js 官方写法：viewport 用 CSS scale，再用 transform 乘 DPR */
   transform: [number, number, number, number, number, number] | undefined
 } {
-  const width = Math.max(1, Math.floor(cssWidth))
-  const height = Math.max(1, Math.floor(cssHeight))
+  const width = Math.max(1, cssWidth)
+  const height = Math.max(1, cssHeight)
   return {
     cssWidth: width,
     cssHeight: height,
@@ -70,7 +70,7 @@ export function resolvePdfCanvasPixelSize(
   }
 }
 
-/** 按 CSS 像素算视口，canvas 用 DPR transform 保证清晰度（避免浮点 CSS 拉伸） */
+/** viewport 是页面、canvas CSS 尺寸和 TextLayer 的唯一几何来源。 */
 export function createPdfPageViewport(page: PDFPageProxy, scale: number, dpr = getPdfDevicePixelRatio()) {
   const cssViewport = page.getViewport({ scale })
   const pixels = resolvePdfCanvasPixelSize(cssViewport.width, cssViewport.height, dpr)

@@ -11,10 +11,41 @@ export interface PdfTextRect {
   height: number
 }
 
+export interface PdfPoint {
+  x: number
+  y: number
+}
+
+/** PDF 页面坐标中的文字四边形；points 顺序为左上、右上、右下、左下。 */
+export interface PdfTextQuad {
+  points: [PdfPoint, PdfPoint, PdfPoint, PdfPoint]
+  /** 纯批注虚线使用的文字基线。 */
+  baseline?: [PdfPoint, PdfPoint]
+}
+
+/** 对应 getTextContent().items 中的文字 item，而不是 textLayer DOM span。 */
+export interface PdfTextPosition {
+  itemIndex: number
+  offset: number
+}
+
+export interface PdfTextQuote {
+  exact: string
+  prefix?: string
+  suffix?: string
+}
+
 export interface PdfReadingAnchor {
   format: 'pdf'
   page: number
   selectedText?: string
+  /** V2 使用 PDF 坐标 Quad + 语义位置；缺省表示旧版 rect 锚点。 */
+  version?: 2
+  begin?: PdfTextPosition
+  end?: PdfTextPosition
+  quote?: PdfTextQuote
+  quads?: PdfTextQuad[]
+  /** V1 兼容字段；新锚点只把它作为降级数据。 */
   rects?: PdfTextRect[]
 }
 

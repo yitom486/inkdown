@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
-import { TextLayer } from 'pdfjs-dist'
+import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist'
 import {
   createPdfPageViewport,
   isPdfRenderCancelled,
 } from '@/lib/reader/pdf-render'
 import { renderPdfMarkOverlays } from '@/lib/reader/pdf-reading-marks'
-import { setupPdfTextLayerSelection } from '@/lib/reader/pdf-text-layer-selection'
+import {
+  loadPdfTextLayerBuilder,
+  type PdfTextLayerBuilderInstance,
+} from '@/lib/reader/pdf-text-layer-builder'
+import {
+  PdfTextLayerMappingSink,
+  registerPdfPageTextGeometry,
+  type PdfSelectionSnapshot,
+} from '@/lib/reader/pdf-selection'
 import { reportAppError } from '@/lib/workspace/report-error'
 import type { ReadingMark } from '@shared/types/reading-mark'
 
@@ -17,6 +24,7 @@ interface PdfPageViewProps {
   scale: number
   theme: 'dark' | 'light'
   marks: ReadingMark[]
+  transientSelection?: PdfSelectionSnapshot | null
   onMouseUp?: (pageNumber: number, pageElement: HTMLElement, point: { clientX: number; clientY: number }) => void
   onPointerOrigin?: (x: number, y: number) => void
 }
@@ -27,30 +35,35 @@ export function PdfPageView({
   scale,
   theme,
   marks,
+  transientSelection,
   onMouseUp,
   onPointerOrigin,
 }: PdfPageViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const textLayerRef = useRef<HTMLDivElement>(null)
-  const marksLayerRef = useRef<HTMLDivElement>(null)
+  const textLayerHostRef = useRef<HTMLDivElement>(null)
+  const marksLayerRef = useRef<SVGSVGElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const renderTaskRef = useRef<RenderTask | null>(null)
-  const textLayerInstanceRef = useRef<TextLayer | null>(null)
+  const textLayerBuilderRef = useRef<PdfTextLayerBuilderInstance | null>(null)
   const [rendering, setRendering] = useState(true)
+  const [pageViewport, setPageViewport] = useState<PageViewport | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const textLayerContainer = textLayerRef.current
+    const textLayerHost = textLayerHostRef.current
     const pageRoot = wrapperRef.current
-    if (!canvas || !textLayerContainer || !pageRoot) return
+    if (!canvas || !textLayerHost || !pageRoot) return
 
     let cancelled = false
-    let teardownSelection: (() => void) | undefined
+    let unregisterTextGeometry: (() => void) | undefined
     setRendering(true)
+    setPageViewport(null)
     renderTaskRef.current?.cancel()
     renderTaskRef.current = null
-    textLayerInstanceRef.current?.cancel()
-    textLayerInstanceRef.current = null
+    textLayerBuilderRef.current?.cancel()
+    textLayerBuilderRef.current = null
+    textLayerHost.replaceChildren()
+    const textLayerBuilderClassPromise = loadPdfTextLayerBuilder()
 
     void (async () => {
       try {
@@ -59,11 +72,16 @@ export function PdfPageView({
 
         const { cssViewport, cssWidth, cssHeight, canvasWidth, canvasHeight, transform } =
           createPdfPageViewport(page, scale)
+        const textContentPromise = page.getTextContent({
+          includeMarkedContent: true,
+          disableNormalization: true,
+        })
 
         pageRoot.style.setProperty('--scale-factor', String(cssViewport.scale))
+        pageRoot.style.setProperty('--user-unit', String(cssViewport.userUnit))
         pageRoot.style.width = `${cssWidth}px`
         pageRoot.style.height = `${cssHeight}px`
-        textLayerContainer.style.setProperty('--scale-factor', String(cssViewport.scale))
+        setPageViewport(cssViewport)
 
         canvas.width = canvasWidth
         canvas.height = canvasHeight
@@ -85,28 +103,28 @@ export function PdfPageView({
         await renderTask.promise
         if (cancelled) return
 
-        textLayerContainer.replaceChildren()
-        textLayerContainer.style.width = ''
-        textLayerContainer.style.height = ''
-
-        const textLayer = new TextLayer({
-          textContentSource: page.streamTextContent({
-            includeMarkedContent: true,
-            disableNormalization: true,
-          }),
-          container: textLayerContainer,
-          viewport: cssViewport,
-        })
-        textLayerInstanceRef.current = textLayer
-        await textLayer.render()
+        const TextLayerBuilder = await textLayerBuilderClassPromise
         if (cancelled) return
-
-        const layerWidth = textLayerContainer.offsetWidth || cssWidth
-        const layerHeight = textLayerContainer.offsetHeight || cssHeight
-        pageRoot.style.width = `${layerWidth}px`
-        pageRoot.style.height = `${layerHeight}px`
-
-        teardownSelection = setupPdfTextLayerSelection(textLayerContainer)
+        const textMapping = new PdfTextLayerMappingSink()
+        const textLayerBuilder = new TextLayerBuilder({
+          pdfPage: page,
+          // TextLayerBuilder 仅通过这三个公开方法使用 highlighter；这里借该 hook 记录 item 映射。
+          highlighter: textMapping,
+          onAppend: (textLayer: HTMLDivElement) => {
+            if (!cancelled) textLayerHost.replaceChildren(textLayer)
+          },
+        })
+        textLayerBuilder.div.setAttribute('aria-hidden', 'false')
+        textLayerBuilderRef.current = textLayerBuilder
+        await textLayerBuilder.render({
+          viewport: cssViewport,
+          // 与官方 PDFPageView 一致：未启用文字层图片占位时传 null。
+          images: null,
+        })
+        if (cancelled) return
+        const textContent = await textContentPromise
+        if (cancelled) return
+        unregisterTextGeometry = registerPdfPageTextGeometry(pageRoot, cssViewport, textContent)
       } catch (cause) {
         if (!cancelled && !isPdfRenderCancelled(cause)) {
           reportAppError({
@@ -122,19 +140,27 @@ export function PdfPageView({
 
     return () => {
       cancelled = true
-      teardownSelection?.()
       renderTaskRef.current?.cancel()
       renderTaskRef.current = null
-      textLayerInstanceRef.current?.cancel()
-      textLayerInstanceRef.current = null
+      textLayerBuilderRef.current?.cancel()
+      textLayerBuilderRef.current = null
+      unregisterTextGeometry?.()
+      textLayerHost.replaceChildren()
     }
   }, [pageNumber, pdf, scale])
 
   useEffect(() => {
     const marksLayer = marksLayerRef.current
-    if (!marksLayer) return
-    renderPdfMarkOverlays(marksLayer, marks, pageNumber, theme)
-  }, [marks, pageNumber, theme])
+    if (!marksLayer || !pageViewport) return
+    renderPdfMarkOverlays(
+      marksLayer,
+      marks,
+      pageNumber,
+      theme,
+      pageViewport,
+      transientSelection,
+    )
+  }, [marks, pageNumber, pageViewport, theme, transientSelection])
 
   return (
     <div
@@ -153,8 +179,8 @@ export function PdfPageView({
         </div>
       ) : null}
       <canvas ref={canvasRef} />
-      <div ref={textLayerRef} className="textLayer" aria-hidden="false" />
-      <div ref={marksLayerRef} className="pdf-marks-layer" />
+      <div ref={textLayerHostRef} className="pdf-text-layer-host" />
+      <svg ref={marksLayerRef} className="pdf-marks-layer" aria-hidden="true" />
     </div>
   )
 }

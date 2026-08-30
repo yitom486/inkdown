@@ -91,13 +91,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
-  /** UI 展示用（可被折叠清空） */
-  const selectionSnapshotRef = useRef<PdfSelectionSnapshot | null>(null)
-  /**
-   * 划重点 / 批注的业务快照：与原生 Selection 解耦。
-   * 对话框抢焦点会折叠 Selection，但不能丢掉这份数据。
-   */
-  const actionSnapshotRef = useRef<PdfSelectionSnapshot | null>(null)
+  /** mouseup 后提交的选区事务；后续 UI 不再依赖原生 Selection。 */
+  const selectionTransactionRef = useRef<PdfSelectionSnapshot | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
@@ -106,8 +101,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   inspectorRef.current = inspector
 
   const clearTextSelection = useCallback(() => {
-    actionSnapshotRef.current = null
-    selectionSnapshotRef.current = null
+    selectionTransactionRef.current = null
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
     clearReaderSelection()
@@ -115,17 +109,17 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [])
 
   const dimTextSelection = useCallback(() => {
-    setSelectionToolbarPos(null)
-    clearWindowSelection(window)
+    clearTextSelection()
     inspectorRef.current.close()
-  }, [])
+  }, [clearTextSelection])
 
   const captureSelectionSnapshot = useCallback((snapshot: PdfSelectionSnapshot) => {
-    actionSnapshotRef.current = snapshot
-    selectionSnapshotRef.current = snapshot
+    selectionTransactionRef.current = snapshot
     setSelectionSnapshot(snapshot)
     commitReaderSelection(filePath, snapshot.text)
     setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
+    // 原生 Selection 在此结束生命周期；SVG 临时选区接管视觉状态。
+    clearWindowSelection(window)
   }, [filePath])
 
   const fileFingerprint = data
@@ -323,16 +317,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [fitWidth, filePath, numPages])
 
   useEffect(() => {
-    actionSnapshotRef.current = null
-    selectionSnapshotRef.current = null
+    selectionTransactionRef.current = null
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
     clearReaderSelection()
   }, [filePath])
 
   useEffect(() => {
-    // PDF 不在 selectionchange 时清业务选区：对话框/缩放会折叠原生 Selection，
-    // 划重点与批注只认 actionSnapshotRef，由空白单击 / 外侧单击 / Esc / 保存 显式清理。
+    // 原生 Selection 在 mouseup 后会转成事务；selectionchange 不负责清理业务选区。
     return bindDocumentSelectionCollapse(document, window, () => {})
   }, [])
 
@@ -499,8 +491,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         )
         if (hits.length > 0) {
           clearWindowSelection(window)
-          actionSnapshotRef.current = null
-          selectionSnapshotRef.current = null
+          selectionTransactionRef.current = null
           setSelectionToolbarPos(null)
           setSelectionSnapshot(null)
           inspector.openAt(hits, point.clientX, point.clientY)
@@ -542,7 +533,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const handleSaveAnnotation = useCallback(
     async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
-      const snapshot = actionSnapshotRef.current
+      const snapshot = selectionTransactionRef.current
       if (!snapshot) {
         throw new Error('当前没有可用选区，请先划选文本')
       }
@@ -583,6 +574,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           format: 'pdf',
           page: snapshot.page,
           selectedText: snapshot.text,
+          version: snapshot.begin && snapshot.end && snapshot.quads?.length ? 2 : undefined,
+          begin: snapshot.begin,
+          end: snapshot.end,
+          quote: snapshot.quote,
+          quads: snapshot.quads,
           rects: snapshot.rects,
         },
         excerpt: snapshot.text,
@@ -801,6 +797,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                           scale={scale}
                           theme={theme}
                           marks={marks}
+                          transientSelection={
+                            selectionSnapshot?.page === page ? selectionSnapshot : null
+                          }
                           onMouseUp={handlePageMouseUp}
                           onPointerOrigin={(x, y) => {
                             pointerOriginRef.current = { x, y }
@@ -868,12 +867,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             dimTextSelection()
           }}
           onAnnotate={() => {
-            if (!actionSnapshotRef.current && !selectionSnapshot) {
+            if (!selectionTransactionRef.current && !selectionSnapshot) {
               toast.error('当前没有可用选区，请先划选文本')
               return
             }
             if (selectionSnapshot) {
-              actionSnapshotRef.current = selectionSnapshot
+              selectionTransactionRef.current = selectionSnapshot
             }
             setEditingNoteMark(null)
             setNoteDialogOpen(true)
@@ -881,7 +880,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           }}
           onHighlight={(color) => {
             if (selectionSnapshot) {
-              actionSnapshotRef.current = selectionSnapshot
+              selectionTransactionRef.current = selectionSnapshot
             }
             void handleSaveAnnotation('', color).catch((cause) => {
               toast.error(cause instanceof Error ? cause.message : '添加高亮失败')
