@@ -16,4 +16,5 @@ Selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand-selecto
 | `reading-progress-store.ts` | 阅读进度百分比等 |
 | `reading-mark-panel-store.ts` | 标记侧栏筛选（重点/批注/书签，persist） |
 | `acp-ui-store.ts` | Agent 线程、消息、连接状态、权限与配置偏好 |
+| `annotation-agent-store.ts` | 批注 AI 助手：按书线程、pendingDraft、ACP capturing |
 | `acp-chat-types.ts` | Agent 聊天消息结构与解析辅助（非独立 store） |

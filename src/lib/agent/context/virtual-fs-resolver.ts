@@ -129,6 +129,7 @@ export async function resolveInkdownSnapshot(
     case 'create-bookmark':
       return JSON.stringify(await createBookmarkForAgent(), null, 2)
     case 'create-note':
+    case 'propose-note':
       return JSON.stringify(await createNoteForAgent(args?.note ?? ''), null, 2)
   }
 }

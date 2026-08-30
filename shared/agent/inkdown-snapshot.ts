@@ -15,6 +15,7 @@ export type InkdownSnapshotResource =
   | 'highlights'
   | 'create-bookmark'
   | 'create-note'
+  | 'propose-note'
 
 export interface InkdownSnapshotArgs {
   query?: string

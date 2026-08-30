@@ -73,13 +73,7 @@ export async function createBookmarkForAgent(): Promise<ReturnType<typeof serial
   return serializeMarkPassage(mark)
 }
 
-export async function createNoteForAgent(
-  note: string,
-): Promise<ReturnType<typeof serializeMarkPassage>> {
-  const provider = getReaderMarksProvider()
-  if (!provider) {
-    throw new Error('当前阅读器未就绪，无法创建批注')
-  }
-  const mark = await provider.createNoteFromSelection(note.trim())
-  return serializeMarkPassage(mark)
-}
+export {
+  createNoteForAgent,
+  proposeNoteForAgent,
+} from '@/lib/agent/context/propose-note-for-agent'

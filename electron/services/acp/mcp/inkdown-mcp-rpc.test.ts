@@ -33,6 +33,8 @@ describe('handleInkdownMcpRpc', () => {
     const names = response.result.tools.map((t) => t.name)
     expect(names).toContain('inkdown_get_toc')
     expect(names).toContain('inkdown_list_highlights')
+    expect(names).toContain('inkdown_propose_note')
+    expect(names).toContain('inkdown_create_note')
   })
 
   it('tools/call 走快照回路', async () => {

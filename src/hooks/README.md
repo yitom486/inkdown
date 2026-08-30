@@ -58,6 +58,7 @@
 | 文件 | 功能 |
 |------|------|
 | `useAcpSession` | 连接 ACP、发 prompt、流式消息、权限与配置；Agent 面板主状态机 |
+| `useAnnotationAgentAssist` | 批注对话框：意图/改写 chip → ACP prompt（capturing 隔离） |
 
 ---
 

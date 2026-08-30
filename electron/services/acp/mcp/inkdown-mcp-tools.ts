@@ -117,14 +117,31 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_create_note',
     description:
-      '基于用户当前选区创建批注或高亮。note 非空为批注，空字符串为高亮。' +
-      '需要已有选区（或本轮 sticky 选区）；用户要求「给这段加批注」时调用。',
+      '基于用户当前选区提出批注或高亮草稿（不会直接入库）。' +
+      'note 非空为批注文案，空字符串为仅高亮。' +
+      '客户端会弹出确认框，用户点击「采用」后才写入；工具结果含 proposed:true。' +
+      '需要已有选区；用户要求「给这段加批注」时调用。与 inkdown_propose_note 等价。',
     inputSchema: {
       type: 'object',
       properties: {
         note: {
           type: 'string',
-          description: '批注正文；省略或空字符串则只创建高亮',
+          description: '批注正文；省略或空字符串则只提议高亮',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inkdown_propose_note',
+    description:
+      '提出批注草稿供用户确认（不入库）。参数与 inkdown_create_note 相同；优先使用本工具名称以表达「仅提议」。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        note: {
+          type: 'string',
+          description: '批注正文；省略或空字符串则只提议高亮',
         },
       },
       additionalProperties: false,
@@ -205,9 +222,13 @@ export async function callInkdownMcpTool(
       const text = await context.readSnapshot('create-bookmark')
       return { content: [{ type: 'text', text }] }
     }
-    case 'inkdown_create_note': {
+    case 'inkdown_create_note':
+    case 'inkdown_propose_note': {
       const note = typeof args?.note === 'string' ? args.note : ''
-      const text = await context.readSnapshot('create-note', { note })
+      const text = await context.readSnapshot(
+        name === 'inkdown_propose_note' ? 'propose-note' : 'create-note',
+        { note },
+      )
       return { content: [{ type: 'text', text }] }
     }
     default:

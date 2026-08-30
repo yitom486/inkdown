@@ -15,6 +15,7 @@ import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
+import { useAnnotationAgentStore } from '@/stores/annotation-agent-store'
 
 function activeThreadAgentSessionId(): string | undefined {
   const s = useAcpUiStore.getState()
@@ -86,6 +87,10 @@ export function useAcpSession(workspaceRoot?: string) {
       }
     })
     const offUpdate = acpApi.onSessionUpdate((event) => {
+      if (useAnnotationAgentStore.getState().capturing) {
+        useAnnotationAgentStore.getState().applySessionUpdate(event.update)
+        return
+      }
       applySessionUpdate(event.update)
     })
     return () => {
