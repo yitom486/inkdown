@@ -9,8 +9,10 @@ import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
-import { extractDocumentText } from '@/lib/agent-context/extract-dom-text'
+import { extractDocumentText, extractViewportText, htmlToText } from '@/lib/agent-context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
+import { focusAgentComposerOnReaderSelection } from '@/lib/agent-context/focus-agent-composer'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import type { ReaderUnit } from '@/lib/reader-navigation'
@@ -89,6 +91,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
   const clearTextSelection = useCallback(() => {
     setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+    clearReaderSelection()
+    clearWindowSelection(iframeRef.current?.contentWindow ?? null)
+  }, [])
+
+  const dimTextSelection = useCallback(() => {
     setSelectionToolbarPos(null)
     clearWindowSelection(iframeRef.current?.contentWindow ?? null)
   }, [])
@@ -274,12 +282,11 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         window.setTimeout(() => {
           if (!currentChapterId) return
           const snapshot = readMobiSelection(doc, win)
-          if (!snapshot) {
-            clearTextSelection()
-            return
-          }
+          if (!snapshot) return
 
           setSelectionSnapshot(snapshot)
+          commitReaderSelection(filePath, snapshot.text)
+          focusAgentComposerOnReaderSelection()
           setSelectionToolbarPos({
             x: frameRect.left + snapshot.toolbarX,
             y: frameRect.top + snapshot.toolbarY,
@@ -288,7 +295,6 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       }
 
       const onSelectionChange = bindDocumentSelectionCollapse(doc, win, () => {
-        setSelectionSnapshot(null)
         setSelectionToolbarPos(null)
       })
 
@@ -395,8 +401,14 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       const iframe = iframeRef.current
       if (!iframe) return false
       return target === iframe || iframe.contains(target)
-    }, clearTextSelection)
-  }, [clearTextSelection])
+    }, dimTextSelection)
+  }, [dimTextSelection])
+
+  useEffect(() => {
+    return () => {
+      clearReaderSelection()
+    }
+  }, [filePath])
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -566,6 +578,36 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     return registerReaderContent({
       filePath,
       getCurrentText: () => extractDocumentText(iframeRef.current?.contentDocument),
+      getViewportText: () => extractViewportText(iframeRef.current?.contentDocument),
+      iterateUnits: async function* () {
+        const mobi = mobiRef.current
+        if (!mobi) return
+        for (const item of mobi.getSpine()) {
+          const html = mobi.loadChapter(item.id)?.html
+          if (!html) continue
+          yield {
+            label: chaptersRef.current.find((c) => c.id === item.id)?.label ?? item.id,
+            text: htmlToText(html),
+          }
+        }
+      },
+      getUnitByIndex: async (flatIndex) => {
+        const mobi = mobiRef.current
+        const chapter = chaptersRef.current[flatIndex]
+        if (!mobi || !chapter) return null
+        const html = mobi.loadChapter(chapter.id)?.html
+        if (!html) return null
+        const text = htmlToText(html)
+        if (!text.trim()) return null
+        return { label: chapter.label, text }
+      },
+    })
+  }, [filePath])
+
+  useEffect(() => {
+    return registerSelectionProvider({
+      filePath,
+      getSelectionText: () => readSelectionText(filePath),
     })
   }, [filePath])
 
@@ -731,7 +773,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
               if (ok) toast.success('已复制')
             })
-            clearTextSelection()
+            dimTextSelection()
           }}
           onAnnotate={() => {
             setNoteDialogOpen(true)

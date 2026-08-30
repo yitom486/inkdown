@@ -1,8 +1,14 @@
-import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
+import type {
+  InkdownSnapshotArgs,
+  InkdownSnapshotResource,
+} from '@shared/agent/inkdown-snapshot'
 
 export interface InkdownMcpToolContext {
   /** 复用 ACP 快照回路：向渲染进程要内存快照 */
-  readSnapshot: (resource: InkdownVirtualResource) => Promise<string>
+  readSnapshot: (
+    resource: InkdownSnapshotResource,
+    args?: InkdownSnapshotArgs,
+  ) => Promise<string>
 }
 
 export interface InkdownMcpToolDefinition {
@@ -21,19 +27,70 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_get_toc',
     description:
-      '获取用户当前在 Inkdown 中打开的文档的完整目录。返回 JSON：entries[].index/level/label、' +
-      'currentIndex（当前所在条目）、unitCount、document（路径与格式）。' +
-      '目录来自 Inkdown 已解析好的内存数据，不需要你自己解析 EPUB/PDF。' +
-      '用户问「有哪些章节」「第几章讲什么」「跳到某章」时应先调用本工具，不要凭书名猜测。',
+      '获取当前打开的 EPUB/PDF/MOBI 等阅读文档的完整目录（JSON：entries、currentIndex、document）。' +
+      '仅用于二进制阅读格式；.md/.txt 请直接读工作区文件，不必调本工具。' +
+      '用户在问章节结构、章名或阅读位置时可选调用；能直接答则不必调用。',
+    inputSchema: NO_ARGS_SCHEMA,
+  },
+  {
+    name: 'inkdown_get_viewport',
+    description:
+      '获取当前阅读窗口可见的纯文本（约一屏，不是整章）。EPUB/MOBI 为视口内可见块；PDF 为当前页。' +
+      '【优先于整章】若线程上下文可能还不够回答「这里/这页」等问题再调用。' +
+      '上文工具结果可能已够用则可直接答，不必每轮重调。体积小。',
     inputSchema: NO_ARGS_SCHEMA,
   },
   {
     name: 'inkdown_get_current_text',
     description:
-      '获取用户当前正在阅读的这一章（PDF 为当前页、Markdown 为全文）的纯文本正文。' +
-      '正文来自 Inkdown 已经渲染好的内容，不要自己去读或解析 EPUB/MOBI/PDF 文件。' +
-      '用户问「这章讲了什么」「总结一下当前内容」「解释这段」时调用本工具。' +
-      '过长时会自动截断并在末尾标注。',
+      '获取当前正在阅读的整章纯文本（PDF 为当前页），可能很长并截断。' +
+      '仅当用户明确要求整章总结，或 inkdown_get_viewport / inkdown_get_selection 仍信息不足时再调用；' +
+      '不要作为读正文的首选。仅用于 EPUB/PDF/MOBI。',
+    inputSchema: NO_ARGS_SCHEMA,
+  },
+  {
+    name: 'inkdown_get_chapter',
+    description:
+      '按目录 flatIndex 或章节标题读取指定章/页的纯文本（不跳转阅读位置）。' +
+      'index 与 inkdown_get_toc.entries[].index 一致；title 可模糊包含匹配。' +
+      '仅当用户明确要某一章（非当前视口）或视口/当前章不够时使用；可能很长并截断。' +
+      '不要用于「这里/这页」——那些优先 viewport。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flatIndex: {
+          type: 'number',
+          description: '目录条目下标（与 toc.entries[].index 相同）',
+        },
+        title: {
+          type: 'string',
+          description: '章节标题；可与 flatIndex 二选一，支持包含匹配',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inkdown_search',
+    description:
+      '在当前打开的阅读文档内做关键词子串检索（忽略大小写），返回章节/页码、次数与片段。' +
+      '仅用于 EPUB/PDF/MOBI；.md/.txt 请用工作区搜索或直接读文件。' +
+      '关键词用原文用词；用户问「哪里提到 X」时可选调用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '要检索的关键词，取自文档原文用词' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inkdown_get_selection',
+    description:
+      '获取用户当前选中的文本。若选区较短（≤30 字），仅向前后各补约 30 字作为 excerpt。' +
+      '仅当 turn-context 出现 hasSelection=true（本轮新划选）时几乎必调；无此标记时不要调。' +
+      '用户划选即优先分析该段；选区通知只生效一轮；无选区时会报错。',
     inputSchema: NO_ARGS_SCHEMA,
   },
 ]
@@ -46,6 +103,7 @@ export interface InkdownMcpToolResult {
 export async function callInkdownMcpTool(
   name: string,
   context: InkdownMcpToolContext,
+  args?: Record<string, unknown>,
 ): Promise<InkdownMcpToolResult> {
   switch (name) {
     case 'inkdown_get_toc': {
@@ -54,6 +112,48 @@ export async function callInkdownMcpTool(
     }
     case 'inkdown_get_current_text': {
       const text = await context.readSnapshot('chapter.txt')
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_get_viewport': {
+      const text = await context.readSnapshot('viewport.txt')
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_get_chapter': {
+      const flatIndex = args?.flatIndex
+      const title = args?.title
+      if (
+        (typeof flatIndex !== 'number' || !Number.isFinite(flatIndex)) &&
+        (typeof title !== 'string' || !title.trim())
+      ) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'inkdown_get_chapter 需要 flatIndex 或 title 之一',
+            },
+          ],
+          isError: true,
+        }
+      }
+      const text = await context.readSnapshot('chapter', {
+        ...(typeof flatIndex === 'number' ? { flatIndex } : {}),
+        ...(typeof title === 'string' ? { title } : {}),
+      })
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_search': {
+      const query = args?.query
+      if (typeof query !== 'string' || !query.trim()) {
+        return {
+          content: [{ type: 'text', text: 'inkdown_search 需要非空的 query 参数' }],
+          isError: true,
+        }
+      }
+      const text = await context.readSnapshot('search', { query })
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_get_selection': {
+      const text = await context.readSnapshot('selection')
       return { content: [{ type: 'text', text }] }
     }
     default:

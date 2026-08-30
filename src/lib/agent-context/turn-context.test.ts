@@ -66,8 +66,13 @@ describe('INKDOWN_STATIC_SKILL', () => {
     expect(INKDOWN_STATIC_SKILL).toBe(INKDOWN_STATIC_SKILL.trim())
   })
 
-  it('明确禁止 Agent 自行解析电子书', () => {
+  it('明确禁止 Agent 自行解析电子书，并区分纯文本走原生读', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('.epub')
     expect(INKDOWN_STATIC_SKILL).toContain('turn-context')
+    expect(INKDOWN_STATIC_SKILL).toContain('Soft cues')
+    expect(INKDOWN_STATIC_SKILL).toContain('normal workspace file read/write')
+    expect(INKDOWN_STATIC_SKILL).toContain('Do **not** call tools every turn')
+    expect(INKDOWN_STATIC_SKILL).toContain('Match the **language of the user')
+    expect(INKDOWN_STATIC_SKILL).not.toContain('默认使用简体中文')
   })
 })

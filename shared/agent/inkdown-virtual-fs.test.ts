@@ -22,6 +22,12 @@ describe('parseInkdownVirtualPath', () => {
     expect(parseInkdownVirtualPath('./.inkdown/agent/toc.json', ROOT)).toBe('toc.json')
   })
 
+  it('识别 viewport.txt', () => {
+    expect(parseInkdownVirtualPath(`${ROOT}/.inkdown/agent/viewport.txt`, ROOT)).toBe(
+      'viewport.txt',
+    )
+  })
+
   it('普通文件返回 null', () => {
     expect(parseInkdownVirtualPath(`${ROOT}/README.md`, ROOT)).toBeNull()
     expect(parseInkdownVirtualPath('src/App.tsx', ROOT)).toBeNull()

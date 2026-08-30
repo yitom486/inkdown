@@ -1,6 +1,9 @@
 /** ACP 跨进程 DTO（精简，不嵌入完整协议 schema） */
 
-import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
+import type {
+  InkdownSnapshotArgs,
+  InkdownSnapshotResource,
+} from '@shared/agent/inkdown-snapshot'
 
 export type AcpConnectionStatus =
   | 'disconnected'
@@ -218,10 +221,11 @@ export interface AcpPermissionResponsePayload {
   outcome: AcpPermissionOutcome
 }
 
-/** 主进程向渲染进程索取 Inkdown 虚拟文件快照 */
+/** 主进程向渲染进程索取 Inkdown 内存快照 */
 export interface AcpSnapshotRequestEvent {
   requestId: number
-  resource: InkdownVirtualResource
+  resource: InkdownSnapshotResource
+  args?: InkdownSnapshotArgs
 }
 
 export type AcpSnapshotResponsePayload =

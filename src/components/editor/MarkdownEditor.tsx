@@ -51,6 +51,7 @@ export interface MarkdownEditorHandle {
   getScrollRatio: () => number
   setScrollRatio: (ratio: number) => void
   getScrollElement: () => HTMLElement | null
+  getSelectionText: () => string | null
 }
 
 interface MarkdownEditorProps {
@@ -137,6 +138,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         if (scroller) applyScrollRatio(scroller, ratio)
       },
       getScrollElement: () => viewRef.current?.scrollDOM ?? null,
+      getSelectionText: () => {
+        const view = viewRef.current
+        if (!view) return null
+        const { from, to } = view.state.selection.main
+        if (from === to) return null
+        const text = view.state.sliceDoc(from, to).trim()
+        return text || null
+      },
     }))
 
     useEffect(() => {

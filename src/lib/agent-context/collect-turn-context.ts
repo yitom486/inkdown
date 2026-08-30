@@ -3,7 +3,7 @@ import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
 
-function baseName(filePath: string): string {
+export function baseName(filePath: string): string {
   const index = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
   return index === -1 ? filePath : filePath.slice(index + 1)
 }

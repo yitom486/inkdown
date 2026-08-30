@@ -25,6 +25,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import { useScrollSync } from '@/hooks/useScrollSync'
+import { registerSelectionProvider } from '@/lib/agent-context/reader-selection-registry'
 import { useMarkdownPreview } from '@/hooks/useMarkdownPreview'
 import { usePasteImage } from '@/hooks/usePasteImage'
 import {
@@ -83,6 +84,14 @@ export const EditorWorkspaceMain = forwardRef<
   const previewDebounceMs = useAppSettingsStore((state) => state.previewDebounceMs)
   const tabSize = useAppSettingsStore((state) => state.tabSize)
   const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
+
+  useEffect(() => {
+    if (!filePath) return
+    return registerSelectionProvider({
+      filePath,
+      getSelectionText: () => editorRef.current?.getSelectionText() ?? null,
+    })
+  }, [filePath])
 
   const viewMode = fileState.viewMode
   const previewHtml = useMarkdownPreview(content, filePath, previewDebounceMs)

@@ -170,12 +170,12 @@ export function registerIpcHandlers(): void {
     })
   })
 
-  setAcpSnapshotBridge(async ({ requestId, resource }) => {
+  setAcpSnapshotBridge(async ({ requestId, resource, args }) => {
     const target = resolveAgentOwnerWebContents()
     if (!target) {
       throw new Error('没有可用窗口提供 Inkdown 快照')
     }
-    target.send(IPC.ACP_SNAPSHOT_REQUEST, { requestId, resource })
+    target.send(IPC.ACP_SNAPSHOT_REQUEST, { requestId, resource, args })
 
     return await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {

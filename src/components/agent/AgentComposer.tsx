@@ -1,5 +1,6 @@
 import { ArrowUp, FileIcon, ImageIcon, Square, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { fileApi } from '@/api/file-api'
 import { Button } from '@/components/ui/button'
 import { extractClipboardImage } from '@/lib/codemirror-paste-image'
@@ -64,6 +65,7 @@ export function AgentComposer({
   const attachmentsRef = useRef(attachments)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   attachmentsRef.current = attachments
+  const composerFocusNonce = useAcpUiStore((state) => state.composerFocusNonce)
 
   /** 拖入/粘贴附件后聚焦输入末尾，便于立刻打字；不影响继续拖贴 */
   const focusComposerEnd = useCallback(() => {
@@ -79,6 +81,11 @@ export function AgentComposer({
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (composerFocusNonce === 0) return
+    focusComposerEnd()
+  }, [composerFocusNonce, focusComposerEnd])
 
   useEffect(() => {
     return () => {

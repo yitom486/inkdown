@@ -6,7 +6,12 @@
  */
 export const INKDOWN_VIRTUAL_DIR = '.inkdown/agent'
 
-export const INKDOWN_VIRTUAL_RESOURCES = ['focused.json', 'toc.json', 'chapter.txt'] as const
+export const INKDOWN_VIRTUAL_RESOURCES = [
+  'focused.json',
+  'toc.json',
+  'chapter.txt',
+  'viewport.txt',
+] as const
 
 export type InkdownVirtualResource = (typeof INKDOWN_VIRTUAL_RESOURCES)[number]
 

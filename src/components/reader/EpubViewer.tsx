@@ -13,9 +13,17 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
-import { extractDocumentText } from '@/lib/agent-context/extract-dom-text'
+import { extractDocumentText, extractViewportText } from '@/lib/agent-context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
+import { focusAgentComposerOnReaderSelection } from '@/lib/agent-context/focus-agent-composer'
 import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
+import {
+  collectEpubSpineItems,
+  labelForSpineHref,
+  loadEpubSpineText,
+} from '@/lib/epub-spine-text'
+import { normalizeLoadKey } from '@/lib/reader-viewport-nav'
 import { navigateEpubToFlatIndex } from '@/lib/reader-flat-nav'
 import {
   flattenEpubToc,
@@ -106,6 +114,13 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
   const clearTextSelection = useCallback(() => {
     setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+    clearReaderSelection()
+    clearEpubRenditionSelections(renditionRef.current)
+  }, [])
+
+  /** 收起高亮与工具栏，保留 sticky 供 Agent 读取 */
+  const dimTextSelection = useCallback(() => {
     setSelectionToolbarPos(null)
     clearEpubRenditionSelections(renditionRef.current)
   }, [])
@@ -379,21 +394,19 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         }
 
         const collapseSelectionUi = () => {
-          setSelectionSnapshot(null)
           setSelectionToolbarPos(null)
         }
 
         const onMouseUp = () => {
           window.setTimeout(() => {
             const snapshot = readEpubSelection(contents)
-            if (!snapshot) {
-              clearTextSelection()
-              return
-            }
+            if (!snapshot) return
 
             const frame = contents.window.frameElement as HTMLElement | null
             const frameRect = frame?.getBoundingClientRect()
             setSelectionSnapshot(snapshot)
+            commitReaderSelection(filePath, snapshot.text)
+            focusAgentComposerOnReaderSelection()
             setSelectionToolbarPos({
               x: (frameRect?.left ?? 0) + snapshot.rect.left + snapshot.rect.width / 2,
               y: (frameRect?.top ?? 0) + snapshot.rect.top,
@@ -470,8 +483,14 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       const container = containerRef.current
       if (!container) return false
       return container.contains(target)
-    }, clearTextSelection)
-  }, [clearTextSelection])
+    }, dimTextSelection)
+  }, [dimTextSelection])
+
+  useEffect(() => {
+    return () => {
+      clearReaderSelection()
+    }
+  }, [filePath])
 
   useEffect(() => {
     if (!ready) return
@@ -700,6 +719,41 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           .map((item) => extractDocumentText((item as { document?: Document }).document))
           .join('\n\n')
       },
+      getViewportText: () => {
+        const contents = renditionRef.current?.getContents() as unknown
+        const list: unknown[] = Array.isArray(contents) ? contents : contents ? [contents] : []
+        return list
+          .map((item) => extractViewportText((item as { document?: Document }).document))
+          .join('\n\n')
+      },
+      iterateUnits: async function* () {
+        const book = bookRef.current
+        if (!book) return
+        for (const item of collectEpubSpineItems(book)) {
+          const text = await loadEpubSpineText(book, item)
+          if (text) yield { label: labelForSpineHref(chaptersRef.current, item.href), text }
+        }
+      },
+      getUnitByIndex: async (flatIndex) => {
+        const book = bookRef.current
+        const chapter = chaptersRef.current[flatIndex]
+        if (!book || !chapter) return null
+        const target = normalizeLoadKey(chapter.href)
+        const matched = collectEpubSpineItems(book).find(
+          (spine) => normalizeLoadKey(spine.href) === target,
+        )
+        if (!matched) return null
+        const text = await loadEpubSpineText(book, matched)
+        if (!text.trim()) return null
+        return { label: chapter.label, text }
+      },
+    })
+  }, [filePath])
+
+  useEffect(() => {
+    return registerSelectionProvider({
+      filePath,
+      getSelectionText: () => readSelectionText(filePath),
     })
   }, [filePath])
 
@@ -803,7 +857,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
             void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
               if (ok) toast.success('已复制')
             })
-            clearTextSelection()
+            dimTextSelection()
           }}
           onAnnotate={() => {
             setNoteDialogOpen(true)

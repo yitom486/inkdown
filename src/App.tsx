@@ -28,6 +28,7 @@ import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
+import { baseName } from '@/lib/agent-context/collect-turn-context'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { isMarkdownEditorFocused } from '@/lib/editor-focus'
 import type { MarkdownHeading } from '@/lib/markdown-headings'
@@ -210,7 +211,14 @@ function App() {
   editorContentRef.current = content
   useEffect(() => {
     if (!filePath || readerDocumentKind) return
-    return registerReaderContent({ filePath, getCurrentText: () => editorContentRef.current })
+    return registerReaderContent({
+      filePath,
+      getCurrentText: () => editorContentRef.current,
+      // Markdown 只有一个单元，检索即整篇全文
+      iterateUnits: async function* () {
+        yield { label: baseName(filePath), text: editorContentRef.current }
+      },
+    })
   }, [filePath, readerDocumentKind])
 
   if (!window.electronAPI) {

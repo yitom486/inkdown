@@ -27,6 +27,8 @@ export interface InkdownTurnContext {
   documentChanged: boolean
   activeDocument: InkdownActiveDocument | null
   reading?: InkdownReadingState
+  /** 发送时用户是否选中了文本（不含选区正文，正文走 inkdown_get_selection） */
+  hasSelection?: boolean
 }
 
 const OPEN_TAG = '<inkdown-turn-context>'

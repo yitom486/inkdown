@@ -22,6 +22,11 @@ export function bindDocumentSelectionCollapse(
   return () => doc.removeEventListener('selectionchange', onSelectionChange)
 }
 
+/** 收起浏览器高亮，但不影响 Agent sticky 选区 */
+export function dimWindowSelection(win: Window | null | undefined): void {
+  clearWindowSelection(win)
+}
+
 /** 点击阅读区外（侧栏、导航等）时清除选区 */
 export function bindOutsideReaderPointerDismiss(
   isInsideReader: (target: Element) => boolean,

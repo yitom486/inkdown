@@ -1,7 +1,16 @@
-import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
+import type {
+  InkdownSnapshotArgs,
+  InkdownSnapshotResource,
+} from '@shared/agent/inkdown-snapshot'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { collectActiveDocument, collectReadingState } from './collect-turn-context'
-import { readCurrentDocumentText } from './reader-content-registry'
+import {
+  readCurrentDocumentText,
+  readViewportText,
+} from './reader-content-registry'
+import { readChapterByRef } from './read-chapter-by-ref'
+import { readSelectionWithContext } from './read-selection-context'
+import { searchReaderContent } from './search-reader-content'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
 
 /** 目录条目上限：整本书目录再大也不该一次灌满 Agent 上下文 */
@@ -78,11 +87,12 @@ function buildFocusedSnapshot(): InkdownFocusedSnapshot {
 }
 
 /**
- * 把虚拟资源序列化成 Agent 能直接读的文本。
+ * 把快照资源序列化成 Agent 能直接读的文本。
  * 全部取自渲染进程内存，不重新解析文件、不落盘。
  */
-export async function resolveInkdownVirtualResource(
-  resource: InkdownVirtualResource,
+export async function resolveInkdownSnapshot(
+  resource: InkdownSnapshotResource,
+  args?: InkdownSnapshotArgs,
 ): Promise<string> {
   switch (resource) {
     case 'toc.json':
@@ -91,5 +101,20 @@ export async function resolveInkdownVirtualResource(
       return JSON.stringify(buildFocusedSnapshot(), null, 2)
     case 'chapter.txt':
       return await readCurrentDocumentText()
+    case 'viewport.txt':
+      return await readViewportText()
+    case 'search':
+      return JSON.stringify(await searchReaderContent(args?.query ?? ''), null, 2)
+    case 'selection':
+      return JSON.stringify(await readSelectionWithContext(), null, 2)
+    case 'chapter':
+      return JSON.stringify(
+        await readChapterByRef({
+          flatIndex: args?.flatIndex,
+          title: args?.title,
+        }),
+        null,
+        2,
+      )
   }
 }

@@ -3,6 +3,7 @@ import {
   READER_TEXT_MAX_CHARS,
   normalizeReaderText,
   readCurrentDocumentText,
+  readViewportText,
   registerReaderContent,
 } from './reader-content-registry'
 
@@ -39,6 +40,27 @@ describe('readCurrentDocumentText', () => {
       getCurrentText: () => 'A',
     })
     await expect(readCurrentDocumentText('/tmp/b.epub')).rejects.toThrow('文档刚刚切换')
+    dispose()
+  })
+})
+
+describe('readViewportText', () => {
+  it('未实现 getViewportText 时明确报错', async () => {
+    const dispose = registerReaderContent({
+      filePath: '/tmp/a.epub',
+      getCurrentText: () => '整章',
+    })
+    await expect(readViewportText()).rejects.toThrow('不支持视口')
+    dispose()
+  })
+
+  it('返回视口文本并截断', async () => {
+    const dispose = registerReaderContent({
+      filePath: '/tmp/a.epub',
+      getCurrentText: () => '整章',
+      getViewportText: () => '  视口可见  ',
+    })
+    await expect(readViewportText()).resolves.toBe('视口可见')
     dispose()
   })
 })

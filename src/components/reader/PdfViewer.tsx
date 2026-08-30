@@ -11,6 +11,8 @@ import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
+import { focusAgentComposerOnReaderSelection } from '@/lib/agent-context/focus-agent-composer'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
 import {
@@ -73,6 +75,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const clearTextSelection = useCallback(() => {
     setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+    clearReaderSelection()
+    clearWindowSelection(window)
+  }, [])
+
+  const dimTextSelection = useCallback(() => {
     setSelectionToolbarPos(null)
     clearWindowSelection(window)
   }, [])
@@ -194,19 +202,46 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     pageNumRef.current = pageNum
   }, [pageNum])
 
+  const readPageText = useCallback(async (page: number): Promise<string> => {
+    const pdf = pdfDocRef.current
+    if (!pdf) return ''
+    // 走 getTextContent 而非 textLayer DOM：未渲染的页也能取到
+    const content = await (await pdf.getPage(page)).getTextContent()
+    return content.items.map((item) => ('str' in item ? item.str : '')).join('')
+  }, [])
+
   useEffect(() => {
     return registerReaderContent({
       filePath,
-      getCurrentText: async () => {
-        const pdf = pdfDocRef.current
-        if (!pdf) return ''
-        // 走 getTextContent 而非 textLayer DOM：未渲染的页也能取到
-        const page = await pdf.getPage(pageNumRef.current)
-        const content = await page.getTextContent()
-        return content.items
-          .map((item) => ('str' in item ? item.str : ''))
-          .join('')
+      getCurrentText: () => readPageText(pageNumRef.current),
+      // PDF 一页 ≈ 视口；多页同时露边时仍以当前页为主
+      getViewportText: () => readPageText(pageNumRef.current),
+      iterateUnits: async function* () {
+        const total = pdfDocRef.current?.numPages ?? 0
+        for (let page = 1; page <= total; page += 1) {
+          yield { label: `第 ${page} 页`, text: await readPageText(page) }
+        }
       },
+      getUnitByIndex: async (flatIndex) => {
+        const units = useReaderNavigationStore.getState().units
+        const unit = units[flatIndex]
+        if (!unit) return null
+        const page = Number.parseInt('href' in unit ? unit.href : '', 10)
+        if (!Number.isFinite(page) || page < 1) {
+          // 无页码时退回按目录标签在全文页里搜不到——直接读不到
+          return null
+        }
+        const text = await readPageText(page)
+        if (!text.trim()) return null
+        return { label: unit.label || `第 ${page} 页`, text }
+      },
+    })
+  }, [filePath, readPageText])
+
+  useEffect(() => {
+    return registerSelectionProvider({
+      filePath,
+      getSelectionText: () => readSelectionText(filePath),
     })
   }, [filePath])
 
@@ -249,11 +284,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   useEffect(() => {
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
+    clearReaderSelection()
   }, [filePath])
 
   useEffect(() => {
     return bindDocumentSelectionCollapse(document, window, () => {
-      setSelectionSnapshot(null)
       setSelectionToolbarPos(null)
     })
   }, [])
@@ -263,8 +298,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       const container = containerRef.current
       if (!container) return false
       return container.contains(target)
-    }, clearTextSelection)
-  }, [clearTextSelection])
+    }, dimTextSelection)
+  }, [dimTextSelection])
+
+  useEffect(() => {
+    return () => {
+      clearReaderSelection()
+    }
+  }, [filePath])
 
   const scaledPageSize = useMemo(
     () => scalePdfPageCssSize(pageCssSize, scale),
@@ -394,15 +435,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const handlePageMouseUp = useCallback((pageNumber: number, pageElement: HTMLElement) => {
     window.setTimeout(() => {
       const snapshot = readPdfSelection(pageElement, pageNumber)
-      if (!snapshot) {
-        clearTextSelection()
-        return
-      }
+      if (!snapshot) return
 
       setSelectionSnapshot(snapshot)
+      commitReaderSelection(filePath, snapshot.text)
+      focusAgentComposerOnReaderSelection()
       setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
     }, 10)
-  }, [clearTextSelection])
+  }, [filePath])
 
   const addPageBookmark = useCallback(async () => {
     if (!fileFingerprint || numPages === 0) return
@@ -599,7 +639,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
               if (ok) toast.success('已复制')
             })
-            clearTextSelection()
+            dimTextSelection()
           }}
           onAnnotate={() => {
             setNoteDialogOpen(true)

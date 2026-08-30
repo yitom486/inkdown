@@ -13,7 +13,10 @@ import type {
   AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
 } from '@shared/types/acp'
-import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
+import type {
+  InkdownSnapshotArgs,
+  InkdownSnapshotResource,
+} from '@shared/agent/inkdown-snapshot'
 import { getAcpRuntime } from './agent-registry'
 import { parseAcpConfigOptions } from './config-options'
 import {
@@ -54,7 +57,8 @@ export type AcpPermissionBridge = (payload: {
 }) => Promise<AcpPermissionOutcome>
 export type AcpSnapshotBridge = (payload: {
   requestId: number
-  resource: InkdownVirtualResource
+  resource: InkdownSnapshotResource
+  args?: InkdownSnapshotArgs
 }) => Promise<string>
 
 let transport: JsonRpcTransport | null = null
@@ -281,12 +285,15 @@ export function setAcpSnapshotBridge(bridge: AcpSnapshotBridge | null): void {
   snapshotBridge = bridge
 }
 
-async function handleSnapshotRequest(resource: InkdownVirtualResource): Promise<string> {
+async function handleSnapshotRequest(
+  resource: InkdownSnapshotResource,
+  args?: InkdownSnapshotArgs,
+): Promise<string> {
   if (!snapshotBridge) {
     throw new Error('Inkdown 快照桥未就绪，请稍后重试')
   }
   snapshotRequestSeq += 1
-  return await snapshotBridge({ requestId: snapshotRequestSeq, resource })
+  return await snapshotBridge({ requestId: snapshotRequestSeq, resource, args })
 }
 
 export function onAcpSessionUpdate(listener: AcpSessionUpdateListener): () => void {

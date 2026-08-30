@@ -68,8 +68,13 @@ export async function handleInkdownMcpRpc(
       if (typeof name !== 'string') {
         return rpcError(message.id, -32602, 'tools/call 需要 name')
       }
+      const rawArgs = message.params?.arguments
+      const args =
+        rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
+          ? (rawArgs as Record<string, unknown>)
+          : undefined
       try {
-        return result(message.id, await callInkdownMcpTool(name, context))
+        return result(message.id, await callInkdownMcpTool(name, context, args))
       } catch (error) {
         // 工具执行失败按 MCP 约定回 isError 结果，让模型能读到原因并自行调整
         return result(message.id, {

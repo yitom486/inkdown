@@ -25,7 +25,8 @@ export function createTurnContextTrackerState(): TurnContextTrackerState {
  *
  * 附加条件（满足其一）：
  * 1. 打开的文档发生变化（含首次打开、关闭文档）；
- * 2. 距离上次附加已达 `interval` 轮。
+ * 2. 距离上次附加已达 `interval` 轮；
+ * 3. 本轮有**新的**用户选区待通知（仅带 hasSelection 一次；正文走工具，下轮默认不再带）。
  *
  * 附加后计数清零，避免每轮都拼装、把上下文撑满。
  */
@@ -33,13 +34,14 @@ export function decideTurnContext(
   state: TurnContextTrackerState,
   currentDocumentKey: string | null,
   interval = TURN_CONTEXT_INTERVAL,
+  hasSelection = false,
 ): TurnContextDecision {
   const documentChanged = state.attachedOnce
     ? currentDocumentKey !== state.lastDocumentKey
     : currentDocumentKey !== null
 
   const intervalReached = state.attachedOnce && state.turnsSinceAttach + 1 >= interval
-  const attach = documentChanged || intervalReached
+  const attach = documentChanged || intervalReached || hasSelection
 
   if (!attach) {
     return {
@@ -67,9 +69,10 @@ export function takeTurnContextDecision(
   threadId: string,
   currentDocumentKey: string | null,
   interval = TURN_CONTEXT_INTERVAL,
+  hasSelection = false,
 ): TurnContextDecision {
   const state = trackerByThread.get(threadId) ?? createTurnContextTrackerState()
-  const decision = decideTurnContext(state, currentDocumentKey, interval)
+  const decision = decideTurnContext(state, currentDocumentKey, interval, hasSelection)
   trackerByThread.set(threadId, decision.next)
   return decision
 }

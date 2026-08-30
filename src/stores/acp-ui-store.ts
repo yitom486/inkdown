@@ -74,8 +74,12 @@ interface AcpUiStore {
   preferredConfigByRuntime: AcpPreferredConfigMap
   /** 当前待用户审批的工具权限（不持久化） */
   pendingPermission: AcpPendingPermission | null
+  /** 递增以触发 AgentComposer 聚焦（不持久化） */
+  composerFocusNonce: number
   setPanelOpen: (open: boolean) => void
   togglePanel: () => void
+  /** 面板已打开时聚焦输入框；不会强行打开面板（阅读器划选等场景） */
+  requestComposerFocus: () => void
   setHistoryOpen: (open: boolean) => void
   setSelectedRuntimeId: (id: string) => void
   setStatus: (status: AcpConnectionStatus, errorMessage?: string) => void
@@ -269,6 +273,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
       historyOpen: false,
       preferredConfigByRuntime: {},
       pendingPermission: null,
+      composerFocusNonce: 0,
 
       setPanelOpen: (open) =>
         set((s) => {
@@ -295,6 +300,11 @@ export const useAcpUiStore = create<AcpUiStore>()(
       togglePanel: () => {
         const open = !get().panelOpen
         get().setPanelOpen(open)
+      },
+      requestComposerFocus: () => {
+        const { panelOpen, composerFocusNonce } = get()
+        if (!panelOpen) return
+        set({ composerFocusNonce: composerFocusNonce + 1 })
       },
       setHistoryOpen: (open) => set({ historyOpen: open }),
       setSelectedRuntimeId: (id) => set({ selectedRuntimeId: id }),

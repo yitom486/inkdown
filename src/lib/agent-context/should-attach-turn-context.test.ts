@@ -73,4 +73,9 @@ describe('decideTurnContext', () => {
     expect(closed.attach).toBe(true)
     expect(closed.documentChanged).toBe(true)
   })
+
+  it('有选区时也附加 turn-context', () => {
+    const decision = decideTurnContext(createTurnContextTrackerState(), 'epub:/a.epub', 5, true)
+    expect(decision.attach).toBe(true)
+  })
 })
