@@ -28,7 +28,7 @@ describe('parseInkdownVirtualPath', () => {
   })
 
   it('虚拟目录下的未知资源返回 null，但能被目录判定捕获', () => {
-    const unknown = `${ROOT}/.inkdown/agent/chapter.txt`
+    const unknown = `${ROOT}/.inkdown/agent/nope.json`
     expect(parseInkdownVirtualPath(unknown, ROOT)).toBeNull()
     expect(isInkdownVirtualDirPath(unknown, ROOT)).toBe(true)
   })

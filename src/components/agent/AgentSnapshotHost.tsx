@@ -10,17 +10,19 @@ import { resolveInkdownVirtualResource } from '@/lib/agent-context/virtual-fs-re
 export function AgentSnapshotHost() {
   useEffect(() => {
     return acpApi.onSnapshotRequest((event) => {
-      try {
-        const content = resolveInkdownVirtualResource(event.resource)
-        acpDevLog('snapshot served', { resource: event.resource, chars: content.length })
-        acpApi.respondSnapshot({ requestId: event.requestId, ok: true, content })
-      } catch (error) {
-        acpApi.respondSnapshot({
-          requestId: event.requestId,
-          ok: false,
-          message: error instanceof Error ? error.message : '快照生成失败',
-        })
-      }
+      void (async () => {
+        try {
+          const content = await resolveInkdownVirtualResource(event.resource)
+          acpDevLog('snapshot served', { resource: event.resource, chars: content.length })
+          acpApi.respondSnapshot({ requestId: event.requestId, ok: true, content })
+        } catch (error) {
+          acpApi.respondSnapshot({
+            requestId: event.requestId,
+            ok: false,
+            message: error instanceof Error ? error.message : '快照生成失败',
+          })
+        }
+      })()
     })
   }, [])
 

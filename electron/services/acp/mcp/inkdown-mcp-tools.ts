@@ -27,6 +27,15 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
       '用户问「有哪些章节」「第几章讲什么」「跳到某章」时应先调用本工具，不要凭书名猜测。',
     inputSchema: NO_ARGS_SCHEMA,
   },
+  {
+    name: 'inkdown_get_current_text',
+    description:
+      '获取用户当前正在阅读的这一章（PDF 为当前页、Markdown 为全文）的纯文本正文。' +
+      '正文来自 Inkdown 已经渲染好的内容，不要自己去读或解析 EPUB/MOBI/PDF 文件。' +
+      '用户问「这章讲了什么」「总结一下当前内容」「解释这段」时调用本工具。' +
+      '过长时会自动截断并在末尾标注。',
+    inputSchema: NO_ARGS_SCHEMA,
+  },
 ]
 
 export interface InkdownMcpToolResult {
@@ -41,6 +50,10 @@ export async function callInkdownMcpTool(
   switch (name) {
     case 'inkdown_get_toc': {
       const text = await context.readSnapshot('toc.json')
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_get_current_text': {
+      const text = await context.readSnapshot('chapter.txt')
       return { content: [{ type: 'text', text }] }
     }
     default:

@@ -9,6 +9,8 @@ import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { extractDocumentText } from '@/lib/agent-context/extract-dom-text'
+import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import type { ReaderUnit } from '@/lib/reader-navigation'
@@ -559,6 +561,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     if (!doc?.body || !currentChapterId) return
     syncMobiMarkOverlays(doc, currentChapterId)
   }, [chapterDocHtml, currentChapterId, marks, syncMobiMarkOverlays])
+
+  useEffect(() => {
+    return registerReaderContent({
+      filePath,
+      getCurrentText: () => extractDocumentText(iframeRef.current?.contentDocument),
+    })
+  }, [filePath])
 
   const prevThemeRef = useRef(theme)
   useEffect(() => {

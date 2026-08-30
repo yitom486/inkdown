@@ -13,6 +13,8 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
+import { extractDocumentText } from '@/lib/agent-context/extract-dom-text'
+import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
 import { navigateEpubToFlatIndex } from '@/lib/reader-flat-nav'
 import {
@@ -687,6 +689,19 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     applyTheme(renditionRef.current)
     applyReadingLayout(renditionRef.current)
   }, [applyReadingLayout, applyTheme, ready, theme])
+
+  useEffect(() => {
+    return registerReaderContent({
+      filePath,
+      getCurrentText: () => {
+        const contents = renditionRef.current?.getContents() as unknown
+        const list: unknown[] = Array.isArray(contents) ? contents : contents ? [contents] : []
+        return list
+          .map((item) => extractDocumentText((item as { document?: Document }).document))
+          .join('\n\n')
+      },
+    })
+  }, [filePath])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

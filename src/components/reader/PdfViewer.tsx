@@ -10,6 +10,7 @@ import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
 import {
@@ -192,6 +193,22 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   useEffect(() => {
     pageNumRef.current = pageNum
   }, [pageNum])
+
+  useEffect(() => {
+    return registerReaderContent({
+      filePath,
+      getCurrentText: async () => {
+        const pdf = pdfDocRef.current
+        if (!pdf) return ''
+        // 走 getTextContent 而非 textLayer DOM：未渲染的页也能取到
+        const page = await pdf.getPage(pageNumRef.current)
+        const content = await page.getTextContent()
+        return content.items
+          .map((item) => ('str' in item ? item.str : ''))
+          .join('')
+      },
+    })
+  }, [filePath])
 
   useEffect(() => {
     if (!ready || pageNum < 1) return

@@ -1,6 +1,7 @@
 import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { collectActiveDocument, collectReadingState } from './collect-turn-context'
+import { readCurrentDocumentText } from './reader-content-registry'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
 
 /** 目录条目上限：整本书目录再大也不该一次灌满 Agent 上下文 */
@@ -80,11 +81,15 @@ function buildFocusedSnapshot(): InkdownFocusedSnapshot {
  * 把虚拟资源序列化成 Agent 能直接读的文本。
  * 全部取自渲染进程内存，不重新解析文件、不落盘。
  */
-export function resolveInkdownVirtualResource(resource: InkdownVirtualResource): string {
+export async function resolveInkdownVirtualResource(
+  resource: InkdownVirtualResource,
+): Promise<string> {
   switch (resource) {
     case 'toc.json':
       return JSON.stringify(buildTocSnapshot(), null, 2)
     case 'focused.json':
       return JSON.stringify(buildFocusedSnapshot(), null, 2)
+    case 'chapter.txt':
+      return await readCurrentDocumentText()
   }
 }

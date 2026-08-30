@@ -28,6 +28,7 @@ import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
+import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { isMarkdownEditorFocused } from '@/lib/editor-focus'
 import type { MarkdownHeading } from '@/lib/markdown-headings'
 
@@ -203,6 +204,14 @@ function App() {
   useEffect(() => {
     useActiveDocumentStore.getState().setActiveFilePath(filePath ?? null)
   }, [filePath])
+
+  // Markdown 正文：读 ref 而非 content，避免每次按键都重新注册
+  const editorContentRef = useRef(content)
+  editorContentRef.current = content
+  useEffect(() => {
+    if (!filePath || readerDocumentKind) return
+    return registerReaderContent({ filePath, getCurrentText: () => editorContentRef.current })
+  }, [filePath, readerDocumentKind])
 
   if (!window.electronAPI) {
     const isElectron = navigator.userAgent.includes('Electron')
