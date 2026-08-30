@@ -94,6 +94,9 @@ const electronAPI: ElectronAPI = {
   acpRespondPermission: (payload) => {
     ipcRenderer.send(IPC.ACP_PERMISSION_RESPONSE, payload)
   },
+  acpRespondSnapshot: (payload) => {
+    ipcRenderer.send(IPC.ACP_SNAPSHOT_RESPONSE, payload)
+  },
   onAcpSessionUpdate: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
       callback(payload)
@@ -119,6 +122,15 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on(IPC.ACP_PERMISSION_REQUEST, handler)
     return () => {
       ipcRenderer.removeListener(IPC.ACP_PERMISSION_REQUEST, handler)
+    }
+  },
+  onAcpSnapshotRequest: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
+      callback(payload)
+    }
+    ipcRenderer.on(IPC.ACP_SNAPSHOT_REQUEST, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.ACP_SNAPSHOT_REQUEST, handler)
     }
   },
 }

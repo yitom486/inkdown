@@ -5,6 +5,7 @@ import { ErrorLogDialog } from '@/components/shared/ErrorLogDialog'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { AgentPermissionHost } from '@/components/agent/AgentPermissionHost'
+import { AgentSnapshotHost } from '@/components/agent/AgentSnapshotHost'
 import {
   EditorWorkspaceMain,
   type EditorOutlineState,
@@ -222,6 +223,7 @@ function App() {
     <>
       <Toaster theme={theme} richColors closeButton position="top-right" />
       <AgentPermissionHost />
+      <AgentSnapshotHost />
 
       <WorkspaceShell
         theme={theme}

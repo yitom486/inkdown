@@ -49,6 +49,8 @@ export const IPC = {
   ACP_SESSION_UPDATE: 'acp:session-update',
   ACP_STATUS_CHANGED: 'acp:status-changed',
   ACP_PERMISSION_REQUEST: 'acp:permission-request',
+  ACP_SNAPSHOT_REQUEST: 'acp:snapshot-request',
+  ACP_SNAPSHOT_RESPONSE: 'acp:snapshot-response',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

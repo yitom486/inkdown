@@ -13,6 +13,7 @@ import type {
   AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
 } from '@shared/types/acp'
+import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
 import { getAcpRuntime } from './agent-registry'
 import { parseAcpConfigOptions } from './config-options'
 import {
@@ -45,6 +46,10 @@ export type AcpPermissionBridge = (payload: {
   sessionId?: string
   params: Record<string, unknown>
 }) => Promise<AcpPermissionOutcome>
+export type AcpSnapshotBridge = (payload: {
+  requestId: number
+  resource: InkdownVirtualResource
+}) => Promise<string>
 
 let transport: JsonRpcTransport | null = null
 let terminalManager = new AcpTerminalManager()
@@ -66,6 +71,8 @@ let cachedAgentVersion: string | undefined
 let cachedProtocolVersion = PROTOCOL_VERSION
 let status: AcpConnectionStatus = 'disconnected'
 let permissionBridge: AcpPermissionBridge | null = null
+let snapshotBridge: AcpSnapshotBridge | null = null
+let snapshotRequestSeq = 0
 
 const pendingPermissions = new Map<number, { resolve: (value: PermissionDecision) => void }>()
 const sessionUpdateListeners = new Set<AcpSessionUpdateListener>()
@@ -253,6 +260,18 @@ export function setAcpPermissionBridge(bridge: AcpPermissionBridge | null): void
   permissionBridge = bridge
 }
 
+export function setAcpSnapshotBridge(bridge: AcpSnapshotBridge | null): void {
+  snapshotBridge = bridge
+}
+
+async function handleSnapshotRequest(resource: InkdownVirtualResource): Promise<string> {
+  if (!snapshotBridge) {
+    throw new Error('Inkdown 快照桥未就绪，请稍后重试')
+  }
+  snapshotRequestSeq += 1
+  return await snapshotBridge({ requestId: snapshotRequestSeq, resource })
+}
+
 export function onAcpSessionUpdate(listener: AcpSessionUpdateListener): () => void {
   sessionUpdateListeners.add(listener)
   return () => {
@@ -349,6 +368,7 @@ export async function connectAcp(payload: {
             {
               getWorkspaceRoot: () => workspaceRoot,
               terminals: terminalManager,
+              readSnapshot: handleSnapshotRequest,
             },
           )
           await router(message)

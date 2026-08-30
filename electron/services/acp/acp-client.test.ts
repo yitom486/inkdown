@@ -8,11 +8,18 @@ import {
   isJsonRpcRequest,
 } from './jsonrpc-transport'
 import { AcpTerminalManager } from './acp-terminal'
+import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
 
-function testContext(workspaceRoot: string | null = null) {
+function testContext(
+  workspaceRoot: string | null = null,
+  readSnapshot: (resource: InkdownVirtualResource) => Promise<string> = async () => {
+    throw new Error('no snapshot in test')
+  },
+) {
   return {
     getWorkspaceRoot: () => workspaceRoot,
     terminals: new AcpTerminalManager(),
+    readSnapshot,
   }
 }
 
@@ -141,6 +148,70 @@ describe('createAcpClientMethodRouter', () => {
     expect(response).toMatchObject({
       result: { outcome: { outcome: 'selected', optionId: 'reject-once' } },
     })
+    transport.dispose()
+  })
+
+  it('fs/read_text_file 命中虚拟路径时走快照，不读磁盘', async () => {
+    const agentOut = new PassThrough()
+    const clientIn = new PassThrough()
+    const transport = new JsonRpcTransport(agentOut, clientIn)
+
+    const seen: string[] = []
+    const router = createAcpClientMethodRouter(
+      transport,
+      async () => ({ outcome: 'cancelled' }),
+      testContext('/ws', async (resource) => {
+        seen.push(resource)
+        return '{"entries":[]}'
+      }),
+    )
+
+    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
+      clientIn.on('data', (chunk) => {
+        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
+      })
+    })
+
+    await router({
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'fs/read_text_file',
+      params: { path: '/ws/.inkdown/agent/toc.json' },
+    })
+
+    expect(seen).toEqual(['toc.json'])
+    expect(await responsePromise).toMatchObject({
+      id: 20,
+      result: { content: '{"entries":[]}' },
+    })
+    transport.dispose()
+  })
+
+  it('虚拟目录下的未知资源返回参数错误', async () => {
+    const agentOut = new PassThrough()
+    const clientIn = new PassThrough()
+    const transport = new JsonRpcTransport(agentOut, clientIn)
+
+    const router = createAcpClientMethodRouter(
+      transport,
+      async () => ({ outcome: 'cancelled' }),
+      testContext('/ws'),
+    )
+
+    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
+      clientIn.on('data', (chunk) => {
+        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
+      })
+    })
+
+    await router({
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'fs/read_text_file',
+      params: { path: '/ws/.inkdown/agent/nope.json' },
+    })
+
+    expect(await responsePromise).toMatchObject({ id: 21, error: { code: -32602 } })
     transport.dispose()
   })
 

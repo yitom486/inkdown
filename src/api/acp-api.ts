@@ -10,6 +10,8 @@ import type {
   AcpLoadSessionPayload,
   AcpPermissionRequestEvent,
   AcpPermissionResponsePayload,
+  AcpSnapshotRequestEvent,
+  AcpSnapshotResponsePayload,
   AcpPromptPayload,
   AcpPromptResult,
   AcpRuntimeInfo,
@@ -161,5 +163,17 @@ export const acpApi = {
     const api = requireAcpBridge()
     if (!api.ok) return () => undefined
     return api.value.onAcpPermissionRequest(callback)
+  },
+
+  onSnapshotRequest(callback: (event: AcpSnapshotRequestEvent) => void): () => void {
+    const api = requireAcpBridge()
+    if (!api.ok || typeof api.value.onAcpSnapshotRequest !== 'function') return () => undefined
+    return api.value.onAcpSnapshotRequest(callback)
+  },
+
+  respondSnapshot(payload: AcpSnapshotResponsePayload): void {
+    const api = requireAcpBridge()
+    if (!api.ok || typeof api.value.acpRespondSnapshot !== 'function') return
+    api.value.acpRespondSnapshot(payload)
   },
 }

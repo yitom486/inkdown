@@ -1,3 +1,9 @@
+import {
+  INKDOWN_VIRTUAL_RESOURCES,
+  isInkdownVirtualDirPath,
+  parseInkdownVirtualPath,
+  type InkdownVirtualResource,
+} from '@shared/agent/inkdown-virtual-fs'
 import type { JsonRpcId, JsonRpcRequest, JsonRpcTransport } from './jsonrpc-transport'
 import { acpReadTextFile, acpWriteTextFile } from './acp-fs'
 import type { AcpTerminalManager } from './acp-terminal'
@@ -14,6 +20,8 @@ export type PermissionRequestHandler = (payload: {
 export interface AcpClientHandlerContext {
   getWorkspaceRoot: () => string | null
   terminals: AcpTerminalManager
+  /** 读取 Inkdown 虚拟文件：向渲染进程要内存快照，不碰磁盘 */
+  readSnapshot: (resource: InkdownVirtualResource) => Promise<string>
 }
 
 function asParams(message: JsonRpcRequest): Record<string, unknown> {
@@ -114,6 +122,32 @@ export function createAcpClientMethodRouter(
         })
         return
       }
+      const virtualResource = parseInkdownVirtualPath(filePath, workspaceRoot)
+      if (virtualResource) {
+        try {
+          const content = await context.readSnapshot(virtualResource)
+          console.info('[acp] fs/read_text_file 虚拟快照 ok', {
+            resource: virtualResource,
+            chars: content.length,
+          })
+          transport.respond(message.id, { content })
+        } catch (error) {
+          transport.respondError(message.id, {
+            code: -32000,
+            message: error instanceof Error ? error.message : '读取 Inkdown 快照失败',
+          })
+        }
+        return
+      }
+
+      if (isInkdownVirtualDirPath(filePath, workspaceRoot)) {
+        transport.respondError(message.id, {
+          code: -32602,
+          message: `Inkdown 虚拟目录下可读：${INKDOWN_VIRTUAL_RESOURCES.join('、')}`,
+        })
+        return
+      }
+
       try {
         const result = await acpReadTextFile({
           path: filePath,

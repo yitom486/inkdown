@@ -36,6 +36,8 @@ import type {
   AcpLoadSessionPayload,
   AcpPermissionRequestEvent,
   AcpPermissionResponsePayload,
+  AcpSnapshotRequestEvent,
+  AcpSnapshotResponsePayload,
   AcpPromptPayload,
   AcpPromptResult,
   AcpRuntimeInfo,
@@ -115,9 +117,11 @@ export interface ElectronAPI {
     payload: AcpSetConfigOptionPayload,
   ) => Promise<Result<AcpSetConfigOptionResult, AppError>>
   acpRespondPermission: (payload: AcpPermissionResponsePayload) => void
+  acpRespondSnapshot: (payload: AcpSnapshotResponsePayload) => void
   onAcpSessionUpdate: (callback: (event: AcpSessionUpdateEvent) => void) => () => void
   onAcpStatusChanged: (callback: (event: AcpStatusChangedEvent) => void) => () => void
   onAcpPermissionRequest: (
     callback: (event: AcpPermissionRequestEvent & { summary?: string }) => void,
   ) => () => void
+  onAcpSnapshotRequest: (callback: (event: AcpSnapshotRequestEvent) => void) => () => void
 }

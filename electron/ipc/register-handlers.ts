@@ -26,6 +26,7 @@ import type {
   AcpPromptPayload,
   AcpSessionNewPayload,
   AcpSetConfigOptionPayload,
+  AcpSnapshotResponsePayload,
 } from '@shared/types/acp'
 import { ok } from '@shared/core/result'
 import {
@@ -75,6 +76,7 @@ import {
   promptAcp,
   setAcpConfigOption,
   setAcpPermissionBridge,
+  setAcpSnapshotBridge,
 } from '../services/acp/acp-client'
 import { pickAllowOptionId } from '../services/acp/client-handlers'
 
@@ -85,6 +87,29 @@ function broadcastToAllWindows(channel: string, payload: unknown): void {
     }
   }
 }
+
+/**
+ * ACP 是全局单例，但快照必须来自「发起这轮对话的那个窗口」，
+ * 否则多窗口同目录时会拿到别的窗口正在读的书。
+ */
+let agentOwnerWebContentsId: number | null = null
+
+function rememberAgentOwner(sender: Electron.WebContents): void {
+  agentOwnerWebContentsId = sender.id
+}
+
+function resolveAgentOwnerWebContents(): Electron.WebContents | null {
+  const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed())
+  const owner = windows.find((win) => win.webContents.id === agentOwnerWebContentsId)
+  if (owner) return owner.webContents
+  // 发起窗口已关闭：退回聚焦窗口，再退回任意窗口
+  const focused = BrowserWindow.getFocusedWindow()
+  if (focused && !focused.isDestroyed()) return focused.webContents
+  return windows[0]?.webContents ?? null
+}
+
+/** 快照全部来自渲染进程内存，正常应在毫秒级返回 */
+const ACP_SNAPSHOT_TIMEOUT_MS = 5_000
 
 /** 集中注册 IPC；文件/书签等耗时操作均为 async，不阻塞主进程事件循环 */
 export function registerIpcHandlers(): void {
@@ -145,6 +170,38 @@ export function registerIpcHandlers(): void {
     })
   })
 
+  setAcpSnapshotBridge(async ({ requestId, resource }) => {
+    const target = resolveAgentOwnerWebContents()
+    if (!target) {
+      throw new Error('没有可用窗口提供 Inkdown 快照')
+    }
+    target.send(IPC.ACP_SNAPSHOT_REQUEST, { requestId, resource })
+
+    return await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup()
+        reject(new Error(`Inkdown 快照请求超时：${resource}`))
+      }, ACP_SNAPSHOT_TIMEOUT_MS)
+
+      const handler = (
+        _event: Electron.IpcMainEvent,
+        payload: AcpSnapshotResponsePayload,
+      ): void => {
+        if (payload?.requestId !== requestId) return
+        cleanup()
+        if (payload.ok) resolve(payload.content)
+        else reject(new Error(payload.message))
+      }
+
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        ipcMain.removeListener(IPC.ACP_SNAPSHOT_RESPONSE, handler)
+      }
+
+      ipcMain.on(IPC.ACP_SNAPSHOT_RESPONSE, handler)
+    })
+  })
+
   onAcpSessionUpdate((event) => {
     broadcastToAllWindows(IPC.ACP_SESSION_UPDATE, event)
   })
@@ -155,7 +212,10 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
   ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, () => ok(probeCodexAuth()))
-  ipcMain.handle(IPC.ACP_CONNECT, (_event, payload: AcpConnectPayload) => connectAcp(payload))
+  ipcMain.handle(IPC.ACP_CONNECT, (event, payload: AcpConnectPayload) => {
+    rememberAgentOwner(event.sender)
+    return connectAcp(payload)
+  })
   ipcMain.handle(IPC.ACP_AUTHENTICATE, (_event, payload: AcpAuthenticatePayload) =>
     authenticateAcp(payload),
   )
@@ -166,7 +226,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.ACP_SESSION_NEW, (_event, payload: AcpSessionNewPayload) =>
     createAcpSession(payload.cwd),
   )
-  ipcMain.handle(IPC.ACP_PROMPT, (_event, payload: AcpPromptPayload) => promptAcp(payload))
+  ipcMain.handle(IPC.ACP_PROMPT, (event, payload: AcpPromptPayload) => {
+    rememberAgentOwner(event.sender)
+    return promptAcp(payload)
+  })
   ipcMain.handle(IPC.ACP_CANCEL, (_event, payload: AcpCancelPayload) => cancelAcp(payload))
   ipcMain.handle(IPC.ACP_SET_CONFIG_OPTION, (_event, payload: AcpSetConfigOptionPayload) =>
     setAcpConfigOption(payload),
