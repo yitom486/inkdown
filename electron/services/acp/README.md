@@ -1,7 +1,7 @@
 # electron/services/acp
 
 ACP Agent 主进程侧：拉起 `codex-acp`、JSON-RPC、权限、会话、进程内 MCP。  
-渲染端入口：`src/api/acp-api.ts` + `AgentPanel`。细则见 `.plan/2026-08-29-ACP客户端.md`。
+渲染端入口：`src/api/acp-api.ts` + `AgentPanel`。设计备忘见本地 `.plan/`（若不在仓库中）。
 
 | 组 | 文件 | 功能 |
 |----|------|------|
