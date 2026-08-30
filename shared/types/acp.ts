@@ -146,7 +146,8 @@ export interface AcpSetConfigOptionResult {
 }
 
 export interface AcpSessionNewPayload {
-  cwd: string
+  /** 缺省时用当前已连接 Agent 的工作区 */
+  cwd?: string
 }
 
 export interface AcpSessionNewResult {

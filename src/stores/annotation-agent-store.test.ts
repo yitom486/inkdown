@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   annotationFileKey,
+  annotationOwnsSessionId,
   useAnnotationAgentStore,
 } from '@/stores/annotation-agent-store'
 
@@ -54,5 +55,28 @@ describe('annotation-agent-store', () => {
     useAnnotationAgentStore.getState().discardDraft()
     expect(useAnnotationAgentStore.getState().pendingDraft).toBeNull()
     expect(useAnnotationAgentStore.getState().externalProposeOpen).toBe(false)
+  })
+
+  it('annotationOwnsSessionId 只认批注线程绑定的 session', () => {
+    const key = annotationFileKey('s', '/s.epub')
+    useAnnotationAgentStore.getState().ensureFile(key)
+    useAnnotationAgentStore.getState().bindSessionId('ann-sess-1')
+    expect(
+      annotationOwnsSessionId(useAnnotationAgentStore.getState(), 'ann-sess-1'),
+    ).toBe(true)
+    expect(
+      annotationOwnsSessionId(useAnnotationAgentStore.getState(), 'main-sess'),
+    ).toBe(false)
+  })
+
+  it('clearAllAgentSessionIds 清绑定但保留本地消息', () => {
+    const key = annotationFileKey('c', '/c.epub')
+    useAnnotationAgentStore.getState().ensureFile(key)
+    useAnnotationAgentStore.getState().bindSessionId('ann-x')
+    useAnnotationAgentStore.getState().appendUserMessage('留下')
+    useAnnotationAgentStore.getState().clearAllAgentSessionIds()
+    const thread = useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!
+    expect(thread.agentSessionId).toBeNull()
+    expect(thread.messages.some((m) => m.text === '留下')).toBe(true)
   })
 })

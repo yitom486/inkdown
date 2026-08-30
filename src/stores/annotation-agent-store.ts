@@ -62,10 +62,14 @@ interface AnnotationAgentStore {
   updatePendingNote: (note: string) => void
   discardDraft: () => void
   appendUserMessage: (text: string) => void
+  /** 本地即时气泡（不经 ACP），如追问写法方向 */
+  appendAgentMessage: (text: string) => void
   beginAgentReply: () => void
   finishStreaming: () => void
   applySessionUpdate: (update: Record<string, unknown>) => void
   bindSessionId: (sessionId: string | null) => void
+  /** 断开 ACP 后清空各线程绑定的 Agent session（本地聊天气泡保留） */
+  clearAllAgentSessionIds: () => void
   lastAgentText: () => string
 }
 
@@ -224,6 +228,25 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
           })),
         ),
 
+      appendAgentMessage: (text) =>
+        set((s) =>
+          patchActiveThread(s, (t) => ({
+            ...t,
+            messages: [
+              ...t.messages,
+              {
+                id: messageId('agent'),
+                role: 'agent',
+                text,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                streaming: false,
+              },
+            ],
+            updatedAt: Date.now(),
+          })),
+        ),
+
       beginAgentReply: () =>
         set((s) =>
           patchActiveThread(s, (t) => {
@@ -273,14 +296,27 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
 
       bindSessionId: (sessionId) =>
         set((s) =>
-          sessionId
-            ? patchActiveThread(s, (t) => ({
-                ...t,
-                agentSessionId: sessionId,
-                updatedAt: Date.now(),
-              }))
-            : {},
+          patchActiveThread(s, (t) => ({
+            ...t,
+            agentSessionId: sessionId,
+            updatedAt: Date.now(),
+          })),
         ),
+
+      clearAllAgentSessionIds: () =>
+        set((s) => {
+          const byFileKey: Record<string, AnnotationAgentFileState> = {}
+          for (const [key, file] of Object.entries(s.byFileKey)) {
+            byFileKey[key] = {
+              ...file,
+              threads: file.threads.map((t) => ({
+                ...t,
+                agentSessionId: null,
+              })),
+            }
+          }
+          return { byFileKey, capturing: false, prompting: false }
+        }),
 
       applySessionUpdate: (update) => {
         const kind =
@@ -442,4 +478,19 @@ export function selectAnnotationActiveMessages(state: AnnotationAgentStore): Acp
   const file = state.byFileKey[fileKey]
   if (!file) return []
   return file.threads.find((t) => t.id === file.activeThreadId)?.messages ?? []
+}
+
+/** 任意批注线程是否绑定了该 ACP sessionId（用于分流 sessionUpdate） */
+export function annotationOwnsSessionId(
+  state: Pick<AnnotationAgentStore, 'byFileKey'>,
+  sessionId: string,
+): boolean {
+  const id = sessionId.trim()
+  if (!id) return false
+  for (const file of Object.values(state.byFileKey)) {
+    for (const thread of file.threads) {
+      if (thread.agentSessionId === id) return true
+    }
+  }
+  return false
 }

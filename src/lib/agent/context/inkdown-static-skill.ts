@@ -70,7 +70,7 @@ Exposed via MCP; names start with \`inkdown_\`. Values come from Inkdown's **in-
 - \`inkdown_list_marks\` — mixed list of bookmarks / highlights / notes. Use for "what bookmarks do I have", not for collecting highlighted passages.
 - \`inkdown_list_highlights\` — collect **highlighted passages** (highlights + notes that have excerpt; **no** bookmarks). Sorted by location. Prefer this when the user wants to summarize, export, or review marked sentences. \`passages\` is the excerpt list.
 - \`inkdown_create_bookmark\` — bookmark the **current** reading position (does not navigate).
-- \`inkdown_propose_note\` / \`inkdown_create_note\` — **propose** a note/highlight draft from the current selection (\`note\` optional; empty → highlight-only). Opens a confirm UI; the mark is **not** saved until the user clicks Adopt. Never assume it was persisted.
+- \`inkdown_propose_note\` / \`inkdown_create_note\` — **only when the user clearly wants to save a reading note**. Proposes an editable draft (confirm UI); **not** persisted until Adopt. In annotation-assist chat, prefer discussing first; do not propose on every turn.
 
 Content usually does not change within a turn—do not spam the same tool. If a tool errors or returns empty, say so; do not pretend you read the body.
 Only propose bookmarks/notes when the user clearly asks; do not invent marks unprompted. Prefer \`inkdown_propose_note\` for wording clarity.

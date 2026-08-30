@@ -31,7 +31,7 @@ import {
 } from '@/lib/reader/mobi-chapter-html'
 import { applyEpubReadingLayout } from '@/lib/reader/epub-themes'
 import { injectMobiMarkStyles } from '@/lib/reader/reader-mark-geometry'
-import { findMobiMarksAtPoint, findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from '@/lib/reader/mobi-reading-marks'
+import { findMobiMarksAtPoint, findMobiNoteMarkAtPoint, renderMobiMarkOverlays, applyMobiPendingSelectionHighlight, removeMobiPendingSelectionHighlight } from '@/lib/reader/mobi-reading-marks'
 import {
   buildMobiChapterList,
   decodeMobiTocHref,
@@ -112,6 +112,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const selectionSnapshotRef = useRef(selectionSnapshot)
+  selectionSnapshotRef.current = selectionSnapshot
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
@@ -121,6 +123,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   marksRef.current = marks
 
   const clearTextSelection = useCallback(() => {
+    const body = iframeRef.current?.contentDocument?.body ?? null
+    removeMobiPendingSelectionHighlight(body)
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
     clearReaderSelection()
@@ -128,10 +132,20 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   }, [])
 
   const dimTextSelection = useCallback(() => {
+    if (noteDialogOpen) return
     setSelectionToolbarPos(null)
     clearWindowSelection(iframeRef.current?.contentWindow ?? null)
     inspectorRef.current.close()
-  }, [])
+  }, [noteDialogOpen])
+
+  const showPendingSelectionHighlight = useCallback(() => {
+    if (editingNoteMark) return
+    const snapshot = selectionSnapshotRef.current
+    const body = iframeRef.current?.contentDocument?.body ?? null
+    if (!snapshot?.rects?.length || !body) return
+    applyMobiPendingSelectionHighlight(body, snapshot.rects, themeRef.current)
+    clearWindowSelection(iframeRef.current?.contentWindow ?? null)
+  }, [editingNoteMark])
 
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
@@ -291,8 +305,14 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       if (!doc.body) return
       injectMobiMarkStyles(doc, themeRef.current)
       renderMobiMarkOverlays(doc.body, marksRef.current, chapterId, themeRef.current)
+      if (noteDialogOpen && !editingNoteMark) {
+        const rects = selectionSnapshotRef.current?.rects
+        if (rects?.length) {
+          applyMobiPendingSelectionHighlight(doc.body, rects, themeRef.current)
+        }
+      }
     },
-    [],
+    [editingNoteMark, noteDialogOpen],
   )
 
   const scheduleMobiMarkLayout = useDeferredReaderLayout(() => {
@@ -487,8 +507,11 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       const iframe = iframeRef.current
       if (!iframe) return false
       return target === iframe || iframe.contains(target)
-    }, dimTextSelection)
-  }, [dimTextSelection])
+    }, () => {
+      if (noteDialogOpen) return
+      dimTextSelection()
+    })
+  }, [dimTextSelection, noteDialogOpen])
 
   useEffect(() => {
     return () => {
@@ -695,9 +718,6 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       getSelectionText: () => readSelectionText(filePath),
     })
   }, [filePath])
-
-  const selectionSnapshotRef = useRef(selectionSnapshot)
-  selectionSnapshotRef.current = selectionSnapshot
 
   const addChapterBookmark = useCallback(async () => {
     if (!fileFingerprint || !currentChapterId) {
@@ -950,6 +970,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             setEditingNoteMark(null)
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+            showPendingSelectionHighlight()
           }}
           onHighlight={(color) => {
             void handleSaveAnnotation('', color)
@@ -976,7 +997,11 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         title={editingNoteMark ? '编辑批注' : '添加批注'}
         onOpenChange={(open) => {
           setNoteDialogOpen(open)
-          if (!open) setEditingNoteMark(null)
+          if (!open) {
+            const wasEditing = Boolean(editingNoteMark)
+            setEditingNoteMark(null)
+            if (!wasEditing) clearTextSelection()
+          }
         }}
         onSave={(note) => {
           if (editingNoteMark) {

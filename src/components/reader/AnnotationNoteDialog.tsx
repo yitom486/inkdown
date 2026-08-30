@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import {
@@ -9,8 +9,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import {
+  ANNOTATION_DIRECTION_CHIPS,
   ANNOTATION_INTENT_CHIPS,
   ANNOTATION_REFINE_CHIPS,
   type AnnotationIntentId,
@@ -31,7 +31,6 @@ interface AnnotationNoteDialogProps {
   title?: string
   filePath: string
   fileFingerprint?: string
-  /** 编辑已有批注时关闭 AI 助手主路径，保留手写 */
   aiAssist?: boolean
   onOpenChange: (open: boolean) => void
   onSave: (note: string) => void
@@ -50,9 +49,11 @@ export function AnnotationNoteDialog({
 }: AnnotationNoteDialogProps) {
   const [note, setNote] = useState('')
   const [showAi, setShowAi] = useState(true)
-  const [customOpen, setCustomOpen] = useState(false)
-  const [customText, setCustomText] = useState('')
-  const [manualEdit, setManualEdit] = useState(false)
+  const [askText, setAskText] = useState('')
+  const [excerptOpen, setExcerptOpen] = useState(true)
+  const askInputRef = useRef<HTMLTextAreaElement>(null)
+  const noteInputRef = useRef<HTMLTextAreaElement>(null)
+  const draftInputRef = useRef<HTMLTextAreaElement>(null)
 
   const assist = useAnnotationAgentAssist({
     filePath,
@@ -63,52 +64,79 @@ export function AnnotationNoteDialog({
   const messages = useAnnotationAgentStore(
     useShallow((s) => selectAnnotationActiveMessages(s)),
   )
-  const timelineOpen = useAnnotationAgentStore((s) => s.timelineOpen)
-  const setTimelineOpen = useAnnotationAgentStore((s) => s.setTimelineOpen)
+
+  const showHandwrite = !showAi || !aiAssist
+  const hasDraft = Boolean(assist.pendingDraft)
 
   useEffect(() => {
     if (!open) return
     setNote(initialNote)
     setShowAi(aiAssist && !initialNote.trim())
-    setCustomOpen(false)
-    setCustomText('')
-    setManualEdit(false)
+    setAskText('')
+    setExcerptOpen(true)
     assist.prepare()
-    // 仅在打开时初始化
+    assist.dismissComposeHint()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open edge
   }, [open, excerpt, initialNote, aiAssist])
 
   useEffect(() => {
-    if (assist.pendingDraft && assist.phase === 'ready') {
+    if (assist.pendingDraft) {
       setNote(assist.pendingDraft.note)
-      setManualEdit(false)
     }
-  }, [assist.pendingDraft, assist.phase])
+  }, [assist.pendingDraft])
 
-  const draftPreview =
-    assist.pendingDraft?.note ??
-    (assist.phase === 'generating' ? '正在生成…' : '')
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => {
+      if (hasDraft) {
+        draftInputRef.current?.focus()
+        return
+      }
+      if (showAi && aiAssist) askInputRef.current?.focus()
+      else noteInputRef.current?.focus()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [open, showAi, aiAssist, hasDraft, assist.phase, assist.awaitingDirection])
 
   const handleIntent = async (id: AnnotationIntentId) => {
     if (id === 'custom') {
-      setCustomOpen(true)
+      askInputRef.current?.focus()
       return
     }
     if (!assist.agentReady) {
-      toast.message('请先连接右侧 Agent，再使用 AI 写批注')
+      toast.message('请先连接 AI')
       return
     }
-    await assist.runIntent(id)
+    await assist.sendChat(id)
   }
 
-  const handleCustomSend = async () => {
-    if (!customText.trim()) return
+  const handleAskSend = async () => {
+    // 等方向时允许空白发送 = 按默认生成
+    if (!askText.trim() && !assist.awaitingDirection) return
     if (!assist.agentReady) {
-      toast.message('请先连接右侧 Agent，再使用 AI 写批注')
+      toast.message('请先连接 AI')
       return
     }
-    await assist.runIntent('custom', customText)
-    setCustomOpen(false)
+    const text = askText
+    setAskText('')
+    await assist.sendChat('custom', text)
+  }
+
+  const handleComposeNow = () => {
+    void assist.writeNoteNow()
+  }
+
+  const handleDirectionChip = async (hint: string) => {
+    await assist.writeNoteNow(hint)
+  }
+
+  const handleRecompose = () => {
+    if (!assist.agentReady) {
+      toast.message('请先连接 AI')
+      return
+    }
+    assist.requestComposeDirection()
+    window.setTimeout(() => askInputRef.current?.focus(), 0)
   }
 
   const handleAdopt = () => {
@@ -118,14 +146,18 @@ export function AnnotationNoteDialog({
     onOpenChange(false)
   }
 
-  const handleDiscardAi = () => {
-    assist.discardDraft()
-    setManualEdit(false)
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-3 overflow-hidden sm:max-w-lg">
+      <DialogContent
+        className="flex max-h-[min(90vh,720px)] flex-col gap-3 overflow-hidden sm:max-w-lg"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          window.setTimeout(() => {
+            if (showAi && aiAssist) askInputRef.current?.focus()
+            else noteInputRef.current?.focus()
+          }, 0)
+        }}
+      >
         <DialogHeader className="space-y-1">
           <DialogTitle>{title}</DialogTitle>
           {aiAssist ? (
@@ -138,7 +170,7 @@ export function AnnotationNoteDialog({
                 onClick={() => setShowAi((value) => !value)}
               >
                 <Sparkles className="size-3.5" />
-                {showAi ? '收起 AI' : '用 AI 写'}
+                {showAi ? '收起 AI' : '用 AI 聊'}
               </Button>
               {showAi ? (
                 <Button
@@ -157,18 +189,44 @@ export function AnnotationNoteDialog({
         </DialogHeader>
 
         {excerpt ? (
-          <blockquote className="max-h-24 shrink-0 overflow-y-auto border-l-2 border-primary/40 pl-3 text-sm text-muted-foreground italic">
-            {excerpt}
-          </blockquote>
+          <div className="shrink-0 space-y-1">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground"
+              onClick={() => setExcerptOpen((value) => !value)}
+            >
+              {excerptOpen ? (
+                <ChevronUp className="size-3" />
+              ) : (
+                <ChevronDown className="size-3" />
+              )}
+              划线原文
+            </button>
+            {excerptOpen ? (
+              <blockquote className="max-h-20 overflow-y-auto border-l-2 border-primary/40 pl-3 text-sm text-muted-foreground italic">
+                {excerpt}
+              </blockquote>
+            ) : null}
+          </div>
         ) : null}
 
         {showAi && aiAssist ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-            {!assist.pendingDraft && assist.phase !== 'generating' ? (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">选一个意图即可生成草稿</p>
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+            {hasDraft ? (
+              <div className="shrink-0 space-y-2 rounded-md border border-border/80 p-2">
+                <p className="text-xs font-medium">批注草稿（可直接改）</p>
+                <textarea
+                  ref={draftInputRef}
+                  value={note}
+                  onChange={(event) => {
+                    setNote(event.target.value)
+                    assist.updatePendingNote(event.target.value)
+                  }}
+                  rows={4}
+                  className="flex min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
                 <div className="flex flex-wrap gap-1.5">
-                  {ANNOTATION_INTENT_CHIPS.map((chip) => (
+                  {ANNOTATION_REFINE_CHIPS.map((chip) => (
                     <Button
                       key={chip.id}
                       type="button"
@@ -176,82 +234,81 @@ export function AnnotationNoteDialog({
                       variant="outline"
                       className="h-7 rounded-full px-2.5 text-xs"
                       disabled={assist.busy}
-                      onClick={() => void handleIntent(chip.id)}
+                      onClick={() => void assist.runRefine(chip.id)}
                     >
                       {chip.label}
                     </Button>
                   ))}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 rounded-full px-2.5 text-xs text-muted-foreground"
+                    disabled={assist.busy}
+                    onClick={() => assist.discardDraft()}
+                  >
+                    不要了
+                  </Button>
                 </div>
-                {customOpen ? (
-                  <div className="flex gap-2">
-                    <input
-                      value={customText}
-                      onChange={(event) => setCustomText(event.target.value)}
-                      placeholder="一句话说明你想要的批注…"
-                      className="flex h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          void handleCustomSend()
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-8"
-                      disabled={assist.busy || !customText.trim()}
-                      onClick={() => void handleCustomSend()}
-                    >
-                      发送
-                    </Button>
-                  </div>
-                ) : null}
-                {!assist.agentReady ? (
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    Agent 未连接时仍可在下方手写批注。
-                  </p>
-                ) : null}
               </div>
             ) : null}
 
-            {assist.phase === 'generating' || assist.pendingDraft ? (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-foreground">待确认草稿</p>
-                {manualEdit ? (
-                  <textarea
-                    value={note}
-                    onChange={(event) => {
-                      setNote(event.target.value)
-                      assist.updatePendingNote(event.target.value)
-                    }}
-                    rows={4}
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  />
-                ) : (
-                  <div
-                    className={cn(
-                      'rounded-md border border-border/80 bg-muted/30 px-3 py-2 text-sm whitespace-pre-wrap',
-                      assist.phase === 'generating' && 'text-muted-foreground',
-                    )}
-                  >
-                    {draftPreview || '…'}
-                  </div>
-                )}
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md border border-border/60 p-2">
+              {messages.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  先聊聊这段话。想留批注时点「写成批注」或说「写批注」即可直接生成；方向可选。
+                </p>
+              ) : (
+                groupAgentMessages(messages).map((item) =>
+                  item.type === 'activity' ? (
+                    <div
+                      key={item.messages.map((m) => m.id).join('-')}
+                      className="space-y-1 opacity-80"
+                    >
+                      {item.messages.map((message) => (
+                        <AgentMessageBubble key={message.id} message={message} />
+                      ))}
+                    </div>
+                  ) : (
+                    <AgentMessageBubble key={item.message.id} message={item.message} />
+                  ),
+                )
+              )}
+              {assist.phase === 'generating' ? (
+                <p className="text-xs text-muted-foreground">正在整理…</p>
+              ) : null}
+            </div>
 
-                {assist.phase !== 'generating' && assist.pendingDraft ? (
+            {!hasDraft ? (
+              <div className="shrink-0 space-y-2">
+                {assist.awaitingDirection ? (
+                  <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2">
+                    <p className="text-[11px] font-medium text-foreground">
+                      方向可选，空白也可直接生成
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ANNOTATION_DIRECTION_CHIPS.map((chip) => (
+                        <Button
+                          key={chip.id}
+                          type="button"
+                          size="sm"
+                          variant={chip.id === 'direct' ? 'default' : 'secondary'}
+                          className="h-7 rounded-full px-2.5 text-xs"
+                          disabled={assist.busy}
+                          onClick={() => void handleDirectionChip(chip.hint)}
+                        >
+                          {chip.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      或输入方向后发送；不写内容直接发送也行
+                    </p>
+                  </div>
+                ) : (
                   <>
                     <div className="flex flex-wrap gap-1.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-7 rounded-full px-3 text-xs"
-                        disabled={assist.busy}
-                        onClick={handleAdopt}
-                      >
-                        采用
-                      </Button>
-                      {ANNOTATION_REFINE_CHIPS.map((chip) => (
+                      {ANNOTATION_INTENT_CHIPS.map((chip) => (
                         <Button
                           key={chip.id}
                           type="button"
@@ -259,79 +316,91 @@ export function AnnotationNoteDialog({
                           variant="outline"
                           className="h-7 rounded-full px-2.5 text-xs"
                           disabled={assist.busy}
-                          onClick={() => void assist.runRefine(chip.id)}
+                          onClick={() => void handleIntent(chip.id)}
                         >
                           {chip.label}
                         </Button>
                       ))}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 rounded-full px-2.5 text-xs text-muted-foreground"
-                        disabled={assist.busy}
-                        onClick={handleDiscardAi}
-                      >
-                        不要了
-                      </Button>
                     </div>
-                    <button
-                      type="button"
-                      className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
-                      onClick={() => setManualEdit((value) => !value)}
-                    >
-                      {manualEdit ? '收起编辑' : '自己改'}
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-
-            <button
-              type="button"
-              className="flex items-center gap-1 text-[11px] text-muted-foreground"
-              onClick={() => setTimelineOpen(!timelineOpen)}
-            >
-              {timelineOpen ? (
-                <ChevronUp className="size-3" />
-              ) : (
-                <ChevronDown className="size-3" />
-              )}
-              对话记录
-            </button>
-            {timelineOpen ? (
-              <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-border/60 p-2">
-                {messages.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">尚无消息</p>
-                ) : (
-                  groupAgentMessages(messages).map((item) =>
-                    item.type === 'activity' ? (
-                      <div
-                        key={item.messages.map((m) => m.id).join('-')}
-                        className="space-y-1 opacity-80"
-                      >
-                        {item.messages.map((message) => (
-                          <AgentMessageBubble key={message.id} message={message} />
-                        ))}
+                    {(assist.composeHint || messages.length > 0) && !assist.busy ? (
+                      <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                        <span className="text-[11px] text-muted-foreground">
+                          聊得差不多了？
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs"
+                          disabled={assist.busy}
+                          onClick={() => handleComposeNow()}
+                        >
+                          写成批注
+                        </Button>
+                        {assist.composeHint ? (
+                          <button
+                            type="button"
+                            className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                            onClick={() => assist.dismissComposeHint()}
+                          >
+                            先不写
+                          </button>
+                        ) : null}
                       </div>
-                    ) : (
-                      <AgentMessageBubble key={item.message.id} message={item.message} />
-                    ),
-                  )
+                    ) : null}
+                  </>
                 )}
               </div>
-            ) : null}
+            ) : (
+              <div className="shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 text-xs"
+                  disabled={assist.busy}
+                  onClick={() => handleRecompose()}
+                >
+                  换个方向再写
+                </Button>
+              </div>
+            )}
+
+            <div className="flex shrink-0 flex-col gap-2">
+              <textarea
+                ref={askInputRef}
+                value={askText}
+                onChange={(event) => setAskText(event.target.value)}
+                placeholder={
+                  assist.awaitingDirection
+                    ? '可选：写一句方向，或留空直接发送…'
+                    : '继续问，或说「写批注」直接生成…'
+                }
+                rows={2}
+                className="flex min-h-[56px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    void handleAskSend()
+                  }
+                }}
+              />
+              {!assist.agentReady ? (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  未连接 AI 时可收起后手写批注。
+                </p>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
-        {!showAi || !aiAssist || (!assist.pendingDraft && assist.phase !== 'generating') ? (
+        {showHandwrite ? (
           <textarea
+            ref={noteInputRef}
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="写下你的想法…"
             rows={4}
-            autoFocus={!showAi || !aiAssist}
-            className="flex min-h-[80px] w-full shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-h-[80px] w-full shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         ) : null}
 
@@ -339,11 +408,14 @@ export function AnnotationNoteDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          {assist.pendingDraft && assist.phase !== 'generating' ? (
-            <Button onClick={handleAdopt} disabled={!draftPreview.trim()}>
+          {hasDraft ? (
+            <Button
+              onClick={handleAdopt}
+              disabled={!note.trim() && !assist.pendingDraft?.note.trim()}
+            >
               采用并保存
             </Button>
-          ) : (
+          ) : showHandwrite ? (
             <Button
               onClick={() => {
                 onSave(note.trim())
@@ -351,6 +423,15 @@ export function AnnotationNoteDialog({
               }}
             >
               保存
+            </Button>
+          ) : (
+            <Button
+              disabled={
+                assist.busy || (!askText.trim() && !assist.awaitingDirection)
+              }
+              onClick={() => void handleAskSend()}
+            >
+              发送
             </Button>
           )}
         </DialogFooter>

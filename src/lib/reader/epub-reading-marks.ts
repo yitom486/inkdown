@@ -187,3 +187,36 @@ export function replaceAllEpubMarksOnRendition(
   }
   applyAllEpubMarksToRendition(rendition, marks, theme)
 }
+
+/** 批注对话框打开期间：用 annotations 顶替会因失焦消失的原生选区高亮 */
+export const EPUB_PENDING_SELECTION_ID = '__inkdown-pending-selection__'
+
+export function applyEpubPendingSelectionHighlight(
+  rendition: EpubRenditionMarks,
+  cfiRange: string,
+  theme: 'dark' | 'light',
+): void {
+  const range = cfiRange.trim()
+  if (!range) return
+  removeEpubMarkBothTypes(rendition, range)
+  rendition.annotations.add(
+    'highlight',
+    range,
+    { id: EPUB_PENDING_SELECTION_ID },
+    undefined,
+    'reader-mark-pending-selection',
+    {
+      fill: highlightFill('yellow', theme),
+      'fill-opacity': '1',
+    },
+  )
+}
+
+export function removeEpubPendingSelectionHighlight(
+  rendition: EpubRenditionMarks,
+  cfiRange: string | null | undefined,
+): void {
+  const range = cfiRange?.trim()
+  if (!range) return
+  removeEpubMarkBothTypes(rendition, range)
+}

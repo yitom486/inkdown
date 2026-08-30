@@ -1,23 +1,67 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildAnnotationIntentPrompt,
+  ANNOTATION_DIRECTION_ASK,
+  ANNOTATION_DIRECTION_CHIPS,
+  buildAnnotationChatPrompt,
+  buildAnnotationComposePrompt,
+  buildAskComposeDirectionPrompt,
+  detectAnnotationWriteIntent,
   buildAnnotationRefinePrompt,
   extractAnnotationDraft,
 } from './annotation-note-prompts'
 
 describe('annotation-note-prompts', () => {
-  it('意图 prompt 含选区与输出约束', () => {
-    const built = buildAnnotationIntentPrompt({
+  it('聊天意图不要求只输出批注，并禁止擅自 propose', () => {
+    const built = buildAnnotationChatPrompt({
       excerpt: '天下大势分久必合',
       intent: 'explain',
     })
     expect(built.displayText).toBe('解释这段')
     expect(built.promptText).toContain('天下大势分久必合')
-    expect(built.promptText).toContain('不要调用 inkdown_create_note')
+    expect(built.promptText).toContain('普通聊天')
+    expect(built.promptText).toContain('不要调用 inkdown_create_note / inkdown_propose_note')
+    expect(built.promptText).toContain('禁止输出 English:')
   })
 
-  it('自定义意图使用用户原文', () => {
-    const built = buildAnnotationIntentPrompt({
+  it('写成批注才允许 propose，且禁止英译杂质', () => {
+    const built = buildAnnotationComposePrompt({
+      excerpt: '选区',
+      hint: '写批注：侧重作者语气',
+    })
+    expect(built.displayText).toContain('写批注')
+    expect(built.promptText).toContain('inkdown_propose_note')
+    expect(built.promptText).toContain('只输出批注正文')
+    expect(built.promptText).toContain('Natural English:')
+  })
+
+  it('按钮追问方向文案固定可本地展示', () => {
+    expect(ANNOTATION_DIRECTION_ASK).toContain('可选')
+    expect(ANNOTATION_DIRECTION_CHIPS.some((c) => c.id === 'direct')).toBe(true)
+    const built = buildAskComposeDirectionPrompt({ excerpt: '选区' })
+    expect(built.displayText).toBe('写成批注')
+    expect(built.promptText).toContain('追问')
+  })
+
+  it('detectAnnotationWriteIntent 识别带方向的命令', () => {
+    expect(detectAnnotationWriteIntent('这段很好玩')).toEqual({
+      write: false,
+      hasDirection: false,
+      direction: '',
+    })
+    expect(detectAnnotationWriteIntent('写一下批注')).toMatchObject({
+      write: true,
+      hasDirection: false,
+    })
+    expect(
+      detectAnnotationWriteIntent('写批注：用口语记下我对这段的疑问'),
+    ).toMatchObject({
+      write: true,
+      hasDirection: true,
+    })
+  })
+
+  it('自定义聊天使用用户原文', () => {
+    const built = buildAnnotationChatPrompt({
       excerpt: '选区',
       intent: 'custom',
       customText: '联系后文矛盾',
@@ -36,8 +80,14 @@ describe('annotation-note-prompts', () => {
     expect(built.promptText).toContain('旧草稿')
   })
 
-  it('extractAnnotationDraft 去掉围栏与前缀', () => {
+  it('extractAnnotationDraft 去掉围栏、前缀与英译行', () => {
     expect(extractAnnotationDraft('```\n批注正文\n```')).toBe('批注正文')
     expect(extractAnnotationDraft('批注：这里有观点')).toBe('这里有观点')
+    expect(
+      extractAnnotationDraft('这段很尖锐。\nEnglish: This is sharp.'),
+    ).toBe('这段很尖锐。')
+    expect(extractAnnotationDraft('Natural English: Hello\n中文批注')).toBe(
+      '中文批注',
+    )
   })
 })

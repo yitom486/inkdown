@@ -226,7 +226,7 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.ACP_DISCONNECT, () => disconnectAcp())
   ipcMain.handle(IPC.ACP_SESSION_NEW, (_event, payload: AcpSessionNewPayload) =>
-    createAcpSession(payload.cwd),
+    createAcpSession(payload?.cwd),
   )
   ipcMain.handle(IPC.ACP_PROMPT, (event, payload: AcpPromptPayload) => {
     rememberAgentOwner(event.sender)

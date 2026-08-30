@@ -15,7 +15,7 @@ import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
-import { useAnnotationAgentStore } from '@/stores/annotation-agent-store'
+import { useAnnotationAgentStore, annotationOwnsSessionId } from '@/stores/annotation-agent-store'
 
 function activeThreadAgentSessionId(): string | undefined {
   const s = useAcpUiStore.getState()
@@ -84,11 +84,20 @@ export function useAcpSession(workspaceRoot?: string) {
         finishStreaming()
         setAuthOpen(false)
         setAuthMethods([])
+        // 批注副会话随 Agent 进程一起失效；本地气泡仍保留
+        useAnnotationAgentStore.getState().clearAllAgentSessionIds()
       }
     })
     const offUpdate = acpApi.onSessionUpdate((event) => {
-      if (useAnnotationAgentStore.getState().capturing) {
-        useAnnotationAgentStore.getState().applySessionUpdate(event.update)
+      const ann = useAnnotationAgentStore.getState()
+      // 按 sessionId 分流：批注副会话绝不进右侧时间线
+      if (annotationOwnsSessionId(ann, event.sessionId)) {
+        ann.applySessionUpdate(event.update)
+        return
+      }
+      // 兼容：副会话刚创建、尚未 bind 前的短窗口
+      if (ann.capturing) {
+        ann.applySessionUpdate(event.update)
         return
       }
       applySessionUpdate(event.update)

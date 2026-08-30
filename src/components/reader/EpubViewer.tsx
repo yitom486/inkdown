@@ -43,10 +43,12 @@ import {
 import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/reader/epub-themes'
 import {
   applyEpubMarkToRendition,
+  applyEpubPendingSelectionHighlight,
   findEpubMarksAtPoint,
   findEpubNoteMarkAtPoint,
   injectReadingMarkStyles,
   removeEpubMarkFromRendition,
+  removeEpubPendingSelectionHighlight,
   replaceAllEpubMarksOnRendition,
   type EpubMarkHoverHandlers,
 } from '@/lib/reader/epub-reading-marks'
@@ -129,6 +131,8 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const selectionSnapshotRef = useRef<EpubSelectionSnapshot | null>(null)
+  selectionSnapshotRef.current = selectionSnapshot
   const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
   const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
   const typography = useMemo(
@@ -151,6 +155,10 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   inspectorRef.current = inspector
 
   const clearTextSelection = useCallback(() => {
+    const pendingCfi = selectionSnapshotRef.current?.cfiRange
+    if (pendingCfi && renditionRef.current) {
+      removeEpubPendingSelectionHighlight(renditionRef.current, pendingCfi)
+    }
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
     clearReaderSelection()
@@ -159,10 +167,19 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
   /** 收起高亮、工具栏与标记浮层，保留 sticky 供 Agent 读取 */
   const dimTextSelection = useCallback(() => {
+    if (noteDialogOpen) return
     setSelectionToolbarPos(null)
     clearEpubRenditionSelections(renditionRef.current)
     inspectorRef.current.close()
-  }, [])
+  }, [noteDialogOpen])
+
+  const showPendingSelectionHighlight = useCallback(() => {
+    const snapshot = selectionSnapshotRef.current
+    const rendition = renditionRef.current
+    if (!snapshot?.cfiRange || !rendition || editingNoteMark) return
+    applyEpubPendingSelectionHighlight(rendition, snapshot.cfiRange, themeRef.current)
+    clearEpubRenditionSelections(rendition)
+  }, [editingNoteMark])
 
   const scrollCleanupRef = useRef<(() => void) | null>(null)
   const selectionCleanupRef = useRef<(() => void) | null>(null)
@@ -307,7 +324,12 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     const rendition = renditionRef.current
     if (!rendition) return
     replaceAllEpubMarksOnRendition(rendition, marksRef.current, theme)
-  }, [theme])
+    // 批注窗打开时重绘会冲掉挂起选区，补回一层
+    if (noteDialogOpen && !editingNoteMark) {
+      const cfi = selectionSnapshotRef.current?.cfiRange
+      if (cfi) applyEpubPendingSelectionHighlight(rendition, cfi, theme)
+    }
+  }, [editingNoteMark, noteDialogOpen, theme])
 
   const scheduleVisualMarkLayout = useDeferredReaderLayout(() => {
     hoveredMarkIdRef.current = null
@@ -315,9 +337,6 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     setMarkTooltipPos(null)
     syncVisualMarks()
   })
-
-  const selectionSnapshotRef = useRef<EpubSelectionSnapshot | null>(null)
-  selectionSnapshotRef.current = selectionSnapshot
 
   const addBookmarkAtCurrent = useCallback(async () => {
     const rendition = renditionRef.current
@@ -596,8 +615,11 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       const container = containerRef.current
       if (!container) return false
       return container.contains(target)
-    }, dimTextSelection)
-  }, [dimTextSelection])
+    }, () => {
+      if (noteDialogOpen) return
+      dimTextSelection()
+    })
+  }, [dimTextSelection, noteDialogOpen])
 
   useEffect(() => {
     return () => {
@@ -1051,6 +1073,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
             setEditingNoteMark(null)
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+            showPendingSelectionHighlight()
           }}
           onHighlight={(color) => {
             void handleSaveAnnotation('', color)
@@ -1077,7 +1100,11 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         title={editingNoteMark ? '编辑批注' : '添加批注'}
         onOpenChange={(open) => {
           setNoteDialogOpen(open)
-          if (!open) setEditingNoteMark(null)
+          if (!open) {
+            const wasEditing = Boolean(editingNoteMark)
+            setEditingNoteMark(null)
+            if (!wasEditing) clearTextSelection()
+          }
         }}
         onSave={(note) => {
           if (editingNoteMark) {

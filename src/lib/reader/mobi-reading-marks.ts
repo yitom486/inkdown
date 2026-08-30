@@ -268,6 +268,37 @@ export function findMobiMarksAtPoint(
   return hits
 }
 
+/** 批注对话框打开期间：用 rect 叠层顶替失焦后消失的原生选区 */
+export const MOBI_PENDING_SELECTION_ID = '__inkdown-pending-selection__'
+
+export function removeMobiPendingSelectionHighlight(container: HTMLElement | null): void {
+  if (!container) return
+  container
+    .querySelectorAll(`[data-mark-id="${MOBI_PENDING_SELECTION_ID}"]`)
+    .forEach((node) => node.remove())
+}
+
+export function applyMobiPendingSelectionHighlight(
+  container: HTMLElement | null,
+  rects: Array<{ x: number; y: number; width: number; height: number }>,
+  theme: 'dark' | 'light',
+): void {
+  if (!container || rects.length === 0) return
+  removeMobiPendingSelectionHighlight(container)
+  const layer = ensureMarkLayer(container)
+  for (const rect of rects) {
+    appendRectOverlay(
+      layer,
+      rect,
+      'mobi-mark-highlight mobi-mark-pending-selection',
+      MOBI_PENDING_SELECTION_ID,
+      false,
+      'yellow',
+      theme,
+    )
+  }
+}
+
 export function findMobiNoteMarkAtPoint(
   doc: Document,
   clientX: number,

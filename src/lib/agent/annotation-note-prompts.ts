@@ -1,4 +1,4 @@
-/** 批注 AI 助手：意图 / 改写 chip 与发给 Agent 的隐含指令（用户只点 chip）。 */
+/** 批注助手：先聊天；带方向的写批注命令直接整理；按钮先追问方向。 */
 
 export type AnnotationIntentId =
   | 'explain'
@@ -28,7 +28,7 @@ export const ANNOTATION_INTENT_CHIPS: AnnotationIntentChip[] = [
   { id: 'explain', label: '解释这段' },
   { id: 'thesis', label: '提炼观点' },
   { id: 'challenge', label: '质疑一下' },
-  { id: 'plain', label: '白话改写' },
+  { id: 'plain', label: '白话说说' },
   { id: 'custom', label: '其他…' },
 ]
 
@@ -40,11 +40,30 @@ export const ANNOTATION_REFINE_CHIPS: AnnotationRefineChip[] = [
   { id: 'formal', label: '更正式' },
 ]
 
-const INTENT_INSTRUCTIONS: Record<Exclude<AnnotationIntentId, 'custom'>, string> = {
-  explain: '用简洁中文解释选区含义，写成可直接当作阅读批注的短文（不要复述全文）。',
-  thesis: '抽出核心主张或结论，写成 1–3 句批注。',
-  challenge: '针对选区提出 1–2 个合理疑问或反例，语气克制，写成批注。',
-  plain: '把选区改写成更好懂的说法，仍用批注口吻，不要写成全书摘要。',
+/** 点「写成批注」后立刻展示；点选即作为方向去生成 */
+export interface AnnotationDirectionChip {
+  id: string
+  label: string
+  /** 交给 compose 的方向文案 */
+  hint: string
+}
+
+export const ANNOTATION_DIRECTION_ASK =
+  '可以补一句写法方向（可选）；直接发送空白或点「直接写」也会按默认整理一条批注。'
+
+export const ANNOTATION_DIRECTION_CHIPS: AnnotationDirectionChip[] = [
+  { id: 'direct', label: '直接写', hint: '' },
+  { id: 'explain', label: '侧重解释', hint: '侧重解释这段在说什么' },
+  { id: 'thesis', label: '提炼观点', hint: '提炼核心观点写成批注' },
+  { id: 'question', label: '记下疑问', hint: '记下我对这段的疑问' },
+  { id: 'casual', label: '口语一点', hint: '用口语写一条短批注' },
+]
+
+const CHAT_INTENT: Record<Exclude<AnnotationIntentId, 'custom'>, string> = {
+  explain: '请解释这段选区在说什么，用轻松对话的方式，不必写成最终批注。',
+  thesis: '请帮我提炼这段选区的核心观点，先讨论清楚，不必急着定稿批注。',
+  challenge: '请对这段选区提出一两个值得思考的疑问或反例，我们先聊聊。',
+  plain: '请用大白话讲讲这段选区，方便我理解，先不用写成批注格式。',
 }
 
 const REFINE_INSTRUCTIONS: Record<AnnotationRefineId, string> = {
@@ -55,45 +74,111 @@ const REFINE_INSTRUCTIONS: Record<AnnotationRefineId, string> = {
   formal: '把当前草稿改得更正式、克制。',
 }
 
-const OUTPUT_RULES = [
-  '你在帮用户撰写阅读批注草稿，不是聊天客服。',
-  '只输出批注正文本身：不要标题、不要 markdown 围栏、不要「以下是批注」等前后缀。',
-  '不要调用 inkdown_create_note；草稿由客户端展示给用户确认后再保存。',
-  '若信息不足，仍基于给定选区尽力写一版短批注。',
+const CHAT_RULES = [
+  '你在阅读器的「批注助手」里与用户多轮讨论选区。',
+  '默认是普通聊天：解答、讨论、追问都可以。',
+  '全程使用用户的语言（通常为中文）；禁止输出 English: / Natural English: 等英译前缀或对照翻译。',
+  '不要调用 inkdown_create_note / inkdown_propose_note，除非用户已明确要求整理批注正文。',
+  '不要每次回复都输出「最终批注」。',
 ].join('\n')
 
-export function buildAnnotationIntentPrompt(options: {
+const DRAFT_RULES = [
+  '用户已明确要求整理成可保存的阅读批注草稿。',
+  '只输出批注正文本身，必须能直接贴进批注框。',
+  '禁止：标题、markdown 围栏、「以下是批注」、English:/Natural English:、中英对照、思考过程、客套话。',
+  '语言与用户一致（用户用中文就写中文）。',
+  '可调用 inkdown_propose_note 提交草稿（不入库，等人确认）；不要调用 inkdown_create_note 直接入库。',
+].join('\n')
+
+const WRITE_INTENT_RE =
+  /写(?:成|一下|一个|条)?批注|整理成批注|记(?:一)?条批注|帮我写批注|给这段写批注/
+
+function excerptBlock(excerpt: string): string {
+  return ['选区原文（用户划线）：', excerpt.trim() || '（无选区文本）'].join('\n')
+}
+
+/** 用户是否在命令里明确要求写批注；direction 为整句（含写法要求）。 */
+export function detectAnnotationWriteIntent(text: string): {
+  write: boolean
+  /** 除「写批注」套话外是否还有写法方向 */
+  hasDirection: boolean
+  direction: string
+} {
+  const trimmed = text.trim()
+  if (!trimmed || !WRITE_INTENT_RE.test(trimmed)) {
+    return { write: false, hasDirection: false, direction: '' }
+  }
+  const stripped = trimmed
+    .replace(WRITE_INTENT_RE, ' ')
+    .replace(/^[，,。.\s:：]+|[，,。.\s]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const hasDirection = stripped.length >= 2
+  return { write: true, hasDirection, direction: trimmed }
+}
+
+/** 多轮聊天（意图 chip / 自由提问） */
+export function buildAnnotationChatPrompt(options: {
   excerpt: string
   intent: AnnotationIntentId
   customText?: string
 }): { displayText: string; promptText: string } {
   const excerpt = options.excerpt.trim()
   if (options.intent === 'custom') {
-    const ask = options.customText?.trim() || '请根据选区写一条有用的批注'
+    const ask = options.customText?.trim() || '我们先聊聊这段选区'
     return {
       displayText: ask,
-      promptText: [
-        OUTPUT_RULES,
-        '',
-        `用户意图：${ask}`,
-        '',
-        '选区原文：',
-        excerpt || '（无选区文本）',
-      ].join('\n'),
+      promptText: [CHAT_RULES, '', `用户说：${ask}`, '', excerptBlock(excerpt)].join('\n'),
     }
   }
 
   const chip = ANNOTATION_INTENT_CHIPS.find((item) => item.id === options.intent)
-  const instruction = INTENT_INSTRUCTIONS[options.intent]
   return {
     displayText: chip?.label ?? options.intent,
     promptText: [
-      OUTPUT_RULES,
+      CHAT_RULES,
       '',
-      `任务：${instruction}`,
+      `用户点了「${chip?.label ?? options.intent}」。`,
+      CHAT_INTENT[options.intent],
       '',
-      '选区原文：',
-      excerpt || '（无选区文本）',
+      excerptBlock(excerpt),
+    ].join('\n'),
+  }
+}
+
+/** 按钮「写成批注」：只追问方向，不写正文 */
+export function buildAskComposeDirectionPrompt(options: {
+  excerpt: string
+}): { displayText: string; promptText: string } {
+  return {
+    displayText: '写成批注',
+    promptText: [
+      CHAT_RULES,
+      '',
+      '用户点了「写成批注」，但尚未说明想怎么写。',
+      '请只用一两句中文追问：希望批注侧重什么（解释 / 评价 / 疑问 / 摘录要点等），或想强调哪一点？',
+      '不要写批注正文，不要英译，不要工具调用。',
+      '',
+      excerptBlock(options.excerpt),
+    ].join('\n'),
+  }
+}
+
+/** 已有明确方向：整理可编辑草稿 */
+export function buildAnnotationComposePrompt(options: {
+  excerpt: string
+  hint?: string
+}): { displayText: string; promptText: string } {
+  const hint = options.hint?.trim()
+  return {
+    displayText: hint && WRITE_INTENT_RE.test(hint) ? hint : '写成批注',
+    promptText: [
+      DRAFT_RULES,
+      '',
+      '请按用户给出的方向，根据对话与选区，写一条可保存的批注正文。',
+      hint ? `用户方向：${hint}` : '用户未补充方向时，写一条简洁的理解性批注。',
+      '',
+      excerptBlock(options.excerpt),
     ].join('\n'),
   }
 }
@@ -108,20 +193,27 @@ export function buildAnnotationRefinePrompt(options: {
   return {
     displayText: chip?.label ?? options.refine,
     promptText: [
-      OUTPUT_RULES,
+      DRAFT_RULES,
       '',
       `任务：${REFINE_INSTRUCTIONS[options.refine]}`,
-      options.lastIntentLabel ? `原先意图：${options.lastIntentLabel}` : '',
+      options.lastIntentLabel ? `上下文：${options.lastIntentLabel}` : '',
       '',
-      '选区原文：',
-      options.excerpt.trim() || '（无选区文本）',
+      excerptBlock(options.excerpt),
       '',
-      '当前草稿：',
+      '当前草稿（用户可已改过）：',
       options.draft.trim() || '（空）',
     ]
       .filter(Boolean)
       .join('\n'),
   }
+}
+
+export function buildAnnotationIntentPrompt(options: {
+  excerpt: string
+  intent: AnnotationIntentId
+  customText?: string
+}): { displayText: string; promptText: string } {
+  return buildAnnotationChatPrompt(options)
 }
 
 /** 从 Agent 回复中抽出可当作批注的纯文本。 */
@@ -138,6 +230,14 @@ export function extractAnnotationDraft(raw: string): string {
     .replace(/^这里是(?:批注|草稿)[:：]\s*/i, '')
     .replace(/^批注(?:正文)?[:：]\s*/i, '')
     .replace(/^草稿[:：]\s*/i, '')
+    .trim()
+
+  // 丢掉英译前缀行（English: / Natural English:）
+  text = text
+    .split(/\n/)
+    .filter((line) => !/^(English|Natural English)\s*:/i.test(line.trim()))
+    .join('\n')
+    .replace(/^(English|Natural English)\s*:\s*/gim, '')
     .trim()
 
   return text

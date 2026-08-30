@@ -5,6 +5,18 @@ export function isReaderSelectionToolbarTarget(target: EventTarget | null): bool
   )
 }
 
+/** 批注对话框、Radix 浮层等：点击时不应清掉阅读器选区高亮 */
+export function isReaderOverlayUiTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        '[role="dialog"], [data-radix-popper-content-wrapper], [data-radix-select-content], [data-sonner-toaster]',
+      ),
+    )
+  )
+}
+
 export function clearWindowSelection(win: Window | null | undefined): void {
   win?.getSelection()?.removeAllRanges()
 }
@@ -38,6 +50,7 @@ export function bindOutsideReaderPointerDismiss(
   const onPointerDown = (event: PointerEvent) => {
     if (!(event.target instanceof Element)) return
     if (isReaderSelectionToolbarTarget(event.target)) return
+    if (isReaderOverlayUiTarget(event.target)) return
     if (isInsideReader(event.target)) return
     onDismiss()
   }

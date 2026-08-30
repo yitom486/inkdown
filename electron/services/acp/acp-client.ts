@@ -240,9 +240,13 @@ async function handlePermissionRequest(
 
   return await new Promise<PermissionDecision>((resolve) => {
     pendingPermissions.set(numericId, { resolve })
+    const permSessionId =
+      typeof params.sessionId === 'string' && params.sessionId.trim()
+        ? params.sessionId
+        : (sessionId ?? undefined)
     void permissionBridge!({
       requestId: numericId,
-      sessionId: sessionId ?? undefined,
+      sessionId: permSessionId,
       params,
     })
       .then((outcome) => {
@@ -593,24 +597,44 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
   return ok(undefined)
 }
 
+/**
+ * 在已连接的 Agent 进程上再建一条 session（如批注助手）。
+ * **不**覆盖主面板的 sessionId，避免副会话抢走主会话身份。
+ * cwd 可省略：沿用 connect 时记下的 workspaceRoot。
+ */
 export async function createAcpSession(
-  cwd: string,
+  cwd?: string,
 ): Promise<Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>> {
   const t = requireTransport()
   if (!t.ok) return t
 
+  const resolvedCwd = cwd?.trim() || workspaceRoot?.trim() || ''
+  if (!resolvedCwd) {
+    return err({
+      code: 'ACP_NOT_CONNECTED',
+      message: '无工作区路径，无法创建批注会话（请先打开文件夹并连接 AI）',
+    })
+  }
+
   try {
     const result = (await t.value.request('session/new', {
-      cwd,
-      mcpServers: [],
+      cwd: resolvedCwd,
+      mcpServers: inkdownMcp
+        ? [
+            {
+              type: 'http',
+              name: 'inkdown',
+              url: inkdownMcp.url,
+              headers: [{ name: 'Authorization', value: `Bearer ${inkdownMcp.authToken}` }],
+            },
+          ]
+        : [],
     })) as Record<string, unknown>
     const id = typeof result.sessionId === 'string' ? result.sessionId : null
     if (!id) {
       return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
     }
-    sessionId = id
-    workspaceRoot = cwd
-    setStatus('connected')
+    if (!workspaceRoot) workspaceRoot = resolvedCwd
     return ok({
       sessionId: id,
       configOptions: parseAcpConfigOptions(result.configOptions),
