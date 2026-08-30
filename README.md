@@ -134,9 +134,9 @@ bun run pack
 只有推送版本 tag 才会触发 GitHub Actions 打包发布，普通 `git push` 不会创建 Release。
 
 ```bash
-git tag v0.2.1
+git tag v0.2.2
 git push origin master
-git push origin v0.2.1
+git push origin v0.2.2
 ```
 
 发布工作流位于 [`.github/workflows/release.yml`](./.github/workflows/release.yml)。
