@@ -222,7 +222,11 @@ export function registerIpcHandlers(): void {
     authenticateAcp(payload),
   )
   ipcMain.handle(IPC.ACP_LOAD_SESSION, (_event, payload: AcpLoadSessionPayload) =>
-    loadAcpSession(payload),
+    loadAcpSession({
+      sessionId: payload.sessionId,
+      cwd: payload.cwd,
+      secondary: payload.secondary,
+    }),
   )
   ipcMain.handle(IPC.ACP_DISCONNECT, () => disconnectAcp())
   ipcMain.handle(IPC.ACP_SESSION_NEW, (_event, payload: AcpSessionNewPayload) =>

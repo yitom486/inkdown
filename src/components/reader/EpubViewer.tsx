@@ -1094,7 +1094,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         open={noteDialogOpen}
         filePath={filePath}
         fileFingerprint={fileFingerprint}
-        aiAssist={!editingNoteMark}
+        aiAssist
         excerpt={editingNoteMark?.excerpt ?? selectionSnapshot?.text}
         initialNote={editingNoteMark?.note ?? ''}
         title={editingNoteMark ? '编辑批注' : '添加批注'}

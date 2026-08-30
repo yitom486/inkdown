@@ -84,8 +84,8 @@ export function useAcpSession(workspaceRoot?: string) {
         finishStreaming()
         setAuthOpen(false)
         setAuthMethods([])
-        // 批注副会话随 Agent 进程一起失效；本地气泡仍保留
-        useAnnotationAgentStore.getState().clearAllAgentSessionIds()
+        // 批注：保留 agentSessionId，仅标记 stale，重连后 session/load 续上
+        useAnnotationAgentStore.getState().markSessionsStale()
       }
     })
     const offUpdate = acpApi.onSessionUpdate((event) => {

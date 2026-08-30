@@ -991,7 +991,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         open={noteDialogOpen}
         filePath={filePath}
         fileFingerprint={fileFingerprint}
-        aiAssist={!editingNoteMark}
+        aiAssist
         excerpt={editingNoteMark?.excerpt ?? selectionSnapshot?.text}
         initialNote={editingNoteMark?.note ?? ''}
         title={editingNoteMark ? '编辑批注' : '添加批注'}

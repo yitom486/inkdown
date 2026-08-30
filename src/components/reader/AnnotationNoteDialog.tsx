@@ -31,6 +31,7 @@ interface AnnotationNoteDialogProps {
   title?: string
   filePath: string
   fileFingerprint?: string
+  /** 是否提供 AI 能力（默认开；界面默认仍先手写） */
   aiAssist?: boolean
   onOpenChange: (open: boolean) => void
   onSave: (note: string) => void
@@ -48,12 +49,13 @@ export function AnnotationNoteDialog({
   onSave,
 }: AnnotationNoteDialogProps) {
   const [note, setNote] = useState('')
-  const [showAi, setShowAi] = useState(true)
+  /** 默认收起：先手写，需要时再展开 AI */
+  const [showAi, setShowAi] = useState(false)
   const [askText, setAskText] = useState('')
   const [excerptOpen, setExcerptOpen] = useState(true)
+  const [polishPreview, setPolishPreview] = useState<string | null>(null)
   const askInputRef = useRef<HTMLTextAreaElement>(null)
   const noteInputRef = useRef<HTMLTextAreaElement>(null)
-  const draftInputRef = useRef<HTMLTextAreaElement>(null)
 
   const assist = useAnnotationAgentAssist({
     filePath,
@@ -65,15 +67,16 @@ export function AnnotationNoteDialog({
     useShallow((s) => selectAnnotationActiveMessages(s)),
   )
 
-  const showHandwrite = !showAi || !aiAssist
   const hasDraft = Boolean(assist.pendingDraft)
+  const canPolish = aiAssist && note.trim().length > 0
 
   useEffect(() => {
     if (!open) return
     setNote(initialNote)
-    setShowAi(aiAssist && !initialNote.trim())
+    setShowAi(false)
     setAskText('')
     setExcerptOpen(true)
+    setPolishPreview(null)
     assist.prepare()
     assist.dismissComposeHint()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open edge
@@ -82,21 +85,18 @@ export function AnnotationNoteDialog({
   useEffect(() => {
     if (assist.pendingDraft) {
       setNote(assist.pendingDraft.note)
+      setPolishPreview(null)
     }
   }, [assist.pendingDraft])
 
   useEffect(() => {
     if (!open) return
     const timer = window.setTimeout(() => {
-      if (hasDraft) {
-        draftInputRef.current?.focus()
-        return
-      }
-      if (showAi && aiAssist) askInputRef.current?.focus()
+      if (showAi) askInputRef.current?.focus()
       else noteInputRef.current?.focus()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [open, showAi, aiAssist, hasDraft, assist.phase, assist.awaitingDirection])
+  }, [open, showAi, hasDraft, assist.phase, assist.awaitingDirection])
 
   const handleIntent = async (id: AnnotationIntentId) => {
     if (id === 'custom') {
@@ -111,7 +111,6 @@ export function AnnotationNoteDialog({
   }
 
   const handleAskSend = async () => {
-    // 等方向时允许空白发送 = 按默认生成
     if (!askText.trim() && !assist.awaitingDirection) return
     if (!assist.agentReady) {
       toast.message('请先连接 AI')
@@ -139,9 +138,32 @@ export function AnnotationNoteDialog({
     window.setTimeout(() => askInputRef.current?.focus(), 0)
   }
 
+  const handlePolish = async () => {
+    if (!assist.agentReady) {
+      toast.message('请先连接 AI')
+      return
+    }
+    const polished = await assist.polishNote(note)
+    if (polished) setPolishPreview(polished)
+  }
+
+  const handleAdoptPolish = () => {
+    if (!polishPreview) return
+    setNote(polishPreview)
+    if (assist.pendingDraft) assist.updatePendingNote(polishPreview)
+    setPolishPreview(null)
+    toast.message('已替换为润色稿，确认无误后再保存')
+  }
+
   const handleAdopt = () => {
     const text = (assist.pendingDraft?.note ?? note).trim()
     onSave(text)
+    assist.discardDraft()
+    onOpenChange(false)
+  }
+
+  const handleSaveHandwrite = () => {
+    onSave(note.trim())
     assist.discardDraft()
     onOpenChange(false)
   }
@@ -152,10 +174,7 @@ export function AnnotationNoteDialog({
         className="flex max-h-[min(90vh,720px)] flex-col gap-3 overflow-hidden sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
-          window.setTimeout(() => {
-            if (showAi && aiAssist) askInputRef.current?.focus()
-            else noteInputRef.current?.focus()
-          }, 0)
+          window.setTimeout(() => noteInputRef.current?.focus(), 0)
         }}
       >
         <DialogHeader className="space-y-1">
@@ -210,21 +229,72 @@ export function AnnotationNoteDialog({
           </div>
         ) : null}
 
+        {/* 主路径：始终可手写 */}
+        <div className="shrink-0 space-y-2">
+          <textarea
+            ref={noteInputRef}
+            value={note}
+            onChange={(event) => {
+              setNote(event.target.value)
+              setPolishPreview(null)
+              if (assist.pendingDraft) {
+                assist.updatePendingNote(event.target.value)
+              }
+            }}
+            placeholder="写下你的想法…"
+            rows={4}
+            className="flex min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          {!showAi && aiAssist ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 px-2.5 text-xs"
+                disabled={assist.busy || !canPolish}
+                onClick={() => void handlePolish()}
+              >
+                <Sparkles className="size-3.5" />
+                {assist.phase === 'generating' ? '润色中…' : 'AI 润色'}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                先手写；需要时再润色或点上方「用 AI 聊」
+              </span>
+            </div>
+          ) : null}
+          {polishPreview ? (
+            <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+              <p className="text-[11px] font-medium">润色预览（尚未替换）</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{polishPreview}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={handleAdoptPolish}
+                >
+                  替换原文
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setPolishPreview(null)}
+                >
+                  不用
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         {showAi && aiAssist ? (
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
             {hasDraft ? (
               <div className="shrink-0 space-y-2 rounded-md border border-border/80 p-2">
-                <p className="text-xs font-medium">批注草稿（可直接改）</p>
-                <textarea
-                  ref={draftInputRef}
-                  value={note}
-                  onChange={(event) => {
-                    setNote(event.target.value)
-                    assist.updatePendingNote(event.target.value)
-                  }}
-                  rows={4}
-                  className="flex min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
+                <p className="text-xs font-medium">AI 草稿（已同步到上方，可再改）</p>
                 <div className="flex flex-wrap gap-1.5">
                   {ANNOTATION_REFINE_CHIPS.map((chip) => (
                     <Button
@@ -256,7 +326,7 @@ export function AnnotationNoteDialog({
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md border border-border/60 p-2">
               {messages.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
-                  先聊聊这段话。想留批注时点「写成批注」或说「写批注」即可直接生成；方向可选。
+                  先聊聊这段话。想留批注时点「写成批注」或说「写批注」即可生成到上方。
                 </p>
               ) : (
                 groupAgentMessages(messages).map((item) =>
@@ -274,7 +344,7 @@ export function AnnotationNoteDialog({
                   ),
                 )
               )}
-              {assist.phase === 'generating' ? (
+              {assist.phase === 'generating' && !polishPreview ? (
                 <p className="text-xs text-muted-foreground">正在整理…</p>
               ) : null}
             </div>
@@ -301,9 +371,6 @@ export function AnnotationNoteDialog({
                         </Button>
                       ))}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      或输入方向后发送；不写内容直接发送也行
-                    </p>
                   </div>
                 ) : (
                   <>
@@ -386,45 +453,25 @@ export function AnnotationNoteDialog({
               />
               {!assist.agentReady ? (
                 <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  未连接 AI 时可收起后手写批注。
+                  未连接 AI 时可先手写保存。
                 </p>
               ) : null}
             </div>
           </div>
         ) : null}
 
-        {showHandwrite ? (
-          <textarea
-            ref={noteInputRef}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="写下你的想法…"
-            rows={4}
-            className="flex min-h-[80px] w-full shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        ) : null}
-
         <DialogFooter className="shrink-0">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          {hasDraft ? (
+          {showAi && hasDraft ? (
             <Button
               onClick={handleAdopt}
               disabled={!note.trim() && !assist.pendingDraft?.note.trim()}
             >
               采用并保存
             </Button>
-          ) : showHandwrite ? (
-            <Button
-              onClick={() => {
-                onSave(note.trim())
-                onOpenChange(false)
-              }}
-            >
-              保存
-            </Button>
-          ) : (
+          ) : showAi && !hasDraft ? (
             <Button
               disabled={
                 assist.busy || (!askText.trim() && !assist.awaitingDirection)
@@ -432,6 +479,10 @@ export function AnnotationNoteDialog({
               onClick={() => void handleAskSend()}
             >
               发送
+            </Button>
+          ) : (
+            <Button onClick={handleSaveHandwrite} disabled={assist.busy}>
+              保存
             </Button>
           )}
         </DialogFooter>

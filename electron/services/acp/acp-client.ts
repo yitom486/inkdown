@@ -534,6 +534,7 @@ export async function authenticateAcp(payload: {
 export async function loadAcpSession(payload: {
   sessionId: string
   cwd: string
+  secondary?: boolean
 }): Promise<
   Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>
 > {
@@ -546,23 +547,49 @@ export async function loadAcpSession(payload: {
     })
   }
 
+  const cwd = payload.cwd.trim() || workspaceRoot?.trim() || ''
+  if (!cwd) {
+    return err({
+      code: 'ACP_NOT_CONNECTED',
+      message: '无工作区路径，无法加载会话',
+    })
+  }
+
+  const secondary = payload.secondary === true
+  if (secondary) suppressSessionUpdates = true
+
   try {
     const result = (await t.value.request('session/load', {
       sessionId: payload.sessionId,
-      cwd: payload.cwd,
-      mcpServers: [],
+      cwd,
+      mcpServers: inkdownMcp
+        ? [
+            {
+              type: 'http',
+              name: 'inkdown',
+              url: inkdownMcp.url,
+              headers: [{ name: 'Authorization', value: `Bearer ${inkdownMcp.authToken}` }],
+            },
+          ]
+        : [],
     })) as Record<string, unknown>
     const id =
       typeof result.sessionId === 'string' ? result.sessionId : payload.sessionId
-    sessionId = id
-    workspaceRoot = payload.cwd
-    setStatus('connected')
+    if (!secondary) {
+      sessionId = id
+      workspaceRoot = cwd
+      setStatus('connected')
+    } else if (!workspaceRoot) {
+      workspaceRoot = cwd
+    }
     return ok({
       sessionId: id,
       configOptions: parseAcpConfigOptions(result.configOptions),
     })
   } catch (error) {
     return err(toProtocolError(error, '加载会话失败'))
+  } finally {
+    if (secondary) suppressSessionUpdates = false
   }
 }
 

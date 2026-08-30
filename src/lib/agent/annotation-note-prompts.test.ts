@@ -4,6 +4,7 @@ import {
   ANNOTATION_DIRECTION_CHIPS,
   buildAnnotationChatPrompt,
   buildAnnotationComposePrompt,
+  buildAnnotationPolishPrompt,
   buildAskComposeDirectionPrompt,
   detectAnnotationWriteIntent,
   buildAnnotationRefinePrompt,
@@ -78,6 +79,16 @@ describe('annotation-note-prompts', () => {
     })
     expect(built.displayText).toBe('更短')
     expect(built.promptText).toContain('旧草稿')
+  })
+
+  it('润色 prompt 带上用户原文', () => {
+    const built = buildAnnotationPolishPrompt({
+      excerpt: '选区',
+      draft: '我的手写批注',
+    })
+    expect(built.displayText).toBe('润色批注')
+    expect(built.promptText).toContain('我的手写批注')
+    expect(built.promptText).toContain('只输出润色后的批注正文')
   })
 
   it('extractAnnotationDraft 去掉围栏、前缀与英译行', () => {

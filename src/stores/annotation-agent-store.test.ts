@@ -16,6 +16,7 @@ describe('annotation-agent-store', () => {
       prompting: false,
       timelineOpen: false,
       externalProposeOpen: false,
+      sessionsStale: false,
     })
   })
 
@@ -78,5 +79,18 @@ describe('annotation-agent-store', () => {
     const thread = useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!
     expect(thread.agentSessionId).toBeNull()
     expect(thread.messages.some((m) => m.text === '留下')).toBe(true)
+  })
+
+  it('markSessionsStale 保留 agentSessionId 供重连 load', () => {
+    const key = annotationFileKey('r', '/r.epub')
+    useAnnotationAgentStore.getState().ensureFile(key)
+    useAnnotationAgentStore.getState().bindSessionId('ann-resume')
+    useAnnotationAgentStore.getState().markSessionsStale()
+    expect(useAnnotationAgentStore.getState().sessionsStale).toBe(true)
+    expect(
+      useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!.agentSessionId,
+    ).toBe('ann-resume')
+    useAnnotationAgentStore.getState().clearSessionsStale()
+    expect(useAnnotationAgentStore.getState().sessionsStale).toBe(false)
   })
 })

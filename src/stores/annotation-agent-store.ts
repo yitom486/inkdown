@@ -49,6 +49,11 @@ interface AnnotationAgentStore {
   timelineOpen: boolean
   /** 正式 Agent 经 MCP propose 时弹出独立确认框 */
   externalProposeOpen: boolean
+  /**
+   * 断开重连后为 true：下次 ensure 时对已保存的 agentSessionId 做 session/load。
+   * 不清空 id（与右侧主会话一样保留，便于 resume）。
+   */
+  sessionsStale: boolean
 
   ensureFile: (fileKey: string) => void
   setActiveFileKey: (fileKey: string | null) => void
@@ -68,7 +73,9 @@ interface AnnotationAgentStore {
   finishStreaming: () => void
   applySessionUpdate: (update: Record<string, unknown>) => void
   bindSessionId: (sessionId: string | null) => void
-  /** 断开 ACP 后清空各线程绑定的 Agent session（本地聊天气泡保留） */
+  markSessionsStale: () => void
+  clearSessionsStale: () => void
+  /** 测试 / 显式重置用 */
   clearAllAgentSessionIds: () => void
   lastAgentText: () => string
 }
@@ -164,6 +171,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
       prompting: false,
       timelineOpen: false,
       externalProposeOpen: false,
+      sessionsStale: false,
 
       ensureFile: (fileKey) =>
         set((s) => {
@@ -303,6 +311,11 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
           })),
         ),
 
+      markSessionsStale: () =>
+        set({ sessionsStale: true, capturing: false, prompting: false }),
+
+      clearSessionsStale: () => set({ sessionsStale: false }),
+
       clearAllAgentSessionIds: () =>
         set((s) => {
           const byFileKey: Record<string, AnnotationAgentFileState> = {}
@@ -315,7 +328,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
               })),
             }
           }
-          return { byFileKey, capturing: false, prompting: false }
+          return { byFileKey, capturing: false, prompting: false, sessionsStale: false }
         }),
 
       applySessionUpdate: (update) => {

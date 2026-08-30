@@ -117,6 +117,10 @@ export interface AcpAuthenticatePayload {
 export interface AcpLoadSessionPayload {
   sessionId: string
   cwd: string
+  /**
+   * 批注等副会话：加载时不覆盖主面板 sessionId，并压制回放更新（本地已有气泡）。
+   */
+  secondary?: boolean
 }
 
 export interface AcpConfigOptionValue {

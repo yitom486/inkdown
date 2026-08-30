@@ -7,6 +7,7 @@ import {
   ANNOTATION_DIRECTION_ASK,
   buildAnnotationChatPrompt,
   buildAnnotationComposePrompt,
+  buildAnnotationPolishPrompt,
   buildAnnotationRefinePrompt,
   detectAnnotationWriteIntent,
   extractAnnotationDraft,
@@ -70,7 +71,7 @@ export function useAnnotationAgentAssist(options: {
     useAnnotationAgentStore.getState().setTimelineOpen(true)
   }, [fileKey])
 
-  /** 为当前书的当前批注线程拿到专属 sessionId（没有则 session/new） */
+  /** 为当前书的当前批注线程拿到专属 sessionId（resume/load 优先，否则 session/new） */
   const ensureAnnotationSession = useCallback(async (): Promise<string | null> => {
     prepare()
     if (useAcpUiStore.getState().status !== 'connected') {
@@ -78,18 +79,39 @@ export function useAnnotationAgentAssist(options: {
       return null
     }
 
+    const store = useAnnotationAgentStore.getState()
     const existing = activeAnnotationAgentSessionId(fileKey)
-    if (existing) return existing
+    const stale = store.sessionsStale
 
-    // cwd 可省略：主进程用 connect 时的 workspaceRoot 兜底
-    // （ACP 线程上的 workspaceRoot 可能为空，不代表没开工作区）
-    const created = await acpApi.sessionNew({ cwd: resolveWorkspaceCwd() })
+    // 同一次连接内、未标记过期：直接复用（模型侧仍是同一条 session）
+    if (existing && !stale) return existing
+
+    const cwd = resolveWorkspaceCwd()
+
+    // 重连后：用 session/load 恢复模型记忆（ACP 无独立短期记忆，靠 session 续上）
+    if (existing && stale) {
+      const loaded = await acpApi.loadSession({
+        sessionId: existing,
+        cwd: cwd ?? '',
+        secondary: true,
+      })
+      if (isOk(loaded)) {
+        useAnnotationAgentStore.getState().bindSessionId(loaded.value.sessionId)
+        useAnnotationAgentStore.getState().clearSessionsStale()
+        return loaded.value.sessionId
+      }
+      // load 失败（Agent 不支持或 session 已失效）→ 新建，本地气泡仍保留
+      useAnnotationAgentStore.getState().bindSessionId(null)
+    }
+
+    const created = await acpApi.sessionNew({ cwd })
     if (!isOk(created)) {
       reportAppError(created.error)
       return null
     }
 
     useAnnotationAgentStore.getState().bindSessionId(created.value.sessionId)
+    useAnnotationAgentStore.getState().clearSessionsStale()
 
     const runtimeId = useAcpUiStore.getState().selectedRuntimeId
     const preferred =
@@ -279,6 +301,74 @@ export function useAnnotationAgentAssist(options: {
     [options.excerpt, runPrompt],
   )
 
+  /** 润色手写正文：返回新文案，不自动替换、不 propose */
+  const polishNote = useCallback(
+    async (draft: string): Promise<string | null> => {
+      const text = draft.trim()
+      if (!text) {
+        toast.message('先写一点内容再润色')
+        return null
+      }
+      prepare()
+      const store = useAnnotationAgentStore.getState()
+      if (store.prompting) return null
+      if (useAcpUiStore.getState().prompting) {
+        toast.message('右侧 AI 忙碌中，请稍后再试')
+        return null
+      }
+      if (useAcpUiStore.getState().status !== 'connected') {
+        toast.message('请先连接 AI')
+        return null
+      }
+
+      const sid = await ensureAnnotationSession()
+      if (!sid) return null
+
+      const built = buildAnnotationPolishPrompt({
+        excerpt: options.excerpt,
+        draft: text,
+      })
+
+      store.setCapturing(true)
+      store.setPrompting(true)
+      store.setPhase('generating')
+      store.appendUserMessage(built.displayText)
+      store.beginAgentReply()
+
+      const prefix = buildInkdownPromptPrefix(`annotation:${fileKey}`)
+      const result = await acpApi.prompt({
+        sessionId: sid,
+        prompt: [...prefix, { type: 'text', text: built.promptText }],
+      })
+
+      store.finishStreaming()
+      store.setCapturing(false)
+
+      if (!isOk(result)) {
+        if (
+          result.error.code === 'ACP_PROTOCOL_ERROR' ||
+          result.error.code === 'ACP_NOT_CONNECTED'
+        ) {
+          useAnnotationAgentStore.getState().bindSessionId(null)
+        }
+        reportAppError(result.error)
+        store.setPhase(store.pendingDraft ? 'editing' : 'idle')
+        return null
+      }
+
+      const polished = extractAnnotationDraft(
+        useAnnotationAgentStore.getState().lastAgentText(),
+      )
+      store.setPhase(store.pendingDraft ? 'editing' : 'idle')
+      if (!polished) {
+        toast.message('没得到可用润色结果，请再试一次')
+        return null
+      }
+      return polished
+    },
+    [ensureAnnotationSession, fileKey, options.excerpt, prepare],
+  )
+
   /** 新会话：本地新线程 + 下次 prompt 再建 ACP session（不碰右侧历史） */
   const newSession = useCallback(() => {
     useAnnotationAgentStore.getState().createThread(fileKey)
@@ -302,6 +392,7 @@ export function useAnnotationAgentAssist(options: {
     writeNoteNow,
     requestComposeDirection,
     runRefine,
+    polishNote,
     newSession,
     discardDraft: () => useAnnotationAgentStore.getState().discardDraft(),
     updatePendingNote: (note: string) =>

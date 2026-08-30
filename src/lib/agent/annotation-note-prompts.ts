@@ -183,6 +183,27 @@ export function buildAnnotationComposePrompt(options: {
   }
 }
 
+/** 润色用户已写批注 */
+export function buildAnnotationPolishPrompt(options: {
+  excerpt: string
+  draft: string
+}): { displayText: string; promptText: string } {
+  return {
+    displayText: '润色批注',
+    promptText: [
+      DRAFT_RULES,
+      '',
+      '请润色用户已写的阅读批注：更清晰、通顺，尽量保留原意与语气，不要写成另一篇长文。',
+      '只输出润色后的批注正文，不要对照说明。',
+      '',
+      excerptBlock(options.excerpt),
+      '',
+      '用户原文：',
+      options.draft.trim() || '（空）',
+    ].join('\n'),
+  }
+}
+
 export function buildAnnotationRefinePrompt(options: {
   excerpt: string
   draft: string
