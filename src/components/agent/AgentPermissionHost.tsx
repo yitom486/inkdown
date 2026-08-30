@@ -4,7 +4,7 @@ import {
   parsePermissionOptions,
   permissionSummaryFromToolCall,
   toolCallIdFromPermission,
-} from '@/lib/acp-permission'
+} from '@/lib/agent/acp-permission'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 
 /**

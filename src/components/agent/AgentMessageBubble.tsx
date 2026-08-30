@@ -8,7 +8,7 @@ import {
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
 import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
-import { renderAgentMarkdown } from '@/lib/agent-markdown'
+import { renderAgentMarkdown } from '@/lib/agent/agent-markdown'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import '@/styles/markdown-preview.css'

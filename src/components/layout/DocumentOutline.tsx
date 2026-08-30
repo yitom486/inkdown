@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, ListTree } from 'lucide-react'
-import type { MarkdownHeading } from '@/lib/markdown-headings'
+import type { MarkdownHeading } from '@/lib/editor/markdown-headings'
 import { cn } from '@/lib/utils'
 
 interface DocumentOutlineProps {

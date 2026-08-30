@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { flattenEpubToc } from '@/lib/epub-navigation'
-import type { MobiChapterItem } from '@/lib/mobi-navigation'
+import { flattenEpubToc } from '@/lib/reader/epub-navigation'
+import type { MobiChapterItem } from '@/lib/reader/mobi-navigation'
 import { useReaderNavigationStore, selectReaderNavTitles } from '@/stores/reader-navigation-store'
 
-import { mockRelativeOffsetTop, mockScrollRoot } from '@/lib/reader-viewport-test-helpers'
+import { mockRelativeOffsetTop, mockScrollRoot } from '@/lib/reader/reader-viewport-test-helpers'
 
 function buildGovernanceChapterDocument(): Document {
   const document = window.document

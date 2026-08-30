@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { reportRuntimeError } from '@/lib/error-reporter'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
 import { WelcomePage } from '@/components/layout/WelcomePage'
@@ -24,15 +24,15 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
-import { useScrollSync } from '@/hooks/useScrollSync'
-import { registerSelectionProvider } from '@/lib/agent-context/reader-selection-registry'
-import { useMarkdownPreview } from '@/hooks/useMarkdownPreview'
-import { usePasteImage } from '@/hooks/usePasteImage'
+import { useScrollSync } from '@/hooks/editor/useScrollSync'
+import { registerSelectionProvider } from '@/lib/agent/context/reader-selection-registry'
+import { useMarkdownPreview } from '@/hooks/editor/useMarkdownPreview'
+import { usePasteImage } from '@/hooks/editor/usePasteImage'
 import {
   findActiveHeading,
   parseMarkdownHeadings,
   type MarkdownHeading,
-} from '@/lib/markdown-headings'
+} from '@/lib/editor/markdown-headings'
 import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 

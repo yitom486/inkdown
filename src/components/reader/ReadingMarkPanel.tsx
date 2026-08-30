@@ -2,8 +2,8 @@ import { Bookmark, Highlighter, MessageSquare, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { ReadingMark } from '@shared/types/reading-mark'
-import { getReadingMarkKindLabel, getReadingMarkLabel } from '@/lib/reading-mark-labels'
-import { highlightSwatch } from '@/lib/reading-mark-colors'
+import { getReadingMarkKindLabel, getReadingMarkLabel } from '@/lib/reader/reading-mark-labels'
+import { highlightSwatch } from '@/lib/reader/reading-mark-colors'
 import { cn } from '@/lib/utils'
 
 function MarkKindIcon({ kind }: { kind: ReadingMark['kind'] }) {

@@ -9,12 +9,12 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable'
-import { useCollapsiblePanelSync } from '@/hooks/useSidebarPanelSync'
-import type { MarkdownHeading } from '@/lib/markdown-headings'
+import { useCollapsiblePanelSync } from '@/hooks/workspace/useSidebarPanelSync'
+import type { MarkdownHeading } from '@/lib/editor/markdown-headings'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { FileTreeNode } from '@shared/types/file'
-import type { useFileTreeActions } from '@/hooks/useFileTreeActions'
+import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 
 export interface WorkspaceShellProps {
   theme: 'dark' | 'light'

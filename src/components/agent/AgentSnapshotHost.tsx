@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { acpApi } from '@/api/acp-api'
-import { acpDevLog } from '@/lib/acp-dev-log'
-import { resolveInkdownSnapshot } from '@/lib/agent-context/virtual-fs-resolver'
+import { acpDevLog } from '@/lib/agent/acp-dev-log'
+import { resolveInkdownSnapshot } from '@/lib/agent/context/virtual-fs-resolver'
 
 /**
  * 挂在 App 根：应答主进程对 Inkdown 内存快照的请求。

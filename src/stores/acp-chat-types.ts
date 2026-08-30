@@ -1,6 +1,6 @@
 import type { AcpToolCallKind, AcpToolCallStatus } from '@shared/types/acp'
-import type { AcpPlanEntry } from '@/lib/acp-plan'
-import type { AcpMessageAttachment } from '@/lib/acp-composer'
+import type { AcpPlanEntry } from '@/lib/agent/acp-plan'
+import type { AcpMessageAttachment } from '@/lib/agent/acp-composer'
 
 export type AcpChatRole = 'user' | 'agent' | 'thought' | 'tool' | 'plan' | 'system'
 

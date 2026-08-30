@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
-import type { ReaderUnit } from '@/lib/reader-navigation'
+import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import type { ReadingMark } from '@shared/types/reading-mark'
 
 interface ReaderContentShellProps {

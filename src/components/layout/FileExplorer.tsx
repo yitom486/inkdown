@@ -16,10 +16,10 @@ import {
 } from 'lucide-react'
 import type { FileTreeNode } from '@shared/types/file'
 import { Button } from '@/components/ui/button'
-import { writeWorkspacePathsToDataTransfer } from '@/lib/acp-composer'
-import { getParentDir, isMarkdownPath } from '@/lib/file-tree-ops'
+import { writeWorkspacePathsToDataTransfer } from '@/lib/agent/acp-composer'
+import { getParentDir, isMarkdownPath } from '@/lib/workspace/file-tree-ops'
 import { cn } from '@/lib/utils'
-import type { useFileTreeActions } from '@/hooks/useFileTreeActions'
+import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 
 type TreeActions = ReturnType<typeof useFileTreeActions>
 

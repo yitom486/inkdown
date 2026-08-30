@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { getDraftKey, type DocumentDraft } from '@/lib/draft-utils'
+import { getDraftKey, type DocumentDraft } from '@/lib/editor/draft-utils'
 
 interface DraftStore {
   drafts: Record<string, DocumentDraft>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { MermaidBlock } from '@/components/markdown/MermaidBlock'
-import { splitMarkdownParts } from '@/lib/markdown-parts'
+import { splitMarkdownParts } from '@/lib/editor/markdown-parts'
 import { cn } from '@/lib/utils'
 
 interface MarkdownContentProps {

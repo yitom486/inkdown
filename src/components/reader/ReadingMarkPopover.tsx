@@ -4,8 +4,8 @@ import {
   HIGHLIGHT_COLORS,
   type HighlightColorId,
   normalizeHighlightColor,
-} from '@/lib/reading-mark-colors'
-import { getReadingMarkKindLabel } from '@/lib/reading-mark-labels'
+} from '@/lib/reader/reading-mark-colors'
+import { getReadingMarkKindLabel } from '@/lib/reader/reading-mark-labels'
 import type { ReadingMark } from '@shared/types/reading-mark'
 import { cn } from '@/lib/utils'
 

@@ -23,7 +23,7 @@ import {
 } from '@/components/agent/AgentChatItem'
 import { AgentDiffPreview } from '@/components/agent/AgentDiffPreview'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
-import { toolMessageNeedsApproval } from '@/lib/acp-permission-ui'
+import { toolMessageNeedsApproval } from '@/lib/agent/acp-permission-ui'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { isToolActiveStatus } from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'

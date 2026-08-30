@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
-import type { EpubChapter, EpubLocationHint } from '@/lib/epub-navigation'
-import type { MobiChapterItem } from '@/lib/mobi-navigation'
+import type { EpubChapter, EpubLocationHint } from '@/lib/reader/epub-navigation'
+import type { MobiChapterItem } from '@/lib/reader/mobi-navigation'
 import {
   EMPTY_READER_NAV,
   syncEpubNavigation,
@@ -11,10 +11,10 @@ import {
   syncMobiNavigationFromViewport,
   syncPdfNavigation,
   type ReaderFormat,
-} from '@/lib/reader-navigation-sync'
-import type { AdjacentFlatNavState } from '@/lib/reader-chapter-nav'
-import { encodeMobiTocHref } from '@/lib/mobi-navigation'
-import type { ReaderUnit } from '@/lib/reader-navigation'
+} from '@/lib/reader/reader-navigation-sync'
+import type { AdjacentFlatNavState } from '@/lib/reader/reader-chapter-nav'
+import { encodeMobiTocHref } from '@/lib/reader/mobi-navigation'
+import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 
 /** 用户点击导航后，短暂阻止视口同步覆盖 intent flatIndex */
 export const NAV_INTENT_LOCK_MS = 800

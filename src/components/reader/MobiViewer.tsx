@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { initKindleFile, type KindleBook } from '@/lib/kindle-init'
+import { initKindleFile, type KindleBook } from '@/lib/reader/kindle-init'
 import { Loader2 } from 'lucide-react'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
@@ -9,26 +9,26 @@ import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
-import { useReaderBinary } from '@/hooks/useReaderBinary'
-import { useReadingMarkInspector } from '@/hooks/useReadingMarkInspector'
-import { extractDocumentText, extractViewportText, htmlToText } from '@/lib/agent-context/extract-dom-text'
-import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
-import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
-import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
-import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reading-mark-colors'
-import { findMarkForSelection, isClickNotDrag } from '@/lib/reading-mark-hit'
-import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
-import { useReadingMarks } from '@/hooks/useReadingMarks'
-import type { ReaderUnit } from '@/lib/reader-navigation'
-import { resolveWheelPageTurn } from '@/lib/reader-wheel-navigation'
+import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
+import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
+import { extractDocumentText, extractViewportText, htmlToText } from '@/lib/agent/context/extract-dom-text'
+import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
+import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
+import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
+import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
+import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
+import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+import { resolveWheelPageTurn } from '@/lib/reader/reader-wheel-navigation'
 import {
   buildMobiChapterDocument,
   isMobiChapterReadable,
   normalizeMobiChapterHtml,
-} from '@/lib/mobi-chapter-html'
-import { injectMobiMarkStyles } from '@/lib/reader-mark-geometry'
-import { findMobiMarksAtPoint, findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from '@/lib/mobi-reading-marks'
+} from '@/lib/reader/mobi-chapter-html'
+import { injectMobiMarkStyles } from '@/lib/reader/reader-mark-geometry'
+import { findMobiMarksAtPoint, findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from '@/lib/reader/mobi-reading-marks'
 import {
   buildMobiChapterList,
   decodeMobiTocHref,
@@ -36,23 +36,23 @@ import {
   isTocLikeMobiChapter,
   pickReadableMobiChapterCandidates,
   type MobiChapterItem,
-} from '@/lib/mobi-navigation'
+} from '@/lib/reader/mobi-navigation'
 import {
   findFirstFlatIndexById,
-} from '@/lib/reader-chapter-nav'
-import { scrollMobiChapterToFlatIndex } from '@/lib/epub-scroll-toc'
-import { readMobiSelection } from '@/lib/mobi-selection'
+} from '@/lib/reader/reader-chapter-nav'
+import { scrollMobiChapterToFlatIndex } from '@/lib/reader/epub-scroll-toc'
+import { readMobiSelection } from '@/lib/reader/mobi-selection'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
   clearWindowSelection,
-} from '@/lib/reader-selection-dismiss'
+} from '@/lib/reader/reader-selection-dismiss'
 import {
   copyTextToClipboard,
   type PdfSelectionSnapshot,
-} from '@/lib/pdf-selection'
-import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
-import { reportAppError } from '@/lib/report-error'
+} from '@/lib/reader/pdf-selection'
+import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
+import { reportAppError } from '@/lib/workspace/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'

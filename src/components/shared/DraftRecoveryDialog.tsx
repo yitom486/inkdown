@@ -7,7 +7,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { getDraftDisplayName, type DocumentDraft } from '@/lib/draft-utils'
+import { getDraftDisplayName, type DocumentDraft } from '@/lib/editor/draft-utils'
 
 interface DraftRecoveryDialogProps {
   open: boolean

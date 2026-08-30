@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import {
   HIGHLIGHT_COLORS,
   type HighlightColorId,
-} from '@/lib/reading-mark-colors'
+} from '@/lib/reader/reading-mark-colors'
 
 export interface SelectionToolbarProps {
   x: number

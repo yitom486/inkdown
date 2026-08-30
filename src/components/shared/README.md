@@ -1,0 +1,10 @@
+# src/components/shared
+
+跨编辑器 / 阅读器复用的对话框与错误边界。
+
+| 文件 | 功能 |
+|------|------|
+| `SettingsDialog` / `AboutDialog` | 设置、关于 |
+| `UnsavedChangesDialog` / `DraftRecoveryDialog` | 未保存确认、草稿恢复 |
+| `ErrorLogDialog` / `ErrorBanner` | 错误日志与横幅 |
+| `AppErrorBoundary` / `PaneErrorBoundary` | 应用级 / 分栏级错误边界 |

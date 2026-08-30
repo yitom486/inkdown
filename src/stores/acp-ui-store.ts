@@ -16,18 +16,18 @@ import {
   parseToolDiffs,
   parseToolLocations,
 } from '@/stores/acp-chat-types'
-import type { AcpMessageAttachment } from '@/lib/acp-composer'
-import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/acp-plan'
-import { pruneIntermediateAgentReplies } from '@/lib/acp-prune-agent-replies'
+import type { AcpMessageAttachment } from '@/lib/agent/acp-composer'
+import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/agent/acp-plan'
+import { pruneIntermediateAgentReplies } from '@/lib/agent/acp-prune-agent-replies'
 import {
   rememberPreferredConfig,
   type AcpPreferredConfigMap,
-} from '@/lib/acp-config-preferences'
-import { isBlankThread, pruneBlankThreads } from '@/lib/acp-thread-prune'
+} from '@/lib/agent/acp-config-preferences'
+import { isBlankThread, pruneBlankThreads } from '@/lib/agent/acp-thread-prune'
 import {
   toolCallIdFromPermission,
   type AcpPermissionOptionView,
-} from '@/lib/acp-permission'
+} from '@/lib/agent/acp-permission'
 
 export interface AcpPendingPermission {
   requestId: number

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
-import { hydrateMermaidInElement } from '@/lib/mermaid-hydrate'
-import { mermaidLog, mermaidWarn, summarizeMermaidSource } from '@/lib/mermaid-debug'
+import { hydrateMermaidInElement } from '@/lib/preview/mermaid-hydrate'
+import { mermaidLog, mermaidWarn, summarizeMermaidSource } from '@/lib/preview/mermaid-debug'
 import { cn } from '@/lib/utils'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 

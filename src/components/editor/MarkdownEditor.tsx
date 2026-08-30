@@ -14,14 +14,14 @@ import {
   indentUnit,
 } from '@codemirror/language'
 import { highlightSelectionMatches, search } from '@codemirror/search'
-import { buildThemeExtensions } from '@/lib/codemirror-theme'
+import { buildThemeExtensions } from '@/lib/editor/codemirror-theme'
 import {
   buildImagePasteChange,
   handlePasteImageEvent,
-} from '@/lib/codemirror-paste-image'
-import { markdownFormattingKeymap } from '@/lib/markdown-editor-commands'
-import { markdownLintGutter, markdownSyntaxLinter } from '@/lib/codemirror-syntax-linter'
-import { reportRuntimeError } from '@/lib/error-reporter'
+} from '@/lib/editor/codemirror-paste-image'
+import { markdownFormattingKeymap } from '@/lib/editor/markdown-editor-commands'
+import { markdownLintGutter, markdownSyntaxLinter } from '@/lib/editor/codemirror-syntax-linter'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 import { Compartment, EditorState, Transaction } from '@codemirror/state'
 import {
   drawSelection,
@@ -33,7 +33,7 @@ import {
   lineNumbers,
   placeholder,
 } from '@codemirror/view'
-import { applyScrollRatio, scrollRatio } from '@/lib/markdown-headings'
+import { applyScrollRatio, scrollRatio } from '@/lib/editor/markdown-headings'
 import type { AppTheme } from '@shared/types/editor'
 import {
   forwardRef,

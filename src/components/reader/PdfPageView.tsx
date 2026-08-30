@@ -5,10 +5,10 @@ import { TextLayer } from 'pdfjs-dist'
 import {
   createPdfPageViewport,
   isPdfRenderCancelled,
-} from '@/lib/pdf-render'
-import { renderPdfMarkOverlays } from '@/lib/pdf-reading-marks'
-import { setupPdfTextLayerSelection } from '@/lib/pdf-text-layer-selection'
-import { reportAppError } from '@/lib/report-error'
+} from '@/lib/reader/pdf-render'
+import { renderPdfMarkOverlays } from '@/lib/reader/pdf-reading-marks'
+import { setupPdfTextLayerSelection } from '@/lib/reader/pdf-text-layer-selection'
+import { reportAppError } from '@/lib/workspace/report-error'
 import type { ReadingMark } from '@shared/types/reading-mark'
 
 interface PdfPageViewProps {

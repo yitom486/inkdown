@@ -21,9 +21,9 @@ import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
 import { AGENT_CHAT_COL_CLASS } from '@/components/agent/AgentChatItem'
 import { Button } from '@/components/ui/button'
-import { shouldShowOrphanPermissionCard } from '@/lib/acp-permission-ui'
-import { logAcpLayoutProbe } from '@/lib/acp-layout-probe'
-import { appendSelectionChatMarker } from '@/lib/agent-context/selection-chat-marker'
+import { shouldShowOrphanPermissionCard } from '@/lib/agent/acp-permission-ui'
+import { logAcpLayoutProbe } from '@/lib/agent/acp-layout-probe'
+import { appendSelectionChatMarker } from '@/lib/agent/context/selection-chat-marker'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,9 +34,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useAcpSession } from '@/hooks/useAcpSession'
-import { useCodeBlockCopy } from '@/hooks/useCodeBlockCopy'
-import { useHighlightTheme } from '@/hooks/useHighlightTheme'
+import { useAcpSession } from '@/hooks/agent/useAcpSession'
+import { useCodeBlockCopy } from '@/hooks/preview/useCodeBlockCopy'
+import { useHighlightTheme } from '@/hooks/preview/useHighlightTheme'
 import { cn } from '@/lib/utils'
 import {
   useAcpActiveMessages,

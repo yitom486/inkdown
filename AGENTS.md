@@ -34,17 +34,25 @@ bunx shadcn@latest add <component>
 ```
 shared/          # 跨进程契约（ipc / types / core Result）
 electron/        # main、preload、ipc、window、services（含 services/acp）
-src/api/         # 渲染端 IPC 封装（file-api、acp-api；禁止组件直调 window.electronAPI 文件 API）
-src/stores/      # Zustand
-src/components/  # ui | editor | preview | reader | layout | shared
-.plan/           # 可执行计划与进度（见 .plan/README.md）
+src/api/         # 渲染端 IPC 封装（见该目录 README）
+src/hooks/       # 渲染端 Hook：editor | preview | reader | workspace | agent（见 README）
+src/lib/         # 渲染端纯逻辑：同上五域；根上仅 utils.ts（见 README）
+src/stores/      # Zustand（见 README）
+src/components/  # ui | editor | preview | reader | layout | shared | agent | markdown（见 README）
+src/providers/   # Query / Theme（见 README）
+src/styles/      # 全局与阅读器 CSS（见 README）
+.plan/           # 可执行计划与进度（见该目录 README）
 .cursor/rules/   # Agent 强制细则
 ```
+
+渲染进程总览：[`src/README.md`](./src/README.md)。
 
 ACP（阶段 A/B/C）：主进程 `electron/services/acp/` + `src/api/acp-api.ts` + `AgentPanel`；协议 v1，默认 `codex-acp`。  
 UI：**壳自研、皮复用**（shadcn + 可选开源消息渲染）；认证：**复用 `~/.codex` / ACP authMethods**（对齐 VS Code / Zed），详见 `.plan/2026-08-29-ACP客户端.md`「UI 与认证策略」。
 
 路径别名：`@/` → `src/`，`@shared/` → `shared/`。
+
+**子目录 README**：`src/` 及其子目录、`.plan/` 等凡有 `README.md` 的目录，增删文件或改文件名后必须同步更新其中的列表与路径引用（叶目录若写「见上级 README」，则改上级清单）。避免文档与目录脱节。
 
 ## Electron / IPC
 
@@ -89,6 +97,7 @@ Zustand selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand
 - Message：`type: 中文描述`（feat / fix / docs / chore…）
 - 最小改动；不擅自引入冲突技术栈；不擅自 commit；不提交密钥
 - 任务进度同步更新 `.plan/`（状态标记见该目录 README）
+- 改动带 README 的目录时，同步更新该 README 的文件引用（见上方「子目录 README」）
 
 ## 计划
 

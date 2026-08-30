@@ -11,34 +11,34 @@ import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
-import { useReaderBinary } from '@/hooks/useReaderBinary'
-import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
-import { useReadingMarkInspector } from '@/hooks/useReadingMarkInspector'
-import { useReadingMarks } from '@/hooks/useReadingMarks'
-import { extractDocumentText, extractViewportText } from '@/lib/agent-context/extract-dom-text'
-import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
-import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
-import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
-import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reading-mark-colors'
-import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
+import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
+import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
+import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
+import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
+import { extractDocumentText, extractViewportText } from '@/lib/agent/context/extract-dom-text'
+import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
+import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
+import { scrollEpubChapterInRendition } from '@/lib/reader/epub-scroll-toc'
 import {
   collectEpubSpineItems,
   labelForSpineHref,
   loadEpubSpineText,
-} from '@/lib/epub-spine-text'
-import { normalizeLoadKey } from '@/lib/reader-viewport-nav'
-import { navigateEpubToFlatIndex } from '@/lib/reader-flat-nav'
+} from '@/lib/reader/epub-spine-text'
+import { normalizeLoadKey } from '@/lib/reader/reader-viewport-nav'
+import { navigateEpubToFlatIndex } from '@/lib/reader/reader-flat-nav'
 import {
   flattenEpubToc,
   pickInitialChapter,
   type EpubChapter,
-} from '@/lib/epub-navigation'
+} from '@/lib/reader/epub-navigation'
 import {
   buildEpubFileFingerprint,
   EPUB_LOCATIONS_CHUNK_SIZE,
-} from '@/lib/epub-locations-cache'
-import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/epub-themes'
+} from '@/lib/reader/epub-locations-cache'
+import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/reader/epub-themes'
 import {
   applyEpubMarkToRendition,
   findEpubMarksAtPoint,
@@ -47,16 +47,16 @@ import {
   removeEpubMarkFromRendition,
   replaceAllEpubMarksOnRendition,
   type EpubMarkHoverHandlers,
-} from '@/lib/epub-reading-marks'
-import { copyTextToClipboard, readEpubSelection, type EpubSelectionSnapshot } from '@/lib/epub-selection'
+} from '@/lib/reader/epub-reading-marks'
+import { copyTextToClipboard, readEpubSelection, type EpubSelectionSnapshot } from '@/lib/reader/epub-selection'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
   clearEpubRenditionSelections,
-} from '@/lib/reader-selection-dismiss'
-import { findMarkForSelection, isClickNotDrag } from '@/lib/reading-mark-hit'
-import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
-import { reportAppError } from '@/lib/report-error'
+} from '@/lib/reader/reader-selection-dismiss'
+import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
+import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
+import { reportAppError } from '@/lib/workspace/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'

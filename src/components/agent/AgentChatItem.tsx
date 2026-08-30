@@ -5,7 +5,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
-import { logAcpLayoutProbe } from '@/lib/acp-layout-probe'
+import { logAcpLayoutProbe } from '@/lib/agent/acp-layout-probe'
 import { cn } from '@/lib/utils'
 
 /**

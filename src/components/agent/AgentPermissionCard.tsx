@@ -5,7 +5,7 @@ import {
   isAllowPermissionKind,
   isRejectPermissionKind,
   type AcpPermissionOptionView,
-} from '@/lib/acp-permission'
+} from '@/lib/agent/acp-permission'
 import { cn } from '@/lib/utils'
 import type { AcpPendingPermission } from '@/stores/acp-ui-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'

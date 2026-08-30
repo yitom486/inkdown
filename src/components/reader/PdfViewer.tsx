@@ -10,39 +10,39 @@ import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
-import { useReaderBinary } from '@/hooks/useReaderBinary'
-import { useReadingMarkInspector } from '@/hooks/useReadingMarkInspector'
-import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
-import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
-import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
-import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reading-mark-colors'
-import { useReadingMarks } from '@/hooks/useReadingMarks'
-import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
+import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
+import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
+import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
+import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
+import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
+import { loadPdfOutlineUnits } from '@/lib/reader/pdf-outline'
 import {
   estimatePageOffsetTop,
   PDF_PAGE_GAP_PX,
   scalePdfPageCssSize,
   type PdfPageCssSize,
-} from '@/lib/pdf-page-metrics'
-import { openPdfDocument } from '@/lib/pdf-document'
-import { findPdfMarksAtPoint } from '@/lib/pdf-reading-marks'
-import { shouldRenderPdfPage } from '@/lib/pdf-render'
-import { findMarkForSelection, isClickNotDrag } from '@/lib/reading-mark-hit'
-import type { ReaderUnit } from '@/lib/reader-navigation'
+} from '@/lib/reader/pdf-page-metrics'
+import { openPdfDocument } from '@/lib/reader/pdf-document'
+import { findPdfMarksAtPoint } from '@/lib/reader/pdf-reading-marks'
+import { shouldRenderPdfPage } from '@/lib/reader/pdf-render'
+import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
+import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import {
   copyTextToClipboard,
   getSelectionToolbarPosition,
   readPdfSelection,
   type PdfSelectionSnapshot,
-} from '@/lib/pdf-selection'
+} from '@/lib/reader/pdf-selection'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
   clearWindowSelection,
-} from '@/lib/reader-selection-dismiss'
-import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
-import { reportAppError } from '@/lib/report-error'
+} from '@/lib/reader/reader-selection-dismiss'
+import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
+import { reportAppError } from '@/lib/workspace/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
 import type { AppError } from '@shared/core/errors'

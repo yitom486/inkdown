@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { AgentChatItem, AgentChatItemBody, useAgentChatOpen } from '@/components/agent/AgentChatItem'
 import { cn } from '@/lib/utils'
-import { summarizePlanProgress } from '@/lib/acp-plan'
+import { summarizePlanProgress } from '@/lib/agent/acp-plan'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 
 interface AgentPlanCardProps {

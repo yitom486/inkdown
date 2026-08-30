@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { appApi } from '@/api/app-api'
-import { formatErrorLogEntry, reportRuntimeError } from '@/lib/error-reporter'
+import { formatErrorLogEntry, reportRuntimeError } from '@/lib/workspace/error-reporter'
 
 interface AppErrorBoundaryProps {
   children: ReactNode

@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, ListTree } from 'lucide-react'
-import type { ReaderUnit } from '@/lib/reader-navigation'
+import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import {
   buildReaderUnitTree,
   shouldExpandReaderUnitNode,
   type ReaderUnitTreeNode,
-} from '@/lib/reader-unit-tree'
+} from '@/lib/reader/reader-unit-tree'
 import { cn } from '@/lib/utils'
 
 interface ReaderUnitOutlineProps {

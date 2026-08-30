@@ -1,9 +1,9 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Eye } from 'lucide-react'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
-import { useCodeBlockCopy } from '@/hooks/useCodeBlockCopy'
-import { useHighlightTheme } from '@/hooks/useHighlightTheme'
-import { applyScrollRatio, collectPreviewHeadingPositions, scrollRatio } from '@/lib/markdown-headings'
+import { useCodeBlockCopy } from '@/hooks/preview/useCodeBlockCopy'
+import { useHighlightTheme } from '@/hooks/preview/useHighlightTheme'
+import { applyScrollRatio, collectPreviewHeadingPositions, scrollRatio } from '@/lib/editor/markdown-headings'
 import type { AppTheme } from '@/stores/editor-ui-store'
 import '@/styles/markdown-preview.css'
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { fileApi } from '@/api/file-api'
 import { Button } from '@/components/ui/button'
-import { extractClipboardImage } from '@/lib/codemirror-paste-image'
+import { extractClipboardImage } from '@/lib/editor/codemirror-paste-image'
 import {
   ACP_MAX_IMAGE_BYTES,
   attachmentToMessageMeta,
@@ -20,7 +20,7 @@ import {
   readWorkspacePathsFromDataTransfer,
   type AcpMessageAttachment,
   type ComposerAttachment,
-} from '@/lib/acp-composer'
+} from '@/lib/agent/acp-composer'
 import { cn } from '@/lib/utils'
 import { isOk } from '@shared/core/result'
 import type { AcpContentBlock, AcpPromptCapabilities } from '@shared/types/acp'
