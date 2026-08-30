@@ -17,8 +17,15 @@
   --scale-round-y: 1px;
 }
 
-.pdf-page-wrapper canvas {
+.pdf-canvas-host {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-canvas-host canvas {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .pdf-text-layer-host {

@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify'
 import type { MobiProcessedChapter } from '@lingo-reader/mobi-parser'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
+import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
 
 /** 去掉 XML 声明、DOCTYPE，并尽量只保留 body 正文 */
 export function normalizeMobiChapterHtml(raw: string): string {
@@ -86,6 +87,7 @@ async function fetchCssText(href: string): Promise<string> {
 export async function buildMobiChapterDocument(
   chapter: MobiProcessedChapter,
   theme: EpubThemeMode,
+  typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
 ): Promise<string> {
   const bodyHtml = normalizeMobiChapterHtml(chapter.html)
   // KF8/AZW3 的 resolveHref 依赖 aid/name/id 作章内锚点，消毒时必须保留
@@ -108,7 +110,7 @@ export async function buildMobiChapterDocument(
 
   const cssParts = await Promise.all(chapter.css.map((part) => fetchCssText(part.href)))
   const bookCss = cssParts.filter(Boolean).join('\n')
-  const themeCss = buildReaderLayoutCss(theme)
+  const themeCss = buildReaderLayoutCss(theme, typography)
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">

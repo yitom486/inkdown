@@ -1,6 +1,19 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { EditorViewMode } from '@shared/types/editor'
+import {
+  DEFAULT_READER_TYPOGRAPHY,
+  type ReaderFontSize,
+  type ReaderLineHeight,
+} from '@/lib/reader/reader-typography'
+
+export {
+  READER_FONT_SIZE_OPTIONS,
+  READER_FONT_SIZE_OPTION_LABELS,
+  READER_LINE_HEIGHT_OPTION_LABELS,
+  type ReaderFontSize,
+  type ReaderLineHeight,
+} from '@/lib/reader/reader-typography'
 
 export type AutoSaveIntervalMs = 15000 | 30000 | 60000
 export type PreviewDebounceMs = 150 | 300 | 500
@@ -53,6 +66,8 @@ export interface AppSettingsState {
   lastWorkspaceRoot?: string
   tabSize: EditorTabSize
   editorFontSize: EditorFontSize
+  readerFontSize: ReaderFontSize
+  readerLineHeight: ReaderLineHeight
   verboseRendererLogs: boolean
 }
 
@@ -68,6 +83,8 @@ interface AppSettingsStore extends AppSettingsState {
   setLastWorkspaceRoot: (rootPath?: string) => void
   setTabSize: (tabSize: EditorTabSize) => void
   setEditorFontSize: (fontSize: EditorFontSize) => void
+  setReaderFontSize: (fontSize: ReaderFontSize) => void
+  setReaderLineHeight: (lineHeight: ReaderLineHeight) => void
   setVerboseRendererLogs: (enabled: boolean) => void
   addRecentFile: (filePath: string) => void
   removeRecentFile: (filePath: string) => void
@@ -93,6 +110,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       lastWorkspaceRoot: undefined,
       tabSize: 2,
       editorFontSize: 15,
+      readerFontSize: DEFAULT_READER_TYPOGRAPHY.fontSize,
+      readerLineHeight: DEFAULT_READER_TYPOGRAPHY.lineHeight,
       verboseRendererLogs: false,
 
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
@@ -114,6 +133,10 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       setTabSize: (tabSize) => set({ tabSize }),
 
       setEditorFontSize: (fontSize) => set({ editorFontSize: fontSize }),
+
+      setReaderFontSize: (fontSize) => set({ readerFontSize: fontSize }),
+
+      setReaderLineHeight: (lineHeight) => set({ readerLineHeight: lineHeight }),
 
       setVerboseRendererLogs: (enabled) => set({ verboseRendererLogs: enabled }),
 
@@ -156,6 +179,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         lastWorkspaceRoot: state.lastWorkspaceRoot,
         tabSize: state.tabSize,
         editorFontSize: state.editorFontSize,
+        readerFontSize: state.readerFontSize,
+        readerLineHeight: state.readerLineHeight,
         verboseRendererLogs: state.verboseRendererLogs,
       }),
     },

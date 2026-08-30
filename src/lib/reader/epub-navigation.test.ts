@@ -168,4 +168,36 @@ describe('epub-navigation', () => {
       expect(nav.nextIndex).toBeGreaterThan(nav.currentIndex)
     })
   })
+
+  describe('目录层级与正文渲染单元不一致', () => {
+    const shortStories = flattenEpubToc([
+      {
+        label: '醒世恒言',
+        href: 'xing/index.xhtml',
+        subitems: [
+          { label: '第一卷', href: 'xing/001.xhtml' },
+          { label: '第二卷', href: 'xing/002.xhtml' },
+        ],
+      },
+      {
+        label: '初刻拍案惊奇',
+        href: 'chu/index.xhtml',
+        subitems: [{ label: '第一卷', href: 'chu/001.xhtml' }],
+      },
+    ])
+
+    it('底栏按下一个实际加载的正文文件导航，而不是跳到下一个同级目录', () => {
+      const firstStoryIndex = shortStories.findIndex(
+        (chapter) => chapter.href === 'xing/001.xhtml',
+      )
+      const nav = resolveChapterNav(shortStories, undefined, firstStoryIndex)
+
+      expect(nav.current?.label).toBe('第一卷')
+      expect(nav.next?.label).toBe('第二卷')
+      expect(nav.nextIndex).toBe(
+        shortStories.findIndex((chapter) => chapter.href === 'xing/002.xhtml'),
+      )
+      expect(nav.flatIndex).toBe(firstStoryIndex)
+    })
+  })
 })

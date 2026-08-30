@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ePub from 'epubjs'
 import type Book from 'epubjs/types/book'
 import { Loader2 } from 'lucide-react'
@@ -8,6 +8,7 @@ import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
@@ -65,6 +66,7 @@ import {
 import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/core/errors'
@@ -126,6 +128,18 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
+  const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
+  const typography = useMemo(
+    () => ({ fontSize: readerFontSize, lineHeight: readerLineHeight }),
+    [readerFontSize, readerLineHeight],
+  )
+  // 书籍初始化只应随文件变化。排版值通过 ref 提供给 epub.js，避免字号/主题
+  // 改变时让初始化 effect 销毁并重新创建整本 book 与 rendition。
+  const themeRef = useRef(theme)
+  themeRef.current = theme
+  const typographyRef = useRef(typography)
+  typographyRef.current = typography
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
@@ -167,15 +181,13 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     }
   }, [filePath])
 
-  const applyTheme = useCallback(
-    (rendition: NonNullable<typeof renditionRef.current>) => {
-      rendition.themes.register('dark', getEpubThemeRules('dark'))
-      rendition.themes.register('light', getEpubThemeRules('light'))
-      rendition.themes.select(theme)
-      rendition.themes.fontSize('100%')
-    },
-    [theme],
-  )
+  const applyTheme = useCallback((rendition: NonNullable<typeof renditionRef.current>) => {
+    const currentTypography = typographyRef.current
+    rendition.themes.register('dark', getEpubThemeRules('dark', currentTypography))
+    rendition.themes.register('light', getEpubThemeRules('light', currentTypography))
+    rendition.themes.select(themeRef.current)
+    rendition.themes.fontSize(`${currentTypography.fontSize}px`)
+  }, [])
 
   const syncChapterNav = useCallback(
     (location?: EpubLocation | string, flatIndex?: number) => {
@@ -411,12 +423,9 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     [deleteMark],
   )
 
-  const applyReadingLayout = useCallback(
-    (rendition: NonNullable<typeof renditionRef.current>) => {
-      applyEpubReadingLayoutToRendition(rendition, theme)
-    },
-    [theme],
-  )
+  const applyReadingLayout = useCallback((rendition: NonNullable<typeof renditionRef.current>) => {
+    applyEpubReadingLayoutToRendition(rendition, themeRef.current, typographyRef.current)
+  }, [])
 
   const bindScrollReporting = useCallback(
     (rendition: NonNullable<typeof renditionRef.current>) => {
@@ -425,9 +434,9 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
       const handler = (contents: { document: Document; window: Window; cfiFromRange?: (range: Range) => string }) => {
         injectReadingMarkStyles(contents.document, theme)
-        applyEpubReadingLayout(contents.document, theme)
+        applyEpubReadingLayout(contents.document, theme, typography)
         requestAnimationFrame(() => {
-          applyEpubReadingLayout(contents.document, theme)
+          applyEpubReadingLayout(contents.document, theme, typography)
         })
         scrollCleanupRef.current?.()
         selectionCleanupRef.current?.()
@@ -569,7 +578,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
       rendition.hooks.content.register(handler)
     },
-    [clearTextSelection, markHoverHandlers, scheduleReportLocation, theme],
+    [clearTextSelection, markHoverHandlers, scheduleReportLocation, theme, typography],
   )
 
   useEffect(() => {
@@ -801,7 +810,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     if (!renditionRef.current || !ready) return
     applyTheme(renditionRef.current)
     applyReadingLayout(renditionRef.current)
-  }, [applyReadingLayout, applyTheme, ready, theme])
+  }, [applyReadingLayout, applyTheme, ready, theme, typography])
 
   useEffect(() => {
     return registerReaderContent({
@@ -932,6 +941,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         onAddBookmark={() => void addBookmarkAtCurrent()}
         trailing={
           <>
+            <ReaderTypographyControls disabled={!ready} />
             {ready ? (
               <div className="relative text-muted-foreground">
                 <ReadingProgressRing progress={globalProgress} />

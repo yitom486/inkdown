@@ -1,4 +1,5 @@
 import { liveSelectionCss } from '@/lib/reader/reading-mark-colors'
+import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
 
 /** 正文左右留白（百分比）：两侧各 5%，正文占中间 90% */
 export const EPUB_CONTENT_HORIZONTAL_PADDING = '5%'
@@ -33,7 +34,10 @@ export type EpubThemeMode = keyof typeof EPUB_PALETTE
 export { EPUB_PALETTE as READER_PALETTE }
 
 /** epub.js themes 规则：覆盖书内默认蓝链与字体 */
-export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<string, string>> {
+export function getEpubThemeRules(
+  mode: EpubThemeMode,
+  typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
+): Record<string, Record<string, string>> {
   const serif = '"Source Han Serif SC", "Noto Serif SC", "Songti SC", Georgia, serif'
   const sans = '"Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif'
   const horizontalPadding = EPUB_CONTENT_HORIZONTAL_PADDING
@@ -42,8 +46,8 @@ export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<st
   const sharedBody = {
     background: `${palette.pageBackground} !important`,
     'font-family': serif,
-    'font-size': '18px',
-    'line-height': '1.85',
+    'font-size': `${typography.fontSize}px`,
+    'line-height': String(typography.lineHeight),
     'padding-top': `${EPUB_CONTENT_VERTICAL_PADDING} !important`,
     'padding-bottom': `${EPUB_CONTENT_VERTICAL_PADDING} !important`,
     'padding-left': '0 !important',
@@ -136,7 +140,10 @@ export function getEpubThemeRules(mode: EpubThemeMode): Record<string, Record<st
 }
 
 /** 阅读区布局 CSS（EPUB iframe 与 MOBI 章节文档共用） */
-export function buildReaderLayoutCss(mode: EpubThemeMode): string {
+export function buildReaderLayoutCss(
+  mode: EpubThemeMode,
+  typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
+): string {
   const h = EPUB_CONTENT_HORIZONTAL_PADDING
   const v = EPUB_CONTENT_VERTICAL_PADDING
   const palette = EPUB_PALETTE[mode]
@@ -169,6 +176,8 @@ export function buildReaderLayoutCss(mode: EpubThemeMode): string {
       position: relative !important;
       background-color: ${palette.pageBackground} !important;
       color: ${palette.text} !important;
+      font-size: ${typography.fontSize}px !important;
+      line-height: ${typography.lineHeight} !important;
     }
     body p,
     body span:not(.mobi-mark-highlight):not(.mobi-mark-note):not(.reader-mark-highlight):not(.reader-mark-note),
@@ -184,6 +193,8 @@ export function buildReaderLayoutCss(mode: EpubThemeMode): string {
     body figcaption {
       color: ${palette.text} !important;
       background-color: transparent !important;
+      font-size: inherit !important;
+      line-height: inherit !important;
     }
     body h1 { color: ${palette.h1} !important; background-color: transparent !important; }
     body h2 { color: ${palette.h2} !important; background-color: transparent !important; }
@@ -204,19 +215,20 @@ export function buildReaderLayoutCss(mode: EpubThemeMode): string {
       overflow-wrap: anywhere !important;
     }
     body h1 {
-      font-size: clamp(1.35rem, 4vw, 1.75rem) !important;
+      font-size: 1.6em !important;
       line-height: 1.35 !important;
     }
     body h2 {
-      font-size: clamp(1.2rem, 3.5vw, 1.45rem) !important;
+      font-size: 1.35em !important;
       line-height: 1.38 !important;
     }
     body h3 {
-      font-size: clamp(1.1rem, 3vw, 1.25rem) !important;
+      font-size: 1.15em !important;
     }
     body p[class*="calibre"],
     body div[class*="calibre"] {
-      line-height: 1.45 !important;
+      font-size: inherit !important;
+      line-height: inherit !important;
       height: auto !important;
       min-height: 0 !important;
       max-height: none !important;
@@ -300,7 +312,11 @@ function stripPublisherLayoutOverrides(doc: Document): void {
   }
 }
 
-function syncEpubReadingInlineStyles(doc: Document, mode: EpubThemeMode): void {
+function syncEpubReadingInlineStyles(
+  doc: Document,
+  mode: EpubThemeMode,
+  typography: ReaderTypography,
+): void {
   const html = doc.documentElement
   const body = doc.body
   if (!body) return
@@ -332,21 +348,27 @@ function syncEpubReadingInlineStyles(doc: Document, mode: EpubThemeMode): void {
   important(body, 'padding-right', '0')
   important(body, 'background-color', palette.pageBackground)
   important(body, 'color', palette.text)
+  important(body, 'font-size', `${typography.fontSize}px`)
+  important(body, 'line-height', String(typography.lineHeight))
 
   stripPublisherLayoutOverrides(doc)
   stripPublisherInlineColors(doc)
 }
 
 /** 覆盖 epub.js / 书内样式，强制左右各 5% 对称边距与主题色 */
-export function applyEpubReadingLayout(doc: Document, mode: EpubThemeMode): void {
+export function applyEpubReadingLayout(
+  doc: Document,
+  mode: EpubThemeMode,
+  typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
+): void {
   let style = doc.getElementById(READER_LAYOUT_STYLE_ID) as HTMLStyleElement | null
   if (!style) {
     style = doc.createElement('style')
     style.id = READER_LAYOUT_STYLE_ID
     doc.head.appendChild(style)
   }
-  style.textContent = buildReaderLayoutCss(mode)
-  syncEpubReadingInlineStyles(doc, mode)
+  style.textContent = buildReaderLayoutCss(mode, typography)
+  syncEpubReadingInlineStyles(doc, mode, typography)
 }
 
 interface EpubContentsLike {
@@ -357,12 +379,13 @@ interface EpubContentsLike {
 export function applyEpubReadingLayoutToRendition(
   rendition: { getContents: () => unknown },
   mode: EpubThemeMode,
+  typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
 ): void {
   const raw = rendition.getContents()
   const contentsList = (Array.isArray(raw) ? raw : raw ? [raw] : []) as EpubContentsLike[]
   for (const contents of contentsList) {
     if (contents?.document) {
-      applyEpubReadingLayout(contents.document, mode)
+      applyEpubReadingLayout(contents.document, mode, typography)
     }
   }
 }

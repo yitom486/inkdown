@@ -263,6 +263,34 @@ export function resolveChapterNav(
     }
   }
 
+  // 底栏不能再从 TOC 的层级推断「章」。不同电子书的目录层级并不可靠：
+  // 有些书把整卷放在二级、实际正文却按每个独立 spine 文件加载。中央阅读器
+  // 的真实切换边界是 href 去掉 fragment 后的加载目标，因此底栏也必须使用同一组
+  // render units。flatIndex 仍保留精确 TOC 位置，供目录树高亮当前小节。
+  const renderUnits = buildEpubRenderUnits(chapters)
+  const current = chapters[resolvedFlatIndex]!
+  const currentBase = normalizeHref(current.href)
+  const renderUnitIndex = renderUnits.findIndex(
+    (unit) => normalizeHref(unit.href) === currentBase,
+  )
+
+  if (renderUnitIndex >= 0) {
+    const currentUnit = renderUnits[renderUnitIndex]!
+    const previous = renderUnits[renderUnitIndex - 1] ?? null
+    const next = renderUnits[renderUnitIndex + 1] ?? null
+
+    return {
+      current: currentUnit,
+      previous,
+      next,
+      currentIndex: chapters.indexOf(currentUnit),
+      previousIndex: previous ? chapters.indexOf(previous) : -1,
+      nextIndex: next ? chapters.indexOf(next) : -1,
+      flatIndex: resolvedFlatIndex,
+    }
+  }
+
+  // 目录页等并非正文渲染单元的特殊位置，沿用旧的层级回退逻辑。
   const navLevel = resolveEpubRenderLevel(chapters)
   return resolveReaderChapterNav(chapters, resolvedFlatIndex, navLevel, {
     isTocLike: isTocLikeChapter,

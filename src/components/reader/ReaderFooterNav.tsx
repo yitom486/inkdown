@@ -33,7 +33,7 @@ export function ReaderFooterNav({
         <ChevronLeft className="size-4 shrink-0" />
         <span className="min-w-0">
           <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-            上一节
+            上一单元
           </span>
           <span className="block truncate text-xs">{previousTitle}</span>
         </span>
@@ -41,7 +41,7 @@ export function ReaderFooterNav({
 
       <div className="px-2 text-center">
         <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-          当前节
+          当前单元
         </span>
         <span className="block max-w-40 truncate text-xs font-medium">{currentTitle}</span>
       </div>
@@ -55,7 +55,7 @@ export function ReaderFooterNav({
       >
         <span className="min-w-0">
           <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-            下一节
+            下一单元
           </span>
           <span className="block truncate text-xs">{nextTitle}</span>
         </span>

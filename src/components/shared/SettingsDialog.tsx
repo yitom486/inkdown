@@ -13,6 +13,8 @@ import {
   DEFAULT_VIEW_MODE_OPTIONS,
   EDITOR_FONT_SIZE_OPTION_LABELS,
   PREVIEW_DEBOUNCE_OPTIONS,
+  READER_FONT_SIZE_OPTION_LABELS,
+  READER_LINE_HEIGHT_OPTION_LABELS,
   RECENT_FILES_LIMIT_OPTIONS,
   TAB_SIZE_OPTION_LABELS,
   useAppSettingsStore,
@@ -21,6 +23,8 @@ import {
   type EditorTabSize,
   type PreviewDebounceMs,
   type RecentFilesLimit,
+  type ReaderFontSize,
+  type ReaderLineHeight,
 } from '@/stores/app-settings-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import type { AppTheme } from '@shared/types/editor'
@@ -133,6 +137,10 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog }: SettingsD
   const editorFontSize = useAppSettingsStore((state) => state.editorFontSize)
   const setTabSize = useAppSettingsStore((state) => state.setTabSize)
   const setEditorFontSize = useAppSettingsStore((state) => state.setEditorFontSize)
+  const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
+  const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
+  const setReaderFontSize = useAppSettingsStore((state) => state.setReaderFontSize)
+  const setReaderLineHeight = useAppSettingsStore((state) => state.setReaderLineHeight)
   const verboseRendererLogs = useAppSettingsStore((state) => state.verboseRendererLogs)
   const setVerboseRendererLogs = useAppSettingsStore((state) => state.setVerboseRendererLogs)
 
@@ -200,6 +208,26 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog }: SettingsD
                 value={editorFontSize}
                 options={EDITOR_FONT_SIZE_OPTION_LABELS}
                 onChange={setEditorFontSize}
+              />
+            </SettingRow>
+          </section>
+
+          <Separator className="my-2" />
+
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">阅读</h3>
+            <SettingRow title="电子书字号" description="作用于 EPUB、MOBI、AZW3 和 AZW 正文；顶部工具栏也可快速调整。">
+              <OptionButtons<ReaderFontSize>
+                value={readerFontSize}
+                options={READER_FONT_SIZE_OPTION_LABELS}
+                onChange={setReaderFontSize}
+              />
+            </SettingRow>
+            <SettingRow title="电子书行距" description="作用于 EPUB、MOBI、AZW3 和 AZW 正文。">
+              <OptionButtons<ReaderLineHeight>
+                value={readerLineHeight}
+                options={READER_LINE_HEIGHT_OPTION_LABELS}
+                onChange={setReaderLineHeight}
               />
             </SettingRow>
           </section>

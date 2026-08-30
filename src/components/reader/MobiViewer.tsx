@@ -7,6 +7,7 @@ import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
@@ -27,6 +28,7 @@ import {
   isMobiChapterReadable,
   normalizeMobiChapterHtml,
 } from '@/lib/reader/mobi-chapter-html'
+import { applyEpubReadingLayout } from '@/lib/reader/epub-themes'
 import { injectMobiMarkStyles } from '@/lib/reader/reader-mark-geometry'
 import { findMobiMarksAtPoint, findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from '@/lib/reader/mobi-reading-marks'
 import {
@@ -61,6 +63,7 @@ import {
 import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'
 import type { AppError } from '@shared/core/errors'
@@ -80,6 +83,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const themeRef = useRef(theme)
   themeRef.current = theme
+  const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
+  const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
+  const typographyRef = useRef({ fontSize: readerFontSize, lineHeight: readerLineHeight })
+  typographyRef.current = { fontSize: readerFontSize, lineHeight: readerLineHeight }
   const chapterCleanupRef = useRef<(() => void) | null>(null)
   const marksRef = useRef<ReadingMark[]>([])
   const hoveredMarkIdRef = useRef<string | null>(null)
@@ -181,6 +188,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     const documentHtml = await buildMobiChapterDocument(
       { ...chapter, html: bodyHtml || chapter.html },
       themeRef.current,
+      typographyRef.current,
     )
     if (!/<body[^>]*>[\s\S]*\S[\s\S]*<\/body>/i.test(documentHtml)) {
       return false
@@ -283,6 +291,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     },
     [],
   )
+
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument
+    if (!doc?.body || !currentChapterId) return
+    applyEpubReadingLayout(doc, theme, typographyRef.current)
+    syncMobiMarkOverlays(doc, currentChapterId)
+  }, [currentChapterId, readerFontSize, readerLineHeight, syncMobiMarkOverlays, theme])
 
   const bindChapterFrame = useCallback(
     (iframe: HTMLIFrameElement) => {
@@ -854,9 +869,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         onMarksToggle={toggleMarks}
         onAddBookmark={() => void addChapterBookmark()}
         trailing={
-          isLoading || !ready ? (
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          ) : null
+          <>
+            <ReaderTypographyControls disabled={!ready} />
+            {isLoading || !ready ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
+          </>
         }
       />
 
