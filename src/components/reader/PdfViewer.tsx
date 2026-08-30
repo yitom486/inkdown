@@ -11,8 +11,9 @@ import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
+import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection } from '@/lib/agent-context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection } from '@/lib/agent-context/focus-agent-composer'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
 import {
@@ -444,8 +445,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     }, 10)
   }, [filePath])
 
+  const selectionSnapshotRef = useRef(selectionSnapshot)
+  selectionSnapshotRef.current = selectionSnapshot
+
   const addPageBookmark = useCallback(async () => {
-    if (!fileFingerprint || numPages === 0) return
+    if (!fileFingerprint || numPages === 0) {
+      throw new Error('无法获取当前页')
+    }
     const result = await createMark({
       filePath,
       fileFingerprint,
@@ -453,14 +459,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       anchor: { format: 'pdf', page: pageNum },
       label: nav.current?.label ?? `第 ${pageNum} 页`,
     })
-    if (isOk(result)) {
-      toast.success('已添加书签')
+    if (!isOk(result)) {
+      throw new Error(result.error.message || '创建书签失败')
     }
-  }, [createMark, fileFingerprint, filePath, nav.current?.label, pageNum])
+    toast.success('已添加书签')
+    return result.value
+  }, [createMark, fileFingerprint, filePath, nav.current?.label, numPages, pageNum])
 
   const handleSaveAnnotation = useCallback(
     async (note: string) => {
-      if (!selectionSnapshot || !fileFingerprint) return
+      const snapshot = selectionSnapshotRef.current
+      if (!snapshot || !fileFingerprint) {
+        throw new Error('当前没有可用选区，请先划选文本')
+      }
 
       const result = await createMark({
         filePath,
@@ -468,22 +479,32 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         kind: note ? 'note' : 'highlight',
         anchor: {
           format: 'pdf',
-          page: selectionSnapshot.page,
-          selectedText: selectionSnapshot.text,
-          rects: selectionSnapshot.rects,
+          page: snapshot.page,
+          selectedText: snapshot.text,
+          rects: snapshot.rects,
         },
-        excerpt: selectionSnapshot.text,
+        excerpt: snapshot.text,
         note: note || undefined,
       })
 
-      if (isOk(result)) {
-        toast.success(note ? '已保存批注' : '已添加高亮')
+      if (!isOk(result)) {
+        throw new Error(result.error.message || '创建批注失败')
       }
 
+      toast.success(note ? '已保存批注' : '已添加高亮')
       clearTextSelection()
+      return result.value
     },
-    [clearTextSelection, createMark, fileFingerprint, filePath, selectionSnapshot],
+    [clearTextSelection, createMark, fileFingerprint, filePath],
   )
+
+  useEffect(() => {
+    return registerReaderMarks({
+      filePath,
+      createBookmark: () => addPageBookmark(),
+      createNoteFromSelection: (note) => handleSaveAnnotation(note),
+    })
+  }, [addPageBookmark, filePath, handleSaveAnnotation])
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {
@@ -644,6 +665,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+          }}
+          onAskAgent={() => {
+            openAgentComposerToAskSelection()
+            dimTextSelection()
           }}
           onDismiss={clearTextSelection}
         />

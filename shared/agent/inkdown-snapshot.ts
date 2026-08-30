@@ -11,9 +11,13 @@ export type InkdownSnapshotResource =
   | 'search'
   | 'selection'
   | 'chapter'
+  | 'marks'
+  | 'create-bookmark'
+  | 'create-note'
 
 export interface InkdownSnapshotArgs {
   query?: string
   flatIndex?: number
   title?: string
+  note?: string
 }

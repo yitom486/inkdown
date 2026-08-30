@@ -15,8 +15,9 @@ import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { extractDocumentText, extractViewportText } from '@/lib/agent-context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
+import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection } from '@/lib/agent-context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection } from '@/lib/agent-context/focus-agent-composer'
 import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
 import {
   collectEpubSpineItems,
@@ -275,15 +276,20 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     replaceAllEpubMarksOnRendition(rendition, marksRef.current, theme)
   }, [theme])
 
+  const selectionSnapshotRef = useRef<EpubSelectionSnapshot | null>(null)
+  selectionSnapshotRef.current = selectionSnapshot
+
   const addBookmarkAtCurrent = useCallback(async () => {
     const rendition = renditionRef.current
-    if (!rendition || !fileFingerprint) return
+    if (!rendition || !fileFingerprint) {
+      throw new Error('无法获取当前阅读位置')
+    }
 
     const location = rendition.currentLocation() as EpubLocation | null
     const cfi = location?.start?.cfi
     if (!cfi) {
       toast.error('无法获取当前阅读位置')
-      return
+      throw new Error('无法获取当前阅读位置')
     }
 
     const result = await createMark({
@@ -297,14 +303,19 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       },
       label: nav.current?.label ?? '书签',
     })
-    if (isOk(result)) {
-      toast.success('已添加书签')
+    if (!isOk(result)) {
+      throw new Error(result.error.message || '创建书签失败')
     }
+    toast.success('已添加书签')
+    return result.value
   }, [nav, createMark, fileFingerprint, filePath])
 
   const handleSaveAnnotation = useCallback(
     async (note: string) => {
-      if (!selectionSnapshot || !fileFingerprint) return
+      const snapshot = selectionSnapshotRef.current
+      if (!snapshot || !fileFingerprint) {
+        throw new Error('当前没有可用选区，请先划选文本')
+      }
 
       const result = await createMark({
         filePath,
@@ -312,23 +323,28 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         kind: note ? 'note' : 'highlight',
         anchor: {
           format: 'epub',
-          cfi: selectionSnapshot.cfiRange,
-          cfiRange: selectionSnapshot.cfiRange,
+          cfi: snapshot.cfiRange,
+          cfiRange: snapshot.cfiRange,
           href: nav.current?.href,
-          selectedText: selectionSnapshot.text,
+          selectedText: snapshot.text,
         },
-        excerpt: selectionSnapshot.text,
+        excerpt: snapshot.text,
         note: note || undefined,
       })
 
-      if (isOk(result) && renditionRef.current) {
+      if (!isOk(result)) {
+        throw new Error(result.error.message || '创建批注失败')
+      }
+
+      if (renditionRef.current) {
         applyEpubMarkToRendition(renditionRef.current, result.value, theme)
         toast.success(note ? '已保存批注' : '已添加高亮')
       }
 
       clearTextSelection()
+      return result.value
     },
-    [nav, clearTextSelection, createMark, fileFingerprint, filePath, selectionSnapshot, theme],
+    [nav, clearTextSelection, createMark, fileFingerprint, filePath, theme],
   )
 
   const handleSelectMark = useCallback((mark: ReadingMark) => {
@@ -758,6 +774,14 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   }, [filePath])
 
   useEffect(() => {
+    return registerReaderMarks({
+      filePath,
+      createBookmark: () => addBookmarkAtCurrent(),
+      createNoteFromSelection: (note) => handleSaveAnnotation(note),
+    })
+  }, [addBookmarkAtCurrent, filePath, handleSaveAnnotation])
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!ready) return
       if (!(event.altKey || event.metaKey)) return
@@ -862,6 +886,10 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+          }}
+          onAskAgent={() => {
+            openAgentComposerToAskSelection()
+            dimTextSelection()
           }}
           onDismiss={clearTextSelection}
         />

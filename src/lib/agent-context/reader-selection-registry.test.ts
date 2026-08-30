@@ -6,6 +6,7 @@ import {
   hasActiveSelection,
   readSelectionText,
   registerSelectionProvider,
+  reviveSelectionNotify,
 } from './reader-selection-registry'
 
 describe('reader-selection-registry sticky', () => {
@@ -78,5 +79,19 @@ describe('selection one-shot notify', () => {
     commitReaderSelection('/book.epub', '新选区')
     expect(beginPromptSelectionCycle()).toBe(true)
     expect(readSelectionText()).toBe('新选区')
+  })
+
+  it('reviveSelectionNotify 可在问 Agent 时重新挂起通知', () => {
+    commitReaderSelection('/book.epub', '选段')
+    expect(beginPromptSelectionCycle()).toBe(true)
+    expect(beginPromptSelectionCycle()).toBe(false)
+    expect(reviveSelectionNotify()).toBe(false) // sticky 已清
+
+    commitReaderSelection('/book.epub', '选段')
+    expect(beginPromptSelectionCycle()).toBe(true)
+    // 本轮工具仍可读；模拟「问 Agent」在通知已消费后再次挂起
+    expect(readSelectionText()).toBe('选段')
+    expect(reviveSelectionNotify()).toBe(true)
+    expect(beginPromptSelectionCycle()).toBe(true)
   })
 })

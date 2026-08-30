@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Copy, ClipboardPaste, MessageSquarePlus } from 'lucide-react'
+import { BotMessageSquare, ClipboardPaste, Copy, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -9,6 +9,8 @@ export interface SelectionToolbarProps {
   readOnly?: boolean
   onCopy: () => void
   onAnnotate: () => void
+  /** 打开 Agent 面板并带着当前选区去提问 */
+  onAskAgent?: () => void
   onDismiss: () => void
 }
 
@@ -18,6 +20,7 @@ export function SelectionToolbar({
   readOnly = true,
   onCopy,
   onAnnotate,
+  onAskAgent,
   onDismiss,
 }: SelectionToolbarProps) {
   useEffect(() => {
@@ -57,6 +60,17 @@ export function SelectionToolbar({
         <ClipboardPaste className="size-3.5" />
         粘贴
       </Button>
+      {onAskAgent ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs"
+          onClick={onAskAgent}
+        >
+          <BotMessageSquare className="size-3.5" />
+          问 Agent
+        </Button>
+      ) : null}
       <Button
         variant="ghost"
         size="sm"

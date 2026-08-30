@@ -93,6 +93,35 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
       '用户划选即优先分析该段；选区通知只生效一轮；无选区时会报错。',
     inputSchema: NO_ARGS_SCHEMA,
   },
+  {
+    name: 'inkdown_list_marks',
+    description:
+      '列出当前打开文档的书签 / 高亮 / 批注（JSON：id、kind、label、excerpt、note、location）。' +
+      '用户问「我有哪些书签/批注」时调用；仅 EPUB/PDF/MOBI。',
+    inputSchema: NO_ARGS_SCHEMA,
+  },
+  {
+    name: 'inkdown_create_bookmark',
+    description:
+      '在当前阅读位置创建书签（不跳转）。用户明确要求「加个书签」时调用；仅 EPUB/PDF/MOBI。',
+    inputSchema: NO_ARGS_SCHEMA,
+  },
+  {
+    name: 'inkdown_create_note',
+    description:
+      '基于用户当前选区创建批注或高亮。note 非空为批注，空字符串为高亮。' +
+      '需要已有选区（或本轮 sticky 选区）；用户要求「给这段加批注」时调用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        note: {
+          type: 'string',
+          description: '批注正文；省略或空字符串则只创建高亮',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
 ]
 
 export interface InkdownMcpToolResult {
@@ -154,6 +183,19 @@ export async function callInkdownMcpTool(
     }
     case 'inkdown_get_selection': {
       const text = await context.readSnapshot('selection')
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_list_marks': {
+      const text = await context.readSnapshot('marks')
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_create_bookmark': {
+      const text = await context.readSnapshot('create-bookmark')
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_create_note': {
+      const note = typeof args?.note === 'string' ? args.note : ''
+      const text = await context.readSnapshot('create-note', { note })
       return { content: [{ type: 'text', text }] }
     }
     default:

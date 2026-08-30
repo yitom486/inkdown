@@ -56,6 +56,13 @@ export function getStickyReaderSelection(): StickyReaderSelection | null {
   return sticky
 }
 
+/** 「问 Agent」：若已有 sticky，重新挂起本轮 hasSelection 通知 */
+export function reviveSelectionNotify(): boolean {
+  if (!sticky?.text) return false
+  selectionNotifyPending = true
+  return true
+}
+
 /**
  * 每轮构建 prompt 开头调用：
  * - 若上一轮已通知过选区且用户未重新划选 → 清掉 sticky，避免后续轮次仍 hasSelection

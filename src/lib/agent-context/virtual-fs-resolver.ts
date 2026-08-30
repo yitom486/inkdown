@@ -9,6 +9,11 @@ import {
   readViewportText,
 } from './reader-content-registry'
 import { readChapterByRef } from './read-chapter-by-ref'
+import {
+  createBookmarkForAgent,
+  createNoteForAgent,
+  listMarksForAgent,
+} from './read-marks-for-agent'
 import { readSelectionWithContext } from './read-selection-context'
 import { searchReaderContent } from './search-reader-content'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
@@ -116,5 +121,11 @@ export async function resolveInkdownSnapshot(
         null,
         2,
       )
+    case 'marks':
+      return JSON.stringify(await listMarksForAgent(), null, 2)
+    case 'create-bookmark':
+      return JSON.stringify(await createBookmarkForAgent(), null, 2)
+    case 'create-note':
+      return JSON.stringify(await createNoteForAgent(args?.note ?? ''), null, 2)
   }
 }

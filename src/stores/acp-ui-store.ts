@@ -80,6 +80,8 @@ interface AcpUiStore {
   togglePanel: () => void
   /** 面板已打开时聚焦输入框；不会强行打开面板（阅读器划选等场景） */
   requestComposerFocus: () => void
+  /** 打开 Agent 面板并聚焦输入框（选区「问 Agent」） */
+  openPanelAndFocusComposer: () => void
   setHistoryOpen: (open: boolean) => void
   setSelectedRuntimeId: (id: string) => void
   setStatus: (status: AcpConnectionStatus, errorMessage?: string) => void
@@ -306,6 +308,13 @@ export const useAcpUiStore = create<AcpUiStore>()(
         if (!panelOpen) return
         set({ composerFocusNonce: composerFocusNonce + 1 })
       },
+      openPanelAndFocusComposer: () =>
+        set((s) => ({
+          ...(s.panelOpen
+            ? { panelOpen: true }
+            : { panelOpen: true, ...openPanelWithBlankDraft(s) }),
+          composerFocusNonce: s.composerFocusNonce + 1,
+        })),
       setHistoryOpen: (open) => set({ historyOpen: open }),
       setSelectedRuntimeId: (id) => set({ selectedRuntimeId: id }),
 

@@ -11,8 +11,9 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { extractDocumentText, extractViewportText, htmlToText } from '@/lib/agent-context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
+import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection } from '@/lib/agent-context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection } from '@/lib/agent-context/focus-agent-composer'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import type { ReaderUnit } from '@/lib/reader-navigation'
@@ -626,8 +627,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     })()
   }, [theme, currentChapterId, ready, loadChapterById])
 
+  const selectionSnapshotRef = useRef(selectionSnapshot)
+  selectionSnapshotRef.current = selectionSnapshot
+
   const addChapterBookmark = useCallback(async () => {
-    if (!fileFingerprint || !currentChapterId) return
+    if (!fileFingerprint || !currentChapterId) {
+      throw new Error('无法获取当前章节')
+    }
     const result = await createMark({
       filePath,
       fileFingerprint,
@@ -635,12 +641,19 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       anchor: { format: 'mobi', chapterId: currentChapterId },
       label: nav.current?.label ?? '书签',
     })
-    if (isOk(result)) toast.success('已添加书签')
+    if (!isOk(result)) {
+      throw new Error(result.error.message || '创建书签失败')
+    }
+    toast.success('已添加书签')
+    return result.value
   }, [nav.current?.label, createMark, currentChapterId, fileFingerprint, filePath])
 
   const handleSaveAnnotation = useCallback(
     async (note: string) => {
-      if (!selectionSnapshot || !fileFingerprint || !currentChapterId) return
+      const snapshot = selectionSnapshotRef.current
+      if (!snapshot || !fileFingerprint || !currentChapterId) {
+        throw new Error('当前没有可用选区，请先划选文本')
+      }
 
       const result = await createMark({
         filePath,
@@ -649,26 +662,37 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         anchor: {
           format: 'mobi',
           chapterId: currentChapterId,
-          selectedText: selectionSnapshot.text,
-          rects: selectionSnapshot.rects,
+          selectedText: snapshot.text,
+          rects: snapshot.rects,
         },
-        excerpt: selectionSnapshot.text,
+        excerpt: snapshot.text,
         note: note || undefined,
       })
 
-      if (isOk(result)) {
-        marksRef.current = [...marksRef.current, result.value]
-        toast.success(note ? '已保存批注' : '已添加高亮')
-        const doc = iframeRef.current?.contentDocument
-        if (doc?.body) {
-          syncMobiMarkOverlays(doc, currentChapterId)
-        }
+      if (!isOk(result)) {
+        throw new Error(result.error.message || '创建批注失败')
+      }
+
+      marksRef.current = [...marksRef.current, result.value]
+      toast.success(note ? '已保存批注' : '已添加高亮')
+      const doc = iframeRef.current?.contentDocument
+      if (doc?.body) {
+        syncMobiMarkOverlays(doc, currentChapterId)
       }
 
       clearTextSelection()
+      return result.value
     },
-    [clearTextSelection, createMark, currentChapterId, fileFingerprint, filePath, selectionSnapshot, syncMobiMarkOverlays],
+    [clearTextSelection, createMark, currentChapterId, fileFingerprint, filePath, syncMobiMarkOverlays],
   )
+
+  useEffect(() => {
+    return registerReaderMarks({
+      filePath,
+      createBookmark: () => addChapterBookmark(),
+      createNoteFromSelection: (note) => handleSaveAnnotation(note),
+    })
+  }, [addChapterBookmark, filePath, handleSaveAnnotation])
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {
@@ -778,6 +802,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           onAnnotate={() => {
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+          }}
+          onAskAgent={() => {
+            openAgentComposerToAskSelection()
+            dimTextSelection()
           }}
           onDismiss={clearTextSelection}
         />
