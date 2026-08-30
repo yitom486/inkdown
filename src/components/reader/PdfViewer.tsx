@@ -21,8 +21,9 @@ import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/reader/pdf-outline'
 import {
-  estimatePageOffsetTop,
+  PDF_JUMP_SYNC_HOLD_MS,
   PDF_PAGE_GAP_PX,
+  resolvePdfPageScrollTop,
   scalePdfPageCssSize,
   type PdfPageCssSize,
 } from '@/lib/reader/pdf-page-metrics'
@@ -72,6 +73,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const loadingTaskRef = useRef<PDFDocumentLoadingTask | null>(null)
   const ignoreScrollSyncRef = useRef(false)
   const pendingJumpPageRef = useRef<number | null>(null)
+  const jumpSettleCancelRef = useRef<(() => void) | null>(null)
+  const scrollSyncReleaseTimerRef = useRef<number | null>(null)
   const pageNumRef = useRef(1)
   const savePdfProgressTimerRef = useRef<number | null>(null)
   const [pageNum, setPageNum] = useState(1)
@@ -343,6 +346,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   useEffect(() => {
     return () => {
+      jumpSettleCancelRef.current?.()
+      if (scrollSyncReleaseTimerRef.current != null) {
+        window.clearTimeout(scrollSyncReleaseTimerRef.current)
+      }
       clearReaderSelection()
     }
   }, [filePath])
@@ -352,27 +359,43 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     [pageCssSize, scale],
   )
 
+  const holdScrollSync = useCallback((ms: number) => {
+    ignoreScrollSyncRef.current = true
+    if (scrollSyncReleaseTimerRef.current != null) {
+      window.clearTimeout(scrollSyncReleaseTimerRef.current)
+    }
+    scrollSyncReleaseTimerRef.current = window.setTimeout(() => {
+      ignoreScrollSyncRef.current = false
+      scrollSyncReleaseTimerRef.current = null
+    }, ms)
+  }, [])
+
   const applyScrollToPage = useCallback(
-    (targetPage: number, behavior: ScrollBehavior = 'auto') => {
+    (
+      targetPage: number,
+      behavior: ScrollBehavior = 'auto',
+      options?: { preferEstimate?: boolean; holdSyncMs?: number },
+    ) => {
       const container = containerRef.current
       if (!container) return
 
-      ignoreScrollSyncRef.current = true
       const anchor = pageAnchorRefs.current.get(targetPage)
-      const estimatedTop = estimatePageOffsetTop(targetPage, scaledPageSize.height, PDF_PAGE_GAP_PX)
-      const top = anchor ? Math.max(0, anchor.offsetTop - 16) : estimatedTop
+      const top = resolvePdfPageScrollTop(
+        targetPage,
+        scaledPageSize.height,
+        options?.preferEstimate ? null : (anchor?.offsetTop ?? null),
+        PDF_PAGE_GAP_PX,
+      )
+
+      holdScrollSync(options?.holdSyncMs ?? (behavior === 'smooth' ? 420 : 80))
 
       if (behavior === 'auto') {
         container.scrollTop = top
       } else {
         container.scrollTo({ top, behavior })
       }
-
-      window.setTimeout(() => {
-        ignoreScrollSyncRef.current = false
-      }, behavior === 'smooth' ? 420 : 80)
     },
-    [scaledPageSize.height],
+    [holdScrollSync, scaledPageSize.height],
   )
 
   const scrollToPage = useCallback(
@@ -426,15 +449,63 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   useLayoutEffect(() => {
     const targetPage = pendingJumpPageRef.current
     if (targetPage === null) return
-
-    applyScrollToPage(targetPage, 'auto')
     pendingJumpPageRef.current = null
 
-    // 目标页渲染完成后用真实高度再校准一次
-    window.requestAnimationFrame(() => {
-      applyScrollToPage(targetPage, 'auto')
+    jumpSettleCancelRef.current?.()
+
+    // 先按等高估算落位，避免「已渲染真高 + 占位估算」混算把视口甩飞
+    applyScrollToPage(targetPage, 'auto', {
+      preferEstimate: true,
+      holdSyncMs: PDF_JUMP_SYNC_HOLD_MS,
     })
-  }, [applyScrollToPage, pageNum, scaledPageSize.height, scale])
+
+    let cancelled = false
+    let frames = 0
+    const maxFrames = 45
+
+    const snapToAnchor = () => {
+      if (cancelled) return
+      const container = containerRef.current
+      const anchor = pageAnchorRefs.current.get(targetPage)
+      if (!container || !anchor) return
+      const top = resolvePdfPageScrollTop(targetPage, scaledPageSize.height, anchor.offsetTop)
+      if (Math.abs(container.scrollTop - top) > 1) {
+        container.scrollTop = top
+      }
+    }
+
+    const tick = () => {
+      if (cancelled) return
+      snapToAnchor()
+      frames += 1
+      if (frames < maxFrames) {
+        window.requestAnimationFrame(tick)
+      } else {
+        holdScrollSync(120)
+      }
+    }
+    window.requestAnimationFrame(tick)
+
+    const targetEl = pageAnchorRefs.current.get(targetPage)
+    let observer: ResizeObserver | null = null
+    if (targetEl && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        snapToAnchor()
+        holdScrollSync(160)
+      })
+      observer.observe(targetEl)
+    }
+
+    jumpSettleCancelRef.current = () => {
+      cancelled = true
+      observer?.disconnect()
+    }
+
+    return () => {
+      jumpSettleCancelRef.current?.()
+      jumpSettleCancelRef.current = null
+    }
+  }, [applyScrollToPage, holdScrollSync, pageNum, scaledPageSize.height, scale])
 
   useEffect(() => {
     const container = containerRef.current
@@ -787,7 +858,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                         else pageAnchorRefs.current.delete(page)
                       }}
                       className="w-fit max-w-full"
-                      style={{ minHeight: active ? undefined : estimatedPageHeight }}
+                      // 激活页 canvas 为 absolute，异步量尺寸前必须占位，否则远跳时高度塌成黑屏
+                      style={{
+                        minHeight: estimatedPageHeight,
+                        minWidth: estimatedPageWidth,
+                      }}
                       data-page={page}
                     >
                       {active ? (
