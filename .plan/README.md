@@ -72,7 +72,8 @@ YYYY-MM-DD-计划名称.md
 | [2026-08-28-电子书阅读支持.md](./2026-08-28-电子书阅读支持.md) | `in-progress` | PDF/EPUB 只读阅读，应用更名轻量阅读器 |
 | [2026-08-28-阅读标记与批注.md](./2026-08-28-阅读标记与批注.md) | `in-progress` | 书签、批注、选区工具条 |
 | [2026-08-29-PDF虚拟滚动优化.md](./2026-08-29-PDF虚拟滚动优化.md) | `pending` | PDF 虚拟列表 + 渲染缓存（按需实施） |
-| [2026-08-29-ACP客户端.md](./2026-08-29-ACP客户端.md) | `in-progress` | v1 主路径已齐；backlog：MCP、@文件、E2E mock、xterm |
+| [2026-08-29-ACP客户端.md](./2026-08-29-ACP客户端.md) | `in-progress` | v1 主路径已齐；**下一 P0：Agent 上下文深度集成** |
+| [2026-08-30-Agent上下文深度集成.md](./2026-08-30-Agent上下文深度集成.md) | `pending` | 静态 Skill + turn-context + 虚拟 fs；不用 MCP |
 | [2026-08-29-GitHub发布与版本路线.md](./2026-08-29-GitHub发布与版本路线.md) | `pending` | v0.1 无 AI 首发 Release，v0.2 接入 Agent |
 | [2026-08-29-Markdown旁注与批注.md](./2026-08-29-Markdown旁注与批注.md) | `pending` | MD 旁注（快照+侧栏）；v0.3+，不照搬阅读器划词 |
 | [2026-08-29-书架.md](./2026-08-29-书架.md) | `pending` | 阅读书架 MVP；目标 v0.3.x |

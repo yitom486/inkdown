@@ -8,6 +8,8 @@ import type {
 } from '@shared/types/acp'
 import type { AcpMessageAttachment } from '@/lib/acp-composer'
 import { acpApi } from '@/api/acp-api'
+import { buildInkdownPromptPrefix } from '@/lib/agent-context/build-prompt-prefix'
+import { resetTurnContextTracker } from '@/lib/agent-context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/acp-config-preferences'
 import { acpDevLog, acpDevWarn } from '@/lib/acp-dev-log'
 import { formatAcpConnectedMessage } from '@/lib/acp-session-restore'
@@ -61,7 +63,7 @@ export function useAcpSession(workspaceRoot?: string) {
   const beginAgentReply = useAcpUiStore((s) => s.beginAgentReply)
   const setPrompting = useAcpUiStore((s) => s.setPrompting)
   const setPromptCapabilities = useAcpUiStore((s) => s.setPromptCapabilities)
-  const clearMessages = useAcpUiStore((s) => s.clearMessages)
+  const clearMessagesInStore = useAcpUiStore((s) => s.clearMessages)
   const selectedRuntimeId = useAcpUiStore((s) => s.selectedRuntimeId)
   const sessionId = useAcpUiStore((s) => s.sessionId)
   const prompting = useAcpUiStore((s) => s.prompting)
@@ -362,7 +364,11 @@ export function useAcpSession(workspaceRoot?: string) {
       appendUserMessage(payload.text, payload.messageAttachments)
       setPrompting(true)
       beginAgentReply()
-      const result = await acpApi.prompt({ sessionId: sid, prompt: payload.prompt })
+      const prefix = buildInkdownPromptPrefix(useAcpUiStore.getState().activeThreadId)
+      const result = await acpApi.prompt({
+        sessionId: sid,
+        prompt: [...prefix, ...payload.prompt],
+      })
       finishStreaming()
       if (!isOk(result)) {
         reportAppError(result.error)
@@ -382,6 +388,12 @@ export function useAcpSession(workspaceRoot?: string) {
       syncAgentSessionToActiveThread,
     ],
   )
+
+  /** 清空时间线等于重新开场：turn-context 计数一并归零 */
+  const clearMessages = useCallback(() => {
+    resetTurnContextTracker(useAcpUiStore.getState().activeThreadId)
+    clearMessagesInStore()
+  }, [clearMessagesInStore])
 
   const cancel = useCallback(async () => {
     const sid = useAcpUiStore.getState().sessionId

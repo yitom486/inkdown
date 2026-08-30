@@ -23,6 +23,7 @@ import { useAppMeta, useFileOperations } from '@/hooks/useFileOperations'
 import { pickLatestRecoverableDraft } from '@/lib/draft-utils'
 import { reportAppError, reportUnknownError } from '@/lib/report-error'
 import { appApi } from '@/api/app-api'
+import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
@@ -197,6 +198,10 @@ function App() {
       setOutline({ headings: [] })
     }
   }, [filePath, readerDocumentKind])
+
+  useEffect(() => {
+    useActiveDocumentStore.getState().setActiveFilePath(filePath ?? null)
+  }, [filePath])
 
   if (!window.electronAPI) {
     const isElectron = navigator.userAgent.includes('Electron')

@@ -1,8 +1,15 @@
 import { access, readFile, writeFile } from 'node:fs/promises'
-import { dirname, resolve, sep } from 'node:path'
+import { dirname, extname, resolve, sep } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 
 const MAX_READ_BYTES = 2 * 1024 * 1024
+
+/** 电子书是压缩包/二进制：按文本读只会得到乱码并烧掉大量 token */
+const BINARY_DOCUMENT_EXTENSIONS = new Set(['.epub', '.mobi', '.azw', '.azw3', '.pdf'])
+
+export function isBinaryDocumentPath(filePath: string): boolean {
+  return BINARY_DOCUMENT_EXTENSIONS.has(extname(filePath).toLowerCase())
+}
 
 export function assertPathInsideWorkspace(filePath: string, workspaceRoot: string): string {
   const root = resolve(workspaceRoot)
@@ -20,6 +27,12 @@ export async function acpReadTextFile(params: {
   line?: number
   limit?: number
 }): Promise<{ content: string }> {
+  if (isBinaryDocumentPath(params.path)) {
+    throw new Error(
+      `Inkdown 拒绝按文本读取电子书/PDF：${params.path}。` +
+        '该格式已由客户端解析，请改为向用户索取所需的章节、目录或视口文本。',
+    )
+  }
   const abs = assertPathInsideWorkspace(params.path, params.workspaceRoot)
   await access(abs)
   let content = await readFile(abs, 'utf-8')
