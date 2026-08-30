@@ -26,9 +26,15 @@ import { runConnectAuthGate } from './connect-auth-gate'
 import { AcpTerminalManager } from './acp-terminal'
 import {
   parseLoadSessionSupported,
+  parseMcpHttpSupported,
   parsePromptCapabilities,
   parseResumeSessionSupported,
 } from './session-capabilities'
+import {
+  startInkdownMcpServer,
+  stopInkdownMcpServer,
+  type InkdownMcpServerHandle,
+} from './mcp/inkdown-mcp-server'
 import { restoreOrCreateAcpSession } from './session-open'
 import {
   isJsonRpcNotification,
@@ -73,6 +79,7 @@ let status: AcpConnectionStatus = 'disconnected'
 let permissionBridge: AcpPermissionBridge | null = null
 let snapshotBridge: AcpSnapshotBridge | null = null
 let snapshotRequestSeq = 0
+let inkdownMcp: InkdownMcpServerHandle | null = null
 
 const pendingPermissions = new Map<number, { resolve: (value: PermissionDecision) => void }>()
 const sessionUpdateListeners = new Set<AcpSessionUpdateListener>()
@@ -156,6 +163,16 @@ async function openSessionAfterAuth(
       resumeSessionId: resumeId,
       resumeSupported: resumeSessionSupported,
       loadSupported: loadSessionSupported,
+      mcpServers: inkdownMcp
+        ? [
+            {
+              type: 'http',
+              name: 'inkdown',
+              url: inkdownMcp.url,
+              headers: [{ name: 'Authorization', value: `Bearer ${inkdownMcp.authToken}` }],
+            },
+          ]
+        : [],
       onSuppressUpdates: (suppress) => {
         suppressSessionUpdates = suppress
       },
@@ -433,6 +450,14 @@ export async function connectAcp(payload: {
     resumeSessionSupported = parseResumeSessionSupported(caps)
     cachedPromptCapabilities = parsePromptCapabilities(caps)
 
+    // codex 不会主动走 fs/read_text_file，只有 MCP 工具能让它拉到我们的内存数据
+    if (parseMcpHttpSupported(caps)) {
+      inkdownMcp = await startInkdownMcpServer({ readSnapshot: handleSnapshotRequest })
+    } else {
+      inkdownMcp = null
+      console.warn('[acp-mcp] Agent 未声明 mcpCapabilities.http，Inkdown 工具不可用')
+    }
+
     const authMethods = parseAuthMethods(initResult.authMethods)
     const preflight = probeCodexAuth()
     let openedWithoutAuth: Extract<AcpConnectResult, { phase: 'ready' }> | null = null
@@ -543,6 +568,9 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
 
   processHandle?.kill()
   processHandle = null
+
+  await stopInkdownMcpServer()
+  inkdownMcp = null
 
   sessionId = null
   runtimeId = null

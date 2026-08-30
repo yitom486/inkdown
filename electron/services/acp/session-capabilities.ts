@@ -21,6 +21,15 @@ export function parseResumeSessionSupported(caps: Record<string, unknown>): bool
   return false
 }
 
+/** ACP：HTTP 传输的 MCP server 是可选能力，Agent 未声明时不能注入 */
+export function parseMcpHttpSupported(caps: Record<string, unknown>): boolean {
+  const mcpCaps =
+    caps.mcpCapabilities && typeof caps.mcpCapabilities === 'object'
+      ? (caps.mcpCapabilities as Record<string, unknown>)
+      : null
+  return mcpCaps?.http === true
+}
+
 export function parsePromptCapabilities(caps: Record<string, unknown>): AcpPromptCapabilities {
   const raw =
     caps.promptCapabilities && typeof caps.promptCapabilities === 'object'

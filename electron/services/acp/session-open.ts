@@ -8,6 +8,8 @@ export interface RestoreOrCreateSessionInput {
   resumeSessionId: string | null
   resumeSupported: boolean
   loadSupported: boolean
+  /** 客户端自带的 MCP server（Inkdown 工具）；Agent 不支持 HTTP 传输时传空数组 */
+  mcpServers?: unknown[]
   /** session/load 回放期间回调（主进程用来压制 UI 更新） */
   onSuppressUpdates?: (suppress: boolean) => void
   /** 测试可设为 0 */
@@ -69,7 +71,7 @@ export async function restoreOrCreateAcpSession(
         const result = (await input.request(rpcMethod, {
           sessionId: resumeId,
           cwd: input.cwd,
-          mcpServers: [],
+          mcpServers: input.mcpServers ?? [],
         })) as Record<string, unknown>
         restoreAttempts.push({ method, ok: true, tries: tryIndex })
         log('info', 'session restore ok', { method: rpcMethod, sessionId: resumeId })
@@ -142,7 +144,7 @@ export async function restoreOrCreateAcpSession(
   log('info', 'falling back to session/new', { resumeId, restoreAttempts })
   const sessionResult = (await input.request('session/new', {
     cwd: input.cwd,
-    mcpServers: [],
+    mcpServers: input.mcpServers ?? [],
   })) as Record<string, unknown>
   const newSessionId =
     typeof sessionResult.sessionId === 'string' ? sessionResult.sessionId : null
