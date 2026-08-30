@@ -67,6 +67,12 @@ export interface ExportDocumentPayload {
   suggestedName?: string
 }
 
+/** 另存为 Markdown / 纯文本（笔记导出等） */
+export interface ExportMarkdownPayload {
+  content: string
+  suggestedName?: string
+}
+
 export interface ExportDocumentResult {
   filePath: string
 }

@@ -2,6 +2,11 @@ import type { ReactNode } from 'react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+import type {
+  ReadingNotesChapterRef,
+  ReadingNotesContentKind,
+  ReadingNotesScope,
+} from '@/lib/reader/export-reading-notes'
 import type { ReadingMark } from '@shared/types/reading-mark'
 
 interface ReaderContentShellProps {
@@ -10,6 +15,13 @@ interface ReaderContentShellProps {
   onSelectMark: (mark: ReadingMark) => void
   onDeleteMark: (mark: ReadingMark) => void
   onCloseMarks: () => void
+  onExportNotes?: (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => void
+  marksToc?: ReadingNotesChapterRef[]
+  marksCurrentChapterKey?: string
+  marksResolveChapter?: (
+    mark: ReadingMark,
+    toc: ReadingNotesChapterRef[],
+  ) => ReadingNotesChapterRef
   tocOpen: boolean
   units: ReaderUnit[]
   currentUnitId?: string
@@ -24,6 +36,10 @@ export function ReaderContentShell({
   onSelectMark,
   onDeleteMark,
   onCloseMarks,
+  onExportNotes,
+  marksToc,
+  marksCurrentChapterKey,
+  marksResolveChapter,
   tocOpen,
   units,
   currentUnitId,
@@ -39,6 +55,10 @@ export function ReaderContentShell({
           onSelect={onSelectMark}
           onDelete={onDeleteMark}
           onClose={onCloseMarks}
+          onExportNotes={onExportNotes}
+          marksToc={marksToc}
+          currentChapterKey={marksCurrentChapterKey}
+          resolveChapter={marksResolveChapter}
         />
       ) : null}
       {tocOpen && units.length > 0 ? (

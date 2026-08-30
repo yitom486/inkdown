@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc/channels'
 import type {
   ExportDocumentPayload,
+  ExportMarkdownPayload,
   OpenDialogOptions,
   SaveFilePayload,
   SavePastedImagePayload,
@@ -32,6 +33,7 @@ import { ok } from '@shared/core/result'
 import {
   exportHtmlDocument,
   exportPdfDocument,
+  exportMarkdownDocument,
   openDocumentDialog,
   openFolderDialog,
   scanWorkspaceFolder,
@@ -301,6 +303,9 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.FILE_EXPORT_PDF, (_event, payload: ExportDocumentPayload) =>
     exportPdfDocument(payload),
+  )
+  ipcMain.handle(IPC.FILE_EXPORT_MARKDOWN, (_event, payload: ExportMarkdownPayload) =>
+    exportMarkdownDocument(payload),
   )
 
   ipcMain.on(IPC.FILE_UPDATE_TITLE, (event, payload: { filePath?: string; isDirty: boolean }) => {

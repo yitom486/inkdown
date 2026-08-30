@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc/channels'
-import type { ExportDocumentPayload, OpenDialogOptions, SaveFilePayload, SavePastedImagePayload } from '@shared/types/file'
+import type { ExportDocumentPayload, ExportMarkdownPayload, OpenDialogOptions, SaveFilePayload, SavePastedImagePayload } from '@shared/types/file'
 import type { RendererErrorPayload } from '@shared/types/error-log'
 import type { WindowInit } from '@shared/types/window'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
@@ -59,6 +59,8 @@ const electronAPI: ElectronAPI = {
   exportHtml: (payload: ExportDocumentPayload) =>
     ipcRenderer.invoke(IPC.FILE_EXPORT_HTML, payload),
   exportPdf: (payload: ExportDocumentPayload) => ipcRenderer.invoke(IPC.FILE_EXPORT_PDF, payload),
+  exportMarkdown: (payload: ExportMarkdownPayload) =>
+    ipcRenderer.invoke(IPC.FILE_EXPORT_MARKDOWN, payload),
   updateTitle: (payload) => {
     ipcRenderer.send(IPC.FILE_UPDATE_TITLE, payload)
   },

@@ -10,7 +10,7 @@
 | `workspace.ts` | 扫描工作区树（深度限制、忽略目录、去掉空文件夹） |
 | `workspace-fs.ts` | 工作区内新建/重命名/移动/复制/删除 |
 | `workspace-watcher.ts` | 监听工作区变更并通知渲染进程 |
-| `export-save-path.ts` | 导出 HTML/PDF 的保存路径 |
+| `export-save-path.ts` | 导出 HTML/PDF/Markdown 的保存路径 |
 
 ## 阅读标记
 

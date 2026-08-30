@@ -1,6 +1,7 @@
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
+  ExportMarkdownPayload,
   OpenDialogOptions,
   OpenDocumentResult,
   OpenFileResult,
@@ -89,6 +90,7 @@ export interface ElectronAPI {
   ) => Promise<Result<WorkspaceFsPathResult, AppError>>
   exportHtml: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
   exportPdf: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
+  exportMarkdown: (payload: ExportMarkdownPayload) => Promise<Result<ExportDocumentResult, AppError>>
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void
   quit: () => void
   newWindow: () => void

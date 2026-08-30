@@ -43,6 +43,7 @@ import {
 } from '@/lib/reader/reader-selection-dismiss'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { tocFromPdfPages, resolvePdfPageChapter } from '@/lib/reader/export-reading-notes'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
 import type { AppError } from '@shared/core/errors'
@@ -81,6 +82,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [editingNoteMark, setEditingNoteMark] = useState<ReadingMark | null>(null)
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
 
+  const { data, isLoading, error } = useReaderBinary(filePath)
+  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
+  const inspector = useReadingMarkInspector(marks)
+  const inspectorRef = useRef(inspector)
+  inspectorRef.current = inspector
+
   const clearTextSelection = useCallback(() => {
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
@@ -91,11 +98,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const dimTextSelection = useCallback(() => {
     setSelectionToolbarPos(null)
     clearWindowSelection(window)
+    inspectorRef.current.close()
   }, [])
 
-  const { data, isLoading, error } = useReaderBinary(filePath)
-  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
-  const inspector = useReadingMarkInspector(marks)
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
@@ -464,7 +469,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       }
 
       const snapshot = readPdfSelection(pageElement, pageNumber)
-      if (!snapshot) return
+      if (!snapshot) {
+        if (isClickNotDrag(pointerOriginRef.current, point)) {
+          inspector.close()
+        }
+        return
+      }
 
       inspector.close()
       setSelectionSnapshot(snapshot)
@@ -512,7 +522,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         const result = await updateMark({
           id: existing.id,
           color,
-          ...(trimmed ? { note: trimmed, kind: 'note' as const } : {}),
+          ...(trimmed
+            ? {
+                note: trimmed,
+                kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
+              }
+            : {}),
         })
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
@@ -633,6 +648,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         onSelectMark={handleSelectMark}
         onDeleteMark={(mark) => void handleDeleteMark(mark)}
         onCloseMarks={() => setMarksOpen(false)}
+        onExportNotes={() => {
+          toast.message('PDF 笔记导出即将支持')
+        }}
+        marksToc={tocFromPdfPages(marks)}
+        marksCurrentChapterKey={`page-${pageNum}`}
+        marksResolveChapter={resolvePdfPageChapter}
         tocOpen={tocOpen}
         units={outlineUnits}
         currentUnitId={currentUnitId ?? String(pageNum)}
@@ -770,9 +791,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             void updateMark({
               id: editingNoteMark.id,
               note,
-              kind: note.trim() ? 'note' : 'highlight',
+              kind: editingNoteMark.kind === 'highlight' ? 'highlight' : 'note',
             }).then((result) => {
-              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已改为高亮')
+              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已清除批注')
             })
             return
           }

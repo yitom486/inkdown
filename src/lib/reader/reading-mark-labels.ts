@@ -8,7 +8,7 @@ export function getReadingMarkLabel(mark: ReadingMark): string {
   }
   if (mark.kind === 'bookmark') return '书签'
   if (mark.kind === 'note') return '批注'
-  return '高亮'
+  return '重点'
 }
 
 export function getReadingMarkKindLabel(kind: ReadingMark['kind']): string {
@@ -16,10 +16,32 @@ export function getReadingMarkKindLabel(kind: ReadingMark['kind']): string {
     case 'bookmark':
       return '书签'
     case 'highlight':
-      return '高亮'
+      return '重点'
     case 'note':
       return '批注'
   }
+}
+
+/** 列表状态文案：重点 / 重点 + 批注 / 批注 / 书签 */
+export function getReadingMarkStatusLabel(mark: ReadingMark): string {
+  if (mark.kind === 'bookmark') return '书签'
+  if (mark.kind === 'highlight') {
+    return mark.note?.trim() ? '重点 + 批注' : '重点'
+  }
+  if (mark.kind === 'note') return '批注'
+  return getReadingMarkKindLabel(mark.kind)
+}
+
+/** 在已有标记上写入批注时：重点保持重点，其余走批注 */
+export function kindAfterAttachingNote(existingKind: ReadingMark['kind']): ReadingMark['kind'] {
+  if (existingKind === 'highlight') return 'highlight'
+  if (existingKind === 'bookmark') return 'note'
+  return 'note'
+}
+
+/** 列表图标跟存储 kind 一致 */
+export function getReadingMarkDisplayKind(mark: ReadingMark): ReadingMark['kind'] {
+  return mark.kind
 }
 
 export function isReadingMarkForChapter(

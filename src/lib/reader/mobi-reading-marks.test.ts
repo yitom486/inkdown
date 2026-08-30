@@ -15,7 +15,7 @@ function createMark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'kind' |
 }
 
 describe('renderMobiMarkOverlays', () => {
-  it('按选中文本包裹 span 显示批注', () => {
+  it('按选中文本包裹 span 显示重点（可含批注）', () => {
     const container = document.createElement('div')
     container.innerHTML = '<p>这是第一章的正文内容，用于测试批注。</p>'
 
@@ -24,6 +24,7 @@ describe('renderMobiMarkOverlays', () => {
         id: 'note-1',
         kind: 'note',
         excerpt: '第一章的正文',
+        note: '备注',
         anchor: {
           format: 'mobi',
           chapterId: '1',
@@ -69,7 +70,9 @@ describe('renderMobiMarkOverlays', () => {
     renderMobiMarkOverlays(container, marks, 'ch-1')
 
     expect(container.querySelectorAll('span.mobi-mark-note')).toHaveLength(1)
-    expect((container.querySelector('span.mobi-mark-note') as HTMLElement | null)?.dataset.markId).toBe('note-2')
+    expect(
+      (container.querySelector('span.mobi-mark-note') as HTMLElement | null)?.dataset.markId,
+    ).toBe('note-2')
   })
 
   it('文本锚定失败时按 rect 绘制可 hover 的 hit 区', () => {
@@ -82,6 +85,7 @@ describe('renderMobiMarkOverlays', () => {
         id: 'note-rect',
         kind: 'note',
         excerpt: 'missing text',
+        note: '备注',
         anchor: {
           format: 'mobi',
           chapterId: '1',

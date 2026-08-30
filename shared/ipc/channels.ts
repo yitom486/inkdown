@@ -21,6 +21,7 @@ export const IPC = {
   FILE_SAVE_PASTED_IMAGE: 'file:save-pasted-image',
   FILE_EXPORT_HTML: 'file:export-html',
   FILE_EXPORT_PDF: 'file:export-pdf',
+  FILE_EXPORT_MARKDOWN: 'file:export-markdown',
   FILE_UPDATE_TITLE: 'file:update-title',
   FILE_CREATE: 'file:create',
   FILE_CREATE_DIR: 'file:create-dir',

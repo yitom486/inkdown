@@ -189,7 +189,7 @@ function appendRectOverlay(
   element.style.position = 'absolute'
   element.style.left = `${rect.x * 100}%`
 
-  if (className.includes('mobi-mark-note')) {
+  if (interactive) {
     element.classList.add('mobi-mark-note-hit')
     element.style.width = `${rect.width * 100}%`
     element.style.top = `${rect.y * 100}%`
@@ -234,7 +234,7 @@ export function renderMobiMarkOverlays(
           rect,
           className,
           mark.id,
-          mark.kind === 'note',
+          Boolean(mark.note?.trim()) || mark.kind === 'note',
           mark.color,
           theme,
         )
@@ -273,10 +273,6 @@ export function findMobiNoteMarkAtPoint(
   clientX: number,
   clientY: number,
 ): { markId: string; element: HTMLElement } | null {
-  return (
-    findMobiMarksAtPoint(doc, clientX, clientY).find((hit) => {
-      const el = hit.element
-      return el.classList.contains('mobi-mark-note') || el.classList.contains('mobi-mark-note-hit')
-    }) ?? null
-  )
+  // 带笔记的重点也是高亮 span；命中后由调用方检查 mark.note
+  return findMobiMarksAtPoint(doc, clientX, clientY)[0] ?? null
 }

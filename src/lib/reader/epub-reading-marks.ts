@@ -36,6 +36,7 @@ export function getEpubMarkCfiRange(mark: ReadingMark): string | null {
 }
 
 export function getEpubAnnotationType(mark: ReadingMark): 'highlight' | 'underline' {
+  // 纯批注：虚线下划线；重点 / 重点+批注：彩色高亮
   return mark.kind === 'note' ? 'underline' : 'highlight'
 }
 
@@ -109,11 +110,8 @@ export function findEpubNoteMarkAtPoint(
   clientX: number,
   clientY: number,
 ): { element: Element; markId: string } | null {
-  return (
-    findEpubMarksAtPoint(host, clientX, clientY).find((hit) =>
-      hit.element.classList.contains('reader-mark-note'),
-    ) ?? null
-  )
+  // 命中任意划词标记；是否有批注由调用方查 marks（重点+批注也是 highlight 样式）
+  return findEpubMarksAtPoint(host, clientX, clientY)[0] ?? null
 }
 
 export function applyEpubMarkToRendition(

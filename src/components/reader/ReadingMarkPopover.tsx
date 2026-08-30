@@ -5,7 +5,7 @@ import {
   type HighlightColorId,
   normalizeHighlightColor,
 } from '@/lib/reader/reading-mark-colors'
-import { getReadingMarkKindLabel } from '@/lib/reader/reading-mark-labels'
+import { getReadingMarkStatusLabel } from '@/lib/reader/reading-mark-labels'
 import type { ReadingMark } from '@shared/types/reading-mark'
 import { cn } from '@/lib/utils'
 
@@ -55,7 +55,7 @@ export function ReadingMarkPopover({
               )}
               onClick={() => onSelect(item)}
             >
-              {getReadingMarkKindLabel(item.kind)}
+              {getReadingMarkStatusLabel(item)}
             </button>
           ))}
         </div>

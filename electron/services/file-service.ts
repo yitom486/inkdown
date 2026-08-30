@@ -16,6 +16,7 @@ import { err, ok, type Result } from '@shared/core/result'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
+  ExportMarkdownPayload,
   OpenDialogOptions,
   OpenDocumentResult,
   OpenFileResult,
@@ -304,5 +305,26 @@ export async function exportPdfDocument(
     return err(toAppError(error, '导出 PDF 失败'))
   } finally {
     exportWindow?.destroy()
+  }
+}
+
+export async function exportMarkdownDocument(
+  payload: ExportMarkdownPayload,
+): Promise<Result<ExportDocumentResult, AppError>> {
+  try {
+    const { canceled, filePath } = await resolveExportSavePath({
+      title: '导出 Markdown',
+      filters: markdownFilters,
+      defaultPath: payload.suggestedName ?? 'export.md',
+    })
+
+    if (canceled || !filePath) {
+      return err({ code: 'CANCELLED', message: '已取消导出 Markdown' })
+    }
+
+    await writeFile(filePath, payload.content, 'utf-8')
+    return ok({ filePath })
+  } catch (error) {
+    return err(toAppError(error, '导出 Markdown 失败'))
   }
 }

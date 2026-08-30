@@ -37,7 +37,14 @@ describe('isPointInMarkGroup', () => {
 })
 
 describe('getEpubAnnotationType', () => {
-  it('批注使用 underline，高亮使用 highlight', () => {
+  it('批注用 underline，重点用 highlight', () => {
+    expect(
+      getEpubAnnotationType({
+        ...baseMark,
+        kind: 'note',
+        excerpt: '一段原文',
+      }),
+    ).toBe('underline')
     expect(getEpubAnnotationType({ ...baseMark, kind: 'note' })).toBe('underline')
     expect(getEpubAnnotationType({ ...baseMark, kind: 'highlight' })).toBe('highlight')
   })
@@ -45,6 +52,6 @@ describe('getEpubAnnotationType', () => {
 
 describe('getReadingMarkKindLabel', () => {
   it('返回中文类型', () => {
-    expect(getReadingMarkKindLabel('highlight')).toBe('高亮')
+    expect(getReadingMarkKindLabel('highlight')).toBe('重点')
   })
 })

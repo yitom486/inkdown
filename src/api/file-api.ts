@@ -2,6 +2,7 @@ import type { AppError } from '@shared/core/errors'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
+  ExportMarkdownPayload,
   OpenDialogOptions,
   OpenDocumentResult,
   OpenFileResult,
@@ -175,6 +176,14 @@ export const fileApi = {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.exportPdf(payload)
+  },
+
+  async exportMarkdown(
+    payload: ExportMarkdownPayload,
+  ): Promise<Result<ExportDocumentResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.exportMarkdown(payload)
   },
 }
 

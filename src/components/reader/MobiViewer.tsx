@@ -52,6 +52,13 @@ import {
   type PdfSelectionSnapshot,
 } from '@/lib/reader/pdf-selection'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
+import {
+  resolveMobiChapter,
+  tocFromMobiUnits,
+  type ReadingNotesContentKind,
+  type ReadingNotesScope,
+} from '@/lib/reader/export-reading-notes'
+import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
@@ -96,6 +103,13 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
 
+  const { data, isLoading, error } = useReaderBinary(filePath)
+  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
+  const inspector = useReadingMarkInspector(marks)
+  const inspectorRef = useRef(inspector)
+  inspectorRef.current = inspector
+  marksRef.current = marks
+
   const clearTextSelection = useCallback(() => {
     setSelectionSnapshot(null)
     setSelectionToolbarPos(null)
@@ -106,14 +120,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   const dimTextSelection = useCallback(() => {
     setSelectionToolbarPos(null)
     clearWindowSelection(iframeRef.current?.contentWindow ?? null)
+    inspectorRef.current.close()
   }, [])
-
-  const { data, isLoading, error } = useReaderBinary(filePath)
-  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
-  const inspector = useReadingMarkInspector(marks)
-  const inspectorRef = useRef(inspector)
-  inspectorRef.current = inspector
-  marksRef.current = marks
 
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
@@ -313,7 +321,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
           }
 
           const snapshot = readMobiSelection(doc, win)
-          if (!snapshot) return
+          if (!snapshot) {
+            if (isClickNotDrag(pointerOriginRef.current, event)) {
+              inspectorRef.current.close()
+            }
+            return
+          }
 
           inspectorRef.current.close()
           setSelectionSnapshot(snapshot)
@@ -698,7 +711,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         const result = await updateMark({
           id: existing.id,
           color,
-          ...(trimmed ? { note: trimmed, kind: 'note' as const } : {}),
+          ...(trimmed
+            ? {
+                note: trimmed,
+                kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
+              }
+            : {}),
         })
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
@@ -779,6 +797,28 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
   const { currentUnitId } = useReaderNavTitles()
 
+  const handleExportNotes = useCallback(
+    (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => {
+      const toc = tocFromMobiUnits(chapters)
+      const key = currentChapterId ?? ''
+      const currentHits = toc.filter((entry) => entry.matchKey === key)
+      const currentChapter =
+        currentHits.length > 0
+          ? currentHits.reduce((best, item) => (item.level >= best.level ? item : best))
+          : null
+      void saveReadingNotesExport({
+        marks,
+        toc,
+        contentKind,
+        scope,
+        currentChapter: scope === 'chapter' ? currentChapter : null,
+        filePath,
+        resolveChapter: resolveMobiChapter,
+      })
+    },
+    [chapters, currentChapterId, filePath, marks],
+  )
+
   const readerHost = (
     <PaneErrorBoundary name="MOBI 阅读" filePath={filePath}>
       <div
@@ -826,6 +866,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         onSelectMark={handleSelectMark}
         onDeleteMark={(mark) => void handleDeleteMark(mark)}
         onCloseMarks={closeMarks}
+        onExportNotes={handleExportNotes}
+        marksToc={tocFromMobiUnits(chapters)}
+        marksCurrentChapterKey={currentChapterId}
+        marksResolveChapter={resolveMobiChapter}
         tocOpen={tocOpen}
         units={outlineUnits}
         currentUnitId={currentUnitId}
@@ -912,9 +956,9 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             void updateMark({
               id: editingNoteMark.id,
               note,
-              kind: note.trim() ? 'note' : 'highlight',
+              kind: editingNoteMark.kind === 'highlight' ? 'highlight' : 'note',
             }).then((result) => {
-              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已改为高亮')
+              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已清除批注')
             })
             return
           }
