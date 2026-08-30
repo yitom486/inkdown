@@ -62,6 +62,7 @@ export interface CreateReadingMarkPayload {
 
 export interface UpdateReadingMarkPayload {
   id: string
+  kind?: ReadingMarkKind
   label?: string
   note?: string
   color?: string

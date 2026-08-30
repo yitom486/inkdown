@@ -96,8 +96,16 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_list_marks',
     description:
-      '列出当前打开文档的书签 / 高亮 / 批注（JSON：id、kind、label、excerpt、note、location）。' +
-      '用户问「我有哪些书签/批注」时调用；仅 EPUB/PDF/MOBI。',
+      '列出当前打开文档的书签 / 高亮 / 批注（混排，含纯书签）。' +
+      '用户问「我有哪些书签」或要看全部标记时调用。整理划重点请用 inkdown_list_highlights。仅 EPUB/PDF/MOBI。',
+    inputSchema: NO_ARGS_SCHEMA,
+  },
+  {
+    name: 'inkdown_list_highlights',
+    description:
+      '收集当前打开文档的划重点：高亮原文，以及带摘录的批注（不含纯书签）。' +
+      '按阅读位置排序；JSON 含 passages（纯摘录数组）与 highlights（text、note、color、location）。' +
+      '用户要整理/汇总/导出划重点、回顾标过的句子时调用；仅 EPUB/PDF/MOBI。',
     inputSchema: NO_ARGS_SCHEMA,
   },
   {
@@ -187,6 +195,10 @@ export async function callInkdownMcpTool(
     }
     case 'inkdown_list_marks': {
       const text = await context.readSnapshot('marks')
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_list_highlights': {
+      const text = await context.readSnapshot('highlights')
       return { content: [{ type: 'text', text }] }
     }
     case 'inkdown_create_bookmark': {

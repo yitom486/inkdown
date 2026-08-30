@@ -112,10 +112,14 @@ export async function updateReadingMark(
     const current = store.marks[index]!
     const next: ReadingMark = {
       ...current,
+      kind: payload.kind ?? current.kind,
       label: payload.label !== undefined ? payload.label.trim() || undefined : current.label,
       note: payload.note !== undefined ? payload.note.trim() || undefined : current.note,
       color: payload.color ?? current.color,
       updatedAt: Date.now(),
+    }
+    if (payload.note !== undefined && !payload.note.trim() && payload.kind === undefined) {
+      next.kind = next.kind === 'note' ? 'highlight' : next.kind
     }
     store.marks[index] = next
     await writeStore(store)

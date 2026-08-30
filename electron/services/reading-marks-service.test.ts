@@ -53,6 +53,15 @@ describe('reading-marks-service', () => {
     if (!isOk(updateResult)) return
     expect(updateResult.value.note).toBe('读后感')
 
+    const highlightResult = await updateReadingMark({
+      id: createResult.value.id,
+      note: '',
+    })
+    expect(isOk(highlightResult)).toBe(true)
+    if (!isOk(highlightResult)) return
+    expect(highlightResult.value.note).toBeUndefined()
+    expect(highlightResult.value.kind).toBe('bookmark')
+
     const deleteResult = await deleteReadingMark(createResult.value.id)
     expect(isOk(deleteResult)).toBe(true)
 

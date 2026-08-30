@@ -7,13 +7,17 @@ import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { useReadingMarkInspector } from '@/hooks/useReadingMarkInspector'
 import { extractDocumentText, extractViewportText, htmlToText } from '@/lib/agent-context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
 import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reading-mark-colors'
+import { findMarkForSelection, isClickNotDrag } from '@/lib/reading-mark-hit'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import type { ReaderUnit } from '@/lib/reader-navigation'
@@ -24,7 +28,7 @@ import {
   normalizeMobiChapterHtml,
 } from '@/lib/mobi-chapter-html'
 import { injectMobiMarkStyles } from '@/lib/reader-mark-geometry'
-import { findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from '@/lib/mobi-reading-marks'
+import { findMobiMarksAtPoint, findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from '@/lib/mobi-reading-marks'
 import {
   buildMobiChapterList,
   decodeMobiTocHref,
@@ -87,6 +91,8 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     null,
   )
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [editingNoteMark, setEditingNoteMark] = useState<ReadingMark | null>(null)
+  const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
 
@@ -103,7 +109,10 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   }, [])
 
   const { data, isLoading, error } = useReaderBinary(filePath)
-  const { marks, createMark, deleteMark } = useReadingMarks(filePath)
+  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
+  const inspector = useReadingMarkInspector(marks)
+  const inspectorRef = useRef(inspector)
+  inspectorRef.current = inspector
   marksRef.current = marks
 
   const fileFingerprint = data
@@ -262,7 +271,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     (doc: Document, chapterId: string) => {
       if (!doc.body) return
       injectMobiMarkStyles(doc, themeRef.current)
-      renderMobiMarkOverlays(doc.body, marksRef.current, chapterId)
+      renderMobiMarkOverlays(doc.body, marksRef.current, chapterId, themeRef.current)
     },
     [],
   )
@@ -279,12 +288,34 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
       const frameRect = iframe.getBoundingClientRect()
 
-      const onMouseUp = () => {
+      const onMouseDown = (event: MouseEvent) => {
+        pointerOriginRef.current = { x: event.clientX, y: event.clientY }
+      }
+
+      const onMouseUp = (event: MouseEvent) => {
         window.setTimeout(() => {
           if (!currentChapterId) return
+
+          if (isClickNotDrag(pointerOriginRef.current, event)) {
+            const hits = findMobiMarksAtPoint(doc, event.clientX, event.clientY)
+              .map((hit) => marksRef.current.find((item) => item.id === hit.markId))
+              .filter((item): item is ReadingMark => Boolean(item))
+            if (hits.length > 0) {
+              clearWindowSelection(win)
+              setSelectionToolbarPos(null)
+              inspectorRef.current.openAt(
+                hits,
+                frameRect.left + event.clientX,
+                frameRect.top + event.clientY,
+              )
+              return
+            }
+          }
+
           const snapshot = readMobiSelection(doc, win)
           if (!snapshot) return
 
+          inspectorRef.current.close()
           setSelectionSnapshot(snapshot)
           commitReaderSelection(filePath, snapshot.text)
           focusAgentComposerOnReaderSelection()
@@ -375,6 +406,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         }
       }
 
+      doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('click', onClick)
       doc.addEventListener('mousemove', onMouseMove, { passive: true })
@@ -383,6 +415,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       requestAnimationFrame(() => onScroll())
 
       chapterCleanupRef.current = () => {
+        doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
         onSelectionChange()
         doc.removeEventListener('click', onClick)
@@ -649,10 +682,34 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   }, [nav.current?.label, createMark, currentChapterId, fileFingerprint, filePath])
 
   const handleSaveAnnotation = useCallback(
-    async (note: string) => {
+    async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
       const snapshot = selectionSnapshotRef.current
       if (!snapshot || !fileFingerprint || !currentChapterId) {
         throw new Error('当前没有可用选区，请先划选文本')
+      }
+
+      const existing = findMarkForSelection(marks, {
+        format: 'mobi',
+        text: snapshot.text,
+        chapterId: currentChapterId,
+      })
+      if (existing) {
+        const trimmed = note.trim()
+        const result = await updateMark({
+          id: existing.id,
+          color,
+          ...(trimmed ? { note: trimmed, kind: 'note' as const } : {}),
+        })
+        if (!isOk(result)) {
+          throw new Error(result.error.message || '更新标记失败')
+        }
+        toast.success(trimmed ? '已保存批注' : '已更新高亮')
+        const existingDoc = iframeRef.current?.contentDocument
+        if (existingDoc?.body) {
+          syncMobiMarkOverlays(existingDoc, currentChapterId)
+        }
+        clearTextSelection()
+        return result.value
       }
 
       const result = await createMark({
@@ -667,6 +724,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
         },
         excerpt: snapshot.text,
         note: note || undefined,
+        color,
       })
 
       if (!isOk(result)) {
@@ -683,7 +741,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       clearTextSelection()
       return result.value
     },
-    [clearTextSelection, createMark, currentChapterId, fileFingerprint, filePath, syncMobiMarkOverlays],
+    [clearTextSelection, createMark, currentChapterId, fileFingerprint, filePath, marks, syncMobiMarkOverlays, updateMark],
   )
 
   useEffect(() => {
@@ -784,8 +842,29 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
       <ReaderFooterNav ready={ready} onPrevious={goPrevChapter} onNext={goNextChapter} />
 
-      {markTooltipPos && hoveredMark ? (
+      {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
+      ) : null}
+
+      {inspector.pos && inspector.active ? (
+        <ReadingMarkPopover
+          mark={inspector.active}
+          stack={inspector.stack}
+          x={inspector.pos.x}
+          y={inspector.pos.y}
+          onSelect={inspector.select}
+          onChangeColor={(color) => {
+            void updateMark({ id: inspector.active!.id, color })
+          }}
+          onEditNote={() => {
+            setEditingNoteMark(inspector.active)
+            setNoteDialogOpen(true)
+            inspector.close()
+          }}
+          onDelete={() => {
+            void handleDeleteMark(inspector.active!).then(() => inspector.close())
+          }}
+        />
       ) : null}
 
       {selectionToolbarPos && selectionSnapshot ? (
@@ -800,11 +879,12 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
             dimTextSelection()
           }}
           onAnnotate={() => {
+            setEditingNoteMark(null)
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
           }}
-          onHighlight={() => {
-            void handleSaveAnnotation('')
+          onHighlight={(color) => {
+            void handleSaveAnnotation('', color)
           }}
           onAddToChat={() => {
             addSelectionMarkerToComposer()
@@ -820,9 +900,26 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
 
       <AnnotationNoteDialog
         open={noteDialogOpen}
-        excerpt={selectionSnapshot?.text}
-        onOpenChange={setNoteDialogOpen}
-        onSave={(note) => void handleSaveAnnotation(note)}
+        excerpt={editingNoteMark?.excerpt ?? selectionSnapshot?.text}
+        initialNote={editingNoteMark?.note ?? ''}
+        title={editingNoteMark ? '编辑批注' : '添加批注'}
+        onOpenChange={(open) => {
+          setNoteDialogOpen(open)
+          if (!open) setEditingNoteMark(null)
+        }}
+        onSave={(note) => {
+          if (editingNoteMark) {
+            void updateMark({
+              id: editingNoteMark.id,
+              note,
+              kind: note.trim() ? 'note' : 'highlight',
+            }).then((result) => {
+              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已改为高亮')
+            })
+            return
+          }
+          void handleSaveAnnotation(note)
+        }}
       />
     </div>
   )

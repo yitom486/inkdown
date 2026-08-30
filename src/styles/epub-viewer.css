@@ -73,11 +73,10 @@
   border: 2px solid rgb(24 24 27);
 }
 
-/* epub.js marks-pane：批注用下划线，高亮用半透明底色（覆盖默认 yellow） */
+/* epub.js marks-pane：高亮 fill 由 annotation styles 按颜色写入，这里不覆盖，以免挡住正文 */
 .epub-viewer-host svg g.reader-mark-highlight rect {
-  fill: rgba(59, 130, 246, 0.22) !important;
   fill-opacity: 1 !important;
-  mix-blend-mode: normal !important;
+  mix-blend-mode: multiply !important;
   stroke: none !important;
 }
 
@@ -96,7 +95,7 @@
 
 .dark .epub-viewer-host svg g.reader-mark-highlight rect,
 .epub-viewer-host[data-theme='dark'] svg g.reader-mark-highlight rect {
-  fill: rgba(122, 162, 247, 0.28) !important;
+  mix-blend-mode: normal !important;
 }
 
 .dark .epub-viewer-host svg g.reader-mark-note line,

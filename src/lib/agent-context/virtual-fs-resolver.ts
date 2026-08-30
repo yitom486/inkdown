@@ -12,6 +12,7 @@ import { readChapterByRef } from './read-chapter-by-ref'
 import {
   createBookmarkForAgent,
   createNoteForAgent,
+  listHighlightsForAgent,
   listMarksForAgent,
 } from './read-marks-for-agent'
 import { readSelectionWithContext } from './read-selection-context'
@@ -123,6 +124,8 @@ export async function resolveInkdownSnapshot(
       )
     case 'marks':
       return JSON.stringify(await listMarksForAgent(), null, 2)
+    case 'highlights':
+      return JSON.stringify(await listHighlightsForAgent(), null, 2)
     case 'create-bookmark':
       return JSON.stringify(await createBookmarkForAgent(), null, 2)
     case 'create-note':

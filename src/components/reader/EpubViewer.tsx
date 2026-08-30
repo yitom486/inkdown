@@ -9,15 +9,18 @@ import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
+import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/useReaderSidePanels'
+import { useReadingMarkInspector } from '@/hooks/useReadingMarkInspector'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { extractDocumentText, extractViewportText } from '@/lib/agent-context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
 import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reading-mark-colors'
 import { scrollEpubChapterInRendition } from '@/lib/epub-scroll-toc'
 import {
   collectEpubSpineItems,
@@ -38,6 +41,7 @@ import {
 import { getEpubThemeRules, applyEpubReadingLayout, applyEpubReadingLayoutToRendition } from '@/lib/epub-themes'
 import {
   applyEpubMarkToRendition,
+  findEpubMarksAtPoint,
   findEpubNoteMarkAtPoint,
   injectReadingMarkStyles,
   removeEpubMarkFromRendition,
@@ -50,6 +54,7 @@ import {
   bindOutsideReaderPointerDismiss,
   clearEpubRenditionSelections,
 } from '@/lib/reader-selection-dismiss'
+import { findMarkForSelection, isClickNotDrag } from '@/lib/reading-mark-hit'
 import { buildReadingFileFingerprint } from '@/lib/reading-file-fingerprint'
 import { reportAppError } from '@/lib/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -110,6 +115,8 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     null,
   )
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [editingNoteMark, setEditingNoteMark] = useState<ReadingMark | null>(null)
+  const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
 
@@ -136,7 +143,10 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   const pendingNavChapterRef = useRef<EpubChapter | null>(null)
 
   const { data, isLoading, error } = useReaderBinary(filePath)
-  const { marks, createMark, deleteMark } = useReadingMarks(filePath)
+  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
+  const inspector = useReadingMarkInspector(marks)
+  const inspectorRef = useRef(inspector)
+  inspectorRef.current = inspector
   marksRef.current = marks
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
@@ -311,10 +321,33 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   }, [nav, createMark, fileFingerprint, filePath])
 
   const handleSaveAnnotation = useCallback(
-    async (note: string) => {
+    async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
       const snapshot = selectionSnapshotRef.current
       if (!snapshot || !fileFingerprint) {
         throw new Error('当前没有可用选区，请先划选文本')
+      }
+
+      const existing = findMarkForSelection(marks, {
+        format: 'epub',
+        text: snapshot.text,
+        cfiRange: snapshot.cfiRange,
+      })
+      if (existing) {
+        const trimmed = note.trim()
+        const result = await updateMark({
+          id: existing.id,
+          color,
+          ...(trimmed ? { note: trimmed, kind: 'note' as const } : {}),
+        })
+        if (!isOk(result)) {
+          throw new Error(result.error.message || '更新标记失败')
+        }
+        if (renditionRef.current) {
+          applyEpubMarkToRendition(renditionRef.current, result.value, theme)
+        }
+        toast.success(trimmed ? '已保存批注' : '已更新高亮')
+        clearTextSelection()
+        return result.value
       }
 
       const result = await createMark({
@@ -330,6 +363,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         },
         excerpt: snapshot.text,
         note: note || undefined,
+        color,
       })
 
       if (!isOk(result)) {
@@ -344,7 +378,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       clearTextSelection()
       return result.value
     },
-    [nav, clearTextSelection, createMark, fileFingerprint, filePath, theme],
+    [nav, clearTextSelection, createMark, fileFingerprint, filePath, marks, theme, updateMark],
   )
 
   const handleSelectMark = useCallback((mark: ReadingMark) => {
@@ -413,13 +447,36 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           setSelectionToolbarPos(null)
         }
 
-        const onMouseUp = () => {
+        const onMouseDown = (event: MouseEvent) => {
+          pointerOriginRef.current = { x: event.clientX, y: event.clientY }
+        }
+
+        const onMouseUp = (event: MouseEvent) => {
           window.setTimeout(() => {
+            const frame = contents.window.frameElement as HTMLElement | null
+            const frameRect = frame?.getBoundingClientRect()
+            const clientX = (frameRect?.left ?? 0) + event.clientX
+            const clientY = (frameRect?.top ?? 0) + event.clientY
+
+            if (isClickNotDrag(pointerOriginRef.current, event)) {
+              const host = containerRef.current
+              if (host) {
+                const hits = findEpubMarksAtPoint(host, clientX, clientY)
+                  .map((hit) => marksRef.current.find((item) => item.id === hit.markId))
+                  .filter((item): item is ReadingMark => Boolean(item))
+                if (hits.length > 0) {
+                  clearEpubRenditionSelections(renditionRef.current)
+                  setSelectionToolbarPos(null)
+                  inspectorRef.current.openAt(hits, clientX, clientY)
+                  return
+                }
+              }
+            }
+
             const snapshot = readEpubSelection(contents)
             if (!snapshot) return
 
-            const frame = contents.window.frameElement as HTMLElement | null
-            const frameRect = frame?.getBoundingClientRect()
+            inspectorRef.current.close()
             setSelectionSnapshot(snapshot)
             commitReaderSelection(filePath, snapshot.text)
             focusAgentComposerOnReaderSelection()
@@ -436,8 +493,10 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
           collapseSelectionUi,
         )
 
+        contents.document.addEventListener('mousedown', onMouseDown)
         contents.document.addEventListener('mouseup', onMouseUp)
         selectionCleanupRef.current = () => {
+          contents.document.removeEventListener('mousedown', onMouseDown)
           contents.document.removeEventListener('mouseup', onMouseUp)
           unbindSelectionCollapse()
         }
@@ -868,8 +927,29 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         onNext={() => goToChapter(nav.next, nav.nextIndex)}
       />
 
-      {markTooltipPos && hoveredMark ? (
+      {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
+      ) : null}
+
+      {inspector.pos && inspector.active ? (
+        <ReadingMarkPopover
+          mark={inspector.active}
+          stack={inspector.stack}
+          x={inspector.pos.x}
+          y={inspector.pos.y}
+          onSelect={inspector.select}
+          onChangeColor={(color) => {
+            void updateMark({ id: inspector.active!.id, color })
+          }}
+          onEditNote={() => {
+            setEditingNoteMark(inspector.active)
+            setNoteDialogOpen(true)
+            inspector.close()
+          }}
+          onDelete={() => {
+            void handleDeleteMark(inspector.active!).then(() => inspector.close())
+          }}
+        />
       ) : null}
 
       {selectionToolbarPos && selectionSnapshot ? (
@@ -884,11 +964,12 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
             dimTextSelection()
           }}
           onAnnotate={() => {
+            setEditingNoteMark(null)
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
           }}
-          onHighlight={() => {
-            void handleSaveAnnotation('')
+          onHighlight={(color) => {
+            void handleSaveAnnotation('', color)
           }}
           onAddToChat={() => {
             addSelectionMarkerToComposer()
@@ -904,9 +985,26 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
 
       <AnnotationNoteDialog
         open={noteDialogOpen}
-        excerpt={selectionSnapshot?.text}
-        onOpenChange={setNoteDialogOpen}
-        onSave={(note) => void handleSaveAnnotation(note)}
+        excerpt={editingNoteMark?.excerpt ?? selectionSnapshot?.text}
+        initialNote={editingNoteMark?.note ?? ''}
+        title={editingNoteMark ? '编辑批注' : '添加批注'}
+        onOpenChange={(open) => {
+          setNoteDialogOpen(open)
+          if (!open) setEditingNoteMark(null)
+        }}
+        onSave={(note) => {
+          if (editingNoteMark) {
+            void updateMark({
+              id: editingNoteMark.id,
+              note,
+              kind: note.trim() ? 'note' : 'highlight',
+            }).then((result) => {
+              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已改为高亮')
+            })
+            return
+          }
+          void handleSaveAnnotation(note)
+        }}
       />
     </div>
   )

@@ -8,12 +8,15 @@ import { PdfPageView } from '@/components/reader/PdfPageView'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/useReaderBinary'
+import { useReadingMarkInspector } from '@/hooks/useReadingMarkInspector'
 import { registerReaderContent } from '@/lib/agent-context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent-context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent-context/reader-selection-registry'
 import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent-context/focus-agent-composer'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/useReadingMarks'
 import { loadPdfOutlineUnits } from '@/lib/pdf-outline'
 import {
@@ -23,7 +26,9 @@ import {
   type PdfPageCssSize,
 } from '@/lib/pdf-page-metrics'
 import { openPdfDocument } from '@/lib/pdf-document'
+import { findPdfMarksAtPoint } from '@/lib/pdf-reading-marks'
 import { shouldRenderPdfPage } from '@/lib/pdf-render'
+import { findMarkForSelection, isClickNotDrag } from '@/lib/reading-mark-hit'
 import type { ReaderUnit } from '@/lib/reader-navigation'
 import {
   copyTextToClipboard,
@@ -73,6 +78,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     null,
   )
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [editingNoteMark, setEditingNoteMark] = useState<ReadingMark | null>(null)
+  const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
 
   const clearTextSelection = useCallback(() => {
     setSelectionSnapshot(null)
@@ -87,7 +94,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [])
 
   const { data, isLoading, error } = useReaderBinary(filePath)
-  const { marks, createMark, deleteMark } = useReadingMarks(filePath)
+  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
+  const inspector = useReadingMarkInspector(marks)
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
@@ -433,17 +441,38 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     scrollToPage(Math.min(numPages, pageNum + 1), 'smooth')
   }, [numPages, pageNum, scrollToPage])
 
-  const handlePageMouseUp = useCallback((pageNumber: number, pageElement: HTMLElement) => {
+  const handlePageMouseUp = useCallback((
+    pageNumber: number,
+    pageElement: HTMLElement,
+    point: { clientX: number; clientY: number },
+  ) => {
     window.setTimeout(() => {
+      if (isClickNotDrag(pointerOriginRef.current, point)) {
+        const hits = findPdfMarksAtPoint(
+          marks,
+          pageNumber,
+          point.clientX,
+          point.clientY,
+          pageElement,
+        )
+        if (hits.length > 0) {
+          clearWindowSelection(window)
+          setSelectionToolbarPos(null)
+          inspector.openAt(hits, point.clientX, point.clientY)
+          return
+        }
+      }
+
       const snapshot = readPdfSelection(pageElement, pageNumber)
       if (!snapshot) return
 
+      inspector.close()
       setSelectionSnapshot(snapshot)
       commitReaderSelection(filePath, snapshot.text)
       focusAgentComposerOnReaderSelection()
       setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
     }, 10)
-  }, [filePath])
+  }, [filePath, inspector, marks])
 
   const selectionSnapshotRef = useRef(selectionSnapshot)
   selectionSnapshotRef.current = selectionSnapshot
@@ -467,10 +496,30 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [createMark, fileFingerprint, filePath, nav.current?.label, numPages, pageNum])
 
   const handleSaveAnnotation = useCallback(
-    async (note: string) => {
+    async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
       const snapshot = selectionSnapshotRef.current
       if (!snapshot || !fileFingerprint) {
         throw new Error('当前没有可用选区，请先划选文本')
+      }
+
+      const existing = findMarkForSelection(marks, {
+        format: 'pdf',
+        text: snapshot.text,
+        page: snapshot.page,
+      })
+      if (existing) {
+        const trimmed = note.trim()
+        const result = await updateMark({
+          id: existing.id,
+          color,
+          ...(trimmed ? { note: trimmed, kind: 'note' as const } : {}),
+        })
+        if (!isOk(result)) {
+          throw new Error(result.error.message || '更新标记失败')
+        }
+        toast.success(trimmed ? '已保存批注' : '已更新高亮')
+        clearTextSelection()
+        return result.value
       }
 
       const result = await createMark({
@@ -485,6 +534,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         },
         excerpt: snapshot.text,
         note: note || undefined,
+        color,
       })
 
       if (!isOk(result)) {
@@ -495,7 +545,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       clearTextSelection()
       return result.value
     },
-    [clearTextSelection, createMark, fileFingerprint, filePath],
+    [clearTextSelection, createMark, fileFingerprint, filePath, marks, updateMark],
   )
 
   useEffect(() => {
@@ -625,6 +675,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                           theme={theme}
                           marks={marks}
                           onMouseUp={handlePageMouseUp}
+                          onPointerOrigin={(x, y) => {
+                            pointerOriginRef.current = { x, y }
+                          }}
                         />
                       ) : (
                         <div
@@ -651,6 +704,27 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         onNext={() => nav.nextIndex >= 0 && goToFlatIndex(nav.nextIndex)}
       />
 
+      {inspector.pos && inspector.active ? (
+        <ReadingMarkPopover
+          mark={inspector.active}
+          stack={inspector.stack}
+          x={inspector.pos.x}
+          y={inspector.pos.y}
+          onSelect={inspector.select}
+          onChangeColor={(color) => {
+            void updateMark({ id: inspector.active!.id, color })
+          }}
+          onEditNote={() => {
+            setEditingNoteMark(inspector.active)
+            setNoteDialogOpen(true)
+            inspector.close()
+          }}
+          onDelete={() => {
+            void handleDeleteMark(inspector.active!).then(() => inspector.close())
+          }}
+        />
+      ) : null}
+
       {selectionToolbarPos && selectionSnapshot ? (
         <SelectionToolbar
           x={selectionToolbarPos.x}
@@ -663,11 +737,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             dimTextSelection()
           }}
           onAnnotate={() => {
+            setEditingNoteMark(null)
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
           }}
-          onHighlight={() => {
-            void handleSaveAnnotation('')
+          onHighlight={(color) => {
+            void handleSaveAnnotation('', color)
           }}
           onAddToChat={() => {
             addSelectionMarkerToComposer()
@@ -683,9 +758,26 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
       <AnnotationNoteDialog
         open={noteDialogOpen}
-        excerpt={selectionSnapshot?.text}
-        onOpenChange={setNoteDialogOpen}
-        onSave={(note) => void handleSaveAnnotation(note)}
+        excerpt={editingNoteMark?.excerpt ?? selectionSnapshot?.text}
+        initialNote={editingNoteMark?.note ?? ''}
+        title={editingNoteMark ? '编辑批注' : '添加批注'}
+        onOpenChange={(open) => {
+          setNoteDialogOpen(open)
+          if (!open) setEditingNoteMark(null)
+        }}
+        onSave={(note) => {
+          if (editingNoteMark) {
+            void updateMark({
+              id: editingNoteMark.id,
+              note,
+              kind: note.trim() ? 'note' : 'highlight',
+            }).then((result) => {
+              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已改为高亮')
+            })
+            return
+          }
+          void handleSaveAnnotation(note)
+        }}
       />
     </div>
   )

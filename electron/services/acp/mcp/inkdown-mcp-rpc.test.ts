@@ -30,7 +30,9 @@ describe('handleInkdownMcpRpc', () => {
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
       context(),
     )) as { result: { tools: Array<{ name: string }> } }
-    expect(response.result.tools.map((t) => t.name)).toContain('inkdown_get_toc')
+    const names = response.result.tools.map((t) => t.name)
+    expect(names).toContain('inkdown_get_toc')
+    expect(names).toContain('inkdown_list_highlights')
   })
 
   it('tools/call 走快照回路', async () => {
@@ -43,6 +45,24 @@ describe('handleInkdownMcpRpc', () => {
     expect(response).toMatchObject({
       id: 3,
       result: { content: [{ type: 'text', text: '{"entries":[{"index":0}]}' }] },
+    })
+  })
+
+  it('inkdown_list_highlights 走 highlights 快照', async () => {
+    const readSnapshot = vi.fn(async () => '{"count":1,"passages":["重点"]}')
+    const response = await handleInkdownMcpRpc(
+      {
+        jsonrpc: '2.0',
+        id: 31,
+        method: 'tools/call',
+        params: { name: 'inkdown_list_highlights' },
+      },
+      context(readSnapshot),
+    )
+    expect(readSnapshot).toHaveBeenCalledWith('highlights')
+    expect(response).toMatchObject({
+      id: 31,
+      result: { content: [{ type: 'text', text: '{"count":1,"passages":["重点"]}' }] },
     })
   })
 

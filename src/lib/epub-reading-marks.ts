@@ -1,4 +1,5 @@
 import type { ReadingMark } from '@shared/types/reading-mark'
+import { highlightFill, liveSelectionCss } from '@/lib/reading-mark-colors'
 
 export {
   filterVisualReadingMarks,
@@ -20,8 +21,9 @@ export function injectReadingMarkStyles(doc: Document, theme: 'dark' | 'light'):
   const style = doc.createElement('style')
   style.id = MARK_STYLE_ID
   style.textContent = `
+    ${liveSelectionCss()}
     .reader-mark-highlight {
-      background: ${theme === 'dark' ? 'rgba(122, 162, 247, 0.28)' : 'rgba(59, 130, 246, 0.22)'} !important;
+      background: ${highlightFill('yellow', theme)} !important;
       border-radius: 2px;
     }
   `
@@ -37,8 +39,8 @@ export function getEpubAnnotationType(mark: ReadingMark): 'highlight' | 'underli
   return mark.kind === 'note' ? 'underline' : 'highlight'
 }
 
-function getHighlightFill(theme: 'dark' | 'light'): string {
-  return theme === 'dark' ? 'rgba(122, 162, 247, 0.28)' : 'rgba(59, 130, 246, 0.22)'
+function getHighlightFill(mark: ReadingMark, theme: 'dark' | 'light'): string {
+  return highlightFill(mark.color, theme)
 }
 
 function getNoteStroke(theme: 'dark' | 'light'): string {
@@ -83,20 +85,35 @@ export function isPointInMarkGroup(group: Element, clientX: number, clientY: num
   return false
 }
 
+export function findEpubMarksAtPoint(
+  host: HTMLElement,
+  clientX: number,
+  clientY: number,
+): Array<{ element: Element; markId: string }> {
+  const groups = host.querySelectorAll<HTMLElement>(
+    'svg g.reader-mark-highlight[data-id], svg g.reader-mark-note[data-id]',
+  )
+  const hits: Array<{ element: Element; markId: string }> = []
+  for (const group of groups) {
+    const markId = group.dataset.id
+    if (!markId) continue
+    if (isPointInMarkGroup(group, clientX, clientY)) {
+      hits.push({ element: group, markId })
+    }
+  }
+  return hits
+}
+
 export function findEpubNoteMarkAtPoint(
   host: HTMLElement,
   clientX: number,
   clientY: number,
 ): { element: Element; markId: string } | null {
-  const groups = host.querySelectorAll<HTMLElement>('svg g.reader-mark-note[data-id]')
-  for (const group of groups) {
-    const markId = group.dataset.id
-    if (!markId) continue
-    if (isPointInMarkGroup(group, clientX, clientY)) {
-      return { element: group, markId }
-    }
-  }
-  return null
+  return (
+    findEpubMarksAtPoint(host, clientX, clientY).find((hit) =>
+      hit.element.classList.contains('reader-mark-note'),
+    ) ?? null
+  )
 }
 
 export function applyEpubMarkToRendition(
@@ -114,12 +131,13 @@ export function applyEpubMarkToRendition(
   const styles: Record<string, string> =
     type === 'underline'
       ? {
+          fill: getHighlightFill(mark, theme),
+          'fill-opacity': '1',
           stroke: getNoteStroke(theme),
           'stroke-opacity': '1',
-          fill: 'none',
         }
       : {
-          fill: getHighlightFill(theme),
+          fill: getHighlightFill(mark, theme),
           'fill-opacity': '1',
         }
 

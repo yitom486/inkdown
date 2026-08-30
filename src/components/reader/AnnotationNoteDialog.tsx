@@ -11,6 +11,8 @@ import { useEffect, useState } from 'react'
 interface AnnotationNoteDialogProps {
   open: boolean
   excerpt?: string
+  initialNote?: string
+  title?: string
   onOpenChange: (open: boolean) => void
   onSave: (note: string) => void
 }
@@ -18,6 +20,8 @@ interface AnnotationNoteDialogProps {
 export function AnnotationNoteDialog({
   open,
   excerpt,
+  initialNote = '',
+  title = '添加批注',
   onOpenChange,
   onSave,
 }: AnnotationNoteDialogProps) {
@@ -25,15 +29,15 @@ export function AnnotationNoteDialog({
 
   useEffect(() => {
     if (open) {
-      setNote('')
+      setNote(initialNote)
     }
-  }, [open, excerpt])
+  }, [open, excerpt, initialNote])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>添加批注</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {excerpt ? (
           <blockquote className="border-l-2 border-primary/40 pl-3 text-sm text-muted-foreground italic">

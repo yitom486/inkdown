@@ -1,5 +1,11 @@
 import type { PdfTextRect } from '@shared/types/reading-mark'
 
+import {
+  applyHighlightSurface,
+  highlightFill,
+  liveSelectionCss,
+} from '@/lib/reading-mark-colors'
+
 export function getReaderScrollRoot(doc: Document): HTMLElement {
   const scrolling = doc.scrollingElement
   if (scrolling instanceof HTMLElement) return scrolling
@@ -34,11 +40,11 @@ export function normalizeRectsInScrollDocument(
 }
 
 export function buildMobiMarkStylesCss(theme: 'dark' | 'light'): string {
-  const highlight =
-    theme === 'dark' ? 'rgba(122, 162, 247, 0.28)' : 'rgba(59, 130, 246, 0.22)'
+  const highlight = highlightFill('yellow', theme)
   const noteStroke = theme === 'dark' ? '#fbbf24' : '#d97706'
 
   return `
+    ${liveSelectionCss()}
     body {
       position: relative !important;
     }
@@ -59,6 +65,7 @@ export function buildMobiMarkStylesCss(theme: 'dark' | 'light'): string {
       background: ${highlight} !important;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
+      cursor: pointer;
     }
     span.mobi-mark-note {
       background: transparent !important;
@@ -70,7 +77,7 @@ export function buildMobiMarkStylesCss(theme: 'dark' | 'light'): string {
       text-underline-offset: 3px !important;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
-      cursor: default;
+      cursor: pointer;
       pointer-events: auto !important;
     }
     #reader-mark-layer .mobi-mark-note-hit {

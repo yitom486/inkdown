@@ -21,12 +21,12 @@
 .mobi-mark-highlight {
   position: absolute;
   border-radius: 2px;
-  background: rgba(59, 130, 246, 0.22);
+  background: rgba(250, 204, 21, 0.38);
   pointer-events: none;
 }
 
 .mobi-mark-highlight[data-theme='dark'] {
-  background: rgba(122, 162, 247, 0.28);
+  background: rgba(253, 224, 71, 0.26);
 }
 
 .mobi-mark-note {

@@ -1,5 +1,8 @@
 export function isReaderSelectionToolbarTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && Boolean(target.closest('[aria-label="选区操作"]'))
+  return (
+    target instanceof Element &&
+    Boolean(target.closest('[aria-label="选区操作"], [aria-label="标记操作"]'))
+  )
 }
 
 export function clearWindowSelection(win: Window | null | undefined): void {

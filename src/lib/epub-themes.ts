@@ -1,3 +1,5 @@
+import { liveSelectionCss } from '@/lib/reading-mark-colors'
+
 /** 正文左右留白（百分比）：两侧各 5%，正文占中间 90% */
 export const EPUB_CONTENT_HORIZONTAL_PADDING = '5%'
 
@@ -140,6 +142,7 @@ export function buildReaderLayoutCss(mode: EpubThemeMode): string {
   const palette = EPUB_PALETTE[mode]
 
   return `
+    ${liveSelectionCss()}
     html {
       width: 100% !important;
       max-width: 100% !important;
@@ -168,7 +171,7 @@ export function buildReaderLayoutCss(mode: EpubThemeMode): string {
       color: ${palette.text} !important;
     }
     body p,
-    body span,
+    body span:not(.mobi-mark-highlight):not(.mobi-mark-note):not(.reader-mark-highlight):not(.reader-mark-note),
     body div:not(.mobi-mark-highlight):not(.mobi-mark-note):not(#reader-mark-layer),
     body li,
     body td,

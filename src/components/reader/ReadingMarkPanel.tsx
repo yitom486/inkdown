@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { ReadingMark } from '@shared/types/reading-mark'
 import { getReadingMarkKindLabel, getReadingMarkLabel } from '@/lib/reading-mark-labels'
+import { highlightSwatch } from '@/lib/reading-mark-colors'
 import { cn } from '@/lib/utils'
 
 function MarkKindIcon({ kind }: { kind: ReadingMark['kind'] }) {
@@ -45,6 +46,13 @@ export function ReadingMarkPanel({ marks, onSelect, onDelete, onClose }: Reading
                   onClick={() => onSelect(mark)}
                 >
                   <MarkKindIcon kind={mark.kind} />
+                  {mark.kind === 'highlight' ? (
+                    <span
+                      className="mt-0.5 size-2 shrink-0 rounded-full ring-1 ring-black/20 dark:ring-white/30"
+                      style={{ backgroundColor: highlightSwatch(mark.color) }}
+                      aria-hidden
+                    />
+                  ) : null}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium">{getReadingMarkLabel(mark)}</span>
                     <span className="mt-0.5 block text-[10px] text-muted-foreground">

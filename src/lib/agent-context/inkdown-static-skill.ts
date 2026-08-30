@@ -67,7 +67,8 @@ Exposed via MCP; names start with \`inkdown_\`. Values come from Inkdown's **in-
 - \`inkdown_get_chapter\` — body of a **named / indexed** TOC entry (\`flatIndex\` or \`title\`). Does not jump the reader. Prefer after toc when asking about another section.
 - \`inkdown_search\` — case-insensitive substring search in the open book. For "where is X mentioned"; use wording from the source text.
 - \`inkdown_get_selection\` — user's **fresh** selection this turn (\`hasSelection: true\`). Near-mandatory when the flag is present; short selections get ±30 chars only—never the whole chapter.
-- \`inkdown_list_marks\` — list bookmarks / highlights / notes for the open book.
+- \`inkdown_list_marks\` — mixed list of bookmarks / highlights / notes. Use for "what bookmarks do I have", not for collecting highlighted passages.
+- \`inkdown_list_highlights\` — collect **highlighted passages** (highlights + notes that have excerpt; **no** bookmarks). Sorted by location. Prefer this when the user wants to summarize, export, or review marked sentences. \`passages\` is the excerpt list.
 - \`inkdown_create_bookmark\` — bookmark the **current** reading position (does not navigate).
 - \`inkdown_create_note\` — create a note/highlight from the **current selection** (\`note\` text optional; empty → highlight). Requires an active selection.
 

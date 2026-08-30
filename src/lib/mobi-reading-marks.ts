@@ -1,4 +1,5 @@
 import type { ReadingMark } from '@shared/types/reading-mark'
+import { applyHighlightSurface } from '@/lib/reading-mark-colors'
 
 const MARK_SELECTOR = '.mobi-mark-highlight, .mobi-mark-note, .mobi-mark-note-hit'
 
@@ -11,10 +12,12 @@ function pointInClientRect(x: number, y: number, rect: DOMRect, padding = 0): bo
   )
 }
 
-function findNoteMarkElement(doc: Document, clientX: number, clientY: number): HTMLElement | null {
+function findMarkElement(doc: Document, clientX: number, clientY: number): HTMLElement | null {
   const hit = doc.elementFromPoint(clientX, clientY)
   if (hit instanceof HTMLElement) {
-    const marked = hit.closest<HTMLElement>('.mobi-mark-note[data-mark-id], .mobi-mark-note-hit[data-mark-id]')
+    const marked = hit.closest<HTMLElement>(
+      '.mobi-mark-highlight[data-mark-id], .mobi-mark-note[data-mark-id], .mobi-mark-note-hit[data-mark-id]',
+    )
     if (marked?.dataset.markId) return marked
   }
 
@@ -22,7 +25,7 @@ function findNoteMarkElement(doc: Document, clientX: number, clientY: number): H
   if (!body) return null
 
   for (const element of body.querySelectorAll<HTMLElement>(
-    'span.mobi-mark-note[data-mark-id], .mobi-mark-note-hit[data-mark-id]',
+    'span.mobi-mark-highlight[data-mark-id], span.mobi-mark-note[data-mark-id], .mobi-mark-highlight[data-mark-id], .mobi-mark-note-hit[data-mark-id]',
   )) {
     if (pointInClientRect(clientX, clientY, element.getBoundingClientRect(), 4)) {
       return element
@@ -119,10 +122,19 @@ function findTextRange(root: HTMLElement, searchText: string): Range | null {
   return range
 }
 
-function wrapMarkRange(range: Range, className: string, markId: string): boolean {
+function wrapMarkRange(
+  range: Range,
+  className: string,
+  markId: string,
+  color: string | undefined,
+  theme: 'dark' | 'light',
+): boolean {
   const span = document.createElement('span')
   span.className = className
   span.dataset.markId = markId
+  if (className === 'mobi-mark-highlight' || className === 'mobi-mark-note') {
+    applyHighlightSurface(span, color, theme)
+  }
 
   try {
     range.surroundContents(span)
@@ -135,7 +147,11 @@ function wrapMarkRange(range: Range, className: string, markId: string): boolean
   }
 }
 
-function applyMobiTextMark(root: HTMLElement, mark: ReadingMark): boolean {
+function applyMobiTextMark(
+  root: HTMLElement,
+  mark: ReadingMark,
+  theme: 'dark' | 'light',
+): boolean {
   const searchText = getMarkSearchText(mark)
   if (!searchText) return false
 
@@ -143,7 +159,7 @@ function applyMobiTextMark(root: HTMLElement, mark: ReadingMark): boolean {
   if (!range) return false
 
   const className = mark.kind === 'note' ? 'mobi-mark-note' : 'mobi-mark-highlight'
-  return wrapMarkRange(range, className, mark.id)
+  return wrapMarkRange(range, className, mark.id, mark.color, theme)
 }
 
 function ensureMarkLayer(body: HTMLElement): HTMLElement {
@@ -164,6 +180,8 @@ function appendRectOverlay(
   className: string,
   markId: string,
   interactive: boolean,
+  color: string | undefined,
+  theme: 'dark' | 'light',
 ): void {
   const element = document.createElement('div')
   element.className = className
@@ -183,6 +201,9 @@ function appendRectOverlay(
   }
 
   element.style.pointerEvents = interactive ? 'auto' : 'none'
+  if (className.includes('mobi-mark-highlight') || className.includes('mobi-mark-note')) {
+    applyHighlightSurface(element, color, theme)
+  }
   layer.appendChild(element)
 }
 
@@ -190,6 +211,7 @@ export function renderMobiMarkOverlays(
   container: HTMLElement | null,
   marks: ReadingMark[],
   chapterId: string,
+  theme: 'dark' | 'light' = 'light',
 ): void {
   if (!container) return
   clearMobiMarkOverlays(container)
@@ -203,14 +225,47 @@ export function renderMobiMarkOverlays(
     if (mark.kind === 'bookmark') continue
 
     const className = mark.kind === 'note' ? 'mobi-mark-note' : 'mobi-mark-highlight'
-    const appliedByText = applyMobiTextMark(container, mark)
+    const appliedByText = applyMobiTextMark(container, mark, theme)
 
     if (!appliedByText && mark.anchor.rects?.length) {
       for (const rect of mark.anchor.rects) {
-        appendRectOverlay(layer, rect, className, mark.id, mark.kind === 'note')
+        appendRectOverlay(
+          layer,
+          rect,
+          className,
+          mark.id,
+          mark.kind === 'note',
+          mark.color,
+          theme,
+        )
       }
     }
   }
+}
+
+export function findMobiMarksAtPoint(
+  doc: Document,
+  clientX: number,
+  clientY: number,
+): Array<{ markId: string; element: HTMLElement }> {
+  const hits: Array<{ markId: string; element: HTMLElement }> = []
+  const seen = new Set<string>()
+  const primary = findMarkElement(doc, clientX, clientY)
+  if (primary?.dataset.markId) {
+    hits.push({ markId: primary.dataset.markId, element: primary })
+    seen.add(primary.dataset.markId)
+  }
+
+  const body = doc.body
+  if (!body) return hits
+  for (const element of body.querySelectorAll<HTMLElement>('[data-mark-id]')) {
+    const markId = element.dataset.markId
+    if (!markId || seen.has(markId)) continue
+    if (!pointInClientRect(clientX, clientY, element.getBoundingClientRect(), 4)) continue
+    seen.add(markId)
+    hits.push({ markId, element })
+  }
+  return hits
 }
 
 export function findMobiNoteMarkAtPoint(
@@ -218,10 +273,10 @@ export function findMobiNoteMarkAtPoint(
   clientX: number,
   clientY: number,
 ): { markId: string; element: HTMLElement } | null {
-  const marked = findNoteMarkElement(doc, clientX, clientY)
-  if (!marked?.dataset.markId) return null
-  if (!marked.classList.contains('mobi-mark-note') && !marked.classList.contains('mobi-mark-note-hit')) {
-    return null
-  }
-  return { markId: marked.dataset.markId, element: marked }
+  return (
+    findMobiMarksAtPoint(doc, clientX, clientY).find((hit) => {
+      const el = hit.element
+      return el.classList.contains('mobi-mark-note') || el.classList.contains('mobi-mark-note-hit')
+    }) ?? null
+  )
 }

@@ -15,5 +15,7 @@ describe('buildMobiMarkStylesCss', () => {
     expect(css).toContain('.mobi-mark-note-hit')
     expect(css).toContain('.mobi-mark-note-hit::after')
     expect(css).toContain('border-bottom: 2px dashed')
+    expect(css).toContain('rgba(253, 224, 71')
+    expect(css).toContain('::selection')
   })
 })

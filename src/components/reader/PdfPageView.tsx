@@ -17,7 +17,8 @@ interface PdfPageViewProps {
   scale: number
   theme: 'dark' | 'light'
   marks: ReadingMark[]
-  onMouseUp?: (pageNumber: number, pageElement: HTMLElement) => void
+  onMouseUp?: (pageNumber: number, pageElement: HTMLElement, point: { clientX: number; clientY: number }) => void
+  onPointerOrigin?: (x: number, y: number) => void
 }
 
 export function PdfPageView({
@@ -27,6 +28,7 @@ export function PdfPageView({
   theme,
   marks,
   onMouseUp,
+  onPointerOrigin,
 }: PdfPageViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textLayerRef = useRef<HTMLDivElement>(null)
@@ -125,9 +127,10 @@ export function PdfPageView({
       ref={wrapperRef}
       className="pdf-page-wrapper relative shadow-md"
       data-page={pageNumber}
-      onMouseUp={() => {
+      onMouseDown={(event) => onPointerOrigin?.(event.clientX, event.clientY)}
+      onMouseUp={(event) => {
         const pageElement = wrapperRef.current
-        if (pageElement) onMouseUp?.(pageNumber, pageElement)
+        if (pageElement) onMouseUp?.(pageNumber, pageElement, event)
       }}
     >
       {rendering ? (

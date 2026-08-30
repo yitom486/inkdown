@@ -12,6 +12,7 @@ export type InkdownSnapshotResource =
   | 'selection'
   | 'chapter'
   | 'marks'
+  | 'highlights'
   | 'create-bookmark'
   | 'create-note'
 

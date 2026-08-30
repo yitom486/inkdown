@@ -140,6 +140,9 @@ describe('renderMobiMarkOverlays', () => {
 
     renderMobiMarkOverlays(container, [mark], 'ch-1')
     expect(container.querySelector('span.mobi-mark-highlight')).not.toBeNull()
+    expect((container.querySelector('span.mobi-mark-highlight') as HTMLElement).dataset.color).toBe(
+      'yellow',
+    )
 
     renderMobiMarkOverlays(container, [], 'ch-1')
     expect(container.querySelector('span.mobi-mark-highlight')).toBeNull()
