@@ -25,23 +25,32 @@ describe('handleInkdownMcpRpc', () => {
     expect(response.result.protocolVersion).toBe('2025-06-18')
   })
 
-  it('tools/list 暴露 inkdown_get_toc', async () => {
+  it('tools/list 暴露合并后的 5 个工具', async () => {
     const response = (await handleInkdownMcpRpc(
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
       context(),
     )) as { result: { tools: Array<{ name: string }> } }
     const names = response.result.tools.map((t) => t.name)
-    expect(names).toContain('inkdown_get_toc')
-    expect(names).toContain('inkdown_list_highlights')
-    expect(names).toContain('inkdown_propose_note')
-    expect(names).toContain('inkdown_propose_mark')
-    expect(names).toContain('inkdown_create_note')
+    expect(names).toEqual([
+      'inkdown_read',
+      'inkdown_get_selection',
+      'inkdown_list_marks',
+      'inkdown_create_bookmark',
+      'inkdown_propose_mark',
+    ])
+    expect(names).not.toContain('inkdown_get_toc')
+    expect(names).not.toContain('inkdown_list_highlights')
   })
 
-  it('tools/call 走快照回路', async () => {
+  it('inkdown_read(scope=toc) 走 toc 快照', async () => {
     const readSnapshot = vi.fn(async () => '{"entries":[{"index":0}]}')
     const response = await handleInkdownMcpRpc(
-      { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'inkdown_get_toc' } },
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'inkdown_read', arguments: { scope: 'toc' } },
+      },
       context(readSnapshot),
     )
     expect(readSnapshot).toHaveBeenCalledWith('toc.json')
@@ -51,22 +60,55 @@ describe('handleInkdownMcpRpc', () => {
     })
   })
 
-  it('inkdown_list_highlights 走 highlights 快照', async () => {
-    const readSnapshot = vi.fn(async () => '{"count":1,"passages":["重点"]}')
-    const response = await handleInkdownMcpRpc(
+  it('旧 read 工具名仍转发到 inkdown_read', async () => {
+    const readSnapshot = vi.fn(async () => 'viewport text')
+    await handleInkdownMcpRpc(
+      { jsonrpc: '2.0', id: 30, method: 'tools/call', params: { name: 'inkdown_get_viewport' } },
+      context(readSnapshot),
+    )
+    expect(readSnapshot).toHaveBeenCalledWith('viewport.txt')
+  })
+
+  it('inkdown_list_marks(filter=highlights) 走 marks 快照', async () => {
+    const readSnapshot = vi.fn(async () => '{"count":1,"filter":"highlights"}')
+    await handleInkdownMcpRpc(
       {
         jsonrpc: '2.0',
         id: 31,
+        method: 'tools/call',
+        params: { name: 'inkdown_list_marks', arguments: { filter: 'highlights' } },
+      },
+      context(readSnapshot),
+    )
+    expect(readSnapshot).toHaveBeenCalledWith('marks', { filter: 'highlights' })
+  })
+
+  it('旧 list_highlights 仍转发到 filter=highlights', async () => {
+    const readSnapshot = vi.fn(async () => '{"count":1}')
+    await handleInkdownMcpRpc(
+      {
+        jsonrpc: '2.0',
+        id: 32,
         method: 'tools/call',
         params: { name: 'inkdown_list_highlights' },
       },
       context(readSnapshot),
     )
-    expect(readSnapshot).toHaveBeenCalledWith('highlights')
-    expect(response).toMatchObject({
-      id: 31,
-      result: { content: [{ type: 'text', text: '{"count":1,"passages":["重点"]}' }] },
-    })
+    expect(readSnapshot).toHaveBeenCalledWith('marks', { filter: 'highlights' })
+  })
+
+  it('旧 propose 工具名仍转发到 propose-mark 快照', async () => {
+    const readSnapshot = vi.fn(async () => '{"proposed":true,"note":"草稿"}')
+    await handleInkdownMcpRpc(
+      {
+        jsonrpc: '2.0',
+        id: 21,
+        method: 'tools/call',
+        params: { name: 'inkdown_propose_note', arguments: { note: '草稿' } },
+      },
+      context(readSnapshot),
+    )
+    expect(readSnapshot).toHaveBeenCalledWith('propose-mark', { note: '草稿' })
   })
 
   it('快照失败回 isError 结果而非 RPC 错误，让模型能读到原因', async () => {
@@ -74,7 +116,12 @@ describe('handleInkdownMcpRpc', () => {
       throw new Error('没有可用窗口提供 Inkdown 快照')
     })
     const response = (await handleInkdownMcpRpc(
-      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'inkdown_get_toc' } },
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'inkdown_read', arguments: { scope: 'toc' } },
+      },
       context(readSnapshot),
     )) as { result: { isError: boolean; content: Array<{ text: string }> } }
     expect(response.result.isError).toBe(true)

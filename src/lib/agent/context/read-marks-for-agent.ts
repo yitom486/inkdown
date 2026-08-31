@@ -36,16 +36,35 @@ async function loadMarksForOpenDocument() {
   return { document, marks: result.value }
 }
 
-export async function listMarksForAgent(): Promise<{
+export type MarkListFilter = 'all' | 'highlights' | 'bookmarks'
+
+export async function listMarksForAgent(options?: {
+  filter?: MarkListFilter
+}): Promise<{
   documentPath: string
+  filter: MarkListFilter
   count: number
   marks: ReturnType<typeof serializeMarkPassage>[]
 }> {
+  const filter = options?.filter ?? 'all'
+  if (filter === 'highlights') {
+    const highlights = await listHighlightsForAgent()
+    return {
+      documentPath: highlights.documentPath,
+      filter,
+      count: highlights.count,
+      marks: highlights.highlights,
+    }
+  }
+
   const { document, marks } = await loadMarksForOpenDocument()
+  const filtered =
+    filter === 'bookmarks' ? marks.filter((mark) => mark.kind === 'bookmark') : marks
   return {
     documentPath: document.path,
-    count: marks.length,
-    marks: marks.map(serializeMarkPassage),
+    filter,
+    count: filtered.length,
+    marks: filtered.map(serializeMarkPassage),
   }
 }
 

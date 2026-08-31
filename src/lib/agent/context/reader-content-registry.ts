@@ -77,7 +77,7 @@ export async function readViewportText(expectedFilePath?: string): Promise<strin
     throw new Error('文档刚刚切换，请重新获取当前文档信息后再试')
   }
   if (!provider.getViewportText) {
-    throw new Error('当前文档不支持视口文本（Markdown 请直接读文件；阅读器用 inkdown_get_viewport）')
+    throw new Error('当前文档不支持视口文本（Markdown 请直接读文件；阅读器用 inkdown_read(scope=viewport)）')
   }
   return normalizeReaderText(await provider.getViewportText(), VIEWPORT_TEXT_MAX_CHARS)
 }

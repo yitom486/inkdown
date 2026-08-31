@@ -81,7 +81,7 @@
 | `agent-markdown` | Agent 气泡 Markdown（与预览同源解析） |
 | `annotation-note-prompts` | 批注 AI 意图/改写 chip 与草稿抽取 |
 
-`agent/context/`（原 `agent-context/`）：静态 Skill、turn-context、阅读器内容/选区/标记 registry、MCP 快照序列化；`propose-note-for-agent` 为批注草稿确认（不直写）。
+`agent/context/`（原 `agent-context/`）：静态 Skill、turn-context、阅读器内容/选区/标记 registry、MCP 快照序列化；标记提议统一走 `propose-mark`（`inkdown_propose_mark`）。
 
 ---
 

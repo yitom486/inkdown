@@ -40,16 +40,16 @@ You do **not** need to re-read the document every turn. **Why:** tool results an
 
 Unless the user **explicitly** asks for a whole-chapter view or summary, escalate **smallest context first**—and **skip steps whose content is already in the thread**:
 
-1. \`inkdown_get_selection\` — **when** \`hasSelection: true\` (**near-required** for that turn). Skip when the flag is absent.
-2. \`inkdown_get_viewport\` — if thread lacks the needed on-screen text, or selection excerpt is too thin. Skip when recent tool output in the thread already answers.
-3. \`inkdown_get_current_text\` — current chapter/page only if viewport is still insufficient, or the user wants **this** whole chapter.
-4. \`inkdown_get_chapter\` — a **specific** TOC chapter by \`flatIndex\` or title (does not navigate). Use after \`inkdown_get_toc\` when the user asks about another section—not for "here / this page".
-5. \`inkdown_search\` — "where is X mentioned" across the book.
-6. \`inkdown_get_toc\` — structure / chapter names—not body text.
+1. \`inkdown_get_selection\` — **when** \`hasSelection: true\` (**near-required** for that turn). Skip when the flag is absent. **Standalone tool** (not part of \`inkdown_read\`) because selection is high-frequency and turn-triggered.
+2. \`inkdown_read(scope=viewport)\` — if thread lacks the needed on-screen text, or selection excerpt is too thin.
+3. \`inkdown_read(scope=current)\` — current chapter/page only if viewport is still insufficient, or the user wants **this** whole chapter.
+4. \`inkdown_read(scope=chapter)\` — a **specific** TOC chapter by \`flatIndex\` or \`title\` (does not navigate). Use after \`scope=toc\` when the user asks about another section—not for "here / this page".
+5. \`inkdown_read(scope=search)\` — "where is X mentioned" across the book (\`query\` required).
+6. \`inkdown_read(scope=toc)\` — structure / chapter names—not body text.
 
 **Data / fact questions** about what the user is reading: use selection (if flagged) or thread/viewport; escalate only when the answer is not already available.
 
-Do **not** call \`inkdown_get_current_text\` first just because the user said "this chapter" loosely.
+Do **not** call \`inkdown_read(scope=current)\` first just because the user said "this chapter" loosely.
 
 ## When to use tools vs native file access
 
@@ -62,20 +62,14 @@ Do **not** call \`inkdown_get_current_text\` first just because the user said "t
 
 Exposed via MCP; names start with \`inkdown_\`. Values come from Inkdown's **in-memory parsed data** (or read-mode fetched web pages), not a second disk copy.
 
-- \`inkdown_get_toc\` — full TOC (levels, titles, current position). For structure / chapter names / navigation advice—not body text.
-- \`inkdown_get_viewport\` — plain text **currently visible in the reading window** (~one screen). Call when context may not yet have enough on-screen text; skip when the thread already looks sufficient.
-- \`inkdown_get_current_text\` — **entire current chapter** (PDF: current page). Last resort for body text unless the user wants a full-chapter summary. May truncate; heavy on context.
-- \`inkdown_get_chapter\` — body of a **named / indexed** TOC entry (\`flatIndex\` or \`title\`). Does not jump the reader. Prefer after toc when asking about another section.
-- \`inkdown_search\` — case-insensitive substring search in the open book. For "where is X mentioned"; use wording from the source text.
-- \`inkdown_get_selection\` — user's **fresh** selection this turn (\`hasSelection: true\`). Near-mandatory when the flag is present; short selections get ±30 chars only—never the whole chapter.
-- \`inkdown_list_marks\` — mixed list of bookmarks / highlights / notes. Use for "what bookmarks do I have", not for collecting highlighted passages.
-- \`inkdown_list_highlights\` — collect **highlighted passages** (highlights + notes that have excerpt; **no** bookmarks). Sorted by location. Prefer this when the user wants to summarize, export, or review marked sentences. \`passages\` is the excerpt list.
+- \`inkdown_read\` — read TOC or body text. \`scope\`: \`toc\` | \`viewport\` | \`current\` | \`chapter\` | \`search\`. \`chapter\` needs \`flatIndex\` or \`title\`; \`search\` needs \`query\`. Escalate viewport → current → chapter; do not use chapter for "here / this page".
+- \`inkdown_get_selection\` — user's **fresh** selection this turn (\`hasSelection: true\`). **Separate** from \`inkdown_read\`; near-mandatory when the flag is present. Short selections get ±30 chars only—never the whole chapter.
+- \`inkdown_list_marks\` — reading marks on the open doc. \`filter\`: \`all\` (default, bookmarks + highlights + notes) | \`highlights\` (passages only, no pure bookmarks) | \`bookmarks\`.
 - \`inkdown_create_bookmark\` — bookmark the **current** reading position (does not navigate).
-- \`inkdown_propose_note\` / \`inkdown_create_note\` — **only when the user clearly wants to save a reading note** and there is a **fresh selection** (or sticky选区). Proposes an editable draft (in-chat ProposeMarkCard); **not** persisted until Adopt.
-- \`inkdown_propose_mark\` — **unified** propose for highlight and/or note (single or batch \`marks\`, ≤10). \`note\` empty = highlight only; \`kind\`: highlight|note|auto. \`excerpt\` can be paraphrase; client fuzzy-matches. Batch uses one tool call with \`marks: [{ excerpt, note?, kind? }]\`. Legacy \`inkdown_propose_note\` = same tool with selection + \`note\` only.
+- \`inkdown_propose_mark\` — **the only** tool to propose highlights and/or reading notes (never persisted until the user Adopts). Single: \`excerpt\` + optional \`note\` (empty = highlight only), optional \`kind\` highlight|note|auto, optional \`flatIndex\`. With a **fresh selection** (or sticky选区), you may pass only \`note\` and skip \`excerpt\`. Batch: one call with \`marks: [{ excerpt, note?, kind?, flatIndex? }]\`, ≤10 per batch. \`excerpt\` may be paraphrase; client fuzzy-matches. Call only when the user clearly asks to save a highlight or note.
 
 Content usually does not change within a turn—do not spam the same tool. If a tool errors or returns empty, say so; do not pretend you read the body.
-Only propose bookmarks/notes when the user clearly asks; do not invent marks unprompted. Prefer \`inkdown_propose_mark\` when you have the exact excerpt but no selection; \`inkdown_propose_note\` when the user just highlighted text.
+Only propose bookmarks/notes when the user clearly asks; do not invent marks unprompted.
 
 ## turn-context
 
@@ -85,7 +79,7 @@ A \`<inkdown-turn-context>\` JSON block **may** appear before the user message (
 - \`documentChanged: true\` ≈ file changed; prior conclusions may be stale.
 - \`hasSelection: true\` ≈ the user **just highlighted** text for **this** turn—**near-mandatory** to call \`inkdown_get_selection\` first. Absence ≈ no fresh selection (do **not** call the selection tool). One-shot: does not linger unless they select again.
 - The composer token \`「选区」\` is a **pointer**, not the excerpt. Do not treat it as the quoted passage; read the real text with \`inkdown_get_selection\` when \`hasSelection\` is set.
-- \`tocTopLevel\` ≈ a **short** list of top-level TOC titles (≤10). Coarse outline only—call \`inkdown_get_toc\` if you need the full tree or nested sections.
+- \`tocTopLevel\` ≈ a **short** list of top-level TOC titles (≤10). Coarse outline only—call \`inkdown_read(scope=toc)\` if you need the full tree or nested sections.
 - Do not restate this JSON in your reply.
 
 ## Other conventions

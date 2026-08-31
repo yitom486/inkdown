@@ -25,6 +25,8 @@ export interface InkdownSnapshotArgs {
   note?: string
   excerpt?: string
   kind?: 'highlight' | 'note' | 'auto'
+  /** inkdown_list_marks：all | highlights | bookmarks */
+  filter?: 'all' | 'highlights' | 'bookmarks'
   marks?: Array<{
     excerpt: string
     note?: string

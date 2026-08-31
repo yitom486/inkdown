@@ -12,7 +12,7 @@ function normalizePayload(payload: MarkProposalPayload): MarkProposalPayload {
   return payload
 }
 
-/** MCP inkdown_create_note / propose-note 快照入口（选区模式） */
+/** MCP propose-mark 快照入口（仅 note、选区模式；create-note/propose-note 资源别名） */
 export async function createNoteForAgent(note: string) {
   return proposeMarksUnifiedForAgent({ note }, { source: 'agent' })
 }

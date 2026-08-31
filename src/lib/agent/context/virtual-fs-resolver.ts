@@ -165,7 +165,18 @@ export async function resolveInkdownSnapshot(
         2,
       )
     case 'marks':
-      return JSON.stringify(await listMarksForAgent(), null, 2)
+      return JSON.stringify(
+        await listMarksForAgent({
+          filter:
+            args?.filter === 'highlights' ||
+            args?.filter === 'bookmarks' ||
+            args?.filter === 'all'
+              ? args.filter
+              : undefined,
+        }),
+        null,
+        2,
+      )
     case 'highlights':
       return JSON.stringify(await listHighlightsForAgent(), null, 2)
     case 'create-bookmark':
