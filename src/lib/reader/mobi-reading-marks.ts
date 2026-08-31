@@ -1,6 +1,6 @@
 import type { PdfTextRect, ReadingAnchor, ReadingMark } from '@shared/types/reading-mark'
 import { applyHighlightSurface } from '@/lib/reader/reading-mark-colors'
-import { getMarkLayerMetrics } from '@/lib/reader/reader-mark-geometry'
+import { getMarkLayerMetrics, normalizeRectsInScrollDocument } from '@/lib/reader/reader-mark-geometry'
 import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'
 
 const MARK_SELECTOR = '.mobi-mark-highlight, .mobi-mark-note, .mobi-mark-note-hit'
@@ -79,13 +79,24 @@ function getMarkSearchText(mark: ReadingMark): string {
   return (mark.excerpt ?? mark.anchor.selectedText ?? '').trim()
 }
 
-function findTextRange(root: HTMLElement, searchText: string): Range | null {
-  const doc = root.ownerDocument
+function collapseInlineWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+function findTextRangeCandidates(searchText: string): string[] {
+  const trimmed = searchText.trim()
+  const collapsed = collapseInlineWhitespace(trimmed)
+  return trimmed === collapsed ? [trimmed] : [trimmed, collapsed]
+}
+
+function findTextRangeExact(root: HTMLElement, doc: Document, searchText: string): Range | null {
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement
       if (parent?.closest(MARK_SELECTOR)) return NodeFilter.FILTER_REJECT
-      if (parent?.closest('script, style')) return NodeFilter.FILTER_REJECT
+      if (parent?.closest('#reader-mark-layer, .code-block-toolbar, script, style')) {
+        return NodeFilter.FILTER_REJECT
+      }
       return NodeFilter.FILTER_ACCEPT
     },
   })
@@ -132,6 +143,18 @@ function findTextRange(root: HTMLElement, searchText: string): Range | null {
   return range
 }
 
+function findTextRange(root: HTMLElement, searchText: string): Range | null {
+  const doc = root.ownerDocument
+  if (!doc) return null
+
+  for (const candidate of findTextRangeCandidates(searchText)) {
+    const range = findTextRangeExact(root, doc, candidate)
+    if (range) return range
+  }
+
+  return null
+}
+
 function wrapMarkRange(
   range: Range,
   className: string,
@@ -170,6 +193,24 @@ function applyMobiTextMark(
 
   const className = mark.kind === 'note' ? 'mobi-mark-note' : 'mobi-mark-highlight'
   return wrapMarkRange(range, className, mark.id, mark.color, theme)
+}
+
+function liveRectsFromMarkText(root: HTMLElement, mark: ReadingMark): PdfTextRect[] | undefined {
+  const searchText = getMarkSearchText(mark)
+  if (!searchText) return undefined
+
+  const range = findTextRange(root, searchText)
+  if (!range) return undefined
+
+  const doc = root.ownerDocument
+  if (!doc) return undefined
+
+  const clientRects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 0 && rect.height > 0,
+  )
+  if (clientRects.length === 0) return undefined
+
+  return normalizeRectsInScrollDocument(clientRects, doc, root)
 }
 
 function ensureMarkLayer(body: HTMLElement): HTMLElement {
@@ -264,7 +305,9 @@ function renderIframeMarkOverlays(
     const className = mark.kind === 'note' ? 'mobi-mark-note' : 'mobi-mark-highlight'
     const appliedByText = applyMobiTextMark(container, mark, theme)
 
-    const rects = anchorRects(mark.anchor)
+    const rects = !appliedByText
+      ? liveRectsFromMarkText(container, mark) ?? anchorRects(mark.anchor)
+      : undefined
     if (!appliedByText && rects?.length) {
       for (const rect of rects) {
         appendRectOverlay(

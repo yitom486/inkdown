@@ -4,6 +4,20 @@ import { buildCodeBlockToolbarHtml } from '@/lib/preview/code-block-chrome'
 
 const LANGUAGE_CLASS = /\blanguage-([\w-]+)\b/i
 const LANG_CLASS = /\blang-([\w-]+)\b/i
+const SP_LANG_CLASS = /\bsp-(javascript|typescript|jsx|tsx|json|css|html|bash|shell|python|java|go|rust|yaml|markdown|md)\b/i
+const HLJS_LANG_CLASS = /\bhljs-([\w-]+)\b/i
+
+function inferLanguageFromContent(text: string): string | null {
+  const sample = text.trim().slice(0, 400)
+  if (!sample) return null
+  if (/^\s*<\?xml/m.test(sample)) return 'xml'
+  if (/^\s*<!DOCTYPE html/i.test(sample) || /<\/?[a-z][\s\S]*>/i.test(sample)) return 'html'
+  if (/^\s*#\!/.test(sample) || /^\$\s+\w+/.test(sample)) return 'bash'
+  if (/^\s*(import|export)\s+/m.test(sample) || /\b(function|const|let|var)\s+\w+/m.test(sample)) {
+    return /<\w+/.test(sample) ? 'jsx' : 'javascript'
+  }
+  return null
+}
 
 function detectCodeLanguage(node: Element): string {
   const sources = [
@@ -15,7 +29,23 @@ function detectCodeLanguage(node: Element): string {
   for (const source of sources) {
     const language = source.match(LANGUAGE_CLASS)?.[1] ?? source.match(LANG_CLASS)?.[1]
     if (language) return language.toLowerCase()
+
+    const sp = source.match(SP_LANG_CLASS)?.[1]
+    if (sp) return sp.toLowerCase()
+
+    const hljs = source.match(HLJS_LANG_CLASS)?.[1]
+    if (hljs) return hljs.toLowerCase()
   }
+
+  const dataLang =
+    node.getAttribute('data-language') ??
+    node.getAttribute('data-lang') ??
+    node.querySelector('code')?.getAttribute('data-language')
+  if (dataLang?.trim()) return dataLang.trim().toLowerCase()
+
+  const pre = node.tagName === 'PRE' ? node : node.querySelector('pre')
+  const inferred = inferLanguageFromContent(pre?.textContent ?? node.textContent ?? '')
+  if (inferred) return inferred
 
   return 'text'
 }

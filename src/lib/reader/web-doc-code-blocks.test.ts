@@ -5,6 +5,12 @@ import { enhanceWebDocCodeBlocks } from './web-doc-code-blocks'
 import { buildWebDocReaderDocument } from './web-doc-html'
 
 describe('enhanceWebDocCodeBlocks', () => {
+  it('react.dev Sandpack pre 识别 javascript', () => {
+    const html = `<pre class="sp-cm sp-pristine sp-javascript"><code>function MyButton() {}</code></pre>`
+    const enhanced = enhanceWebDocCodeBlocks(html)
+    expect(enhanced).toContain('class="code-block-lang">javascript')
+  })
+
   it('为 VuePress 风格 div.language-* > pre > code 注入复制工具栏', () => {
     const html = `<div class="language-bash extra-class"><pre class="language-bash"><code>$ curl -Lo minikube</code></pre></div>`
 
