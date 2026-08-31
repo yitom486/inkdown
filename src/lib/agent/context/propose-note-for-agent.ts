@@ -5,15 +5,19 @@ export {
   proposeMarkForAgent as proposeNoteForAgent,
 } from '@/lib/agent/context/propose-mark'
 
-import { proposeMarkForAgent } from '@/lib/agent/context/propose-mark'
+import { proposeMarksUnifiedForAgent } from '@/lib/agent/context/propose-mark'
+import type { MarkProposalPayload } from '@shared/types/mark-proposal'
 
-/** MCP inkdown_create_note / propose-note 快照入口 */
+function normalizePayload(payload: MarkProposalPayload): MarkProposalPayload {
+  return payload
+}
+
+/** MCP inkdown_create_note / propose-note 快照入口（选区模式） */
 export async function createNoteForAgent(note: string) {
-  const result = await proposeMarkForAgent(note, { source: 'agent' })
-  return {
-    proposed: result.proposed,
-    note: result.note,
-    excerpt: result.excerpt,
-    message: result.message,
-  }
+  return proposeMarksUnifiedForAgent({ note }, { source: 'agent' })
+}
+
+/** MCP inkdown_propose_mark 快照入口（单条 / 批量 / 高亮） */
+export async function proposeMarkAtForAgentResult(payload: MarkProposalPayload) {
+  return proposeMarksUnifiedForAgent(normalizePayload(payload), { source: 'agent' })
 }

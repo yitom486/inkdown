@@ -79,81 +79,10 @@ function getMarkSearchText(mark: ReadingMark): string {
   return (mark.excerpt ?? mark.anchor.selectedText ?? '').trim()
 }
 
-function collapseInlineWhitespace(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
-}
-
-function findTextRangeCandidates(searchText: string): string[] {
-  const trimmed = searchText.trim()
-  const collapsed = collapseInlineWhitespace(trimmed)
-  return trimmed === collapsed ? [trimmed] : [trimmed, collapsed]
-}
-
-function findTextRangeExact(root: HTMLElement, doc: Document, searchText: string): Range | null {
-  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      const parent = node.parentElement
-      if (parent?.closest(MARK_SELECTOR)) return NodeFilter.FILTER_REJECT
-      if (parent?.closest('#reader-mark-layer, .code-block-toolbar, script, style')) {
-        return NodeFilter.FILTER_REJECT
-      }
-      return NodeFilter.FILTER_ACCEPT
-    },
-  })
-
-  let combined = ''
-  const segments: Array<{ node: Text; start: number; end: number }> = []
-
-  let current = walker.nextNode()
-  while (current) {
-    const textNode = current as Text
-    const text = textNode.textContent ?? ''
-    const start = combined.length
-    combined += text
-    segments.push({ node: textNode, start, end: combined.length })
-    current = walker.nextNode()
-  }
-
-  const index = combined.indexOf(searchText)
-  if (index === -1) return null
-
-  const endIndex = index + searchText.length
-  let startNode: Text | null = null
-  let startOffset = 0
-  let endNode: Text | null = null
-  let endOffset = 0
-
-  for (const segment of segments) {
-    if (!startNode && index >= segment.start && index < segment.end) {
-      startNode = segment.node
-      startOffset = index - segment.start
-    }
-    if (endIndex > segment.start && endIndex <= segment.end) {
-      endNode = segment.node
-      endOffset = endIndex - segment.start
-      break
-    }
-  }
-
-  if (!startNode || !endNode) return null
-
-  const range = doc.createRange()
-  range.setStart(startNode, startOffset)
-  range.setEnd(endNode, endOffset)
-  return range
-}
-
-function findTextRange(root: HTMLElement, searchText: string): Range | null {
-  const doc = root.ownerDocument
-  if (!doc) return null
-
-  for (const candidate of findTextRangeCandidates(searchText)) {
-    const range = findTextRangeExact(root, doc, candidate)
-    if (range) return range
-  }
-
-  return null
-}
+import {
+  excerptSearchCandidates,
+  findTextRangeInRoot,
+} from '@/lib/reader/excerpt-text-match'
 
 function wrapMarkRange(
   range: Range,
@@ -188,7 +117,7 @@ function applyMobiTextMark(
   const searchText = getMarkSearchText(mark)
   if (!searchText) return false
 
-  const range = findTextRange(root, searchText)
+  const range = findTextRangeInRoot(root, searchText)
   if (!range) return false
 
   const className = mark.kind === 'note' ? 'mobi-mark-note' : 'mobi-mark-highlight'
@@ -199,7 +128,7 @@ function liveRectsFromMarkText(root: HTMLElement, mark: ReadingMark): PdfTextRec
   const searchText = getMarkSearchText(mark)
   if (!searchText) return undefined
 
-  const range = findTextRange(root, searchText)
+  const range = findTextRangeInRoot(root, searchText)
   if (!range) return undefined
 
   const doc = root.ownerDocument

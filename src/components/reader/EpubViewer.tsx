@@ -20,7 +20,7 @@ import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
 import { extractDocumentText, extractViewportText } from '@/lib/agent/context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
-import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
 import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { scrollEpubChapterInRendition } from '@/lib/reader/epub-scroll-toc'
@@ -52,7 +52,10 @@ import {
   replaceAllEpubMarksOnRendition,
   type EpubMarkHoverHandlers,
 } from '@/lib/reader/epub-reading-marks'
-import { copyTextToClipboard, readEpubSelection, type EpubSelectionSnapshot } from '@/lib/reader/epub-selection'
+import { copyTextToClipboard, readEpubSelection, buildEpubSnapshotFromRange, type EpubContentsLike, type EpubSelectionSnapshot } from '@/lib/reader/epub-selection'
+import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { waitForDom } from '@/lib/reader/wait-for-dom'
+import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
@@ -433,6 +436,42 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       return result.value
     },
     [nav, clearTextSelection, createMark, fileFingerprint, filePath, marks, theme, updateMark],
+  )
+
+  const getEpubContents = useCallback((): EpubContentsLike | null => {
+    const raw = renditionRef.current?.getContents() as unknown
+    const list: unknown[] = Array.isArray(raw) ? raw : raw ? [raw] : []
+    const item = list[0] as EpubContentsLike | undefined
+    if (!item?.window) return null
+    return item
+  }, [])
+
+  const handleCreateMarkAt = useCallback(
+    async ({ excerpt, note, flatIndex }: CreateMarkAtParams) => {
+      const navState = useReaderNavigationStore.getState().nav
+      if (typeof flatIndex === 'number' && flatIndex >= 0 && flatIndex !== navState.flatIndex) {
+        const chapter = chaptersRef.current[flatIndex]
+        if (!chapter) throw new Error('章节索引无效')
+        goToChapter(chapter, flatIndex)
+      }
+
+      const snapshot = await waitForDom(() => {
+        const contents = getEpubContents()
+        const body = contents?.window.document.body
+        if (!contents || !body) return null
+        const range = findTextRangeInRoot(body, excerpt)
+        if (!range) return null
+        return buildEpubSnapshotFromRange(contents, range, excerpt)
+      })
+      if (!snapshot) {
+        throw new Error('未在当前章节找到该摘录，请打开对应章节后重试')
+      }
+
+      selectionSnapshotRef.current = snapshot
+      setSelectionSnapshot(snapshot)
+      return handleSaveAnnotation(note)
+    },
+    [getEpubContents, goToChapter, handleSaveAnnotation],
   )
 
   const handleSelectMark = useCallback((mark: ReadingMark) => {
@@ -907,7 +946,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
   useEffect(() => {
     return registerSelectionProvider({
       filePath,
-      getSelectionText: () => readSelectionText(filePath),
+      getSelectionText: () => selectionSnapshotRef.current?.text?.trim() || null,
     })
   }, [filePath])
 
@@ -916,8 +955,9 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       filePath,
       createBookmark: () => addBookmarkAtCurrent(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
+      createMarkAt: (params) => handleCreateMarkAt(params),
     })
-  }, [addBookmarkAtCurrent, filePath, handleSaveAnnotation])
+  }, [addBookmarkAtCurrent, filePath, handleCreateMarkAt, handleSaveAnnotation])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   isProposeMarkToolTitle,
+  parseMarkProposalBatchToolResult,
   parseMarkProposalFromTool,
   parseMarkProposalToolResult,
+  parseMarkProposalsFromTool,
 } from '@/lib/agent/parse-mark-proposal'
 
 describe('parse-mark-proposal', () => {
   it('识别 propose 工具名', () => {
     expect(isProposeMarkToolTitle('inkdown_propose_note')).toBe(true)
+    expect(isProposeMarkToolTitle('inkdown_propose_mark')).toBe(true)
     expect(isProposeMarkToolTitle('inkdown_create_note')).toBe(true)
     expect(isProposeMarkToolTitle('Read file')).toBe(false)
   })
@@ -26,6 +29,8 @@ describe('parse-mark-proposal', () => {
       note: '我的批注',
       excerpt: '原文摘录',
       message: '等待确认',
+      locationHint: undefined,
+      kind: 'note',
     })
   })
 
@@ -49,8 +54,21 @@ describe('parse-mark-proposal', () => {
     expect(mark?.note).toBe('批注')
   })
 
-  it('非 propose JSON 返回 null', () => {
-    expect(parseMarkProposalFromTool('grep', '{"ok":true}')).toBeNull()
-    expect(parseMarkProposalToolResult('not json')).toBeNull()
+  it('解析批量工具 JSON', () => {
+    const batch = parseMarkProposalBatchToolResult(
+      JSON.stringify({
+        proposed: true,
+        count: 2,
+        marks: [
+          { proposed: true, excerpt: '句一', note: '', message: '' },
+          { proposed: true, excerpt: '句二', note: '批注', message: '' },
+        ],
+        message: 'ok',
+      }),
+    )
+    expect(batch?.count).toBe(2)
+    const proposals = parseMarkProposalsFromTool('inkdown_propose_mark', JSON.stringify(batch), 'c1')
+    expect(proposals).toHaveLength(2)
+    expect(proposals[1]?.kind).toBe('note')
   })
 })

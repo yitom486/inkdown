@@ -34,6 +34,7 @@ describe('handleInkdownMcpRpc', () => {
     expect(names).toContain('inkdown_get_toc')
     expect(names).toContain('inkdown_list_highlights')
     expect(names).toContain('inkdown_propose_note')
+    expect(names).toContain('inkdown_propose_mark')
     expect(names).toContain('inkdown_create_note')
   })
 

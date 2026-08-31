@@ -76,12 +76,18 @@ export async function handleInkdownMcpRpc(
       try {
         return result(message.id, await callInkdownMcpTool(name, context, args))
       } catch (error) {
+        const messageText = error instanceof Error ? error.message : '工具执行失败'
+        console.warn('[acp-mcp] tools/call 失败', {
+          name,
+          message: messageText,
+          stack: error instanceof Error ? error.stack : undefined,
+        })
         // 工具执行失败按 MCP 约定回 isError 结果，让模型能读到原因并自行调整
         return result(message.id, {
           content: [
             {
               type: 'text',
-              text: error instanceof Error ? error.message : '工具执行失败',
+              text: messageText,
             },
           ],
           isError: true,

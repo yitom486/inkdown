@@ -8,13 +8,20 @@ import { normalizeRectsInScrollDocument } from '@/lib/reader/reader-mark-geometr
 export function readMobiSelection(doc: Document, win: Window): PdfSelectionSnapshot | null {
   const selection = win.getSelection()
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null
+  return buildMobiSnapshotFromRange(doc, selection.getRangeAt(0), selection.toString().trim())
+}
 
-  const range = selection.getRangeAt(0)
+/** 由 DOM Range 构建选区快照（Agent 按摘录定位时用）。 */
+export function buildMobiSnapshotFromRange(
+  doc: Document,
+  range: Range,
+  text?: string,
+): PdfSelectionSnapshot | null {
   const body = doc.body
   if (!body || !body.contains(range.commonAncestorContainer)) return null
 
-  const text = selection.toString().trim()
-  if (!text) return null
+  const resolvedText = (text ?? range.toString()).trim()
+  if (!resolvedText) return null
 
   const clientRects = Array.from(range.getClientRects()).filter(
     (rect) => rect.width > 0 && rect.height > 0,
@@ -26,7 +33,7 @@ export function readMobiSelection(doc: Document, win: Window): PdfSelectionSnaps
 
   const unionRect = unionClientRects(clientRects)
   const toolbarPos = getSelectionToolbarPosition({
-    text,
+    text: resolvedText,
     rect: unionRect,
     rects,
     page: 0,
@@ -35,7 +42,7 @@ export function readMobiSelection(doc: Document, win: Window): PdfSelectionSnaps
   })
 
   return {
-    text,
+    text: resolvedText,
     rect: unionRect,
     rects,
     page: 0,

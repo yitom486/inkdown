@@ -88,7 +88,10 @@ export async function startInkdownMcpServer(
           response.writeHead(202).end()
           return
         }
-        console.info('[acp-mcp] handled', { method: message.method })
+        console.info('[acp-mcp] handled', {
+          method: message.method,
+          tool: typeof message.params?.name === 'string' ? message.params.name : undefined,
+        })
         response
           .writeHead(200, { 'Content-Type': 'application/json' })
           .end(JSON.stringify(rpcResponse))

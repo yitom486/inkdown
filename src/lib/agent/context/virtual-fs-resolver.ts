@@ -2,6 +2,7 @@ import type {
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
 } from '@shared/agent/inkdown-snapshot'
+import type { MarkProposalItem, MarkProposalKind, MarkProposalPayload } from '@shared/types/mark-proposal'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { collectActiveDocument, collectReadingState } from './collect-turn-context'
 import {
@@ -14,10 +15,51 @@ import {
   createNoteForAgent,
   listHighlightsForAgent,
   listMarksForAgent,
+  proposeMarkAtForAgentResult,
 } from './read-marks-for-agent'
 import { readSelectionWithContext } from './read-selection-context'
 import { searchReaderContent } from './search-reader-content'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
+
+function parseMarkProposalArgs(args?: InkdownSnapshotArgs): MarkProposalPayload {
+  const marksRaw = (args as { marks?: unknown } | undefined)?.marks
+  const marks = Array.isArray(marksRaw)
+    ? marksRaw
+        .map((row): MarkProposalItem | null => {
+          if (!row || typeof row !== 'object') return null
+          const item = row as Record<string, unknown>
+          const excerpt = typeof item.excerpt === 'string' ? item.excerpt.trim() : ''
+          if (!excerpt) return null
+          const kind =
+            item.kind === 'highlight' || item.kind === 'note' || item.kind === 'auto'
+              ? (item.kind as MarkProposalKind)
+              : undefined
+          return {
+            excerpt,
+            note: typeof item.note === 'string' ? item.note : undefined,
+            flatIndex:
+              typeof item.flatIndex === 'number' && Number.isFinite(item.flatIndex)
+                ? item.flatIndex
+                : undefined,
+            kind,
+          }
+        })
+        .filter((row): row is MarkProposalItem => row !== null)
+    : undefined
+
+  const kind =
+    args?.kind === 'highlight' || args?.kind === 'note' || args?.kind === 'auto'
+      ? args.kind
+      : undefined
+
+  return {
+    excerpt: args?.excerpt,
+    note: args?.note,
+    flatIndex: args?.flatIndex,
+    kind,
+    marks: marks?.length ? marks : undefined,
+  }
+}
 
 /** 目录条目上限：整本书目录再大也不该一次灌满 Agent 上下文 */
 export const TOC_ENTRY_LIMIT = 600
@@ -131,5 +173,11 @@ export async function resolveInkdownSnapshot(
     case 'create-note':
     case 'propose-note':
       return JSON.stringify(await createNoteForAgent(args?.note ?? ''), null, 2)
+    case 'propose-mark':
+      return JSON.stringify(
+        await proposeMarkAtForAgentResult(parseMarkProposalArgs(args)),
+        null,
+        2,
+      )
   }
 }

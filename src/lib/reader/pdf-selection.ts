@@ -431,19 +431,17 @@ export function rectsFromPdfRange(range: Range, layerElement: HTMLElement): PdfT
 }
 
 /** 读取当前原生 Selection；V2 优先从 text item transform 生成 PDF 坐标 Quad。 */
-export function readPdfSelection(
+export function buildPdfSnapshotFromRange(
   rootElement: HTMLElement,
   pageNum: number,
+  range: Range,
+  text?: string,
 ): PdfSelectionSnapshot | null {
-  const selection = window.getSelection()
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null
-
-  const range = selection.getRangeAt(0)
   if (!rootElement.contains(range.commonAncestorContainer)) return null
 
-  const rawText = selection.toString()
-  const text = rawText.trim()
-  if (!text) return null
+  const rawText = text ?? range.toString()
+  const resolvedText = rawText.trim()
+  if (!resolvedText) return null
 
   const clientRects = readRangeClientRects(range)
   if (clientRects.length === 0) return null
@@ -471,7 +469,7 @@ export function readPdfSelection(
     : undefined
 
   return {
-    text,
+    text: resolvedText,
     rect,
     rects,
     begin: begin ?? undefined,
@@ -482,6 +480,17 @@ export function readPdfSelection(
     toolbarX: rect.left + rect.width / 2,
     toolbarY: rect.top,
   }
+}
+
+export function readPdfSelection(
+  rootElement: HTMLElement,
+  pageNum: number,
+): PdfSelectionSnapshot | null {
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null
+
+  const range = selection.getRangeAt(0)
+  return buildPdfSnapshotFromRange(rootElement, pageNum, range)
 }
 
 export function getSelectionToolbarPosition(snapshot: PdfSelectionSnapshot): {

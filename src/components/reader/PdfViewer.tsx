@@ -15,7 +15,7 @@ import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
-import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
 import { openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
@@ -36,8 +36,12 @@ import {
   copyTextToClipboard,
   getSelectionToolbarPosition,
   readPdfSelection,
+  buildPdfSnapshotFromRange,
   type PdfSelectionSnapshot,
 } from '@/lib/reader/pdf-selection'
+import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { waitForDom } from '@/lib/reader/wait-for-dom'
+import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
@@ -279,7 +283,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   useEffect(() => {
     return registerSelectionProvider({
       filePath,
-      getSelectionText: () => readSelectionText(filePath),
+      getSelectionText: () => selectionTransactionRef.current?.text?.trim() || null,
     })
   }, [filePath])
 
@@ -668,13 +672,41 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     [clearTextSelection, createMark, fileFingerprint, filePath, marks, updateMark],
   )
 
+  const handleCreateMarkAt = useCallback(
+    async ({ excerpt, note, flatIndex }: CreateMarkAtParams) => {
+      if (typeof flatIndex === 'number' && flatIndex >= 0) {
+        const navState = useReaderNavigationStore.getState().nav
+        if (flatIndex !== navState.flatIndex) {
+          goToFlatIndex(flatIndex)
+        }
+      }
+
+      const snapshot = await waitForDom(() => {
+        const page = pageNumRef.current
+        const pageElement = pageAnchorRefs.current.get(page)
+        if (!pageElement) return null
+        const range = findTextRangeInRoot(pageElement, excerpt)
+        if (!range) return null
+        return buildPdfSnapshotFromRange(pageElement, page, range, excerpt)
+      })
+      if (!snapshot) {
+        throw new Error('未在当前页找到该摘录，请翻到对应页后重试')
+      }
+
+      captureSelectionSnapshot(snapshot)
+      return handleSaveAnnotation(note)
+    },
+    [captureSelectionSnapshot, goToFlatIndex, handleSaveAnnotation],
+  )
+
   useEffect(() => {
     return registerReaderMarks({
       filePath,
       createBookmark: () => addPageBookmark(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
+      createMarkAt: (params) => handleCreateMarkAt(params),
     })
-  }, [addPageBookmark, filePath, handleSaveAnnotation])
+  }, [addPageBookmark, filePath, handleCreateMarkAt, handleSaveAnnotation])
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {

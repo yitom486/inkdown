@@ -43,7 +43,19 @@ function mergeProposals(
 function collectToolProposals(messages: AcpChatMessage[]): ChatMarkProposal[] {
   const rows: ChatMarkProposal[] = []
   for (const message of messages) {
-    if (message.role !== 'tool' || !message.markProposal) continue
+    if (message.role !== 'tool') continue
+    if (message.markProposals?.length) {
+      for (const row of message.markProposals) {
+        if (row.status === 'dismissed') continue
+        rows.push({
+          proposal: row.proposal,
+          status: row.status ?? 'pending',
+          toolCallId: message.toolCallId,
+        })
+      }
+      continue
+    }
+    if (!message.markProposal) continue
     if (message.markProposalStatus === 'dismissed') continue
     rows.push({
       proposal: message.markProposal,

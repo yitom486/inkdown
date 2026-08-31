@@ -23,7 +23,7 @@ import { extractDocumentText, extractViewportText } from '@/lib/agent/context/ex
 import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
-import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import { buildWebDocReaderDocument } from '@/lib/reader/web-doc-html'
@@ -40,7 +40,10 @@ import {
   primeWebDocAgentTextCache,
   readWebDocUnitByIndex,
 } from '@/lib/reader/web-doc-agent-content'
-import { readMobiSelection } from '@/lib/reader/mobi-selection'
+import { readMobiSelection, buildMobiSnapshotFromRange } from '@/lib/reader/mobi-selection'
+import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { waitForDom } from '@/lib/reader/wait-for-dom'
+import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import {
   applyMobiPendingSelectionHighlight,
   findMobiMarksAtPoint,
@@ -349,6 +352,50 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
     [clearTextSelection, createMark, documentId, fileFingerprint, marks, normalizedPageUrl, pageUrl, syncWebMarkOverlays, updateMark],
   )
 
+  const handleCreateMarkAt = useCallback(
+    async ({ excerpt, note, flatIndex }: CreateMarkAtParams) => {
+      const navState = useReaderNavigationStore.getState().nav
+      if (typeof flatIndex === 'number' && flatIndex >= 0 && flatIndex !== navState.flatIndex) {
+        const unit = unitsRef.current[flatIndex]
+        if (!unit) throw new Error('章节索引无效')
+        await new Promise<void>((resolve) => {
+          const iframe = iframeRef.current
+          if (!iframe) {
+            resolve()
+            return
+          }
+          const onLoad = () => {
+            iframe.removeEventListener('load', onLoad)
+            resolve()
+          }
+          iframe.addEventListener('load', onLoad)
+          navigateToUrl(unit.href, flatIndex)
+          window.setTimeout(() => {
+            iframe.removeEventListener('load', onLoad)
+            resolve()
+          }, 4000)
+        })
+      }
+
+      const snapshot = await waitForDom(() => {
+        const doc = iframeRef.current?.contentDocument
+        const body = doc?.body
+        if (!doc || !body) return null
+        const range = findTextRangeInRoot(body, excerpt)
+        if (!range) return null
+        return buildMobiSnapshotFromRange(doc, range, excerpt)
+      })
+      if (!snapshot) {
+        throw new Error('未在当前页找到该摘录，请打开对应章节后重试')
+      }
+
+      selectionSnapshotRef.current = snapshot
+      setSelectionSnapshot(snapshot)
+      return handleSaveAnnotation(note)
+    },
+    [handleSaveAnnotation, navigateToUrl],
+  )
+
   const bindIframeFrame = useCallback(
     (iframe: HTMLIFrameElement) => {
       frameCleanupRef.current?.()
@@ -557,13 +604,21 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       filePath: documentId,
       createBookmark: () => addPageBookmark(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
+      createMarkAt: (params) => handleCreateMarkAt(params),
     })
-  }, [addPageBookmark, documentId, handleSaveAnnotation])
+  }, [addPageBookmark, documentId, handleCreateMarkAt, handleSaveAnnotation])
 
   useEffect(() => {
     return registerSelectionProvider({
       filePath: documentId,
-      getSelectionText: () => readSelectionText(documentId),
+      getSelectionText: () => {
+        const cached = selectionSnapshotRef.current?.text?.trim()
+        if (cached) return cached
+        const doc = iframeRef.current?.contentDocument
+        const win = iframeRef.current?.contentWindow
+        if (!doc || !win) return null
+        return readMobiSelection(doc, win)?.text?.trim() || null
+      },
     })
   }, [documentId])
 

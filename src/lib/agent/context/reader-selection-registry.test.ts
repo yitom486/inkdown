@@ -45,6 +45,15 @@ describe('reader-selection-registry sticky', () => {
     expect(readSelectionText()).toBe('编辑器选区')
     dispose()
   })
+
+  it('getSelectionText 误调 readSelectionText 时不栈溢出', () => {
+    const dispose = registerSelectionProvider({
+      filePath: '/book.epub',
+      getSelectionText: () => readSelectionText('/book.epub'),
+    })
+    expect(readSelectionText('/book.epub')).toBeNull()
+    dispose()
+  })
 })
 
 describe('selection one-shot notify', () => {

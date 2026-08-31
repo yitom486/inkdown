@@ -71,10 +71,11 @@ Exposed via MCP; names start with \`inkdown_\`. Values come from Inkdown's **in-
 - \`inkdown_list_marks\` — mixed list of bookmarks / highlights / notes. Use for "what bookmarks do I have", not for collecting highlighted passages.
 - \`inkdown_list_highlights\` — collect **highlighted passages** (highlights + notes that have excerpt; **no** bookmarks). Sorted by location. Prefer this when the user wants to summarize, export, or review marked sentences. \`passages\` is the excerpt list.
 - \`inkdown_create_bookmark\` — bookmark the **current** reading position (does not navigate).
-- \`inkdown_propose_note\` / \`inkdown_create_note\` — **only when the user clearly wants to save a reading note**. Proposes an editable draft (in-chat ProposeMarkCard); **not** persisted until Adopt. In annotation-assist chat, prefer discussing first; do not propose on every turn.
+- \`inkdown_propose_note\` / \`inkdown_create_note\` — **only when the user clearly wants to save a reading note** and there is a **fresh selection** (or sticky选区). Proposes an editable draft (in-chat ProposeMarkCard); **not** persisted until Adopt.
+- \`inkdown_propose_mark\` — **unified** propose for highlight and/or note (single or batch \`marks\`, ≤10). \`note\` empty = highlight only; \`kind\`: highlight|note|auto. \`excerpt\` can be paraphrase; client fuzzy-matches. Batch uses one tool call with \`marks: [{ excerpt, note?, kind? }]\`. Legacy \`inkdown_propose_note\` = same tool with selection + \`note\` only.
 
 Content usually does not change within a turn—do not spam the same tool. If a tool errors or returns empty, say so; do not pretend you read the body.
-Only propose bookmarks/notes when the user clearly asks; do not invent marks unprompted. Prefer \`inkdown_propose_note\` for wording clarity.
+Only propose bookmarks/notes when the user clearly asks; do not invent marks unprompted. Prefer \`inkdown_propose_mark\` when you have the exact excerpt but no selection; \`inkdown_propose_note\` when the user just highlighted text.
 
 ## turn-context
 

@@ -204,7 +204,15 @@ export function registerIpcHandlers(): void {
         if (payload?.requestId !== requestId) return
         cleanup()
         if (payload.ok) resolve(payload.content)
-        else reject(new Error(payload.message))
+        else {
+          console.warn('[acp] snapshot 渲染端失败', {
+            requestId,
+            resource,
+            args,
+            message: payload.message,
+          })
+          reject(new Error(payload.message))
+        }
       }
 
       const cleanup = (): void => {

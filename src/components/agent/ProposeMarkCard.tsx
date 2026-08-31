@@ -57,7 +57,11 @@ export function ProposeMarkCard({
       if (onAdopt) {
         await onAdopt(trimmed)
       } else {
-        await adoptProposedMark(trimmed)
+        await adoptProposedMark({
+          note: trimmed,
+          excerpt: proposal.excerpt,
+          flatIndex: proposal.flatIndex,
+        })
       }
       onResolved?.('adopted')
       toast.success(trimmed ? '已保存批注' : '已添加高亮')

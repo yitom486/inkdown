@@ -15,7 +15,7 @@ import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { extractDocumentText, extractViewportText, htmlToText } from '@/lib/agent/context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
-import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
 import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
@@ -44,7 +44,10 @@ import {
   findFirstFlatIndexById,
 } from '@/lib/reader/reader-chapter-nav'
 import { scrollMobiChapterToFlatIndex } from '@/lib/reader/epub-scroll-toc'
-import { readMobiSelection } from '@/lib/reader/mobi-selection'
+import { readMobiSelection, buildMobiSnapshotFromRange } from '@/lib/reader/mobi-selection'
+import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { waitForDom } from '@/lib/reader/wait-for-dom'
+import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
@@ -715,7 +718,14 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
   useEffect(() => {
     return registerSelectionProvider({
       filePath,
-      getSelectionText: () => readSelectionText(filePath),
+      getSelectionText: () => {
+        const cached = selectionSnapshotRef.current?.text?.trim()
+        if (cached) return cached
+        const doc = iframeRef.current?.contentDocument
+        const win = iframeRef.current?.contentWindow
+        if (!doc || !win) return null
+        return readMobiSelection(doc, win)?.text?.trim() || null
+      },
     })
   }, [filePath])
 
@@ -805,13 +815,41 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
     [clearTextSelection, createMark, currentChapterId, fileFingerprint, filePath, marks, syncMobiMarkOverlays, updateMark],
   )
 
+  const handleCreateMarkAt = useCallback(
+    async ({ excerpt, note, flatIndex }: CreateMarkAtParams) => {
+      const navState = useReaderNavigationStore.getState().nav
+      if (typeof flatIndex === 'number' && flatIndex >= 0 && flatIndex !== navState.flatIndex) {
+        const loaded = await loadChapterAtIndex(flatIndex)
+        if (!loaded) throw new Error('无法跳转到指定章节')
+      }
+
+      const snapshot = await waitForDom(() => {
+        const doc = iframeRef.current?.contentDocument
+        const body = doc?.body
+        if (!doc || !body) return null
+        const range = findTextRangeInRoot(body, excerpt)
+        if (!range) return null
+        return buildMobiSnapshotFromRange(doc, range, excerpt)
+      })
+      if (!snapshot) {
+        throw new Error('未在当前章节找到该摘录，请打开对应章节后重试')
+      }
+
+      selectionSnapshotRef.current = snapshot
+      setSelectionSnapshot(snapshot)
+      return handleSaveAnnotation(note)
+    },
+    [handleSaveAnnotation, loadChapterAtIndex],
+  )
+
   useEffect(() => {
     return registerReaderMarks({
       filePath,
       createBookmark: () => addChapterBookmark(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
+      createMarkAt: (params) => handleCreateMarkAt(params),
     })
-  }, [addChapterBookmark, filePath, handleSaveAnnotation])
+  }, [addChapterBookmark, filePath, handleCreateMarkAt, handleSaveAnnotation])
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {

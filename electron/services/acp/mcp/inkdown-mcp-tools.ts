@@ -139,13 +139,62 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_propose_note',
     description:
-      '提出批注草稿供用户确认（不入库）。参数与 inkdown_create_note 相同；优先使用本工具名称以表达「仅提议」。',
+      '提出批注草稿供用户确认（不入库）。参数与 inkdown_create_note 相同；优先使用本工具名称以表达「仅提议」。' +
+      '需要已有选区，或配合 inkdown_propose_mark 在无选区时按 excerpt 定位。',
     inputSchema: {
       type: 'object',
       properties: {
         note: {
           type: 'string',
           description: '批注正文；省略或空字符串则只提议高亮',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inkdown_propose_mark',
+    description:
+      '统一标记提议（高亮 / 批注 / 批量，不入库）。' +
+      '单条：excerpt（原句或口述关键词）+ 可选 note（空=仅高亮）+ 可选 kind=highlight|note|auto + 可选 flatIndex。' +
+      '批量：marks 数组（每项同单条字段，单批≤10）。' +
+      '客户端读正文并模糊匹配原句；有 fresh 选区且仅写 note 时也可只传 note（等同 propose_note）。' +
+      '建议先 inkdown_get_viewport；用户确认「采用」后才写入。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        excerpt: {
+          type: 'string',
+          description: '单条：要高亮/批注的原文或口述片段',
+        },
+        note: {
+          type: 'string',
+          description: '批注正文；省略或空字符串则仅高亮',
+        },
+        kind: {
+          type: 'string',
+          enum: ['highlight', 'note', 'auto'],
+          description: 'highlight=仅高亮；note=批注；auto=由 note 是否为空推断（默认）',
+        },
+        flatIndex: {
+          type: 'number',
+          description: '可选：目录 flatIndex',
+        },
+        marks: {
+          type: 'array',
+          description: '批量提议（≤10）；与 excerpt 二选一，优先 marks',
+          items: {
+            type: 'object',
+            properties: {
+              excerpt: { type: 'string' },
+              note: { type: 'string' },
+              kind: { type: 'string', enum: ['highlight', 'note', 'auto'] },
+              flatIndex: { type: 'number' },
+            },
+            required: ['excerpt'],
+            additionalProperties: false,
+          },
+          maxItems: 10,
         },
       },
       additionalProperties: false,
@@ -233,6 +282,37 @@ export async function callInkdownMcpTool(
         name === 'inkdown_propose_note' ? 'propose-note' : 'create-note',
         { note },
       )
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_propose_mark': {
+      const marks = args?.marks
+      const excerpt = args?.excerpt
+      const noteOnly = typeof args?.note === 'string' && args.note.trim()
+      if (
+        (!Array.isArray(marks) || marks.length === 0) &&
+        (typeof excerpt !== 'string' || !excerpt.trim()) &&
+        !noteOnly
+      ) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'inkdown_propose_mark 需要 excerpt、marks 之一，或有选区时仅传 note',
+            },
+          ],
+          isError: true,
+        }
+      }
+      const note = typeof args?.note === 'string' ? args.note : ''
+      const flatIndex = args?.flatIndex
+      const kind = args?.kind
+      const text = await context.readSnapshot('propose-mark', {
+        ...(typeof excerpt === 'string' ? { excerpt } : {}),
+        note,
+        kind: kind === 'highlight' || kind === 'note' || kind === 'auto' ? kind : undefined,
+        ...(typeof flatIndex === 'number' && Number.isFinite(flatIndex) ? { flatIndex } : {}),
+        ...(Array.isArray(marks) ? { marks } : {}),
+      })
       return { content: [{ type: 'text', text }] }
     }
     default:

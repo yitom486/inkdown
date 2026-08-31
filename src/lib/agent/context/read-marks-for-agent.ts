@@ -81,4 +81,5 @@ export async function createBookmarkForAgent(): Promise<ReturnType<typeof serial
 export {
   createNoteForAgent,
   proposeNoteForAgent,
+  proposeMarkAtForAgentResult,
 } from '@/lib/agent/context/propose-note-for-agent'

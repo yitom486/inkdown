@@ -89,11 +89,26 @@ export function hasActiveSelection(): boolean {
   return Boolean(readSelectionText())
 }
 
+/** 防止 getSelectionText 误调 readSelectionText 造成无限递归 */
+let selectionReadDepth = 0
+
 export function readSelectionText(expectedFilePath?: string): string | null {
   if (sticky) {
     if (expectedFilePath && sticky.filePath !== expectedFilePath) return null
     return sticky.text
   }
-  const text = current?.getSelectionText()?.trim()
-  return text || null
+  selectionReadDepth += 1
+  if (selectionReadDepth > 1) {
+    selectionReadDepth -= 1
+    console.error(
+      '[reader-selection] getSelectionText 不得调用 readSelectionText，请改为读 DOM/快照',
+    )
+    return null
+  }
+  try {
+    const text = current?.getSelectionText()?.trim()
+    return text || null
+  } finally {
+    selectionReadDepth -= 1
+  }
 }

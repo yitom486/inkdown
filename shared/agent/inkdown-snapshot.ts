@@ -16,10 +16,19 @@ export type InkdownSnapshotResource =
   | 'create-bookmark'
   | 'create-note'
   | 'propose-note'
+  | 'propose-mark'
 
 export interface InkdownSnapshotArgs {
   query?: string
   flatIndex?: number
   title?: string
   note?: string
+  excerpt?: string
+  kind?: 'highlight' | 'note' | 'auto'
+  marks?: Array<{
+    excerpt: string
+    note?: string
+    flatIndex?: number
+    kind?: 'highlight' | 'note' | 'auto'
+  }>
 }
