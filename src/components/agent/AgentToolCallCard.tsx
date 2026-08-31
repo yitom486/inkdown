@@ -23,7 +23,14 @@ import {
 } from '@/components/agent/AgentChatItem'
 import { AgentDiffPreview } from '@/components/agent/AgentDiffPreview'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
+import { Button } from '@/components/ui/button'
 import { toolMessageNeedsApproval } from '@/lib/agent/acp-permission-ui'
+import { isProposeMarkToolTitle } from '@/lib/agent/parse-mark-proposal'
+import {
+  classifyMarkProposalFailure,
+  openChapterForMarkRecovery,
+  promptSelectTextForMarkRecovery,
+} from '@/lib/agent/mark-proposal-failure'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { isToolActiveStatus } from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'
@@ -84,8 +91,19 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
   const detail = message.toolContentText || message.text
   const hasTextDetail = Boolean(detail && detail !== message.toolTitle && diffs.length === 0)
   const locations = message.toolLocations ?? []
-  const hasBody = hasTextDetail || diffs.length > 0 || locations.length > 0 || needsApproval
-
+  const proposeFailed =
+    message.toolStatus === 'failed' &&
+    (isProposeMarkToolTitle(message.toolTitle) ||
+      /propose.?mark|suggest.?chapters/i.test(message.toolTitle ?? ''))
+  const failureGuide = proposeFailed
+    ? classifyMarkProposalFailure(detail || message.toolTitle || '标记定位失败')
+    : null
+  const hasBody =
+    hasTextDetail ||
+    diffs.length > 0 ||
+    locations.length > 0 ||
+    needsApproval ||
+    Boolean(failureGuide)
   const title = message.toolTitle || '工具调用'
   const locationHint =
     diffs.length === 1
@@ -134,7 +152,7 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
         ) : null}
       </button>
 
-      {open && hasBody ? (
+      {open && (hasBody || failureGuide) ? (
         <AgentChatItemBody>
           {locations.length > 0 && diffs.length === 0 ? (
             <ul className="min-w-0 space-y-0.5">
@@ -152,6 +170,34 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
           ) : null}
           {diffs.length > 0 ? <AgentDiffPreview diffs={diffs} /> : null}
           {hasTextDetail ? <pre className={AGENT_CHAT_PRE_CLASS}>{detail}</pre> : null}
+          {failureGuide ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {failureGuide.canOpenChapter ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2.5 text-[11px]"
+                  onClick={() => {
+                    void openChapterForMarkRecovery(failureGuide.flatIndex)
+                  }}
+                >
+                  打开该章
+                </Button>
+              ) : null}
+              {failureGuide.canSelectText ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2.5 text-[11px]"
+                  onClick={() => promptSelectTextForMarkRecovery()}
+                >
+                  去划词
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {needsApproval && pendingPermission ? (
             <AgentPermissionCard pending={pendingPermission} compact />
           ) : null}

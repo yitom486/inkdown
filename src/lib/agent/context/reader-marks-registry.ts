@@ -15,6 +15,8 @@ export interface ReaderMarksProvider {
   createNoteFromSelection: (note: string) => Promise<import('@shared/types/reading-mark').ReadingMark>
   /** 按摘录在章/视口 DOM 内定位并创建标记（无 fresh 选区） */
   createMarkAt: (params: CreateMarkAtParams) => Promise<import('@shared/types/reading-mark').ReadingMark>
+  /** 跳到目录 flatIndex（失败引导「打开该章」） */
+  navigateToFlatIndex?: (flatIndex: number) => void | Promise<void>
 }
 
 let current: ReaderMarksProvider | null = null

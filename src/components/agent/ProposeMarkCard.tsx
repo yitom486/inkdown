@@ -6,6 +6,7 @@ import {
   adoptProposedMark,
   dismissProposedMark,
 } from '@/lib/agent/context/propose-mark'
+import { toastMarkProposalFailure } from '@/lib/agent/mark-proposal-failure'
 import { cn } from '@/lib/utils'
 import type { MarkProposalStatus, ProposedMark } from '@shared/types/mark-proposal'
 
@@ -67,7 +68,7 @@ export function ProposeMarkCard({
       toast.success(trimmed ? '已保存批注' : '已添加高亮')
     }
     void run().catch((cause) => {
-      toast.error(cause instanceof Error ? cause.message : '保存失败')
+      toastMarkProposalFailure(cause, { flatIndex: proposal.flatIndex })
     })
   }
 

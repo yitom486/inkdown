@@ -848,8 +848,17 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       createBookmark: () => addChapterBookmark(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
       createMarkAt: (params) => handleCreateMarkAt(params),
+      navigateToFlatIndex: (index) => {
+        void loadChapterAtIndex(index)
+      },
     })
-  }, [addChapterBookmark, filePath, handleCreateMarkAt, handleSaveAnnotation])
+  }, [
+    addChapterBookmark,
+    filePath,
+    handleCreateMarkAt,
+    handleSaveAnnotation,
+    loadChapterAtIndex,
+  ])
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {

@@ -82,6 +82,7 @@
 | `annotation-note-prompts` | 批注 AI 意图/改写 chip 与草稿抽取 |
 | `enrich-tool-message` | tool 消息 enrich（提议卡 + 章级建议） |
 | `parse-chapter-mark-plan` / `promote-chapter-mark-plans` | 章级划重点 tool 解析与 promote |
+| `mark-proposal-failure` | 提议/采用失败分类与「打开该章 / 去划词」引导 |
 
 `agent/context/`（原 `agent-context/`）：静态 Skill、turn-context、阅读器内容/选区/标记 registry、MCP 快照序列化；标记提议统一走 `propose-mark`（`inkdown_propose_mark`）。
 

@@ -956,8 +956,12 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       createBookmark: () => addBookmarkAtCurrent(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
       createMarkAt: (params) => handleCreateMarkAt(params),
+      navigateToFlatIndex: (index) => {
+        const chapter = chaptersRef.current[index]
+        if (chapter) goToChapter(chapter, index)
+      },
     })
-  }, [addBookmarkAtCurrent, filePath, handleCreateMarkAt, handleSaveAnnotation])
+  }, [addBookmarkAtCurrent, filePath, goToChapter, handleCreateMarkAt, handleSaveAnnotation])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

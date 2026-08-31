@@ -6,7 +6,12 @@ import {
   highlightSwatch,
   normalizeHighlightColor,
 } from '@/lib/reader/reading-mark-colors'
-import { coalescePdfLineRects, type PdfSelectionSnapshot } from '@/lib/reader/pdf-selection'
+import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import {
+  buildPdfSnapshotFromRange,
+  coalescePdfLineRects,
+  type PdfSelectionSnapshot,
+} from '@/lib/reader/pdf-selection'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -111,11 +116,37 @@ function appendUnderline(
 function visualQuadsForMark(
   mark: ReadingMark,
   viewport: PageViewport,
+  pageElement?: HTMLElement | null,
 ): Array<ReturnType<typeof quadToViewport> | ReturnType<typeof rectToViewportQuad>> {
   if (mark.anchor.format !== 'pdf') return []
   if (mark.anchor.quads?.length) {
     return mark.anchor.quads.map((quad) => quadToViewport(quad, viewport))
   }
+
+  // V1-only：缩放后用 selectedText 在 DOM 重找，尽量升到 PDF 用户空间 quads
+  const liveText =
+    mark.anchor.selectedText?.trim() ||
+    (typeof mark.excerpt === 'string' ? mark.excerpt.trim() : '')
+  if (pageElement && liveText) {
+    const range = findTextRangeInRoot(pageElement, liveText)
+    if (range) {
+      const snapshot = buildPdfSnapshotFromRange(
+        pageElement,
+        mark.anchor.page,
+        range,
+        liveText,
+      )
+      if (snapshot?.quads?.length) {
+        return snapshot.quads.map((quad) => quadToViewport(quad, viewport))
+      }
+      if (snapshot?.rects.length) {
+        return coalescePdfLineRects(snapshot.rects).map((rect) =>
+          rectToViewportQuad(rect, viewport),
+        )
+      }
+    }
+  }
+
   return coalescePdfLineRects(mark.anchor.rects ?? []).map((rect) =>
     rectToViewportQuad(rect, viewport),
   )
@@ -128,6 +159,7 @@ export function renderPdfMarkOverlays(
   theme: 'dark' | 'light',
   viewport: PageViewport,
   transientSelection?: PdfSelectionSnapshot | null,
+  pageElement?: HTMLElement | null,
 ): void {
   layer.replaceChildren()
   layer.setAttribute('viewBox', `0 0 ${viewport.width} ${viewport.height}`)
@@ -136,7 +168,7 @@ export function renderPdfMarkOverlays(
     if (mark.anchor.format !== 'pdf' || mark.anchor.page !== pageNum) continue
     if (mark.kind === 'bookmark') continue
 
-    const quads = visualQuadsForMark(mark, viewport)
+    const quads = visualQuadsForMark(mark, viewport, pageElement)
     for (const quad of quads) {
       if (mark.kind === 'note') {
         appendUnderline(layer, quad, mark, theme)

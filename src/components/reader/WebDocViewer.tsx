@@ -605,8 +605,18 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       createBookmark: () => addPageBookmark(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
       createMarkAt: (params) => handleCreateMarkAt(params),
+      navigateToFlatIndex: (index) => {
+        const unit = unitsRef.current[index]
+        if (unit?.href) navigateToUrl(unit.href, index)
+      },
     })
-  }, [addPageBookmark, documentId, handleCreateMarkAt, handleSaveAnnotation])
+  }, [
+    addPageBookmark,
+    documentId,
+    handleCreateMarkAt,
+    handleSaveAnnotation,
+    navigateToUrl,
+  ])
 
   useEffect(() => {
     return registerSelectionProvider({

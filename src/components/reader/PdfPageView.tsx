@@ -178,6 +178,7 @@ export function PdfPageView({
       theme,
       pageViewport,
       transientSelection,
+      wrapperRef.current,
     )
   }, [marks, pageNumber, pageViewport, theme, transientSelection])
 

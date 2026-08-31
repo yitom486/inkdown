@@ -681,22 +681,40 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         }
       }
 
-      const snapshot = await waitForDom(() => {
-        const page = pageNumRef.current
-        const pageElement = pageAnchorRefs.current.get(page)
-        if (!pageElement) return null
-        const range = findTextRangeInRoot(pageElement, excerpt)
-        if (!range) return null
-        return buildPdfSnapshotFromRange(pageElement, page, range, excerpt)
-      })
+      const totalPages = pdfDocRef.current?.numPages ?? numPages
+      const startPage = pageNumRef.current
+      // 当前页 → 相邻页（跨页摘录常落在页界附近），不改存储模型（仍单页锚点）
+      const candidates: number[] = [startPage]
+      for (const delta of [1, -1, 2, -2]) {
+        const page = startPage + delta
+        if (page >= 1 && page <= totalPages && !candidates.includes(page)) {
+          candidates.push(page)
+        }
+      }
+
+      let snapshot: PdfSelectionSnapshot | null = null
+      for (const page of candidates) {
+        if (page !== pageNumRef.current) {
+          jumpToPage(page)
+        }
+        snapshot = await waitForDom(() => {
+          const pageElement = pageAnchorRefs.current.get(pageNumRef.current)
+          if (!pageElement || pageNumRef.current !== page) return null
+          const range = findTextRangeInRoot(pageElement, excerpt)
+          if (!range) return null
+          return buildPdfSnapshotFromRange(pageElement, page, range, excerpt)
+        }, { attempts: page === startPage ? 24 : 32, delayMs: 50 })
+        if (snapshot) break
+      }
+
       if (!snapshot) {
-        throw new Error('未在当前页找到该摘录，请翻到对应页后重试')
+        throw new Error('未在当前页及相邻页找到该摘录，请翻到对应页后划词重试')
       }
 
       captureSelectionSnapshot(snapshot)
       return handleSaveAnnotation(note)
     },
-    [captureSelectionSnapshot, goToFlatIndex, handleSaveAnnotation],
+    [captureSelectionSnapshot, goToFlatIndex, handleSaveAnnotation, jumpToPage, numPages],
   )
 
   useEffect(() => {
@@ -705,8 +723,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       createBookmark: () => addPageBookmark(),
       createNoteFromSelection: (note) => handleSaveAnnotation(note),
       createMarkAt: (params) => handleCreateMarkAt(params),
+      navigateToFlatIndex: (index) => goToFlatIndex(index),
     })
-  }, [addPageBookmark, filePath, handleCreateMarkAt, handleSaveAnnotation])
+  }, [addPageBookmark, filePath, goToFlatIndex, handleCreateMarkAt, handleSaveAnnotation])
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {

@@ -8,6 +8,7 @@ import {
 import { ProposeMarkCard } from '@/components/agent/ProposeMarkCard'
 import { Button } from '@/components/ui/button'
 import { adoptProposedMark } from '@/lib/agent/context/propose-mark'
+import { toastMarkProposalFailure } from '@/lib/agent/mark-proposal-failure'
 import { cn } from '@/lib/utils'
 import type { MarkProposalStatus, ProposedMark } from '@shared/types/mark-proposal'
 
@@ -198,7 +199,7 @@ export function ProposeMarkBlockList({
           onResolved?.(row.proposal.id, 'adopted')
           ok += 1
         } catch (cause) {
-          toast.error(cause instanceof Error ? cause.message : '保存失败')
+          toastMarkProposalFailure(cause, { flatIndex: row.proposal.flatIndex })
         }
       }
       if (ok > 0) toast.success(`已保存 ${ok} 条标记`)

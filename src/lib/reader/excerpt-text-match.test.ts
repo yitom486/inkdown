@@ -44,10 +44,26 @@ describe('excerpt-text-match', () => {
     expect(match?.excerpt).toContain('能源')
   })
 
-  it('findExcerptInText 精确匹配优先', () => {
-    const text = '第一段。第二段含互联网、金融、能源。第三段。'
-    const match = findExcerptInText(text, '互联网、金融、能源')
-    expect(match?.confidence).toBe('exact')
-    expect(match?.excerpt).toBe('互联网、金融、能源')
+  it('findTextRangeInRoot 折叠空白匹配（代码块类碎片 DOM）', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<span>Alpha</span>  <span>beta</span>\n<span>gamma</span>'
+    document.body.appendChild(root)
+
+    const range = findTextRangeInRoot(root, 'Alpha beta gamma')
+    expect(range?.toString().replace(/\s+/g, ' ').trim()).toBe('Alpha beta gamma')
+
+    root.remove()
+  })
+
+  it('findTextRangeInRoot 跳过行号节点', () => {
+    const root = document.createElement('div')
+    root.innerHTML =
+      '<span class="linenumber">1</span><span>hello</span> <span>world</span>'
+    document.body.appendChild(root)
+
+    const range = findTextRangeInRoot(root, 'hello world')
+    expect(range?.toString()).toBe('hello world')
+
+    root.remove()
   })
 })

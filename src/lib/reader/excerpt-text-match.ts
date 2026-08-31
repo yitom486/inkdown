@@ -198,6 +198,10 @@ export function findTextRangeExact(
     acceptNode(node) {
       const parent = node.parentElement
       if (parent?.closest(MARK_SELECTOR)) return NodeFilter.FILTER_REJECT
+      // 代码块行号常混进 textContent，跳过常见行号节点
+      if (parent?.closest('.linenumber, .line-numbers, .code-line-number, [data-line-number]')) {
+        return NodeFilter.FILTER_REJECT
+      }
       return NodeFilter.FILTER_ACCEPT
     },
   })
@@ -215,33 +219,66 @@ export function findTextRangeExact(
     current = walker.nextNode()
   }
 
-  const index = combined.indexOf(searchText)
-  if (index === -1) return null
+  const mapRange = (index: number, endIndex: number): Range | null => {
+    let startNode: Text | null = null
+    let startOffset = 0
+    let endNode: Text | null = null
+    let endOffset = 0
 
-  const endIndex = index + searchText.length
-  let startNode: Text | null = null
-  let startOffset = 0
-  let endNode: Text | null = null
-  let endOffset = 0
+    for (const segment of segments) {
+      if (!startNode && index >= segment.start && index < segment.end) {
+        startNode = segment.node
+        startOffset = index - segment.start
+      }
+      if (endIndex > segment.start && endIndex <= segment.end) {
+        endNode = segment.node
+        endOffset = endIndex - segment.start
+        break
+      }
+    }
 
-  for (const segment of segments) {
-    if (!startNode && index >= segment.start && index < segment.end) {
-      startNode = segment.node
-      startOffset = index - segment.start
-    }
-    if (endIndex > segment.start && endIndex <= segment.end) {
-      endNode = segment.node
-      endOffset = endIndex - segment.start
-      break
-    }
+    if (!startNode || !endNode) return null
+
+    const range = doc.createRange()
+    range.setStart(startNode, startOffset)
+    range.setEnd(endNode, endOffset)
+    return range
   }
 
-  if (!startNode || !endNode) return null
+  const directIndex = combined.indexOf(searchText)
+  if (directIndex !== -1) {
+    return mapRange(directIndex, directIndex + searchText.length)
+  }
 
-  const range = doc.createRange()
-  range.setStart(startNode, startOffset)
-  range.setEnd(endNode, endOffset)
-  return range
+  // 折叠空白后匹配，再映射回原始 Text 偏移（适配代码块 / Sandpack 静态残留）
+  const collapsedNeedle = collapseInlineWhitespace(searchText)
+  if (!collapsedNeedle) return null
+
+  let collapsed = ''
+  const collapsedMap: number[] = []
+  for (let i = 0; i < combined.length; i++) {
+    const ch = combined[i]!
+    if (/\s/.test(ch)) {
+      if (collapsed.length === 0 || collapsed[collapsed.length - 1] === ' ') continue
+      collapsedMap.push(i)
+      collapsed += ' '
+      continue
+    }
+    collapsedMap.push(i)
+    collapsed += ch
+  }
+  const collapsedTrimmed = collapsed.trim()
+  const trimStart = collapsed.length - collapsed.replace(/^\s+/, '').length
+  const needleInCollapsed = collapsedTrimmed.indexOf(collapsedNeedle)
+  if (needleInCollapsed === -1) return null
+
+  const startCollapsed = trimStart + needleInCollapsed
+  const endCollapsed = startCollapsed + collapsedNeedle.length - 1
+  if (startCollapsed < 0 || endCollapsed >= collapsedMap.length) return null
+
+  const rawStart = collapsedMap[startCollapsed]!
+  const rawEndExclusive = collapsedMap[endCollapsed]! + 1
+  return mapRange(rawStart, rawEndExclusive)
 }
 
 export function findTextRangeInRoot(root: HTMLElement, searchText: string): Range | null {
