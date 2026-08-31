@@ -16,6 +16,7 @@ import { ReaderWorkspaceMain } from '@/components/layout/ReaderWorkspaceMain'
 import { WebDocWorkspaceMain } from '@/components/layout/WebDocWorkspaceMain'
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell'
 import { Toaster } from '@/components/ui/sonner'
+import { UpdatePromptHost } from '@/components/shared/UpdatePromptHost'
 import { toast } from 'sonner'
 import { useAutoSave } from '@/hooks/editor/useAutoSave'
 import { useDraftPersistence, clearDraftForFile } from '@/hooks/editor/useDraftPersistence'
@@ -257,6 +258,7 @@ function App() {
   return (
     <>
       <Toaster theme={theme} richColors closeButton position="top-right" />
+      <UpdatePromptHost />
       <AgentPermissionHost />
       <AgentSnapshotHost />
       <AnnotationDraftConfirmHost />
@@ -333,6 +335,7 @@ function App() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         onOpenErrorLog={() => setErrorLogOpen(true)}
+        onOpenAbout={() => setAboutOpen(true)}
       />
 
       <ErrorLogDialog open={errorLogOpen} onOpenChange={setErrorLogOpen} />

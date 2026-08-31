@@ -1,6 +1,9 @@
-appId: com.markdown.editor
-productName: 轻量阅读器
-publish: null
+appId: com.inkdown.app
+productName: Inkdown
+publish:
+  provider: github
+  owner: yitom486
+  repo: inkdown
 directories:
   buildResources: resources
   output: release
@@ -8,6 +11,20 @@ directories:
 files:
   - out/**/*
   - package.json
+  - node_modules/electron-updater/**/*
+  - node_modules/builder-util-runtime/**/*
+  - node_modules/fs-extra/**/*
+  - node_modules/js-yaml/**/*
+  - node_modules/lazy-val/**/*
+  - node_modules/lodash.escaperegexp/**/*
+  - node_modules/lodash.isequal/**/*
+  - node_modules/semver/**/*
+  - node_modules/tiny-typed-emitter/**/*
+  - node_modules/graceful-fs/**/*
+  - node_modules/jsonfile/**/*
+  - node_modules/universalify/**/*
+  - node_modules/argparse/**/*
+  - node_modules/sax/**/*
   - '!node_modules'
 electronLanguages:
   - zh-CN
@@ -27,7 +44,7 @@ nsis:
   allowElevation: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 轻量阅读器
+  shortcutName: Inkdown
   installerLanguages:
     - zh_CN
     - en_US
@@ -57,8 +74,8 @@ linux:
   maintainer: yitom486 <yitom486@gmail.com>
   desktop:
     entry:
-      Name: 轻量阅读器
-      Comment: Markdown 编辑与电子书阅读
+      Name: Inkdown
+      Comment: Markdown 编辑与电子书 / 在线文档阅读
       Categories: Office;TextEditor;
       Terminal: false
       Type: Application

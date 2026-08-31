@@ -84,6 +84,8 @@ jobs:
           path: |
             release/*.exe
             release/*.exe.blockmap
+            release/*.yml
+            release/latest*.yml
             release/*.dmg
             release/*.zip
             release/*.AppImage

@@ -141,6 +141,19 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(IPC.WEB_DOC_FETCH_PAGE, payload),
   discoverWebDocToc: (payload: WebDocDiscoverTocPayload) =>
     ipcRenderer.invoke(IPC.WEB_DOC_DISCOVER_TOC, payload),
+  checkAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_CHECK),
+  downloadAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_DOWNLOAD),
+  installAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_INSTALL),
+  getAppUpdateStatus: () => ipcRenderer.invoke(IPC.APP_UPDATE_GET_STATUS),
+  onAppUpdateStatus: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
+      callback(payload)
+    }
+    ipcRenderer.on(IPC.APP_UPDATE_STATUS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.APP_UPDATE_STATUS, handler)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

@@ -12,7 +12,7 @@ test.describe('应用启动', () => {
         timeout: 15_000,
       })
       await expect(window.getByRole('button', { name: '帮助' })).toBeVisible()
-      await expect(window.getByRole('heading', { name: '轻量阅读器' })).toBeVisible()
+      await expect(window.getByRole('heading', { name: 'Inkdown' })).toBeVisible()
     } finally {
       await app.close()
     }

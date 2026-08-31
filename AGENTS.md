@@ -1,4 +1,4 @@
-# AGENTS.md — 轻量阅读器（Inkdown）
+# AGENTS.md — Inkdown
 
 项目开发准则。细则见 `.cursor/rules/`（Git 身份、Zustand、阅读器导航）。
 

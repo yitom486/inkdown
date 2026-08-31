@@ -55,6 +55,7 @@ import type {
   WebDocFetchPayload,
   WebDocFetchResult,
 } from '@shared/types/web-doc'
+import type { AppUpdateStatus } from '@shared/types/app-update'
 
 export interface ElectronAPI {
   platform: string
@@ -137,4 +138,9 @@ export interface ElectronAPI {
   discoverWebDocToc: (
     payload: WebDocDiscoverTocPayload,
   ) => Promise<Result<WebDocDiscoverTocResult, AppError>>
+  checkAppUpdate: () => Promise<AppUpdateStatus>
+  downloadAppUpdate: () => Promise<AppUpdateStatus>
+  installAppUpdate: () => Promise<Result<void, AppError>>
+  getAppUpdateStatus: () => Promise<Result<AppUpdateStatus, AppError>>
+  onAppUpdateStatus: (callback: (status: AppUpdateStatus) => void) => () => void
 }

@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { APP_TITLE } from '@shared/constants/app'
 import type { AppError } from '@shared/core/errors'
 import { err, ok, type Result } from '@shared/core/result'
 import type {
@@ -429,7 +430,7 @@ export async function connectAcp(payload: {
       },
       clientInfo: {
         name: 'inkdown',
-        title: '轻量阅读器',
+        title: APP_TITLE,
         version: app.getVersion(),
       },
     })) as Record<string, unknown>

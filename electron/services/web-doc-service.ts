@@ -8,6 +8,7 @@ import type {
   WebDocFetchResult,
 } from '@shared/types/web-doc'
 import { extractSameOriginDocLinks } from './web-doc/extract-toc-links'
+import { tryFetchE2eWebDocFixture } from './web-doc/e2e-fixture'
 import { extractReactDevToc } from './web-doc/adapters/react-dev-toc'
 import { resolveWebDocSiteId } from './web-doc/site-registry'
 import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy'
@@ -42,6 +43,9 @@ export async function fetchWebDocPage(
   payload: WebDocFetchPayload,
 ): Promise<Result<WebDocFetchResult, AppError>> {
   try {
+    const fixtureResult = await tryFetchE2eWebDocFixture(payload.url)
+    if (fixtureResult) return fixtureResult
+
     const normalized = normalizeWebDocUrl(payload.url)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), WEB_DOC_FETCH_TIMEOUT_MS)

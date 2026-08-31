@@ -1,7 +1,7 @@
 {
-  "name": "markdown-editor",
+  "name": "inkdown",
   "version": "0.2.2",
-  "description": "Electron 轻量阅读器（Markdown 编辑 + PDF/EPUB 阅读）",
+  "description": "Inkdown — Markdown 编辑、电子书与在线文档阅读、Agent 助手",
   "main": "out/main/main.js",
   "type": "module",
   "private": true,
@@ -16,6 +16,7 @@
     "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icon.ps1 && bun run scripts/generate-icon.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:web-doc": "playwright test e2e/web-doc-smoke.spec.ts",
     "test:all": "bun run typecheck && bun run test && bun run build && bun run test:e2e",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "postinstall": "node node_modules/electron/install.js"
@@ -37,6 +38,7 @@
     "@vscode/markdown-it-katex": "^1.1.2",
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.14",
+    "electron-updater": "^6.8.9",
     "epubjs": "^0.3.93",
     "highlight.js": "^11.12.0",
     "katex": "^0.18.4",

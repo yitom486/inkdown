@@ -1,12 +1,14 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import { createWindow } from './window/create-window'
 import { registerIpcHandlers } from './ipc/register-handlers'
+import { initAppUpdater } from './services/app-updater'
 import { disposeAllAcp } from './services/acp/acp-client'
 import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
   registerIpcHandlers()
+  initAppUpdater()
   createWindow()
 
   app.on('activate', () => {

@@ -4,6 +4,7 @@ import { Clock, FileText, FolderOpen, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { APP_TAGLINE, APP_TITLE } from '@shared/constants/app'
 
 function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() ?? filePath
@@ -68,10 +69,8 @@ export function WelcomePage({
     <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto bg-editor px-6 py-10">
       <div className="w-full max-w-lg space-y-8">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">轻量阅读器</h1>
-          <p className="text-sm text-muted-foreground">
-            Markdown 编辑 · PDF / EPUB / MOBI 阅读 · 在线文档
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{APP_TITLE}</h1>
+          <p className="text-sm text-muted-foreground">{APP_TAGLINE}</p>
         </div>
 
         <div className="space-y-2">

@@ -36,6 +36,7 @@ interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onOpenErrorLog: () => void
+  onOpenAbout: () => void
 }
 
 function SettingRow({
@@ -115,7 +116,7 @@ function OptionButtons<T extends string | number>({
   )
 }
 
-export function SettingsDialog({ open, onOpenChange, onOpenErrorLog }: SettingsDialogProps) {
+export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout }: SettingsDialogProps) {
   const theme = useEditorUiStore((state) => state.theme)
   const setTheme = useEditorUiStore((state) => state.setTheme)
 
@@ -267,6 +268,25 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog }: SettingsD
                 onChange={setRestoreLastFileOnStartup}
                 label="启动时恢复上次文件"
               />
+            </SettingRow>
+          </section>
+
+          <Separator className="my-2" />
+
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">应用</h3>
+            <SettingRow title="检查更新" description="从 GitHub Release 获取新版本（打包版支持一键安装）。">
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false)
+                  onOpenAbout()
+                }}
+              >
+                关于
+              </Button>
             </SettingRow>
           </section>
 

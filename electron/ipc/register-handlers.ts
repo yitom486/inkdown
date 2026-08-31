@@ -53,6 +53,12 @@ import {
   workspaceRename,
 } from '../services/workspace-fs'
 import { getAppVersion } from '../services/app-service'
+import {
+  checkAppUpdate,
+  downloadAppUpdate,
+  getAppUpdateStatus,
+  installAppUpdate,
+} from '../services/app-updater'
 import { appendRendererErrorLog, getErrorLogFilePath } from '../services/error-log-service'
 import { createWindow, getWindowInitByWebContents } from '../window/create-window'
 import { applyWindowTitle } from '../window/window-title'
@@ -248,6 +254,13 @@ export function registerIpcHandlers(): void {
   )
 
   ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())
+  ipcMain.handle(IPC.APP_UPDATE_CHECK, () => checkAppUpdate())
+  ipcMain.handle(IPC.APP_UPDATE_DOWNLOAD, () => downloadAppUpdate())
+  ipcMain.handle(IPC.APP_UPDATE_INSTALL, () => {
+    installAppUpdate()
+    return ok(undefined)
+  })
+  ipcMain.handle(IPC.APP_UPDATE_GET_STATUS, () => ok(getAppUpdateStatus()))
 
   ipcMain.on(IPC.APP_SET_DIRTY, (event, isDirty: boolean) => {
     const session = getWindowSessionByWebContents(event.sender)
