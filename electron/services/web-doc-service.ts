@@ -1,0 +1,127 @@
+import { err, ok, type Result } from '@shared/core/result'
+import type { AppError } from '@shared/core/errors'
+import { toAppError } from '@shared/core/errors'
+import type {
+  WebDocDiscoverTocPayload,
+  WebDocDiscoverTocResult,
+  WebDocFetchPayload,
+  WebDocFetchResult,
+} from '@shared/types/web-doc'
+import { extractSameOriginDocLinks } from './web-doc/extract-toc-links'
+import { resolveWebDocSiteId } from './web-doc/site-registry'
+import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy'
+
+const WEB_DOC_MAX_BYTES = 5 * 1024 * 1024
+const WEB_DOC_FETCH_TIMEOUT_MS = 30_000
+const WEB_DOC_USER_AGENT =
+  'Inkdown/0.3 (Electron; +https://github.com/yitom486/inkdown)'
+
+function toFetchError(message: string): Result<never, AppError> {
+  return err({ code: 'FILE_READ_ERROR', message })
+}
+
+async function readResponseTextLimited(response: Response): Promise<string> {
+  const lengthHeader = response.headers.get('content-length')
+  if (lengthHeader) {
+    const length = Number.parseInt(lengthHeader, 10)
+    if (Number.isFinite(length) && length > WEB_DOC_MAX_BYTES) {
+      throw new Error(`页面过大（>${Math.floor(WEB_DOC_MAX_BYTES / 1024 / 1024)}MB）`)
+    }
+  }
+
+  const buffer = await response.arrayBuffer()
+  if (buffer.byteLength > WEB_DOC_MAX_BYTES) {
+    throw new Error(`页面过大（>${Math.floor(WEB_DOC_MAX_BYTES / 1024 / 1024)}MB）`)
+  }
+
+  return new TextDecoder('utf-8', { fatal: false }).decode(buffer)
+}
+
+export async function fetchWebDocPage(
+  payload: WebDocFetchPayload,
+): Promise<Result<WebDocFetchResult, AppError>> {
+  try {
+    const normalized = normalizeWebDocUrl(payload.url)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), WEB_DOC_FETCH_TIMEOUT_MS)
+
+    let response: Response
+    try {
+      response = await fetch(normalized, {
+        signal: controller.signal,
+        redirect: 'follow',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+          'User-Agent': WEB_DOC_USER_AGENT,
+        },
+      })
+    } finally {
+      clearTimeout(timer)
+    }
+
+    if (!response.ok) {
+      return toFetchError(`请求失败（HTTP ${response.status}）`)
+    }
+
+    const contentType = response.headers.get('content-type') ?? ''
+    if (contentType && !/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+      return toFetchError('该链接不是 HTML 文档页')
+    }
+
+    const html = await readResponseTextLimited(response)
+    if (!html.trim()) {
+      return toFetchError('页面内容为空')
+    }
+
+    return ok({
+      url: response.url || normalized,
+      html,
+    })
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === 'AbortError') {
+      return err({ code: 'ACP_TIMEOUT', message: '抓取页面超时' })
+    }
+    if (cause instanceof Error && cause.message) {
+      return toFetchError(cause.message)
+    }
+    return err(toAppError(cause, '抓取页面失败'))
+  }
+}
+
+export async function discoverWebDocToc(
+  payload: WebDocDiscoverTocPayload,
+): Promise<Result<WebDocDiscoverTocResult, AppError>> {
+  const fetchResult = await fetchWebDocPage({ url: payload.url })
+  if (!fetchResult.ok) return fetchResult
+
+  try {
+    const pageUrl = new URL(fetchResult.value.url)
+    const siteId = resolveWebDocSiteId(pageUrl)
+    const entries = extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
+
+    return ok({
+      siteId,
+      entries,
+    })
+  } catch (cause) {
+    return err(toAppError(cause, '解析文档目录失败'))
+  }
+}
+
+export function validateWebDocUrl(raw: string): Result<string, AppError> {
+  try {
+    return ok(normalizeWebDocUrl(raw))
+  } catch (cause) {
+    return err(toAppError(cause, 'URL 无效'))
+  }
+}
+
+/** 供单测与 handler 校验入参 */
+export function parseWebDocUrlInput(raw: unknown): Result<string, AppError> {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return err({ code: 'FILE_READ_ERROR', message: 'URL 不能为空' })
+  }
+  return validateWebDocUrl(raw)
+}
+
+export { assertWebDocUrlAllowed }

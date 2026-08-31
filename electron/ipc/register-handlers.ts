@@ -29,6 +29,7 @@ import type {
   AcpSetConfigOptionPayload,
   AcpSnapshotResponsePayload,
 } from '@shared/types/acp'
+import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import { ok } from '@shared/core/result'
 import {
   exportHtmlDocument,
@@ -62,6 +63,11 @@ import {
   listReadingMarks,
   updateReadingMark,
 } from '../services/reading-marks-service'
+import {
+  discoverWebDocToc,
+  fetchWebDocPage,
+  parseWebDocUrlInput,
+} from '../services/web-doc-service'
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
 import { listAcpRuntimes } from '../services/acp/agent-registry'
@@ -361,4 +367,16 @@ export function registerIpcHandlers(): void {
     updateReadingMark(payload),
   )
   ipcMain.handle(IPC.MARKS_DELETE, (_event, id: string) => deleteReadingMark(id))
+
+  ipcMain.handle(IPC.WEB_DOC_FETCH_PAGE, async (_event, payload: WebDocFetchPayload) => {
+    const urlResult = parseWebDocUrlInput(payload?.url)
+    if (!urlResult.ok) return urlResult
+    return fetchWebDocPage({ url: urlResult.value })
+  })
+
+  ipcMain.handle(IPC.WEB_DOC_DISCOVER_TOC, async (_event, payload: WebDocDiscoverTocPayload) => {
+    const urlResult = parseWebDocUrlInput(payload?.url)
+    if (!urlResult.ok) return urlResult
+    return discoverWebDocToc({ url: urlResult.value })
+  })
 }

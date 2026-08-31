@@ -9,7 +9,7 @@
 |------|--------|
 | `editor/` | Markdown 解析/编辑/导出、CodeMirror、草稿、换行规范化 |
 | `preview/` | 预览 DOM：代码块复制、消毒、Mermaid hydrate |
-| `reader/` | EPUB / PDF / MOBI 导航、选区、高亮批注、渲染 |
+| `reader/` | EPUB / PDF / MOBI / **在线文档 HTML** 导航、选区、高亮批注、渲染 |
 | `workspace/` | 文件树、对话框路径、全局错误上报 |
 | `agent/` | ACP 会话辅助；`context/` 为 Inkdown 注入 Agent 的 Skill / 快照 / 选区 |
 

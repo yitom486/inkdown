@@ -4,6 +4,7 @@ import type { ExportDocumentPayload, ExportMarkdownPayload, OpenDialogOptions, S
 import type { RendererErrorPayload } from '@shared/types/error-log'
 import type { WindowInit } from '@shared/types/window'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
+import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
 const isFreshWindow = windowInit?.isFreshWindow ?? false
@@ -135,6 +136,10 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener(IPC.ACP_SNAPSHOT_REQUEST, handler)
     }
   },
+  fetchWebDocPage: (payload: WebDocFetchPayload) =>
+    ipcRenderer.invoke(IPC.WEB_DOC_FETCH_PAGE, payload),
+  discoverWebDocToc: (payload: WebDocDiscoverTocPayload) =>
+    ipcRenderer.invoke(IPC.WEB_DOC_DISCOVER_TOC, payload),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

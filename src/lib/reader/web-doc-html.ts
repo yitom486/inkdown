@@ -1,0 +1,164 @@
+import DOMPurify from 'dompurify'
+import type { WebDocPageContent, WebDocSiteId } from '@shared/types/web-doc'
+import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
+import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
+
+const ARTICLE_SELECTORS = [
+  'article',
+  'main',
+  '[role="main"]',
+  '.markdown',
+  '#__next main',
+  '.docs-content',
+  '.doc-content',
+  '.content',
+]
+
+function parseHtmlDocument(html: string): Document {
+  return new DOMParser().parseFromString(html, 'text/html')
+}
+
+export function extractDocumentTitle(doc: Document): string {
+  const h1 = doc.querySelector('article h1, main h1, h1')
+  const h1Text = h1?.textContent?.replace(/\s+/g, ' ').trim()
+  if (h1Text) return h1Text
+
+  const title = doc.querySelector('title')?.textContent?.replace(/\s+/g, ' ').trim()
+  if (title) return title
+
+  return '未命名页面'
+}
+
+export function pickArticleRoot(doc: Document): HTMLElement {
+  for (const selector of ARTICLE_SELECTORS) {
+    const node = doc.querySelector(selector)
+    if (node instanceof HTMLElement && node.textContent?.trim()) {
+      return node
+    }
+  }
+
+  const body = doc.body
+  if (body instanceof HTMLElement && body.textContent?.trim()) {
+    return body
+  }
+
+  const fallback = doc.createElement('div')
+  fallback.textContent = '未能提取正文'
+  return fallback
+}
+
+/** 将相对 URL 改写为绝对地址，便于 iframe 内加载图片与链接 */
+export function rewriteRelativeUrls(root: HTMLElement, baseUrl: string): void {
+  const base = new URL(baseUrl)
+
+  root.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+    const href = anchor.getAttribute('href')?.trim()
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      return
+    }
+    try {
+      anchor.setAttribute('href', new URL(href, base).toString())
+    } catch {
+      anchor.removeAttribute('href')
+    }
+  })
+
+  root.querySelectorAll<HTMLImageElement>('img[src]').forEach((img) => {
+    const src = img.getAttribute('src')?.trim()
+    if (!src) return
+    try {
+      img.setAttribute('src', new URL(src, base).toString())
+    } catch {
+      img.removeAttribute('src')
+    }
+  })
+
+  root.querySelectorAll<HTMLSourceElement>('source[src]').forEach((source) => {
+    const src = source.getAttribute('src')?.trim()
+    if (!src) return
+    try {
+      source.setAttribute('src', new URL(src, base).toString())
+    } catch {
+      source.removeAttribute('src')
+    }
+  })
+}
+
+export function sanitizeWebDocBodyHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(`<div id="web-doc-root">${html}</div>`, 'text/html')
+  doc.querySelectorAll('script, iframe, object, embed, form').forEach((node) => node.remove())
+  const root = doc.getElementById('web-doc-root')
+  const inner = root?.innerHTML ?? html
+
+  return DOMPurify.sanitize(inner, {
+    ADD_TAGS: ['img', 'svg', 'video', 'audio', 'picture', 'source', 'pre', 'code'],
+    ADD_ATTR: [
+      'href',
+      'class',
+      'id',
+      'style',
+      'src',
+      'alt',
+      'title',
+      'target',
+      'rel',
+      'width',
+      'height',
+      'loading',
+      'aria-hidden',
+      'role',
+    ],
+  })
+}
+
+export function extractWebDocArticle(html: string, pageUrl: string): { title: string; bodyHtml: string } {
+  const doc = parseHtmlDocument(html)
+  const root = pickArticleRoot(doc)
+  const clone = root.cloneNode(true) as HTMLElement
+  rewriteRelativeUrls(clone, pageUrl)
+  const bodyHtml = sanitizeWebDocBodyHtml(clone.innerHTML)
+  return {
+    title: extractDocumentTitle(doc),
+    bodyHtml,
+  }
+}
+
+export function buildWebDocReaderDocument(
+  content: Pick<WebDocPageContent, 'title' | 'bodyHtml'>,
+  theme: EpubThemeMode,
+  typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
+): string {
+  const layoutCss = buildReaderLayoutCss(theme, typography)
+  const safeTitle = DOMPurify.sanitize(content.title)
+  const body = content.bodyHtml
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${safeTitle}</title>
+  <style>${layoutCss}</style>
+  <style>
+    body { margin: 0; padding: 1.25rem 1.5rem 2rem; }
+    a { word-break: break-word; }
+    pre { overflow-x: auto; }
+    img { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>${body}</body>
+</html>`
+}
+
+export function buildWebDocPageContent(
+  html: string,
+  pageUrl: string,
+  siteId: WebDocSiteId,
+): WebDocPageContent {
+  const article = extractWebDocArticle(html, pageUrl)
+  return {
+    ...article,
+    baseUrl: pageUrl,
+    siteId,
+  }
+}

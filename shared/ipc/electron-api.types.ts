@@ -49,6 +49,12 @@ import type {
   AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
 } from '@shared/types/acp'
+import type {
+  WebDocDiscoverTocPayload,
+  WebDocDiscoverTocResult,
+  WebDocFetchPayload,
+  WebDocFetchResult,
+} from '@shared/types/web-doc'
 
 export interface ElectronAPI {
   platform: string
@@ -126,4 +132,8 @@ export interface ElectronAPI {
     callback: (event: AcpPermissionRequestEvent & { summary?: string }) => void,
   ) => () => void
   onAcpSnapshotRequest: (callback: (event: AcpSnapshotRequestEvent) => void) => () => void
+  fetchWebDocPage: (payload: WebDocFetchPayload) => Promise<Result<WebDocFetchResult, AppError>>
+  discoverWebDocToc: (
+    payload: WebDocDiscoverTocPayload,
+  ) => Promise<Result<WebDocDiscoverTocResult, AppError>>
 }

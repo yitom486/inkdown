@@ -52,6 +52,8 @@ export const IPC = {
   ACP_PERMISSION_REQUEST: 'acp:permission-request',
   ACP_SNAPSHOT_REQUEST: 'acp:snapshot-request',
   ACP_SNAPSHOT_RESPONSE: 'acp:snapshot-response',
+  WEB_DOC_FETCH_PAGE: 'web-doc:fetch-page',
+  WEB_DOC_DISCOVER_TOC: 'web-doc:discover-toc',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
