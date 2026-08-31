@@ -1,8 +1,17 @@
 import { MARKDOWN_EXTENSION_SET, READER_EXTENSION_SET } from '@shared/constants/extensions'
 
-export type DocumentKind = 'markdown' | 'pdf' | 'epub' | 'mobi' | 'unknown'
+export type DocumentKind = 'markdown' | 'pdf' | 'epub' | 'mobi' | 'web' | 'unknown'
 
 export type ReaderDocumentKind = Extract<DocumentKind, 'pdf' | 'epub' | 'mobi'>
+
+export function isWebDocumentPath(path: string): boolean {
+  try {
+    const url = new URL(path)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
 
 export function getFileExtension(filePath: string): string {
   const index = filePath.lastIndexOf('.')
@@ -11,6 +20,7 @@ export function getFileExtension(filePath: string): string {
 }
 
 export function getDocumentKind(filePath: string): DocumentKind {
+  if (isWebDocumentPath(filePath)) return 'web'
   const extension = getFileExtension(filePath)
   if (MARKDOWN_EXTENSION_SET.has(extension)) return 'markdown'
   if (extension === '.pdf') return 'pdf'

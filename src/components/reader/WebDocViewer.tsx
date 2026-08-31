@@ -21,6 +21,11 @@ import {
   resolveWebDocTocDiscoveryUrl,
 } from '@/lib/reader/web-doc-site'
 import { findWebDocFlatIndex, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
+import {
+  iterateWebDocUnits,
+  primeWebDocAgentTextCache,
+  readWebDocUnitByIndex,
+} from '@/lib/reader/web-doc-agent-content'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -199,8 +204,12 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
 
   useEffect(() => {
     if (!iframeReady) return
+    const text = extractDocumentText(iframeRef.current?.contentDocument)
+    if (text.trim()) {
+      primeWebDocAgentTextCache(pageUrl, text)
+    }
     return bindIframeInteractions()
-  }, [bindIframeInteractions, iframeReady])
+  }, [bindIframeInteractions, iframeReady, pageUrl])
 
   useEffect(() => {
     return () => {
@@ -216,6 +225,18 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       filePath: pageUrl,
       getCurrentText: () => extractDocumentText(iframeRef.current?.contentDocument),
       getViewportText: () => extractViewportText(iframeRef.current?.contentDocument),
+      getUnitByIndex: async (flatIndex) => {
+        if (unitsRef.current.length === 0) return null
+        try {
+          return await readWebDocUnitByIndex(unitsRef.current, flatIndex)
+        } catch {
+          return null
+        }
+      },
+      iterateUnits: async function* () {
+        if (unitsRef.current.length === 0) return
+        yield* iterateWebDocUnits(unitsRef.current)
+      },
     })
   }, [pageUrl])
 

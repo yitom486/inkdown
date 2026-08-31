@@ -23,19 +23,22 @@ const NO_ARGS_SCHEMA = {
   additionalProperties: false,
 } as const
 
+const READER_FORMATS =
+  'EPUB/PDF/MOBI/AZW3 与在线文档（web URL，阅读模式抓取的正文）'
+
 export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_get_toc',
     description:
-      '获取当前打开的 EPUB/PDF/MOBI 等阅读文档的完整目录（JSON：entries、currentIndex、document）。' +
-      '仅用于二进制阅读格式；.md/.txt 请直接读工作区文件，不必调本工具。' +
+      `获取当前打开的 ${READER_FORMATS} 的完整目录（JSON：entries、currentIndex、document）。` +
+      '仅用于阅读器文档；.md/.txt 请直接读工作区文件，不必调本工具。' +
       '用户在问章节结构、章名或阅读位置时可选调用；能直接答则不必调用。',
     inputSchema: NO_ARGS_SCHEMA,
   },
   {
     name: 'inkdown_get_viewport',
     description:
-      '获取当前阅读窗口可见的纯文本（约一屏，不是整章）。EPUB/MOBI 为视口内可见块；PDF 为当前页。' +
+      `获取当前阅读窗口可见的纯文本（约一屏，不是整章）。EPUB/MOBI 为视口内可见块；PDF 为当前页；在线文档为当前页 iframe 视口。` +
       '【优先于整章】若线程上下文可能还不够回答「这里/这页」等问题再调用。' +
       '上文工具结果可能已够用则可直接答，不必每轮重调。体积小。',
     inputSchema: NO_ARGS_SCHEMA,
@@ -43,16 +46,17 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_get_current_text',
     description:
-      '获取当前正在阅读的整章纯文本（PDF 为当前页），可能很长并截断。' +
+      `获取当前正在阅读的整章纯文本（PDF 为当前页；在线文档为当前 URL 页），可能很长并截断。` +
       '仅当用户明确要求整章总结，或 inkdown_get_viewport / inkdown_get_selection 仍信息不足时再调用；' +
-      '不要作为读正文的首选。仅用于 EPUB/PDF/MOBI。',
+      `不要作为读正文的首选。用于 ${READER_FORMATS}。`,
     inputSchema: NO_ARGS_SCHEMA,
   },
   {
     name: 'inkdown_get_chapter',
     description:
-      '按目录 flatIndex 或章节标题读取指定章/页的纯文本（不跳转阅读位置）。' +
+      `按目录 flatIndex 或章节标题读取指定章/页的纯文本（不跳转阅读位置）。` +
       'index 与 inkdown_get_toc.entries[].index 一致；title 可模糊包含匹配。' +
+      '在线文档按 TOC 条目 URL 抓取对应页面正文。' +
       '仅当用户明确要某一章（非当前视口）或视口/当前章不够时使用；可能很长并截断。' +
       '不要用于「这里/这页」——那些优先 viewport。',
     inputSchema: {
@@ -73,8 +77,8 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_search',
     description:
-      '在当前打开的阅读文档内做关键词子串检索（忽略大小写），返回章节/页码、次数与片段。' +
-      '仅用于 EPUB/PDF/MOBI；.md/.txt 请用工作区搜索或直接读文件。' +
+      `在当前打开的阅读文档内做关键词子串检索（忽略大小写），返回章节/页码、次数与片段。` +
+      `用于 ${READER_FORMATS}；.md/.txt 请用工作区搜索或直接读文件。` +
       '关键词用原文用词；用户问「哪里提到 X」时可选调用。',
     inputSchema: {
       type: 'object',

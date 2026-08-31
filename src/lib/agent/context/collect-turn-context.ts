@@ -11,13 +11,27 @@ export function baseName(filePath: string): string {
   return index === -1 ? filePath : filePath.slice(index + 1)
 }
 
+function activeDocumentDisplayName(path: string, kind: InkdownActiveDocument['kind']): string {
+  if (kind === 'web') {
+    try {
+      const url = new URL(path)
+      const pathname = url.pathname.replace(/\/$/, '') || '/'
+      return pathname === '/' ? url.hostname : `${url.hostname}${pathname}`
+    } catch {
+      return path
+    }
+  }
+  return baseName(path)
+}
+
 export function collectActiveDocument(): InkdownActiveDocument | null {
   const filePath = useActiveDocumentStore.getState().filePath?.trim()
   if (!filePath) return null
+  const kind = getDocumentKind(filePath)
   return {
     path: filePath,
-    kind: getDocumentKind(filePath),
-    name: baseName(filePath),
+    kind,
+    name: activeDocumentDisplayName(filePath, kind),
   }
 }
 
