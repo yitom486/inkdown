@@ -1,4 +1,5 @@
 import { isReaderDocumentKind } from '@shared/types/document'
+import type { DocumentKind } from '@shared/types/document'
 import { readingMarksApi } from '@/api/reading-marks-api'
 import { isOk } from '@shared/core/result'
 import {
@@ -14,13 +15,17 @@ export {
   serializeMarkPassage as serializeMarkForAgent,
 } from '@/lib/reader/reading-mark-passages'
 
+function supportsInkdownMarks(kind: DocumentKind): boolean {
+  return kind === 'web' || isReaderDocumentKind(kind)
+}
+
 async function loadMarksForOpenDocument() {
   const document = collectActiveDocument()
   if (!document?.path) {
     throw new Error('当前没有打开的文档')
   }
-  if (!isReaderDocumentKind(document.kind)) {
-    throw new Error('当前不是 EPUB/PDF/MOBI，不必用 Inkdown 书签工具')
+  if (!supportsInkdownMarks(document.kind)) {
+    throw new Error('当前不是 EPUB/PDF/MOBI/在线文档，不必用 Inkdown 书签工具')
   }
 
   const result = await readingMarksApi.list(document.path)

@@ -3,35 +3,74 @@ import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
+import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
+import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
+import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
+import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useWebDocPage } from '@/hooks/reader/useWebDocPage'
 import { useWebDocToc } from '@/hooks/reader/useWebDocToc'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
+import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
+import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
+import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
 import { appApi } from '@/api/app-api'
 import { queryKeys } from '@/api/query-keys'
 import { extractDocumentText, extractViewportText } from '@/lib/agent/context/extract-dom-text'
+import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
+import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
+import { registerSelectionProvider, commitReaderSelection, clearReaderSelection, readSelectionText } from '@/lib/agent/context/reader-selection-registry'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
+import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import { buildWebDocReaderDocument } from '@/lib/reader/web-doc-html'
 import {
+  buildWebDocFileFingerprint,
   formatWebDocTitle,
+  resolveWebDocDocumentId,
   resolveWebDocSiteId,
   resolveWebDocTocDiscoveryUrl,
 } from '@/lib/reader/web-doc-site'
-import { findWebDocFlatIndex, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
+import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
 import {
   iterateWebDocUnits,
   primeWebDocAgentTextCache,
   readWebDocUnitByIndex,
 } from '@/lib/reader/web-doc-agent-content'
+import { readMobiSelection } from '@/lib/reader/mobi-selection'
+import {
+  applyMobiPendingSelectionHighlight,
+  findMobiMarksAtPoint,
+  findMobiNoteMarkAtPoint,
+  removeMobiPendingSelectionHighlight,
+  renderWebMarkOverlays,
+} from '@/lib/reader/mobi-reading-marks'
+import { injectMobiMarkStyles } from '@/lib/reader/reader-mark-geometry'
+import {
+  bindDocumentSelectionCollapse,
+  bindOutsideReaderPointerDismiss,
+  clearWindowSelection,
+} from '@/lib/reader/reader-selection-dismiss'
+import { copyTextToClipboard, type PdfSelectionSnapshot } from '@/lib/reader/pdf-selection'
+import {
+  resolveWebChapter,
+  tocFromWebUnits,
+  type ReadingNotesContentKind,
+  type ReadingNotesScope,
+} from '@/lib/reader/export-reading-notes'
+import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { useWebDocStore } from '@/stores/web-doc-store'
 import { cn } from '@/lib/utils'
+import { isOk } from '@shared/core/result'
+import type { ReadingMark } from '@shared/types/reading-mark'
+import { toast } from 'sonner'
 import '@/styles/web-doc-viewer.css'
 
 const WEB_PROGRESS_SAVE_MS = 400
@@ -44,12 +83,19 @@ interface WebDocViewerProps {
 export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const saveProgressTimerRef = useRef<number | null>(null)
+  const themeRef = useRef(theme)
+  themeRef.current = theme
+  const pageUrlRef = useRef(pageUrl)
+  pageUrlRef.current = pageUrl
   const queryClient = useQueryClient()
   const openPage = useWebDocStore((state) => state.openPage)
   const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
   const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
   const { data, isLoading, isFetching, error, refetch } = useWebDocPage(pageUrl)
   const siteId = useMemo(() => resolveWebDocSiteId(pageUrl), [pageUrl])
+  const documentId = useMemo(() => resolveWebDocDocumentId(pageUrl, siteId), [pageUrl, siteId])
+  const normalizedPageUrl = useMemo(() => normalizeWebDocNavUrl(pageUrl), [pageUrl])
+  const fileFingerprint = useMemo(() => buildWebDocFileFingerprint(documentId), [documentId])
   const tocDiscoveryUrl = useMemo(
     () => resolveWebDocTocDiscoveryUrl(pageUrl, siteId),
     [pageUrl, siteId],
@@ -61,9 +107,27 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
   )
   const unitsRef = useRef(units)
   unitsRef.current = units
-  const { tocOpen, toggleToc, closeToc } = useReaderSidePanels()
+  const { tocOpen, marksOpen, toggleToc, toggleMarks, closeToc, closeMarks } = useReaderSidePanels()
   const [iframeReady, setIframeReady] = useState(false)
   const ready = Boolean(data) && iframeReady
+  const { marks, createMark, updateMark, deleteMark } = useReadingMarks(documentId)
+  const marksRef = useRef(marks)
+  marksRef.current = marks
+  const inspector = useReadingMarkInspector(marks)
+  const inspectorRef = useRef(inspector)
+  inspectorRef.current = inspector
+  const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
+  const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(null)
+  const selectionSnapshotRef = useRef(selectionSnapshot)
+  selectionSnapshotRef.current = selectionSnapshot
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [editingNoteMark, setEditingNoteMark] = useState<ReadingMark | null>(null)
+  const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
+  const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const hoveredMarkIdRef = useRef<string | null>(null)
+  const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
+  const frameCleanupRef = useRef<(() => void) | null>(null)
+  const nav = useReaderNavigationStore((state) => state.nav)
 
   const readerDocument = useMemo(() => {
     if (!data) return ''
@@ -78,12 +142,57 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
     [data?.content.title, pageUrl],
   )
 
+  const clearTextSelection = useCallback(() => {
+    clearWindowSelection(iframeRef.current?.contentWindow ?? undefined)
+    setSelectionSnapshot(null)
+    setSelectionToolbarPos(null)
+    clearReaderSelection()
+    const body = iframeRef.current?.contentDocument?.body
+    if (body) removeMobiPendingSelectionHighlight(body)
+  }, [])
+
+  const dimTextSelection = useCallback(() => {
+    setSelectionToolbarPos(null)
+    clearWindowSelection(iframeRef.current?.contentWindow ?? undefined)
+  }, [])
+
+  const showPendingSelectionHighlight = useCallback(() => {
+    const body = iframeRef.current?.contentDocument?.body
+    const rects = selectionSnapshotRef.current?.rects
+    if (!body || !rects?.length) return
+    applyMobiPendingSelectionHighlight(body, rects, themeRef.current)
+  }, [])
+
+  const syncWebMarkOverlays = useCallback(
+    (doc: Document, url: string) => {
+      if (!doc.body) return
+      injectMobiMarkStyles(doc, themeRef.current)
+      renderWebMarkOverlays(doc.body, marksRef.current, url, themeRef.current)
+      if (noteDialogOpen && !editingNoteMark) {
+        const rects = selectionSnapshotRef.current?.rects
+        if (rects?.length) {
+          applyMobiPendingSelectionHighlight(doc.body, rects, themeRef.current)
+        }
+      }
+    },
+    [editingNoteMark, noteDialogOpen],
+  )
+
+  const scheduleWebMarkLayout = useDeferredReaderLayout(() => {
+    const doc = iframeRef.current?.contentDocument
+    if (!doc?.body) return
+    hoveredMarkIdRef.current = null
+    setHoveredMark(null)
+    setMarkTooltipPos(null)
+    syncWebMarkOverlays(doc, pageUrlRef.current)
+  })
+
   useEffect(() => {
-    useReaderNavigationStore.getState().beginSession(pageUrl, 'web')
+    useReaderNavigationStore.getState().beginSession(documentId, 'web')
     return () => {
       useReaderNavigationStore.getState().beginSession('', 'web')
     }
-  }, [pageUrl])
+  }, [documentId])
 
   useEffect(() => {
     if (units.length === 0) return
@@ -95,6 +204,20 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
     useReaderNavigationStore.getState().syncWeb(units, pageUrl)
     useReaderNavigationStore.getState().setReady(true)
   }, [data, pageUrl, units])
+
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument
+    if (!doc?.body || !iframeReady) return
+    scheduleWebMarkLayout()
+  }, [iframeReady, marks, normalizedPageUrl, readerFontSize, readerLineHeight, scheduleWebMarkLayout, theme])
+
+  useEffect(() => {
+    const iframe = iframeRef.current
+    if (!iframe || !ready) return
+    const observer = new ResizeObserver(() => scheduleWebMarkLayout())
+    observer.observe(iframe)
+    return () => observer.disconnect()
+  }, [ready, scheduleWebMarkLayout])
 
   const navigateToUrl = useCallback(
     (targetUrl: string, flatIndex?: number) => {
@@ -147,43 +270,211 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
     root.scrollTop = scrollHeight * saved.scrollRatio
   }, [pageUrl])
 
-  const bindIframeInteractions = useCallback(() => {
-    const iframe = iframeRef.current
-    const doc = iframe?.contentDocument
-    const win = iframe?.contentWindow
-    if (!iframe || !doc || !win) return
+  const addPageBookmark = useCallback(async () => {
+    const result = await createMark({
+      filePath: documentId,
+      fileFingerprint,
+      kind: 'bookmark',
+      anchor: { format: 'web', url: normalizedPageUrl },
+      label: nav.current?.label ?? data?.content.title ?? '书签',
+    })
+    if (!isOk(result)) {
+      throw new Error(result.error.message || '创建书签失败')
+    }
+    toast.success('已添加书签')
+    return result.value
+  }, [createMark, data?.content.title, documentId, fileFingerprint, nav.current?.label, normalizedPageUrl])
 
-    const onScroll = () => {
-      if (saveProgressTimerRef.current != null) {
-        window.clearTimeout(saveProgressTimerRef.current)
+  const handleSaveAnnotation = useCallback(
+    async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
+      const snapshot = selectionSnapshotRef.current
+      if (!snapshot) {
+        throw new Error('当前没有可用选区，请先划选文本')
       }
-      saveProgressTimerRef.current = window.setTimeout(() => {
-        persistScrollProgress()
-        saveProgressTimerRef.current = null
-      }, WEB_PROGRESS_SAVE_MS)
-    }
 
-    const onClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null
-      const anchor = target?.closest('a')
-      if (!(anchor instanceof HTMLAnchorElement)) return
+      const existing = findMarkForSelection(marks, {
+        format: 'web',
+        text: snapshot.text,
+        pageUrl: normalizedPageUrl,
+      })
+      if (existing) {
+        const trimmed = note.trim()
+        const result = await updateMark({
+          id: existing.id,
+          color,
+          ...(trimmed
+            ? {
+                note: trimmed,
+                kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
+              }
+            : {}),
+        })
+        if (!isOk(result)) {
+          throw new Error(result.error.message || '更新标记失败')
+        }
+        toast.success(trimmed ? '已保存批注' : '已更新高亮')
+        const doc = iframeRef.current?.contentDocument
+        if (doc?.body) syncWebMarkOverlays(doc, pageUrl)
+        clearTextSelection()
+        return result.value
+      }
 
-      const href = anchor.getAttribute('href')?.trim()
-      if (!href || href.startsWith('#')) return
+      const result = await createMark({
+        filePath: documentId,
+        fileFingerprint,
+        kind: note ? 'note' : 'highlight',
+        anchor: {
+          format: 'web',
+          url: normalizedPageUrl,
+          selectedText: snapshot.text,
+          rects: snapshot.rects,
+        },
+        excerpt: snapshot.text,
+        note: note || undefined,
+        color,
+      })
 
-      event.preventDefault()
-      void appApi.openExternal(href)
-    }
+      if (!isOk(result)) {
+        throw new Error(result.error.message || '创建批注失败')
+      }
 
-    doc.addEventListener('scroll', onScroll, { passive: true })
-    doc.addEventListener('click', onClick)
-    restoreScrollProgress()
+      marksRef.current = [...marksRef.current, result.value]
+      toast.success(note ? '已保存批注' : '已添加高亮')
+      const doc = iframeRef.current?.contentDocument
+      if (doc?.body) syncWebMarkOverlays(doc, pageUrl)
+      clearTextSelection()
+      return result.value
+    },
+    [clearTextSelection, createMark, documentId, fileFingerprint, marks, normalizedPageUrl, pageUrl, syncWebMarkOverlays, updateMark],
+  )
 
-    return () => {
-      doc.removeEventListener('scroll', onScroll)
-      doc.removeEventListener('click', onClick)
-    }
-  }, [persistScrollProgress, restoreScrollProgress])
+  const bindIframeFrame = useCallback(
+    (iframe: HTMLIFrameElement) => {
+      frameCleanupRef.current?.()
+
+      const doc = iframe.contentDocument
+      const win = iframe.contentWindow
+      if (!doc || !win || !doc.body) return
+
+      scheduleWebMarkLayout()
+      const frameRect = iframe.getBoundingClientRect()
+
+      const onMouseDown = (event: MouseEvent) => {
+        pointerOriginRef.current = { x: event.clientX, y: event.clientY }
+      }
+
+      const onMouseUp = (event: MouseEvent) => {
+        window.setTimeout(() => {
+          if (isClickNotDrag(pointerOriginRef.current, event)) {
+            const hits = findMobiMarksAtPoint(doc, event.clientX, event.clientY)
+              .map((hit) => marksRef.current.find((item) => item.id === hit.markId))
+              .filter((item): item is ReadingMark => Boolean(item))
+            if (hits.length > 0) {
+              clearWindowSelection(win)
+              setSelectionToolbarPos(null)
+              inspectorRef.current.openAt(
+                hits,
+                frameRect.left + event.clientX,
+                frameRect.top + event.clientY,
+              )
+              return
+            }
+          }
+
+          const snapshot = readMobiSelection(doc, win)
+          if (!snapshot) {
+            if (isClickNotDrag(pointerOriginRef.current, event)) {
+              inspectorRef.current.close()
+            }
+            return
+          }
+
+          inspectorRef.current.close()
+          setSelectionSnapshot(snapshot)
+          commitReaderSelection(documentId, snapshot.text)
+          focusAgentComposerOnReaderSelection()
+          setSelectionToolbarPos({
+            x: frameRect.left + snapshot.toolbarX,
+            y: frameRect.top + snapshot.toolbarY,
+          })
+        }, 10)
+      }
+
+      const onScroll = () => {
+        if (saveProgressTimerRef.current != null) {
+          window.clearTimeout(saveProgressTimerRef.current)
+        }
+        saveProgressTimerRef.current = window.setTimeout(() => {
+          persistScrollProgress()
+          saveProgressTimerRef.current = null
+        }, WEB_PROGRESS_SAVE_MS)
+      }
+
+      const onClick = (event: MouseEvent) => {
+        const target = event.target as HTMLElement | null
+        const anchor = target?.closest('a')
+        if (!(anchor instanceof HTMLAnchorElement)) return
+
+        const href = anchor.getAttribute('href')?.trim()
+        if (!href || href.startsWith('#')) return
+
+        event.preventDefault()
+        void appApi.openExternal(href)
+      }
+
+      const onSelectionChange = bindDocumentSelectionCollapse(doc, win, () => {
+        setSelectionToolbarPos(null)
+      })
+
+      let hoverRaf = 0
+      const onMouseMove = (event: MouseEvent) => {
+        if (hoverRaf !== 0) return
+        hoverRaf = window.requestAnimationFrame(() => {
+          hoverRaf = 0
+          const hit = findMobiNoteMarkAtPoint(doc, event.clientX, event.clientY)
+          if (!hit) {
+            if (hoveredMarkIdRef.current !== null) {
+              hoveredMarkIdRef.current = null
+              setHoveredMark(null)
+              setMarkTooltipPos(null)
+            }
+            return
+          }
+
+          if (hoveredMarkIdRef.current === hit.markId) return
+
+          const mark = marksRef.current.find((item) => item.id === hit.markId)
+          if (!mark?.note?.trim()) return
+
+          hoveredMarkIdRef.current = hit.markId
+          const rect = hit.element.getBoundingClientRect()
+          setHoveredMark(mark)
+          setMarkTooltipPos({
+            x: frameRect.left + rect.left + rect.width / 2,
+            y: frameRect.top + rect.top,
+          })
+        })
+      }
+
+      doc.addEventListener('mousedown', onMouseDown)
+      doc.addEventListener('mouseup', onMouseUp)
+      doc.addEventListener('scroll', onScroll, { passive: true })
+      doc.addEventListener('click', onClick)
+      doc.addEventListener('mousemove', onMouseMove, { passive: true })
+      restoreScrollProgress()
+
+      frameCleanupRef.current = () => {
+        doc.removeEventListener('mousedown', onMouseDown)
+        doc.removeEventListener('mouseup', onMouseUp)
+        doc.removeEventListener('scroll', onScroll)
+        doc.removeEventListener('click', onClick)
+        doc.removeEventListener('mousemove', onMouseMove)
+        onSelectionChange()
+        if (hoverRaf !== 0) window.cancelAnimationFrame(hoverRaf)
+      }
+    },
+    [documentId, persistScrollProgress, restoreScrollProgress, scheduleWebMarkLayout],
+  )
 
   useEffect(() => {
     setIframeReady(false)
@@ -192,6 +483,11 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
 
     const onLoad = () => {
       setIframeReady(true)
+      bindIframeFrame(iframe)
+      const text = extractDocumentText(iframe.contentDocument)
+      if (text.trim()) {
+        primeWebDocAgentTextCache(pageUrl, text)
+      }
     }
 
     iframe.addEventListener('load', onLoad)
@@ -199,17 +495,10 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
 
     return () => {
       iframe.removeEventListener('load', onLoad)
+      frameCleanupRef.current?.()
+      frameCleanupRef.current = null
     }
-  }, [readerDocument])
-
-  useEffect(() => {
-    if (!iframeReady) return
-    const text = extractDocumentText(iframeRef.current?.contentDocument)
-    if (text.trim()) {
-      primeWebDocAgentTextCache(pageUrl, text)
-    }
-    return bindIframeInteractions()
-  }, [bindIframeInteractions, iframeReady, pageUrl])
+  }, [bindIframeFrame, pageUrl, readerDocument])
 
   useEffect(() => {
     return () => {
@@ -241,6 +530,38 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
   }, [pageUrl])
 
   useEffect(() => {
+    return registerReaderMarks({
+      filePath: documentId,
+      createBookmark: () => addPageBookmark(),
+      createNoteFromSelection: (note) => handleSaveAnnotation(note),
+    })
+  }, [addPageBookmark, documentId, handleSaveAnnotation])
+
+  useEffect(() => {
+    return registerSelectionProvider({
+      filePath: documentId,
+      getSelectionText: () => readSelectionText(documentId),
+    })
+  }, [documentId])
+
+  useEffect(() => {
+    return () => {
+      clearReaderSelection()
+    }
+  }, [documentId])
+
+  useEffect(() => {
+    return bindOutsideReaderPointerDismiss((target) => {
+      const iframe = iframeRef.current
+      if (!iframe) return false
+      return target === iframe || iframe.contains(target)
+    }, () => {
+      if (noteDialogOpen) return
+      dimTextSelection()
+    })
+  }, [dimTextSelection, noteDialogOpen])
+
+  useEffect(() => {
     if (error) {
       reportAppError(error)
     }
@@ -254,6 +575,44 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
   const handleOpenInBrowser = () => {
     void appApi.openExternal(pageUrl)
   }
+
+  const handleSelectMark = useCallback(
+    (mark: ReadingMark) => {
+      if (mark.anchor.format === 'web') {
+        navigateToUrl(mark.anchor.url)
+      }
+    },
+    [navigateToUrl],
+  )
+
+  const handleDeleteMark = useCallback(
+    async (mark: ReadingMark) => {
+      await deleteMark(mark.id)
+      toast.success('已删除')
+    },
+    [deleteMark],
+  )
+
+  const handleExportNotes = useCallback(
+    (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => {
+      const toc = tocFromWebUnits(units)
+      const currentHits = toc.filter((item) => item.matchKey === normalizedPageUrl)
+      const currentChapter =
+        scope === 'chapter'
+          ? currentHits.reduce((best, item) => ((item.level ?? 0) >= (best.level ?? 0) ? item : best), currentHits[0] ?? null)
+          : null
+      void saveReadingNotesExport({
+        marks,
+        toc,
+        contentKind,
+        scope,
+        currentChapter: scope === 'chapter' ? currentChapter : null,
+        filePath: documentId,
+        resolveChapter: resolveWebChapter,
+      })
+    },
+    [documentId, marks, normalizedPageUrl, units],
+  )
 
   const currentUnitId = useMemo(() => {
     const flatIndex = findWebDocFlatIndex(units, pageUrl)
@@ -290,10 +649,9 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       <ReaderToolbarShell
         ready={ready}
         tocDisabled={units.length === 0}
-        marksHidden
         onTocToggle={toggleToc}
-        onMarksToggle={() => undefined}
-        onAddBookmark={() => undefined}
+        onMarksToggle={toggleMarks}
+        onAddBookmark={() => void addPageBookmark()}
         trailing={
           <>
             <ReaderTypographyControls disabled={!ready} />
@@ -317,11 +675,15 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       />
 
       <ReaderContentShell
-        marksOpen={false}
-        marks={[]}
-        onSelectMark={() => undefined}
-        onDeleteMark={() => undefined}
-        onCloseMarks={() => undefined}
+        marksOpen={marksOpen}
+        marks={marks}
+        onSelectMark={handleSelectMark}
+        onDeleteMark={(mark) => void handleDeleteMark(mark)}
+        onCloseMarks={closeMarks}
+        onExportNotes={handleExportNotes}
+        marksToc={tocFromWebUnits(units)}
+        marksCurrentChapterKey={normalizedPageUrl}
+        marksResolveChapter={resolveWebChapter}
         tocOpen={tocOpen}
         units={units}
         currentUnitId={currentUnitId}
@@ -332,6 +694,94 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       </ReaderContentShell>
 
       <ReaderFooterNav ready={ready && units.length > 0} onPrevious={goPrevious} onNext={goNext} />
+
+      {markTooltipPos && hoveredMark && !inspector.active ? (
+        <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
+      ) : null}
+
+      {inspector.pos && inspector.active ? (
+        <ReadingMarkPopover
+          mark={inspector.active}
+          stack={inspector.stack}
+          x={inspector.pos.x}
+          y={inspector.pos.y}
+          onSelect={inspector.select}
+          onChangeColor={(color) => {
+            void updateMark({ id: inspector.active!.id, color })
+          }}
+          onEditNote={() => {
+            setEditingNoteMark(inspector.active)
+            setNoteDialogOpen(true)
+            inspector.close()
+          }}
+          onDelete={() => {
+            void handleDeleteMark(inspector.active!).then(() => inspector.close())
+          }}
+        />
+      ) : null}
+
+      {selectionToolbarPos && selectionSnapshot ? (
+        <SelectionToolbar
+          x={selectionToolbarPos.x}
+          y={selectionToolbarPos.y}
+          readOnly
+          onCopy={() => {
+            void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
+              if (ok) toast.success('已复制')
+            })
+            dimTextSelection()
+          }}
+          onAnnotate={() => {
+            setEditingNoteMark(null)
+            setNoteDialogOpen(true)
+            setSelectionToolbarPos(null)
+            showPendingSelectionHighlight()
+          }}
+          onHighlight={(color) => {
+            void handleSaveAnnotation('', color)
+          }}
+          onAddToChat={() => {
+            addSelectionMarkerToComposer()
+            dimTextSelection()
+          }}
+          onAskAgent={() => {
+            openAgentComposerToAskSelection()
+            dimTextSelection()
+          }}
+          onDismiss={clearTextSelection}
+        />
+      ) : null}
+
+      <AnnotationNoteDialog
+        open={noteDialogOpen}
+        filePath={documentId}
+        fileFingerprint={fileFingerprint}
+        aiAssist
+        excerpt={editingNoteMark?.excerpt ?? selectionSnapshot?.text}
+        initialNote={editingNoteMark?.note ?? ''}
+        title={editingNoteMark ? '编辑批注' : '添加批注'}
+        onOpenChange={(open) => {
+          setNoteDialogOpen(open)
+          if (!open) {
+            const wasEditing = Boolean(editingNoteMark)
+            setEditingNoteMark(null)
+            if (!wasEditing) clearTextSelection()
+          }
+        }}
+        onSave={(note) => {
+          if (editingNoteMark) {
+            void updateMark({
+              id: editingNoteMark.id,
+              note,
+              kind: editingNoteMark.kind === 'highlight' ? 'highlight' : 'note',
+            }).then((result) => {
+              if (isOk(result)) toast.success(note.trim() ? '已保存批注' : '已清除批注')
+            })
+            return
+          }
+          void handleSaveAnnotation(note)
+        }}
+      />
     </div>
   )
 }

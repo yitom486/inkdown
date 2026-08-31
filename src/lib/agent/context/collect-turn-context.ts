@@ -1,4 +1,5 @@
 import { getDocumentKind } from '@shared/types/document'
+import { resolveWebDocDocumentId, resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
 import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
@@ -25,13 +26,15 @@ function activeDocumentDisplayName(path: string, kind: InkdownActiveDocument['ki
 }
 
 export function collectActiveDocument(): InkdownActiveDocument | null {
-  const filePath = useActiveDocumentStore.getState().filePath?.trim()
-  if (!filePath) return null
-  const kind = getDocumentKind(filePath)
+  const rawPath = useActiveDocumentStore.getState().filePath?.trim()
+  if (!rawPath) return null
+  const kind = getDocumentKind(rawPath)
+  const path =
+    kind === 'web' ? resolveWebDocDocumentId(rawPath, resolveWebDocSiteId(rawPath)) : rawPath
   return {
-    path: filePath,
+    path,
     kind,
-    name: activeDocumentDisplayName(filePath, kind),
+    name: activeDocumentDisplayName(rawPath, kind),
   }
 }
 

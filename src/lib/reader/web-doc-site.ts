@@ -56,3 +56,12 @@ export function resolveWebDocTocDiscoveryUrl(pageUrl: string, siteId: WebDocSite
     return pageUrl
   }
 }
+
+/** 在线文档书级 id：与 TOC 发现入口一致，用于阅读标记 filePath */
+export function resolveWebDocDocumentId(pageUrl: string, siteId: WebDocSiteId): string {
+  return resolveWebDocTocDiscoveryUrl(pageUrl, siteId)
+}
+
+export function buildWebDocFileFingerprint(documentId: string): string {
+  return `web|${documentId}`
+}

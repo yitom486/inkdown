@@ -78,6 +78,14 @@ describe('renderMobiMarkOverlays', () => {
   it('文本锚定失败时按 rect 绘制可 hover 的 hit 区', () => {
     const container = document.createElement('div')
     container.style.height = '800px'
+    Object.defineProperties(container, {
+      clientWidth: { configurable: true, value: 600 },
+      scrollWidth: { configurable: true, value: 600 },
+      offsetWidth: { configurable: true, value: 600 },
+      clientHeight: { configurable: true, value: 800 },
+      scrollHeight: { configurable: true, value: 800 },
+      offsetHeight: { configurable: true, value: 800 },
+    })
     container.innerHTML = '<p>完全不同的正文，无法匹配选区文本。</p>'
 
     const marks: ReadingMark[] = [
@@ -102,6 +110,12 @@ describe('renderMobiMarkOverlays', () => {
     expect(hit?.style.height).toBe('4%')
     expect(parseFloat(hit?.style.top ?? '')).toBeCloseTo(20, 5)
     expect(container.querySelector('span.mobi-mark-note')).toBeNull()
+
+    const layer = container.querySelector('#reader-mark-layer') as HTMLElement
+    expect(layer.style.getPropertyValue('height')).toBe('800px')
+    expect(layer.style.getPropertyPriority('height')).toBe('important')
+    expect(layer.style.getPropertyValue('width')).toBe('600px')
+    expect(layer.style.getPropertyPriority('width')).toBe('important')
   })
 
   it('geometry 回退可命中 span 批注', () => {

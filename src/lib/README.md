@@ -56,7 +56,7 @@
 | `reading-mark-passages` / `export-reading-notes` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、侧栏类型筛选 |
 | `epub-*` | EPUB 目录、主题、选区、批注 overlay、滚动定位 |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay |
-| `mobi-*` / `kindle-*` / `azw3-*` | MOBI/Kindle 初始化、章节 HTML、导航、选区、批注 |
+| `mobi-*` / `kindle-*` / `azw3-*` | MOBI/Kindle 初始化、章节 HTML、导航、选区、批注（含 `renderWebMarkOverlays`） |
 | `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-agent-content` | 在线文档正文提取、页头剥离、URL/目录、Agent 按页抓文 |
 
 ## workspace/

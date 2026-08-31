@@ -1,7 +1,16 @@
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { PdfTextRect, ReadingAnchor, ReadingMark } from '@shared/types/reading-mark'
 import { applyHighlightSurface } from '@/lib/reader/reading-mark-colors'
+import { getMarkLayerMetrics } from '@/lib/reader/reader-mark-geometry'
+import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'
 
 const MARK_SELECTOR = '.mobi-mark-highlight, .mobi-mark-note, .mobi-mark-note-hit'
+
+function anchorRects(anchor: ReadingAnchor): PdfTextRect[] | undefined {
+  if (anchor.format === 'pdf' || anchor.format === 'mobi' || anchor.format === 'web') {
+    return anchor.rects
+  }
+  return undefined
+}
 
 function pointInClientRect(x: number, y: number, rect: DOMRect, padding = 0): boolean {
   return (
@@ -66,12 +75,13 @@ export function clearMobiMarkOverlays(container: HTMLElement | null): void {
 }
 
 function getMarkSearchText(mark: ReadingMark): string {
-  if (mark.anchor.format !== 'mobi') return ''
+  if (mark.anchor.format !== 'mobi' && mark.anchor.format !== 'web') return ''
   return (mark.excerpt ?? mark.anchor.selectedText ?? '').trim()
 }
 
 function findTextRange(root: HTMLElement, searchText: string): Range | null {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+  const doc = root.ownerDocument
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement
       if (parent?.closest(MARK_SELECTOR)) return NodeFilter.FILTER_REJECT
@@ -116,7 +126,7 @@ function findTextRange(root: HTMLElement, searchText: string): Range | null {
 
   if (!startNode || !endNode) return null
 
-  const range = document.createRange()
+  const range = doc.createRange()
   range.setStart(startNode, startOffset)
   range.setEnd(endNode, endOffset)
   return range
@@ -129,7 +139,7 @@ function wrapMarkRange(
   color: string | undefined,
   theme: 'dark' | 'light',
 ): boolean {
-  const span = document.createElement('span')
+  const span = (range.startContainer.ownerDocument ?? document).createElement('span')
   span.className = className
   span.dataset.markId = markId
   if (className === 'mobi-mark-highlight' || className === 'mobi-mark-note') {
@@ -165,12 +175,16 @@ function applyMobiTextMark(
 function ensureMarkLayer(body: HTMLElement): HTMLElement {
   let layer = body.querySelector('#reader-mark-layer') as HTMLElement | null
   if (!layer) {
-    layer = document.createElement('div')
+    layer = body.ownerDocument.createElement('div')
     layer.id = 'reader-mark-layer'
     layer.setAttribute('aria-hidden', 'true')
     body.appendChild(layer)
   }
-  layer.style.height = `${Math.max(body.scrollHeight, body.offsetHeight)}px`
+  const { width, height } = getMarkLayerMetrics(body)
+  // 选区保存与 overlay 都以 body 的可滚动内容为坐标系。这里必须显式锁定
+  // 尺寸，不能由站点自身的 html/body 高度规则或 100% 百分比接管。
+  layer.style.setProperty('width', `${width}px`, 'important')
+  layer.style.setProperty('height', `${height}px`, 'important')
   return layer
 }
 
@@ -183,7 +197,7 @@ function appendRectOverlay(
   color: string | undefined,
   theme: 'dark' | 'light',
 ): void {
-  const element = document.createElement('div')
+  const element = layer.ownerDocument.createElement('div')
   element.className = className
   element.dataset.markId = markId
   element.style.position = 'absolute'
@@ -213,22 +227,46 @@ export function renderMobiMarkOverlays(
   chapterId: string,
   theme: 'dark' | 'light' = 'light',
 ): void {
+  renderIframeMarkOverlays(container, marks, (mark) => {
+    if (mark.anchor.format !== 'mobi') return false
+    return String(mark.anchor.chapterId) === String(chapterId)
+  }, theme)
+}
+
+export function renderWebMarkOverlays(
+  container: HTMLElement | null,
+  marks: ReadingMark[],
+  pageUrl: string,
+  theme: 'dark' | 'light' = 'light',
+): void {
+  const normalizedPageUrl = normalizeWebDocNavUrl(pageUrl)
+  renderIframeMarkOverlays(container, marks, (mark) => {
+    if (mark.anchor.format !== 'web') return false
+    return mark.anchor.url === normalizedPageUrl
+  }, theme)
+}
+
+function renderIframeMarkOverlays(
+  container: HTMLElement | null,
+  marks: ReadingMark[],
+  matchesMark: (mark: ReadingMark) => boolean,
+  theme: 'dark' | 'light' = 'light',
+): void {
   if (!container) return
   clearMobiMarkOverlays(container)
 
-  const normalizedChapterId = String(chapterId)
   const layer = ensureMarkLayer(container)
 
   for (const mark of marks) {
-    if (mark.anchor.format !== 'mobi') continue
-    if (String(mark.anchor.chapterId) !== normalizedChapterId) continue
+    if (!matchesMark(mark)) continue
     if (mark.kind === 'bookmark') continue
 
     const className = mark.kind === 'note' ? 'mobi-mark-note' : 'mobi-mark-highlight'
     const appliedByText = applyMobiTextMark(container, mark, theme)
 
-    if (!appliedByText && mark.anchor.rects?.length) {
-      for (const rect of mark.anchor.rects) {
+    const rects = anchorRects(mark.anchor)
+    if (!appliedByText && rects?.length) {
+      for (const rect of rects) {
         appendRectOverlay(
           layer,
           rect,

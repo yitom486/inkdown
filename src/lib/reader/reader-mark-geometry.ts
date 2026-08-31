@@ -12,17 +12,23 @@ export function getReaderScrollRoot(doc: Document): HTMLElement {
   return doc.documentElement
 }
 
-/** 将选区坐标转为相对全章滚动内容的 0–1 比例（MOBI/AZW3 iframe 内使用） */
+/** 与 #reader-mark-layer 高度计算保持一致 */
+export function getMarkLayerMetrics(contentRoot: HTMLElement): { width: number; height: number } {
+  return {
+    width: Math.max(contentRoot.clientWidth, contentRoot.scrollWidth, contentRoot.offsetWidth),
+    height: Math.max(contentRoot.clientHeight, contentRoot.scrollHeight, contentRoot.offsetHeight),
+  }
+}
+
+/** 将选区坐标转为相对 contentRoot 滚动内容的 0–1 比例（MOBI / 在线文档 iframe 内使用） */
 export function normalizeRectsInScrollDocument(
   clientRects: DOMRectList | DOMRect[],
-  doc: Document,
+  _doc: Document,
   contentRoot: HTMLElement,
 ): PdfTextRect[] {
-  const scrollRoot = getReaderScrollRoot(doc)
   const items = 'length' in clientRects ? Array.from(clientRects) : [clientRects]
   const contentRect = contentRoot.getBoundingClientRect()
-  const width = scrollRoot.clientWidth || contentRoot.clientWidth
-  const height = Math.max(scrollRoot.scrollHeight, contentRoot.scrollHeight)
+  const { width, height } = getMarkLayerMetrics(contentRoot)
 
   if (width <= 0 || height <= 0) return []
 
@@ -51,8 +57,6 @@ export function buildMobiMarkStylesCss(theme: 'dark' | 'light'): string {
     #reader-mark-layer {
       position: absolute !important;
       inset: 0 auto auto 0 !important;
-      width: 100% !important;
-      height: 100% !important;
       pointer-events: none !important;
       z-index: 4 !important;
       margin: 0 !important;

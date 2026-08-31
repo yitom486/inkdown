@@ -1,6 +1,6 @@
 export type ReadingMarkKind = 'bookmark' | 'highlight' | 'note'
 
-export type ReadingDocumentFormat = 'pdf' | 'epub' | 'mobi'
+export type ReadingDocumentFormat = 'pdf' | 'epub' | 'mobi' | 'web'
 
 export interface PdfTextRect {
   /** 相对页宽比例 0–1 */
@@ -64,7 +64,17 @@ export interface MobiReadingAnchor {
   rects?: PdfTextRect[]
 }
 
-export type ReadingAnchor = PdfReadingAnchor | EpubReadingAnchor | MobiReadingAnchor
+export interface WebReadingAnchor {
+  format: 'web'
+  /** 页 URL（规范化，无 hash） */
+  url: string
+  headingId?: string
+  selectedText?: string
+  quote?: PdfTextQuote
+  rects?: PdfTextRect[]
+}
+
+export type ReadingAnchor = PdfReadingAnchor | EpubReadingAnchor | MobiReadingAnchor | WebReadingAnchor
 
 export interface ReadingMark {
   id: string

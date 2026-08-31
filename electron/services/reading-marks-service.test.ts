@@ -83,4 +83,24 @@ describe('reading-marks-service', () => {
     })
     expect(isOk(result)).toBe(false)
   })
+
+  it('在线文档 anchor 需合法 http(s) URL', async () => {
+    const bad = await createReadingMark({
+      filePath: 'https://react.dev/learn',
+      fileFingerprint: 'web|https://react.dev/learn',
+      kind: 'highlight',
+      anchor: { format: 'web', url: 'not-a-url' },
+      excerpt: 'test',
+    })
+    expect(isOk(bad)).toBe(false)
+
+    const good = await createReadingMark({
+      filePath: 'https://react.dev/learn',
+      fileFingerprint: 'web|https://react.dev/learn',
+      kind: 'highlight',
+      anchor: { format: 'web', url: 'https://react.dev/learn/installation' },
+      excerpt: 'test',
+    })
+    expect(isOk(good)).toBe(true)
+  })
 })

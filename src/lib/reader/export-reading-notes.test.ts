@@ -9,9 +9,11 @@ import {
   resolveMobiChapter,
   resolvePdfChapter,
   resolvePdfChapterByPage,
+  resolveWebChapter,
   tocFromEpubUnits,
   tocFromMobiUnits,
   tocFromPdfUnits,
+  tocFromWebUnits,
 } from './export-reading-notes'
 
 function mark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'id' | 'kind' | 'anchor'>): ReadingMark {
@@ -399,5 +401,63 @@ describe('export-reading-notes', () => {
         'D:\\book\\红色工程师的崛起：清华大学与中国技术官僚阶级的起源(安舟) (z-library.sk, 1lib.sk, z-lib.sk).epub',
       ),
     ).toBe('红色工程师的崛起')
+    expect(bookTitleFromPath('https://react.dev/learn')).toBe('react.dev/learn')
+    expect(bookTitleFromPath('https://react.dev/')).toBe('react.dev')
+  })
+
+  it('Web resolveChapter 用 url 匹配目录', () => {
+    const webToc = tocFromWebUnits([
+      { href: 'https://react.dev/learn', label: 'Quick Start' },
+      { href: 'https://react.dev/learn/installation', label: 'Installation' },
+    ])
+    expect(
+      resolveWebChapter(
+        mark({
+          id: '1',
+          kind: 'highlight',
+          excerpt: 'x',
+          anchor: { format: 'web', url: 'https://react.dev/learn/installation' },
+        }),
+        webToc,
+      ),
+    ).toMatchObject({ matchKey: 'https://react.dev/learn/installation', label: 'Installation', level: 0 })
+  })
+
+  it('Web 全书导出按页面分组', () => {
+    const webToc = tocFromWebUnits([
+      { href: 'https://react.dev/learn', label: 'Quick Start' },
+      { href: 'https://react.dev/learn/installation', label: 'Installation' },
+    ])
+    const result = buildReadingNotesExport({
+      marks: [
+        mark({
+          id: 'a',
+          filePath: 'https://react.dev/learn',
+          kind: 'note',
+          note: '入门笔记',
+          excerpt: 'React is a library',
+          anchor: { format: 'web', url: 'https://react.dev/learn' },
+        }),
+        mark({
+          id: 'b',
+          filePath: 'https://react.dev/learn',
+          kind: 'highlight',
+          excerpt: 'npm install',
+          anchor: { format: 'web', url: 'https://react.dev/learn/installation' },
+        }),
+      ],
+      toc: webToc,
+      contentKind: 'combined',
+      scope: 'book',
+      bookTitle: 'React Docs',
+      resolveChapter: resolveWebChapter,
+      now: new Date(2026, 7, 31, 12, 0),
+    })
+
+    expect(result!.markdown).toContain('## Quick Start')
+    expect(result!.markdown).toContain('## Installation')
+    expect(result!.markdown).toContain('入门笔记')
+    expect(result!.markdown).toContain('**重点**')
+    expect(result!.suggestedName).toBe('React Docs-20260831-1200.md')
   })
 })

@@ -6,6 +6,7 @@ import { toAppError, type AppError } from '@shared/core/errors'
 import { err, ok, type Result } from '@shared/core/result'
 import type {
   CreateReadingMarkPayload,
+  ReadingAnchor,
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '@shared/types/reading-mark'
@@ -49,6 +50,19 @@ function normalizeMarkFilePath(filePath: string): string {
   return trimmed
 }
 
+function validateReadingAnchor(anchor: ReadingAnchor): string | null {
+  if (anchor.format !== 'web') return null
+  try {
+    const url = new URL(anchor.url)
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return '在线文档 URL 无效'
+    }
+  } catch {
+    return '在线文档 URL 无效'
+  }
+  return null
+}
+
 export async function listReadingMarks(
   filePath?: string,
 ): Promise<Result<ReadingMark[], AppError>> {
@@ -73,6 +87,11 @@ export async function createReadingMark(
     const filePath = payload.filePath.trim()
     if (!filePath) {
       return err({ code: 'UNKNOWN', message: '文件路径无效' })
+    }
+
+    const anchorError = validateReadingAnchor(payload.anchor)
+    if (anchorError) {
+      return err({ code: 'UNKNOWN', message: anchorError })
     }
 
     const now = Date.now()

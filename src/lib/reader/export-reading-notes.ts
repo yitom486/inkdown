@@ -1,5 +1,7 @@
 import type { ReadingMark } from '@shared/types/reading-mark'
+import { isWebDocumentPath } from '@shared/types/document'
 import { normalizeLoadKey } from '@/lib/reader/reader-viewport-nav'
+import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'
 import {
   highlightSortKey,
   isHighlightPassage,
@@ -89,6 +91,8 @@ function sameMergeBucket(a: ReadingMark, b: ReadingMark): boolean {
       )
     case 'mobi':
       return ba.format === 'mobi' && aa.chapterId === ba.chapterId
+    case 'web':
+      return ba.format === 'web' && aa.url === ba.url
     case 'pdf':
       return ba.format === 'pdf' && aa.page === ba.page
   }
@@ -188,6 +192,26 @@ export function resolveMobiChapter(
   return unknownChapter(matchKey || 'unknown', matchKey || '未分章')
 }
 
+export function resolveWebChapter(
+  mark: ReadingMark,
+  toc: ReadingNotesChapterRef[],
+): ReadingNotesChapterRef {
+  if (mark.anchor.format !== 'web') {
+    return unknownChapter()
+  }
+  const matchKey = normalizeWebDocNavUrl(mark.anchor.url)
+  const hit = pickTocByMatchKey(toc, matchKey)
+  if (hit) return hit
+  try {
+    const url = new URL(matchKey)
+    const segment = url.pathname.split('/').filter(Boolean).pop()
+    const label = segment || url.hostname
+    return unknownChapter(matchKey, label)
+  } catch {
+    return unknownChapter(matchKey, matchKey || '未分章')
+  }
+}
+
 function tocEntryPage(entry: ReadingNotesChapterRef): number {
   const raw = entry.matchKey || entry.key
   const page = Number.parseInt(raw, 10)
@@ -275,6 +299,22 @@ export function tocFromMobiUnits(
   units.forEach((unit, index) => {
     const matchKey = unit.id
     if (!matchKey) return
+    toc.push({
+      key: `${index}:${matchKey}`,
+      matchKey,
+      label: unit.label.trim() || matchKey,
+      level: Math.max(0, unit.level ?? 0),
+    })
+  })
+  return toc
+}
+
+export function tocFromWebUnits(
+  units: Array<{ href: string; label: string; level?: number }>,
+): ReadingNotesChapterRef[] {
+  const toc: ReadingNotesChapterRef[] = []
+  units.forEach((unit, index) => {
+    const matchKey = normalizeWebDocNavUrl(unit.href)
     toc.push({
       key: `${index}:${matchKey}`,
       matchKey,
@@ -491,6 +531,16 @@ export function buildReadingNotesExport(input: ReadingNotesExportInput): Reading
 
 /** 从路径得到可读短书名：去扩展名、下载站尾巴，主标题（副标题前） */
 export function bookTitleFromPath(filePath: string): string {
+  if (isWebDocumentPath(filePath)) {
+    try {
+      const url = new URL(filePath)
+      const path = url.pathname.replace(/\/$/, '') || '/'
+      return path === '/' ? url.hostname : `${url.hostname}${path}`
+    } catch {
+      return filePath
+    }
+  }
+
   const base = filePath.split(/[/\\]/).pop() ?? filePath
   let name = base.replace(/\.(epub|pdf|mobi|azw3|azw)$/i, '')
 

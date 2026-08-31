@@ -10,6 +10,13 @@ function summarizeAnchor(anchor: ReadingAnchor): string {
       return anchor.href ?? anchor.cfi.slice(0, 48)
     case 'mobi':
       return `章节 ${anchor.chapterId}`
+    case 'web':
+      try {
+        const url = new URL(anchor.url)
+        return url.pathname.replace(/\/$/, '') || url.hostname
+      } catch {
+        return anchor.url
+      }
   }
 }
 
@@ -43,6 +50,8 @@ export function highlightSortKey(mark: ReadingMark): string {
       return `epub:${mark.anchor.href ?? mark.anchor.cfi}:${mark.createdAt}`
     case 'mobi':
       return `mobi:${mark.anchor.chapterId}:${mark.createdAt}`
+    case 'web':
+      return `web:${mark.anchor.url}:${mark.createdAt}`
   }
 }
 

@@ -20,11 +20,12 @@ export function isClickNotDrag(
 export function findMarkForSelection(
   marks: ReadingMark[],
   params: {
-    format: 'pdf' | 'epub' | 'mobi'
+    format: 'pdf' | 'epub' | 'mobi' | 'web'
     text: string
     page?: number
     cfiRange?: string
     chapterId?: string
+    pageUrl?: string
   },
 ): ReadingMark | undefined {
   const text = params.text.trim()
@@ -41,6 +42,9 @@ export function findMarkForSelection(
     if (mark.anchor.format === 'epub') {
       if (!params.cfiRange) return true
       return (mark.anchor.cfiRange ?? mark.anchor.cfi) === params.cfiRange
+    }
+    if (mark.anchor.format === 'web') {
+      return !params.pageUrl || mark.anchor.url === params.pageUrl
     }
     return String(mark.anchor.chapterId) === String(params.chapterId)
   })
