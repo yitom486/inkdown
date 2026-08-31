@@ -7,6 +7,10 @@ import {
 } from '@/components/agent/AgentChatItem'
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
 import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
+import { ProposeMarkBlockList, ProposeMarkChatBlock } from '@/components/agent/ProposeMarkChatBlock'
+import type { ResolveMarkProposal } from '@/components/agent/AgentBlockRenderer'
+import { dismissProposedMark } from '@/lib/agent/context/propose-mark'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
 import { renderAgentMarkdown } from '@/lib/agent/agent-markdown'
 import { cn } from '@/lib/utils'
@@ -15,9 +19,17 @@ import '@/styles/markdown-preview.css'
 
 interface AgentMessageBubbleProps {
   message: AcpChatMessage
+  resolveMarkProposal?: ResolveMarkProposal
 }
 
-export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
+export function AgentMessageBubble({ message, resolveMarkProposal }: AgentMessageBubbleProps) {
+  const resolveFromStore = useAcpUiStore((s) => s.resolveMarkProposal)
+  const resolve = resolveMarkProposal ?? resolveFromStore
+
+  const handleResolved: ResolveMarkProposal = (proposalId, status) => {
+    resolve(proposalId, status)
+    if (status === 'adopted' || status === 'dismissed') dismissProposedMark()
+  }
   const [thoughtOpen, setThoughtOpen] = useAgentChatOpen(Boolean(message.streaming))
 
   const html = useMemo(() => {
@@ -36,7 +48,18 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
   }
 
   if (message.role === 'tool') {
-    return <AgentToolCallCard message={message} />
+    if (message.markProposal && message.markProposalStatus !== 'dismissed') {
+      return (
+        <ProposeMarkChatBlock
+          proposal={message.markProposal}
+          status={message.markProposalStatus ?? 'pending'}
+          onResolved={(status) => handleResolved(message.markProposal!.id, status)}
+        />
+      )
+    }
+    return (
+      <AgentToolCallCard message={message} />
+    )
   }
 
   if (message.role === 'plan') {
@@ -165,6 +188,16 @@ export function AgentMessageBubble({ message }: AgentMessageBubbleProps) {
           )}
         />
       )}
+      {(message.markProposals?.length ?? 0) > 0 ? (
+        <ProposeMarkBlockList
+          embedded
+          proposals={message.markProposals!.map((row) => ({
+            proposal: row.proposal,
+            status: row.status,
+          }))}
+          onResolved={handleResolved}
+        />
+      ) : null}
       {message.streaming && !isUser && !showEmptyStreaming ? (
         <span className="mt-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-foreground/60 align-middle" />
       ) : null}

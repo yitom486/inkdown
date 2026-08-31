@@ -7,7 +7,10 @@ import {
   isToolActiveStatus,
 } from '@/stores/acp-chat-types'
 import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/agent/acp-plan'
+import { enrichToolMessageWithMarkProposal } from '@/lib/agent/parse-mark-proposal'
+import { promoteMarkProposalsToLastAgent, resolveMarkProposalOnMessages } from '@/lib/agent/promote-mark-proposals'
 import { extractAnnotationDraft } from '@/lib/agent/annotation-note-prompts'
+import type { MarkProposalStatus } from '@shared/types/mark-proposal'
 
 function messageId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -43,6 +46,8 @@ interface AnnotationAgentStore {
   activeFileKey: string | null
   pendingDraft: AnnotationPendingDraft | null
   phase: AnnotationDraftPhase
+  /** 提议卡应显示在右侧 Agent 还是批注小窗 */
+  proposeHost: 'main-agent' | 'annotation' | null
   /** 为 true 时 ACP sessionUpdate 写入本 store，不进正式面板 */
   capturing: boolean
   prompting: boolean
@@ -64,6 +69,7 @@ interface AnnotationAgentStore {
   setExternalProposeOpen: (open: boolean) => void
   setPhase: (phase: AnnotationDraftPhase) => void
   setPendingDraft: (draft: AnnotationPendingDraft | null) => void
+  setProposeHost: (host: 'main-agent' | 'annotation' | null) => void
   updatePendingNote: (note: string) => void
   discardDraft: () => void
   appendUserMessage: (text: string) => void
@@ -78,6 +84,7 @@ interface AnnotationAgentStore {
   /** 测试 / 显式重置用 */
   clearAllAgentSessionIds: () => void
   lastAgentText: () => string
+  resolveMarkProposal: (proposalId: string, status: Exclude<MarkProposalStatus, 'pending'>) => void
 }
 
 function emptyThread(): AnnotationAgentThread {
@@ -127,34 +134,39 @@ function applyToolCallUpdate(
   if (!toolCallId) return messages
   const next = [...messages]
   const idx = next.findIndex((m) => m.role === 'tool' && m.toolCallId === toolCallId)
-  const title = typeof update.title === 'string' ? update.title : '工具调用'
-  const kind = typeof update.kind === 'string' ? update.kind : 'other'
-  const status = typeof update.status === 'string' ? update.status : 'pending'
-  const contentText = flattenToolContent(update.content)
+  const prev = idx >= 0 ? next[idx] : undefined
+  const title = typeof update.title === 'string' ? update.title : (prev?.toolTitle ?? '工具调用')
+  const kind = typeof update.kind === 'string' ? update.kind : (prev?.toolKind ?? 'other')
+  const status = typeof update.status === 'string' ? update.status : (prev?.toolStatus ?? 'pending')
+  const contentText =
+    'content' in update
+      ? flattenToolContent(update.content)
+      : (prev?.toolContentText ?? prev?.text ?? '')
+  const active = isToolActiveStatus(status)
+  const base: AcpChatMessage = {
+    id: prev?.id ?? messageId('tool'),
+    role: 'tool',
+    toolCallId,
+    toolTitle: title,
+    toolKind: kind,
+    toolStatus: status,
+    toolContentText: contentText,
+    text: contentText || title,
+    createdAt: prev?.createdAt ?? Date.now(),
+    streaming: active,
+    markProposal: prev?.markProposal,
+    markProposalStatus: prev?.markProposalStatus,
+  }
+  const message = enrichToolMessageWithMarkProposal(base, isToolActiveStatus)
   if (idx < 0) {
-    next.push({
-      id: messageId('tool'),
-      role: 'tool',
-      toolCallId,
-      toolTitle: title,
-      toolKind: kind,
-      toolStatus: status,
-      toolContentText: contentText,
-      text: contentText || title,
-      createdAt: Date.now(),
-      streaming: isToolActiveStatus(status),
-    })
+    next.push(message)
     return next
   }
-  const prev = next[idx]!
+  const prevMsg = next[idx]!
   next[idx] = {
-    ...prev,
-    toolTitle: title || prev.toolTitle,
-    toolKind: kind || prev.toolKind,
-    toolStatus: status,
-    toolContentText: contentText || prev.toolContentText,
-    text: contentText || prev.text,
-    streaming: isToolActiveStatus(status),
+    ...message,
+    id: prevMsg.id,
+    createdAt: prevMsg.createdAt,
     updatedAt: Date.now(),
   }
   return next
@@ -167,6 +179,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
       activeFileKey: null,
       pendingDraft: null,
       phase: 'idle',
+      proposeHost: null,
       capturing: false,
       prompting: false,
       timelineOpen: false,
@@ -200,6 +213,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
             pendingDraft: null,
             phase: 'idle',
             externalProposeOpen: false,
+            proposeHost: null,
           }
         })
         return thread.id
@@ -211,6 +225,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
       setExternalProposeOpen: (open) => set({ externalProposeOpen: open }),
       setPhase: (phase) => set({ phase }),
       setPendingDraft: (draft) => set({ pendingDraft: draft }),
+      setProposeHost: (host) => set({ proposeHost: host }),
       updatePendingNote: (note) =>
         set((s) =>
           s.pendingDraft
@@ -222,7 +237,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
         ),
 
       discardDraft: () =>
-        set({ pendingDraft: null, phase: 'idle', externalProposeOpen: false }),
+        set({ pendingDraft: null, phase: 'idle', externalProposeOpen: false, proposeHost: null }),
 
       appendUserMessage: (text) =>
         set((s) =>
@@ -282,21 +297,29 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
         set((s) => {
           const patched = patchActiveThread(s, (t) => {
             const now = Date.now()
-            return {
-              ...t,
-              updatedAt: now,
-              messages: t.messages.map((m) => {
-                if (!m.streaming) return m
-                if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
-                  return {
+            const frozen = t.messages.map((m) => {
+              if (!m.streaming) return m
+              if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
+                return enrichToolMessageWithMarkProposal(
+                  {
                     ...m,
                     streaming: false,
                     updatedAt: now,
                     toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
-                  }
-                }
-                return { ...m, streaming: false, updatedAt: now }
-              }),
+                  },
+                  isToolActiveStatus,
+                )
+              }
+              return { ...m, streaming: false, updatedAt: now }
+            })
+            return {
+              ...t,
+              updatedAt: now,
+              messages: promoteMarkProposalsToLastAgent(
+                frozen.map((m) =>
+                  m.role === 'tool' ? enrichToolMessageWithMarkProposal(m, isToolActiveStatus) : m,
+                ),
+              ),
             }
           })
           return { prompting: false, ...patched }
@@ -469,6 +492,15 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
         }
         return ''
       },
+
+      resolveMarkProposal: (proposalId, status) =>
+        set((s) =>
+          patchActiveThread(s, (t) => ({
+            ...t,
+            messages: resolveMarkProposalOnMessages(t.messages, proposalId, status),
+            updatedAt: Date.now(),
+          })),
+        ),
     }),
     {
       name: 'inkdown-annotation-agent',

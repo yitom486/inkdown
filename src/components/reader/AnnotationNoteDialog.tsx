@@ -20,8 +20,10 @@ import {
   selectAnnotationActiveMessages,
   useAnnotationAgentStore,
 } from '@/stores/annotation-agent-store'
+import { ProposeMarkChatBlock } from '@/components/agent/ProposeMarkChatBlock'
 import { groupAgentMessages } from '@/components/agent/AgentActivityGroup'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
+import { toProposedMark } from '@shared/types/mark-proposal'
 import { toast } from 'sonner'
 
 interface AnnotationNoteDialogProps {
@@ -66,6 +68,7 @@ export function AnnotationNoteDialog({
   const messages = useAnnotationAgentStore(
     useShallow((s) => selectAnnotationActiveMessages(s)),
   )
+  const resolveMarkProposal = useAnnotationAgentStore((s) => s.resolveMarkProposal)
 
   const hasDraft = Boolean(assist.pendingDraft)
   const canPolish = aiAssist && note.trim().length > 0
@@ -292,35 +295,43 @@ export function AnnotationNoteDialog({
 
         {showAi && aiAssist ? (
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-            {hasDraft ? (
-              <div className="shrink-0 space-y-2 rounded-md border border-border/80 p-2">
-                <p className="text-xs font-medium">AI 草稿（已同步到上方，可再改）</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {ANNOTATION_REFINE_CHIPS.map((chip) => (
-                    <Button
-                      key={chip.id}
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 rounded-full px-2.5 text-xs"
-                      disabled={assist.busy}
-                      onClick={() => void assist.runRefine(chip.id)}
-                    >
-                      {chip.label}
-                    </Button>
-                  ))}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 rounded-full px-2.5 text-xs text-muted-foreground"
-                    disabled={assist.busy}
-                    onClick={() => assist.discardDraft()}
-                  >
-                    不要了
-                  </Button>
-                </div>
-              </div>
+            {hasDraft && assist.pendingDraft ? (
+              <ProposeMarkChatBlock
+                defaultExpanded
+                proposal={toProposedMark({
+                  id: `annotation:${assist.pendingDraft.fileKey}`,
+                  excerpt: assist.pendingDraft.excerpt || excerpt,
+                  note: assist.pendingDraft.note,
+                  source: 'annotation',
+                })}
+                onNoteChange={(value) => {
+                  setNote(value)
+                  assist.updatePendingNote(value)
+                }}
+                onAdopt={async (text) => {
+                  onSave(text)
+                  assist.discardDraft()
+                  onOpenChange(false)
+                }}
+                onDismiss={() => assist.discardDraft()}
+                extraActions={
+                  <>
+                    {ANNOTATION_REFINE_CHIPS.map((chip) => (
+                      <Button
+                        key={chip.id}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 rounded-full px-2.5 text-[11px]"
+                        disabled={assist.busy}
+                        onClick={() => void assist.runRefine(chip.id)}
+                      >
+                        {chip.label}
+                      </Button>
+                    ))}
+                  </>
+                }
+              />
             ) : null}
 
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md border border-border/60 p-2">
@@ -336,11 +347,19 @@ export function AnnotationNoteDialog({
                       className="space-y-1 opacity-80"
                     >
                       {item.messages.map((message) => (
-                        <AgentMessageBubble key={message.id} message={message} />
+                        <AgentMessageBubble
+                          key={message.id}
+                          message={message}
+                          resolveMarkProposal={resolveMarkProposal}
+                        />
                       ))}
                     </div>
                   ) : (
-                    <AgentMessageBubble key={item.message.id} message={item.message} />
+                    <AgentMessageBubble
+                      key={item.message.id}
+                      message={item.message}
+                      resolveMarkProposal={resolveMarkProposal}
+                    />
                   ),
                 )
               )}

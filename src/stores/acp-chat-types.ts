@@ -1,4 +1,5 @@
 import type { AcpToolCallKind, AcpToolCallStatus } from '@shared/types/acp'
+import type { MarkProposalStatus, ProposedMark } from '@shared/types/mark-proposal'
 import type { AcpPlanEntry } from '@/lib/agent/acp-plan'
 import type { AcpMessageAttachment } from '@/lib/agent/acp-composer'
 
@@ -31,6 +32,15 @@ export interface AcpChatMessage {
   toolLocations?: Array<{ path: string; line?: number }>
   /** plan 卡片 */
   planEntries?: AcpPlanEntry[]
+  /** inkdown_propose_* 工具结果（promote 前） */
+  markProposal?: ProposedMark
+  markProposalStatus?: MarkProposalStatus
+  /** promote 后挂在 Agent 回复下方的内嵌提议 */
+  markProposals?: Array<{
+    proposal: ProposedMark
+    status: MarkProposalStatus
+    toolCallId?: string
+  }>
 }
 
 export function extractTextFromContent(content: unknown): string {

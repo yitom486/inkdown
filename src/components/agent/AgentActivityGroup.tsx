@@ -9,6 +9,7 @@ import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { formatDuration } from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'
+import { isProposalPromotedToAgent } from '@/lib/agent/promote-mark-proposals'
 
 interface AgentActivityGroupProps {
   messages: AcpChatMessage[]
@@ -116,6 +117,22 @@ export function groupAgentMessages(messages: AcpChatMessage[]): AgentTimelineIte
 
   for (const msg of messages) {
     if (msg.role === 'thought' || msg.role === 'tool' || msg.role === 'plan') {
+      if (
+        msg.role === 'tool' &&
+        msg.markProposal &&
+        !isProposalPromotedToAgent(messages, msg.markProposal.id)
+      ) {
+        flush()
+        items.push({ type: 'single', message: msg })
+        continue
+      }
+      if (
+        msg.role === 'tool' &&
+        msg.markProposal &&
+        isProposalPromotedToAgent(messages, msg.markProposal.id)
+      ) {
+        continue
+      }
       buffer.push(msg)
       continue
     }

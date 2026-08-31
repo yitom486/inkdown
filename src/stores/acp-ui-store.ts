@@ -28,6 +28,12 @@ import {
   toolCallIdFromPermission,
   type AcpPermissionOptionView,
 } from '@/lib/agent/acp-permission'
+import { enrichToolMessageWithMarkProposal } from '@/lib/agent/parse-mark-proposal'
+import {
+  promoteMarkProposalsToLastAgent,
+  resolveMarkProposalOnMessages,
+} from '@/lib/agent/promote-mark-proposals'
+import type { MarkProposalStatus } from '@shared/types/mark-proposal'
 
 export interface AcpPendingPermission {
   requestId: number
@@ -108,6 +114,7 @@ interface AcpUiStore {
   clearMessages: () => void
   applySessionUpdate: (update: Record<string, unknown>) => void
   finishStreaming: () => void
+  resolveMarkProposal: (proposalId: string, status: Exclude<MarkProposalStatus, 'pending'>) => void
   createThread: (workspaceRoot?: string) => string
   switchThread: (threadId: string) => void
   deleteThread: (threadId: string) => void
@@ -194,6 +201,7 @@ function patchActiveThread(
 }
 
 
+
 function applyToolCallUpdate(
   messages: AcpChatMessage[],
   update: Record<string, unknown>,
@@ -234,7 +242,7 @@ function applyToolCallUpdate(
   }
 
   const active = isToolActiveStatus(status)
-  const message: AcpChatMessage = {
+  const base: AcpChatMessage = {
     id: prev?.id ?? newId('tool'),
     role: 'tool',
     toolCallId,
@@ -248,7 +256,10 @@ function applyToolCallUpdate(
     createdAt: prev?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     streaming: active,
+    markProposal: prev?.markProposal,
+    markProposalStatus: prev?.markProposalStatus,
   }
+  const message = enrichToolMessageWithMarkProposal(base, isToolActiveStatus)
 
   if (idx >= 0) next[idx] = message
   else {
@@ -473,12 +484,15 @@ export const useAcpUiStore = create<AcpUiStore>()(
             const frozen = t.messages.map((m) => {
               if (!m.streaming) return m
               if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
-                return {
-                  ...m,
-                  streaming: false,
-                  updatedAt: now,
-                  toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
-                }
+                return enrichToolMessageWithMarkProposal(
+                  {
+                    ...m,
+                    streaming: false,
+                    updatedAt: now,
+                    toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
+                  },
+                  isToolActiveStatus,
+                )
               }
               return { ...m, streaming: false, updatedAt: now }
             })
@@ -486,10 +500,23 @@ export const useAcpUiStore = create<AcpUiStore>()(
               ...t,
               updatedAt: now,
               // 回合结束：中间 Agent 进度气泡去掉，只留最后一条答复（工具/思考进折叠组）
-              messages: pruneIntermediateAgentReplies(frozen),
+              messages: promoteMarkProposalsToLastAgent(
+                pruneIntermediateAgentReplies(frozen).map((m) =>
+                  m.role === 'tool' ? enrichToolMessageWithMarkProposal(m, isToolActiveStatus) : m,
+                ),
+              ),
             }
           }),
         })),
+
+      resolveMarkProposal: (proposalId, status) =>
+        set((s) =>
+          patchActiveThread(s, (t) => ({
+            ...t,
+            messages: resolveMarkProposalOnMessages(t.messages, proposalId, status),
+            updatedAt: Date.now(),
+          })),
+        ),
 
       createThread: (workspaceRoot) => {
         const thread = createEmptyThread(workspaceRoot)

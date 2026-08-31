@@ -8,6 +8,8 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。
 | `AgentComposer` | 输入框、附件、选区标记 |
 | `AgentChatItem` / `AgentMessageBubble` / `AgentMermaidBlock` | 消息列表与气泡 |
 | `AgentToolCallCard` / `AgentDiffPreview` / `AgentPlanCard` | 工具调用、diff、计划 |
+| `ProposeMarkChatBlock` / `ProposeMarkBlockList` / `ProposeMarkCard` | 聊天气泡内可折叠提议块 |
+| `AgentBlockRenderer` | 兼容入口（tool 消息） |
 | `AgentPermissionHost` / `AgentPermissionCard` | 权限请求 UI |
 | `AgentSnapshotHost` | 向主进程提供 Inkdown 内存快照（MCP） |
 | `AgentAuthDialog` / `AgentHistoryMenu` | 认证与历史线程 |

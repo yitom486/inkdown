@@ -16,6 +16,7 @@ describe('annotation-agent-store', () => {
       prompting: false,
       timelineOpen: false,
       externalProposeOpen: false,
+      proposeHost: null,
       sessionsStale: false,
     })
   })

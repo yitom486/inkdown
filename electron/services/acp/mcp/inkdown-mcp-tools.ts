@@ -123,7 +123,7 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
     description:
       '基于用户当前选区提出批注或高亮草稿（不会直接入库）。' +
       'note 非空为批注文案，空字符串为仅高亮。' +
-      '客户端会弹出确认框，用户点击「采用」后才写入；工具结果含 proposed:true。' +
+      '客户端会在会话内展示提议卡，用户点击「采用」后才写入；工具结果含 proposed:true。' +
       '需要已有选区；用户要求「给这段加批注」时调用。与 inkdown_propose_note 等价。',
     inputSchema: {
       type: 'object',

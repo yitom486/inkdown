@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { isOk } from '@shared/core/result'
 import { acpApi } from '@/api/acp-api'
 import { buildInkdownPromptPrefix } from '@/lib/agent/context/build-prompt-prefix'
-import { proposeNoteForAgent } from '@/lib/agent/context/propose-note-for-agent'
+import { proposeMarkForAgent } from '@/lib/agent/context/propose-mark'
 import {
   ANNOTATION_DIRECTION_ASK,
   buildAnnotationChatPrompt,
@@ -191,11 +191,11 @@ export function useAnnotationAgentAssist(options: {
         return false
       }
 
-      await proposeNoteForAgent(draft, {
-        openConfirmUi: false,
+      await proposeMarkForAgent(draft, {
         excerpt: options.excerpt,
         filePath: options.filePath,
         fileFingerprint: options.fileFingerprint,
+        source: 'annotation',
       })
       setComposeHint(false)
       setAwaitingDirection(false)
