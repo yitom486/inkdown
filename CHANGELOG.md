@@ -1,14 +1,40 @@
 # 更新日志
 
-记录 [轻量阅读器（Inkdown）](README.md) 各版本**主要功能更新**。版本号与 Git tag 对齐。
+记录 [Inkdown](README.md) 各版本**主要功能更新**。版本号与 Git tag 对齐。
 
 **发版时**：在 `[未发布]` 写好本节要点 → 改版本号与日期 → 打 tag 发布；不必罗列每条 commit 或小修复。
 
 ## [未发布]
 
-- **在线文档阅读**：欢迎页输入 URL 或打开 React 官方文档；阅读模式、侧栏目录与底栏导航；划词高亮/批注、标记侧栏与 Markdown 导出；顶栏地址栏切换网址；代码块一键复制；Agent 可通过 MCP 读取当前页/视口/目录章节与阅读标记
+---
+
+## [0.2.3] - 2026-08-31
+
+### 产品
+
+- 应用正式定名为 **Inkdown**（窗口标题、欢迎页、安装包与关于对话框）
+- **应用内更新**：打包版启动后检查 [GitHub Releases](https://github.com/yitom486/inkdown/releases)，可下载并重启安装；关于 / 设置中也可手动检查
+- 关于对话框补充产品说明与仓库链接
+
+> **从 v0.2.x 升级**：安装包 appId 已变更，旧版「轻量阅读器」无法原地自动升级，请下载新安装包覆盖或并行安装；此后同 Inkdown 安装包之间可走应用内更新。
+
+### 在线文档
+
+- 欢迎页输入 URL 或打开 React 官方文档；主进程抓取 HTML、阅读模式渲染
+- 与电子书同一套阅读壳：目录、底栏步进、划词高亮 / 批注、标记侧栏、笔记导出
+- 顶栏**地址栏**切换页面；**代码块一键复制**（含 react.dev 等站点语言识别）
+- Agent 可通过 MCP 读取当前页、视口、目录章节与阅读标记
+
+### 批注与阅读
+
 - **批注 AI 助手**：选区对话、一键「写成批注」、手写优先与 AI 润色；独立会话，与主 Agent 面板互不干扰
 - 修复 PDF 远距离跳转（目录 / 书签）后黑屏不渲染
+- 在线文档划词高亮：文本锚定与空白归一化，减轻布局变化后错位
+
+### 开发
+
+- 在线文档 E2E：本地 fixture 冒烟（不依赖外网）
+- Release 产物包含 `latest.yml`，供 electron-updater 使用
 
 ---
 
@@ -49,7 +75,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.2...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/yitom486/inkdown/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yitom486/inkdown/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/yitom486/inkdown/compare/v0.1.1...v0.2.1
 [0.1.1]: https://github.com/yitom486/inkdown/compare/v0.1.0...v0.1.1

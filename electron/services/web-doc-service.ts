@@ -16,7 +16,7 @@ import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy
 const WEB_DOC_MAX_BYTES = 5 * 1024 * 1024
 const WEB_DOC_FETCH_TIMEOUT_MS = 30_000
 const WEB_DOC_USER_AGENT =
-  'Inkdown/0.3 (Electron; +https://github.com/yitom486/inkdown)'
+  'Inkdown/0.2.3 (Electron; +https://github.com/yitom486/inkdown)'
 
 function toFetchError(message: string): Result<never, AppError> {
   return err({ code: 'FILE_READ_ERROR', message })

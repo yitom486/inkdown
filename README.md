@@ -31,6 +31,7 @@ Inkdown 是一个本地优先的桌面工作区：在同一个窗口里编辑 Ma
 | PDF | 连续滚动、目录、缩放、高 DPI 渲染、文字选择与复制、书签、重点、批注与笔记导出 |
 | EPUB | 目录与章节跳转、阅读进度、主题、书签、重点、批注与笔记导出 |
 | MOBI / AZW3 / AZW | 多级目录、章内锚点跳转、阅读进度、主题、书签、重点、批注与笔记导出 |
+| 在线文档（URL） | 阅读模式抓取 HTML、目录与底栏导航、地址栏换页、代码块复制、划词标记与 Agent 上下文 |
 
 - 阅读器会保存进度；再次打开同一本书时优先回到上次位置。
 - EPUB、MOBI、AZW3 与 AZW 支持在顶部工具栏调整正文字号和行距；偏好会自动保存并在下次启动时恢复。
@@ -59,6 +60,13 @@ Inkdown 是一个本地优先的桌面工作区：在同一个窗口里编辑 Ma
 5. 打开“书签与批注”，按章节回顾标记；需要时从“导出”选择范围和内容类型。
 
 对于 AZW3 中的章内小节跳转，阅读区会在标题上方保留可见空间，避免标题被工具栏遮住。
+
+### 在线文档
+
+1. 在欢迎页输入文档 URL（如 `https://react.dev/learn`）或从最近列表打开。
+2. 顶栏地址栏可切换到同站其他页面；侧栏目录与底栏用于步进。
+3. 划词、批注、导出与 Agent 提问与本地电子书使用同一套能力。
+4. 适合 SSR / 静态文档站；强依赖客户端渲染的 SPA 站点可能无法完整抓取。
 
 ## Agent（可选）
 
@@ -109,7 +117,9 @@ curl -fsSL https://bun.sh/install | bash
 
 ## 下载、安装与开发
 
-Windows 安装包通过 [GitHub Releases](../../releases) 发布。下载 `.exe` 后按安装向导操作，可自行选择安装目录。各版本主要更新见 [CHANGELOG.md](./CHANGELOG.md)。
+安装包通过 [GitHub Releases](https://github.com/yitom486/inkdown/releases) 发布（Windows / macOS / Linux）。Windows 下载 `.exe` 后按向导安装，可自行选择目录。各版本主要更新见 [CHANGELOG.md](./CHANGELOG.md)。
+
+**应用内更新**（v0.2.3 起）：已安装的 Inkdown 会在启动时检查 GitHub Release；也可在「关于」或「设置 → 应用」中手动检查。若此前安装的是旧名「轻量阅读器」且 appId 不同，需重新下载安装包；同 appId 的后续版本可走应用内更新。
 
 项目使用 Bun；开发时不要改用 npm、yarn 或 pnpm。
 
@@ -136,9 +146,9 @@ bun run pack
 发版前在 [CHANGELOG.md](./CHANGELOG.md) 的 `[未发布]` 写好本版主要功能，再改版本号、日期并打 tag：
 
 ```bash
-git tag v0.2.2
+git tag v0.2.3
 git push origin master
-git push origin v0.2.2
+git push origin v0.2.3
 ```
 
 发布工作流位于 [`.github/workflows/release.yml`](./.github/workflows/release.yml)。
