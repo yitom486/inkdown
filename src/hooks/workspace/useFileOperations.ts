@@ -14,6 +14,7 @@ import type { FileTreeNode, OpenDocumentResult, OpenFolderResult } from '@shared
 import { dirname, joinPath } from '@shared/utils/path'
 import { err, isOk, ok, type Result } from '@shared/core/result'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
+import { useWebDocStore } from '@/stores/web-doc-store'
 import { clearDraftForFile } from '@/hooks/editor/useDraftPersistence'
 import { getOpenDialogDefaultPath } from '@/lib/workspace/dialog-default-path'
 import { normalizeNewlines } from '@/lib/editor/text-normalize'
@@ -77,6 +78,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   const loadFile = useCallback(
     (result: { filePath: string; content: string }) => {
+      useWebDocStore.getState().closePage()
       const content = normalizeNewlines(result.content)
       setFilePath(result.filePath)
       setContent(content)
@@ -89,6 +91,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   const loadReader = useCallback(
     (path: string) => {
+      useWebDocStore.getState().closePage()
       setFilePath(path)
       setContent('')
       setSavedContent('')
@@ -96,6 +99,22 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       trackOpenedPath(path)
     },
     [syncTitle, trackOpenedPath],
+  )
+
+  const openWebDocument = useCallback(
+    (rawUrl: string) => {
+      const normalized = useWebDocStore.getState().openPage(rawUrl)
+      if (!normalized) {
+        reportError({ code: 'FILE_READ_ERROR', message: 'URL 无效，请输入 http(s) 链接' })
+        return false
+      }
+      setFilePath(undefined)
+      setContent('')
+      setSavedContent('')
+      syncTitle(undefined, false)
+      return true
+    },
+    [reportError, syncTitle],
   )
 
   const openFileMutation = useMutation({
@@ -476,6 +495,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     saveUnsavedChanges,
     notifyPathDeleted,
     notifyPathRenamed,
+    openWebDocument,
   }
 }
 

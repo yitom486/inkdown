@@ -12,8 +12,9 @@ import {
   type AdjacentFlatNavState,
 } from '@/lib/reader/reader-chapter-nav'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+import { findWebDocFlatIndex, syncWebNavigation } from '@/lib/reader/web-doc-toc'
 
-export type ReaderFormat = 'epub' | 'mobi' | 'pdf'
+export type ReaderFormat = 'epub' | 'mobi' | 'pdf' | 'web'
 
 export const EMPTY_READER_NAV: AdjacentFlatNavState<ReaderUnit> = {
   current: null,
@@ -148,4 +149,12 @@ export function syncPdfNavigation(
   return resolveReaderChapterNav(units, resolvedFlatIndex, navLevel, {
     isTocLike: isTocLikeChapter,
   })
+}
+
+export function syncWebDocNavigation(
+  units: ReaderUnit[],
+  pageUrl: string,
+  flatIndex?: number,
+): AdjacentFlatNavState<ReaderUnit> {
+  return syncWebNavigation(units, pageUrl, flatIndex)
 }

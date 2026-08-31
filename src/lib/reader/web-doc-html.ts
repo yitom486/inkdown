@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import type { WebDocPageContent, WebDocSiteId } from '@shared/types/web-doc'
+import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
 
@@ -111,10 +112,15 @@ export function sanitizeWebDocBodyHtml(html: string): string {
   })
 }
 
-export function extractWebDocArticle(html: string, pageUrl: string): { title: string; bodyHtml: string } {
+export function extractWebDocArticle(
+  html: string,
+  pageUrl: string,
+  siteId: WebDocSiteId = 'generic-ssr',
+): { title: string; bodyHtml: string } {
   const doc = parseHtmlDocument(html)
   const root = pickArticleRoot(doc)
   const clone = root.cloneNode(true) as HTMLElement
+  stripWebDocChrome(clone, siteId)
   rewriteRelativeUrls(clone, pageUrl)
   const bodyHtml = sanitizeWebDocBodyHtml(clone.innerHTML)
   return {
@@ -155,7 +161,7 @@ export function buildWebDocPageContent(
   pageUrl: string,
   siteId: WebDocSiteId,
 ): WebDocPageContent {
-  const article = extractWebDocArticle(html, pageUrl)
+  const article = extractWebDocArticle(html, pageUrl, siteId)
   return {
     ...article,
     baseUrl: pageUrl,

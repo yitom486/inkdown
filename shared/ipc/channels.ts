@@ -10,6 +10,7 @@ export const IPC = {
   APP_SET_VERBOSE_LOGS: 'app:set-verbose-logs',
   APP_NEW_WINDOW: 'app:new-window',
   APP_GET_WINDOW_INIT: 'app:get-window-init',
+  APP_OPEN_EXTERNAL: 'app:open-external',
   FILE_OPEN: 'file:open',
   FILE_OPEN_FOLDER: 'file:open-folder',
   FILE_SCAN_WORKSPACE: 'file:scan-workspace',

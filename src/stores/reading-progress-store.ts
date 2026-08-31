@@ -25,11 +25,17 @@ export interface PdfReadingProgress {
   updatedAt: number
 }
 
+export interface WebReadingProgress {
+  scrollRatio: number
+  updatedAt: number
+}
+
 interface ReadingProgressStore {
   epubByFile: Record<string, EpubReadingProgress>
   epubLocationsByFile: Record<string, EpubLocationsCacheEntry>
   mobiByFile: Record<string, MobiReadingProgress>
   pdfByFile: Record<string, PdfReadingProgress>
+  webByUrl: Record<string, WebReadingProgress>
   getEpubProgress: (filePath: string) => EpubReadingProgress | undefined
   saveEpubProgress: (
     filePath: string,
@@ -49,6 +55,9 @@ interface ReadingProgressStore {
   getPdfProgress: (filePath: string) => PdfReadingProgress | undefined
   savePdfProgress: (filePath: string, progress: Pick<PdfReadingProgress, 'pageNum'>) => void
   clearPdfProgress: (filePath: string) => void
+  getWebProgress: (pageUrl: string) => WebReadingProgress | undefined
+  saveWebProgress: (pageUrl: string, progress: Pick<WebReadingProgress, 'scrollRatio'>) => void
+  clearWebProgress: (pageUrl: string) => void
 }
 
 function normalizeFilePath(filePath: string): string | undefined {
@@ -63,6 +72,7 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
       epubLocationsByFile: {},
       mobiByFile: {},
       pdfByFile: {},
+      webByUrl: {},
 
       getEpubProgress: (filePath) => {
         const normalized = normalizeFilePath(filePath)
@@ -222,6 +232,42 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
           return { pdfByFile: next }
         })
       },
+
+      getWebProgress: (pageUrl) => {
+        const normalized = normalizeFilePath(pageUrl)
+        if (!normalized) return undefined
+        return get().webByUrl[normalized]
+      },
+
+      saveWebProgress: (pageUrl, progress) => {
+        const normalized = normalizeFilePath(pageUrl)
+        if (!normalized) return
+
+        const scrollRatio = Math.min(1, Math.max(0, progress.scrollRatio))
+        const prev = get().webByUrl[normalized]
+        if (prev && Math.abs(prev.scrollRatio - scrollRatio) < 0.01) return
+
+        set((state) => ({
+          webByUrl: {
+            ...state.webByUrl,
+            [normalized]: {
+              scrollRatio,
+              updatedAt: Date.now(),
+            },
+          },
+        }))
+      },
+
+      clearWebProgress: (pageUrl) => {
+        const normalized = normalizeFilePath(pageUrl)
+        if (!normalized) return
+
+        set((state) => {
+          const next = { ...state.webByUrl }
+          delete next[normalized]
+          return { webByUrl: next }
+        })
+      },
     }),
     {
       name: 'reader-progress',
@@ -230,6 +276,7 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
         epubLocationsByFile: state.epubLocationsByFile,
         mobiByFile: state.mobiByFile,
         pdfByFile: state.pdfByFile,
+        webByUrl: state.webByUrl,
       }),
     },
   ),

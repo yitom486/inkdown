@@ -1,5 +1,5 @@
 import type { RendererErrorPayload } from '@shared/types/error-log'
-import { ok, type Result } from '@shared/core/result'
+import { ok, err, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 
 function getElectronAPI() {
@@ -31,5 +31,13 @@ export const appApi = {
 
   newWindow(): void {
     getElectronAPI()?.newWindow()
+  },
+
+  async openExternal(url: string): Promise<Result<void, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.openExternal) {
+      return err({ code: 'API_UNAVAILABLE', message: '外部链接 API 不可用' })
+    }
+    return api.openExternal(url)
   },
 }

@@ -100,6 +100,7 @@ export interface ElectronAPI {
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void
   quit: () => void
   newWindow: () => void
+  openExternal: (url: string) => Promise<Result<void, AppError>>
   toggleDevTools: () => void
   logRendererError: (payload: RendererErrorPayload) => Promise<Result<string, AppError>>
   getErrorLogPath: () => Promise<Result<string, AppError>>

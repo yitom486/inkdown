@@ -13,7 +13,8 @@ Selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand-selecto
 | `draft-store.ts` | 未保存草稿（localStorage） |
 | `error-log-store.ts` | 渲染端错误日志列表 |
 | `reader-navigation-store.ts` | 阅读器目录 / flatIndex / 当前章（侧栏与底栏共用） |
-| `reading-progress-store.ts` | 阅读进度百分比等 |
+| `reading-progress-store.ts` | 阅读进度百分比等（含在线文档滚动比例） |
+| `web-doc-store.ts` | 当前在线文档 URL、最近打开的文档站 |
 | `reading-mark-panel-store.ts` | 标记侧栏筛选（重点/批注/书签，persist） |
 | `acp-ui-store.ts` | Agent 线程、消息、连接状态、权限与配置偏好 |
 | `annotation-agent-store.ts` | 批注 AI 助手：按书线程、独立 agentSessionId、pendingDraft |

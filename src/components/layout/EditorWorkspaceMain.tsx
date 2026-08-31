@@ -51,10 +51,12 @@ interface EditorWorkspaceMainProps {
   content: string
   workspaceRoot?: string
   recentFiles: string[]
+  recentWebUrls?: string[]
   onContentChange: (value: string) => void
   onOpenFile: () => void
   onOpenFolder: () => void
   onOpenRecentFile: (path: string) => void
+  onOpenWebDoc: (url: string) => void
   onOutlineChange?: (state: EditorOutlineState) => void
 }
 
@@ -68,10 +70,12 @@ export const EditorWorkspaceMain = forwardRef<
     content,
     workspaceRoot,
     recentFiles,
+    recentWebUrls,
     onContentChange,
     onOpenFile,
     onOpenFolder,
     onOpenRecentFile,
+    onOpenWebDoc,
     onOutlineChange,
   },
   ref,
@@ -255,10 +259,12 @@ export const EditorWorkspaceMain = forwardRef<
         {showWelcome ? (
           <WelcomePage
             recentFiles={recentFiles}
+            recentWebUrls={recentWebUrls}
             workspaceRoot={workspaceRoot}
             onOpenFile={onOpenFile}
             onOpenFolder={onOpenFolder}
             onOpenRecentFile={onOpenRecentFile}
+            onOpenWebDoc={onOpenWebDoc}
           />
         ) : (
           <ResizablePanelGroup

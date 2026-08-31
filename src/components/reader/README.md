@@ -1,9 +1,10 @@
 # src/components/reader
 
-电子书阅读 UI：EPUB / PDF / MOBI（含 AZW3）。
+电子书阅读 UI：EPUB / PDF / MOBI（含 AZW3）与**在线文档**。
 
 | 文件 | 功能 |
 |------|------|
+| `WebDocViewer` | 在线文档阅读（iframe 阅读模式） |
 | `EpubViewer` / `PdfViewer` / `MobiViewer` | 各格式主 Viewer |
 | `PdfPageView` | PDF 单页（渲染 + text layer + 批注 overlay） |
 | `ReaderContentShell` / `ReaderToolbarShell` / `ReaderFooterNav` | 阅读区壳、工具栏、底栏翻页 |

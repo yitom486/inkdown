@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { IPC } from '@shared/ipc/channels'
 import type {
   ExportDocumentPayload,
@@ -30,7 +30,7 @@ import type {
   AcpSnapshotResponsePayload,
 } from '@shared/types/acp'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
-import { ok } from '@shared/core/result'
+import { ok, err } from '@shared/core/result'
 import {
   exportHtmlDocument,
   exportPdfDocument,
@@ -331,6 +331,20 @@ export function registerIpcHandlers(): void {
 
   ipcMain.on(IPC.APP_NEW_WINDOW, () => {
     createWindow({ fresh: true })
+  })
+
+  ipcMain.handle(IPC.APP_OPEN_EXTERNAL, async (_event, rawUrl: unknown) => {
+    const urlResult = parseWebDocUrlInput(rawUrl)
+    if (!urlResult.ok) return urlResult
+    try {
+      await shell.openExternal(urlResult.value)
+      return ok(undefined)
+    } catch (cause) {
+      return err({
+        code: 'UNKNOWN',
+        message: cause instanceof Error ? cause.message : '无法打开外部链接',
+      })
+    }
   })
 
   /** preload 启动时同步读取，仅访问内存中的 session 映射 */

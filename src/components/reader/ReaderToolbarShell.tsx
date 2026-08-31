@@ -6,6 +6,7 @@ import { useReaderNavTitles } from '@/stores/reader-navigation-store'
 interface ReaderToolbarShellProps {
   ready?: boolean
   tocDisabled?: boolean
+  marksHidden?: boolean
   onTocToggle: () => void
   onMarksToggle: () => void
   onAddBookmark: () => void
@@ -17,6 +18,7 @@ interface ReaderToolbarShellProps {
 export function ReaderToolbarShell({
   ready = true,
   tocDisabled = false,
+  marksHidden = false,
   onTocToggle,
   onMarksToggle,
   onAddBookmark,
@@ -38,25 +40,29 @@ export function ReaderToolbarShell({
         <List className="size-3.5" />
         目录
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 gap-1 text-xs"
-        disabled={!ready}
-        onClick={onMarksToggle}
-      >
-        <Bookmark className="size-3.5" />
-        书签与批注
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 text-xs"
-        disabled={!ready || addBookmarkDisabled}
-        onClick={onAddBookmark}
-      >
-        添加书签
-      </Button>
+      {!marksHidden ? (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            disabled={!ready}
+            onClick={onMarksToggle}
+          >
+            <Bookmark className="size-3.5" />
+            书签与批注
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={!ready || addBookmarkDisabled}
+            onClick={onAddBookmark}
+          >
+            添加书签
+          </Button>
+        </>
+      ) : null}
       <span className="ml-2 min-w-0 truncate text-xs text-muted-foreground">{currentTitle}</span>
       {center ? <div className="flex min-w-0 flex-1 items-center justify-center gap-1">{center}</div> : null}
       {trailing ? <div className="ml-auto flex items-center gap-2">{trailing}</div> : null}

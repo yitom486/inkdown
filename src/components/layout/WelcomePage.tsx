@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react'
-import { Clock, FileText, FolderOpen } from 'lucide-react'
+import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
+import { useState } from 'react'
+import { Clock, FileText, FolderOpen, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() ?? filePath
@@ -9,11 +11,15 @@ function getFileName(filePath: string): string {
 
 interface WelcomePageProps {
   recentFiles: string[]
+  recentWebUrls?: string[]
   workspaceRoot?: string
   onOpenFile: () => void
   onOpenFolder: () => void
   onOpenRecentFile: (path: string) => void
+  onOpenWebDoc: (url: string) => void
 }
+
+const REACT_DOCS_URL = 'https://react.dev/learn'
 
 interface WelcomeActionProps {
   icon: ReactNode
@@ -40,18 +46,31 @@ function WelcomeAction({ icon, title, hint, onClick }: WelcomeActionProps) {
 
 export function WelcomePage({
   recentFiles,
+  recentWebUrls = [],
   workspaceRoot,
   onOpenFile,
   onOpenFolder,
   onOpenRecentFile,
+  onOpenWebDoc,
 }: WelcomePageProps) {
+  const [webUrlInput, setWebUrlInput] = useState('')
+
+  const submitWebUrl = () => {
+    const value = webUrlInput.trim()
+    if (!value) {
+      toast.error('请输入文档 URL')
+      return
+    }
+    onOpenWebDoc(value)
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto bg-editor px-6 py-10">
       <div className="w-full max-w-lg space-y-8">
         <div className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">轻量阅读器</h1>
           <p className="text-sm text-muted-foreground">
-            Markdown 编辑 · PDF / EPUB / MOBI 阅读
+            Markdown 编辑 · PDF / EPUB / MOBI 阅读 · 在线文档
           </p>
         </div>
 
@@ -69,6 +88,61 @@ export function WelcomePage({
             onClick={onOpenFolder}
           />
         </div>
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">在线文档</h2>
+          <div className="flex gap-2">
+            <input
+              value={webUrlInput}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setWebUrlInput(event.target.value)
+              }
+              className={cn(
+                'flex h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm',
+                'shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              )}
+              placeholder="https://react.dev/learn"
+              onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+                if (event.key === 'Enter') submitWebUrl()
+              }}
+            />
+            <Button type="button" onClick={submitWebUrl}>
+              打开
+            </Button>
+          </div>
+          <WelcomeAction
+            icon={<Globe className="size-5" />}
+            title="React 官方文档"
+            hint="react.dev · 阅读模式"
+            onClick={() => onOpenWebDoc(REACT_DOCS_URL)}
+          />
+        </section>
+
+        {recentWebUrls.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Globe className="size-4" />
+              最近在线文档
+            </h2>
+            <ul className="divide-y divide-border/60 rounded-lg border border-border/60 bg-background/50">
+              {recentWebUrls.map((url) => (
+                <li key={url}>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex w-full flex-col gap-0.5 px-3 py-2.5 text-left text-sm',
+                      'hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none',
+                    )}
+                    title={url}
+                    onClick={() => onOpenWebDoc(url)}
+                  >
+                    <span className="truncate font-medium">{url}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {recentFiles.length > 0 && (
           <section className="space-y-2">

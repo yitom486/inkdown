@@ -43,4 +43,24 @@ describe('web-doc-html', () => {
     rewriteRelativeUrls(root, 'https://react.dev/learn')
     expect(root.querySelector('a')?.getAttribute('href')).toBe('#intro')
   })
+
+  it('react.dev 页头控件会被剥离', () => {
+    const html = `<!DOCTYPE html><html><body><article>
+      <div class="flex justify-between items-start">
+        <div class="flex-1">
+          <a href="/learn">Learn React</a>
+        </div>
+        <button><span>Copy page</span><span>Copy</span></button>
+      </div>
+      <h1>Quick Start<a aria-label="Link for this heading" href="#quick-start">#</a></h1>
+      <p>Body</p>
+    </article></body></html>`
+
+    const result = extractWebDocArticle(html, 'https://react.dev/learn', 'react-dev')
+    expect(result.bodyHtml).toContain('Quick Start')
+    expect(result.bodyHtml).toContain('Body')
+    expect(result.bodyHtml).not.toContain('Copy page')
+    expect(result.bodyHtml).not.toContain('Learn React')
+    expect(result.bodyHtml).not.toContain('aria-label="Link for this heading"')
+  })
 })

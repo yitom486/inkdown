@@ -13,8 +13,10 @@ import {
   type EditorWorkspaceMainHandle,
 } from '@/components/layout/EditorWorkspaceMain'
 import { ReaderWorkspaceMain } from '@/components/layout/ReaderWorkspaceMain'
+import { WebDocWorkspaceMain } from '@/components/layout/WebDocWorkspaceMain'
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell'
 import { Toaster } from '@/components/ui/sonner'
+import { toast } from 'sonner'
 import { useAutoSave } from '@/hooks/editor/useAutoSave'
 import { useDraftPersistence, clearDraftForFile } from '@/hooks/editor/useDraftPersistence'
 import { useDraftRecoveryPrompt } from '@/hooks/editor/useDraftRecovery'
@@ -29,6 +31,7 @@ import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
+import { useWebDocStore } from '@/stores/web-doc-store'
 import { baseName } from '@/lib/agent/context/collect-turn-context'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { isMarkdownEditorFocused } from '@/lib/editor/editor-focus'
@@ -85,7 +88,11 @@ function App() {
     saveUnsavedChanges,
     notifyPathDeleted,
     notifyPathRenamed,
+    openWebDocument,
   } = useFileOperations(reportAppError)
+
+  const webPageUrl = useWebDocStore((state) => state.pageUrl)
+  const recentWebUrls = useWebDocStore((state) => state.recentUrls)
 
   const { exportHtml, exportPdf } = useExportDocument(content, filePath)
 
@@ -201,17 +208,17 @@ function App() {
     if (readerDocumentKind && filePath) {
       setOutline({ headings: [] })
     }
-  }, [filePath, readerDocumentKind])
+  }, [filePath, readerDocumentKind, webPageUrl])
 
   useEffect(() => {
-    useActiveDocumentStore.getState().setActiveFilePath(filePath ?? null)
-  }, [filePath])
+    useActiveDocumentStore.getState().setActiveFilePath(filePath ?? webPageUrl ?? null)
+  }, [filePath, webPageUrl])
 
   // Markdown 正文：读 ref 而非 content，避免每次按键都重新注册
   const editorContentRef = useRef(content)
   editorContentRef.current = content
   useEffect(() => {
-    if (!filePath || readerDocumentKind) return
+    if (!filePath || readerDocumentKind || webPageUrl) return
     return registerReaderContent({
       filePath,
       getCurrentText: () => editorContentRef.current,
@@ -220,7 +227,16 @@ function App() {
         yield { label: baseName(filePath), text: editorContentRef.current }
       },
     })
-  }, [filePath, readerDocumentKind])
+  }, [filePath, readerDocumentKind, webPageUrl])
+
+  const handleOpenWebDoc = useCallback(
+    (url: string) => {
+      if (!openWebDocument(url)) {
+        toast.error('URL 无效，请输入 http(s) 链接')
+      }
+    },
+    [openWebDocument],
+  )
 
   if (!window.electronAPI) {
     const isElectron = navigator.userAgent.includes('Electron')
@@ -236,6 +252,7 @@ function App() {
   }
 
   const isReader = Boolean(readerDocumentKind && filePath)
+  const isWebDoc = Boolean(webPageUrl)
 
   return (
     <>
@@ -251,10 +268,10 @@ function App() {
         activeFilePath={filePath}
         recentFiles={recentFiles}
         treeActions={treeActions}
-        headings={isReader ? [] : outline.headings}
-        activeHeadingId={isReader ? undefined : outline.activeHeadingId}
-        onSelectHeading={isReader ? undefined : handleSelectHeading}
-        readOnly={isReader}
+        headings={isReader || isWebDoc ? [] : outline.headings}
+        activeHeadingId={isReader || isWebDoc ? undefined : outline.activeHeadingId}
+        onSelectHeading={isReader || isWebDoc ? undefined : handleSelectHeading}
+        readOnly={isReader || isWebDoc}
         onOpenFile={() => void openFile()}
         onOpenFolder={() => void openFolder()}
         onRescanWorkspace={() => void rescanWorkspace()}
@@ -273,7 +290,9 @@ function App() {
         onNewWindow={() => appApi.newWindow()}
         onQuit={quitApp}
       >
-        {isReader && readerDocumentKind && filePath ? (
+        {isWebDoc && webPageUrl ? (
+          <WebDocWorkspaceMain pageUrl={webPageUrl} theme={theme} />
+        ) : isReader && readerDocumentKind && filePath ? (
           <ReaderWorkspaceMain
             filePath={filePath}
             documentKind={readerDocumentKind}
@@ -287,10 +306,12 @@ function App() {
             content={content}
             workspaceRoot={workspaceRoot}
             recentFiles={recentFiles}
+            recentWebUrls={recentWebUrls}
             onContentChange={setContent}
             onOpenFile={() => void openFile()}
             onOpenFolder={() => void openFolder()}
             onOpenRecentFile={(path) => void openRecentFile(path)}
+            onOpenWebDoc={handleOpenWebDoc}
             onOutlineChange={handleOutlineChange}
           />
         )}

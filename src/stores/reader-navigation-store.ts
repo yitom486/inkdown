@@ -10,6 +10,7 @@ import {
   syncMobiNavigation,
   syncMobiNavigationFromViewport,
   syncPdfNavigation,
+  syncWebDocNavigation,
   type ReaderFormat,
 } from '@/lib/reader/reader-navigation-sync'
 import type { AdjacentFlatNavState } from '@/lib/reader/reader-chapter-nav'
@@ -67,6 +68,7 @@ interface ReaderNavigationStore {
   syncMobi: (units: MobiChapterItem[], chapterId?: string, flatIndex?: number) => void
   syncMobiViewport: (units: MobiChapterItem[], document: Document, chapterId: string) => void
   syncPdf: (units: ReaderUnit[], pageNum: number) => void
+  syncWeb: (units: ReaderUnit[], pageUrl: string, flatIndex?: number) => void
   syncFlatIndex: (flatIndex: number) => void
   clearNavIntent: () => void
 }
@@ -151,6 +153,17 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
     set({ units, format: 'pdf', nav })
   },
 
+  syncWeb: (units, pageUrl, flatIndex) => {
+    const nav = syncWebDocNavigation(units, pageUrl, flatIndex)
+    const prev = get()
+    if (prev.format === 'web' && prev.units === units && isSameNav(prev.nav, nav)) return
+    const nextIntent =
+      typeof flatIndex === 'number' && flatIndex >= 0
+        ? { flatIndex, lockedUntil: Date.now() + NAV_INTENT_LOCK_MS }
+        : prev.navIntent
+    set({ units, format: 'web', nav, navIntent: nextIntent })
+  },
+
   syncFlatIndex: (flatIndex) => {
     const { format, units, nav: prevNav } = get()
     if (flatIndex < 0 || flatIndex >= units.length) return
@@ -160,7 +173,9 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
         ? syncMobiNavigation(units as MobiChapterItem[], undefined, flatIndex)
         : format === 'pdf'
           ? syncPdfNavigation(units as ReaderUnit[], undefined, flatIndex)
-          : syncEpubNavigation(units as EpubChapter[], undefined, flatIndex)
+          : format === 'web'
+            ? syncWebDocNavigation(units as ReaderUnit[], get().filePath ?? '', flatIndex)
+            : syncEpubNavigation(units as EpubChapter[], undefined, flatIndex)
 
     if (isSameNav(prevNav, nav)) {
       set({

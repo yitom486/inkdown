@@ -8,6 +8,7 @@ import type {
   WebDocFetchResult,
 } from '@shared/types/web-doc'
 import { extractSameOriginDocLinks } from './web-doc/extract-toc-links'
+import { extractReactDevToc } from './web-doc/adapters/react-dev-toc'
 import { resolveWebDocSiteId } from './web-doc/site-registry'
 import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy'
 
@@ -97,11 +98,18 @@ export async function discoverWebDocToc(
   try {
     const pageUrl = new URL(fetchResult.value.url)
     const siteId = resolveWebDocSiteId(pageUrl)
-    const entries = extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
+    const entries =
+      siteId === 'react-dev'
+        ? extractReactDevToc(fetchResult.value.html, fetchResult.value.url)
+        : extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
+    const resolvedEntries =
+      entries.length > 0
+        ? entries
+        : extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
 
     return ok({
       siteId,
-      entries,
+      entries: resolvedEntries,
     })
   } catch (cause) {
     return err(toAppError(cause, '解析文档目录失败'))
