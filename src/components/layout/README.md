@@ -10,6 +10,7 @@
 | `DocumentOutline` | Markdown 大纲 |
 | `EditorWorkspaceMain` | Markdown 编辑 + 预览分栏 |
 | `ReaderWorkspaceMain` | 电子书阅读主区入口 |
-| `WebDocWorkspaceMain` | 在线文档阅读主区 |
+| `WebDocWorkspaceMain` | 在线文档阅读主区（顶栏地址栏 + Viewer） |
+| `WebDocAddressBar` | 在线文档 URL 输入与最近列表 |
 | `ViewModeToggle` / `SplitPane` | 编辑/预览/分屏切换 |
 | `WelcomePage` | 无打开文件时的欢迎页（含在线文档 URL 入口） |

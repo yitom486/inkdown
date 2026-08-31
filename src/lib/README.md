@@ -42,7 +42,7 @@
 | 文件 | 功能 |
 |------|------|
 | `preview-sanitize` | 预览 HTML 消毒选项 |
-| `code-block-copy` | 代码块「复制」按钮 DOM 辅助 |
+| `code-block-copy` / `code-block-chrome` | 代码块「复制」按钮 DOM 与共享工具栏 HTML |
 | `mermaid-hydrate` / `mermaid-debug` | 在容器内渲染 Mermaid |
 
 ## reader/
@@ -57,7 +57,7 @@
 | `epub-*` | EPUB 目录、主题、选区、批注 overlay、滚动定位 |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay |
 | `mobi-*` / `kindle-*` / `azw3-*` | MOBI/Kindle 初始化、章节 HTML、导航、选区、批注（含 `renderWebMarkOverlays`） |
-| `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-agent-content` | 在线文档正文提取、页头剥离、URL/目录、Agent 按页抓文 |
+| `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-agent-content` / `web-doc-code-blocks` | 在线文档正文提取、页头剥离、URL/目录、Agent 按页抓文、代码块复制 |
 
 ## workspace/
 

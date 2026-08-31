@@ -1,7 +1,13 @@
 /** 从代码块复制按钮解析待复制文本（纯函数，便于单测） */
 export function getCodeBlockTextFromCopyButton(button: Element): string | null {
-  const code = button.closest('.code-block')?.querySelector('code')
-  const text = code?.textContent
+  const block = button.closest('.code-block')
+  if (!block) return null
+
+  const code = block.querySelector('code')
+  if (code?.textContent?.trim()) return code.textContent
+
+  const pre = block.querySelector('pre')
+  const text = pre?.textContent
   return text && text.length > 0 ? text : null
 }
 

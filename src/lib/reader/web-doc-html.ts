@@ -3,6 +3,7 @@ import type { WebDocPageContent, WebDocSiteId } from '@shared/types/web-doc'
 import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
+import { buildWebDocCodeBlockCss, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
 
 const ARTICLE_SELECTORS = [
   'article',
@@ -135,8 +136,9 @@ export function buildWebDocReaderDocument(
   typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
 ): string {
   const layoutCss = buildReaderLayoutCss(theme, typography)
+  const codeBlockCss = buildWebDocCodeBlockCss(theme)
   const safeTitle = DOMPurify.sanitize(content.title)
-  const body = content.bodyHtml
+  const body = enhanceWebDocCodeBlocks(content.bodyHtml)
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -145,6 +147,7 @@ export function buildWebDocReaderDocument(
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${safeTitle}</title>
   <style>${layoutCss}</style>
+  <style>${codeBlockCss}</style>
   <style>
     body { margin: 0; padding: 1.25rem 1.5rem 2rem; }
     a { word-break: break-word; }

@@ -55,6 +55,7 @@ import {
   clearWindowSelection,
 } from '@/lib/reader/reader-selection-dismiss'
 import { copyTextToClipboard, type PdfSelectionSnapshot } from '@/lib/reader/pdf-selection'
+import { applyCopyButtonFeedback, getCodeBlockTextFromCopyButton } from '@/lib/preview/code-block-copy'
 import {
   resolveWebChapter,
   tocFromWebUnits,
@@ -410,6 +411,26 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
         }, WEB_PROGRESS_SAVE_MS)
       }
 
+      const onCopyCodeBlock = (event: MouseEvent) => {
+        const target = event.target
+        if (!(target instanceof Element)) return
+
+        const button = target.closest<HTMLButtonElement>('.code-block-copy')
+        if (!button) return
+
+        event.preventDefault()
+        event.stopPropagation()
+
+        const text = getCodeBlockTextFromCopyButton(button)
+        if (!text) return
+
+        void copyTextToClipboard(text).then((ok) => {
+          if (!ok) return
+          applyCopyButtonFeedback(button)
+          toast.success('代码已复制')
+        })
+      }
+
       const onClick = (event: MouseEvent) => {
         const target = event.target as HTMLElement | null
         const anchor = target?.closest('a')
@@ -456,6 +477,7 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
         })
       }
 
+      doc.addEventListener('click', onCopyCodeBlock)
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('scroll', onScroll, { passive: true })
@@ -464,6 +486,7 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       restoreScrollProgress()
 
       frameCleanupRef.current = () => {
+        doc.removeEventListener('click', onCopyCodeBlock)
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
         doc.removeEventListener('scroll', onScroll)

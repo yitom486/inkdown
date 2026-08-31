@@ -291,7 +291,12 @@ function App() {
         onQuit={quitApp}
       >
         {isWebDoc && webPageUrl ? (
-          <WebDocWorkspaceMain pageUrl={webPageUrl} theme={theme} />
+          <WebDocWorkspaceMain
+            pageUrl={webPageUrl}
+            theme={theme}
+            recentUrls={recentWebUrls}
+            onNavigateUrl={handleOpenWebDoc}
+          />
         ) : isReader && readerDocumentKind && filePath ? (
           <ReaderWorkspaceMain
             filePath={filePath}
