@@ -109,7 +109,7 @@ curl -fsSL https://bun.sh/install | bash
 
 ## 下载、安装与开发
 
-Windows 安装包通过 [GitHub Releases](../../releases) 发布。下载 `.exe` 后按安装向导操作，可自行选择安装目录。
+Windows 安装包通过 [GitHub Releases](../../releases) 发布。下载 `.exe` 后按安装向导操作，可自行选择安装目录。各版本主要更新见 [CHANGELOG.md](./CHANGELOG.md)。
 
 项目使用 Bun；开发时不要改用 npm、yarn 或 pnpm。
 
@@ -132,6 +132,8 @@ bun run pack
 ## 发布版本
 
 只有推送版本 tag 才会触发 GitHub Actions 打包发布，普通 `git push` 不会创建 Release。
+
+发版前在 [CHANGELOG.md](./CHANGELOG.md) 的 `[未发布]` 写好本版主要功能，再改版本号、日期并打 tag：
 
 ```bash
 git tag v0.2.2
