@@ -4,6 +4,7 @@ import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
 import { buildWebDocCodeBlockCss, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
+import { ensureWebDocHeadingIds } from '@/lib/reader/web-doc-outline'
 
 const ARTICLE_SELECTORS = [
   'article',
@@ -123,7 +124,8 @@ export function extractWebDocArticle(
   const clone = root.cloneNode(true) as HTMLElement
   stripWebDocChrome(clone, siteId)
   rewriteRelativeUrls(clone, pageUrl)
-  const bodyHtml = sanitizeWebDocBodyHtml(clone.innerHTML)
+  const sanitized = sanitizeWebDocBodyHtml(clone.innerHTML)
+  const { bodyHtml } = ensureWebDocHeadingIds(sanitized)
   return {
     title: extractDocumentTitle(doc),
     bodyHtml,

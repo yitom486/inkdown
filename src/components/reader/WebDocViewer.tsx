@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -27,6 +35,13 @@ import { registerSelectionProvider, commitReaderSelection, clearReaderSelection 
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import { buildWebDocReaderDocument } from '@/lib/reader/web-doc-html'
+import { extractWebDocHeadings } from '@/lib/reader/web-doc-outline'
+import {
+  collectPreviewHeadingPositions,
+  findActiveHeadingByPositions,
+  type MarkdownHeading,
+} from '@/lib/editor/markdown-headings'
+import type { EditorOutlineState } from '@/components/layout/EditorWorkspaceMain'
 import {
   buildWebDocFileFingerprint,
   formatWebDocTitle,
@@ -79,12 +94,18 @@ import '@/styles/web-doc-viewer.css'
 
 const WEB_PROGRESS_SAVE_MS = 400
 
+export interface WebDocViewerHandle {
+  selectHeading: (heading: MarkdownHeading) => void
+}
+
 interface WebDocViewerProps {
   pageUrl: string
   theme: 'dark' | 'light'
+  onOutlineChange?: (state: EditorOutlineState) => void
 }
 
-export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
+export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
+  function WebDocViewer({ pageUrl, theme, onOutlineChange }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const saveProgressTimerRef = useRef<number | null>(null)
   const themeRef = useRef(theme)
@@ -144,6 +165,50 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
   const displayTitle = useMemo(
     () => formatWebDocTitle(pageUrl, data?.content.title),
     [data?.content.title, pageUrl],
+  )
+
+  const pageHeadings = useMemo(
+    () => (data?.content.bodyHtml ? extractWebDocHeadings(data.content.bodyHtml) : []),
+    [data?.content.bodyHtml],
+  )
+  const pageHeadingsRef = useRef(pageHeadings)
+  pageHeadingsRef.current = pageHeadings
+  const [activeHeadingId, setActiveHeadingId] = useState<string>()
+
+  useEffect(() => {
+    setActiveHeadingId(undefined)
+  }, [pageUrl])
+
+  useEffect(() => {
+    onOutlineChange?.({ headings: pageHeadings, activeHeadingId })
+  }, [activeHeadingId, onOutlineChange, pageHeadings])
+
+  const syncActiveHeadingFromScroll = useCallback(() => {
+    const doc = iframeRef.current?.contentDocument
+    const root = doc?.scrollingElement ?? doc?.documentElement
+    if (!root || !(root instanceof HTMLElement)) return
+    const headings = pageHeadingsRef.current
+    if (headings.length === 0) {
+      setActiveHeadingId(undefined)
+      return
+    }
+    const positions = collectPreviewHeadingPositions(root)
+    const active = findActiveHeadingByPositions(headings, positions, root.scrollTop)
+    setActiveHeadingId(active?.id)
+  }, [])
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      selectHeading: (heading: MarkdownHeading) => {
+        const doc = iframeRef.current?.contentDocument
+        const el = doc?.getElementById(heading.id)
+        if (!el) return
+        el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        setActiveHeadingId(heading.id)
+      },
+    }),
+    [],
   )
 
   const clearTextSelection = useCallback(() => {
@@ -449,6 +514,7 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       }
 
       const onScroll = () => {
+        syncActiveHeadingFromScroll()
         if (saveProgressTimerRef.current != null) {
           window.clearTimeout(saveProgressTimerRef.current)
         }
@@ -531,6 +597,7 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       doc.addEventListener('click', onClick)
       doc.addEventListener('mousemove', onMouseMove, { passive: true })
       restoreScrollProgress()
+      syncActiveHeadingFromScroll()
 
       frameCleanupRef.current = () => {
         doc.removeEventListener('click', onCopyCodeBlock)
@@ -543,7 +610,7 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
         if (hoverRaf !== 0) window.cancelAnimationFrame(hoverRaf)
       }
     },
-    [documentId, persistScrollProgress, restoreScrollProgress, scheduleWebMarkLayout],
+    [documentId, persistScrollProgress, restoreScrollProgress, scheduleWebMarkLayout, syncActiveHeadingFromScroll],
   )
 
   useEffect(() => {
@@ -872,4 +939,4 @@ export function WebDocViewer({ pageUrl, theme }: WebDocViewerProps) {
       />
     </div>
   )
-}
+})

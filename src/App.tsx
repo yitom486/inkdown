@@ -12,7 +12,7 @@ import {
   type EditorWorkspaceMainHandle,
 } from '@/components/layout/EditorWorkspaceMain'
 import { ReaderWorkspaceMain } from '@/components/layout/ReaderWorkspaceMain'
-import { WebDocWorkspaceMain } from '@/components/layout/WebDocWorkspaceMain'
+import { WebDocWorkspaceMain, type WebDocWorkspaceMainHandle } from '@/components/layout/WebDocWorkspaceMain'
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell'
 import { Toaster } from '@/components/ui/sonner'
 import { UpdatePromptHost } from '@/components/shared/UpdatePromptHost'
@@ -43,6 +43,7 @@ function App() {
   const [errorLogOpen, setErrorLogOpen] = useState(false)
   const [outline, setOutline] = useState<EditorOutlineState>({ headings: [] })
   const editorMainRef = useRef<EditorWorkspaceMainHandle>(null)
+  const webDocMainRef = useRef<WebDocWorkspaceMainHandle>(null)
   const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
   const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
@@ -154,6 +155,10 @@ function App() {
   }, [])
 
   const handleSelectHeading = useCallback((heading: MarkdownHeading) => {
+    if (useWebDocStore.getState().pageUrl) {
+      webDocMainRef.current?.selectHeading(heading)
+      return
+    }
     editorMainRef.current?.selectHeading(heading)
   }, [])
 
@@ -208,7 +213,12 @@ function App() {
     if (readerDocumentKind && filePath) {
       setOutline({ headings: [] })
     }
-  }, [filePath, readerDocumentKind, webPageUrl])
+  }, [filePath, readerDocumentKind])
+
+  useEffect(() => {
+    if (!webPageUrl) return
+    setOutline({ headings: [] })
+  }, [webPageUrl])
 
   useEffect(() => {
     useActiveDocumentStore.getState().setActiveFilePath(filePath ?? webPageUrl ?? null)
@@ -270,9 +280,9 @@ function App() {
         recentWebUrls={recentWebUrls}
         recentFiles={recentFiles}
         treeActions={treeActions}
-        headings={isReader || isWebDoc ? [] : outline.headings}
-        activeHeadingId={isReader || isWebDoc ? undefined : outline.activeHeadingId}
-        onSelectHeading={isReader || isWebDoc ? undefined : handleSelectHeading}
+        headings={isReader ? [] : outline.headings}
+        activeHeadingId={isReader ? undefined : outline.activeHeadingId}
+        onSelectHeading={isReader ? undefined : handleSelectHeading}
         readOnly={isReader || isWebDoc}
         onOpenFile={() => void openFile()}
         onOpenFolder={() => void openFolder()}
@@ -295,10 +305,12 @@ function App() {
       >
         {isWebDoc && webPageUrl ? (
           <WebDocWorkspaceMain
+            ref={webDocMainRef}
             pageUrl={webPageUrl}
             theme={theme}
             recentUrls={recentWebUrls}
             onNavigateUrl={handleOpenWebDoc}
+            onOutlineChange={handleOutlineChange}
           />
         ) : isReader && readerDocumentKind && filePath ? (
           <ReaderWorkspaceMain
