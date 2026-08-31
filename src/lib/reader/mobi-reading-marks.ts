@@ -23,8 +23,10 @@ function pointInClientRect(x: number, y: number, rect: DOMRect, padding = 0): bo
 
 function findMarkElement(doc: Document, clientX: number, clientY: number): HTMLElement | null {
   const hit = doc.elementFromPoint(clientX, clientY)
-  if (hit instanceof HTMLElement) {
-    const marked = hit.closest<HTMLElement>(
+  // 网页/MOBI 正文位于 iframe 时，不能用外层窗口的 HTMLElement 做 instanceof。
+  // 跨 Window realm 会使真实元素被误判为非 HTMLElement。
+  if (hit?.nodeType === 1) {
+    const marked = (hit as HTMLElement).closest<HTMLElement>(
       '.mobi-mark-highlight[data-mark-id], .mobi-mark-note[data-mark-id], .mobi-mark-note-hit[data-mark-id]',
     )
     if (marked?.dataset.markId) return marked
@@ -60,11 +62,12 @@ export function clearMobiMarkOverlays(container: HTMLElement | null): void {
   if (!container) return
 
   container.querySelectorAll(MARK_SELECTOR).forEach((node) => {
-    if (node instanceof HTMLElement && node.id === 'reader-mark-layer') {
+    if (node.id === 'reader-mark-layer') {
       node.replaceChildren()
       return
     }
-    if (node instanceof HTMLSpanElement) {
+    // 不能用 instanceof HTMLSpanElement：iframe 内的 span 属于 iframe 自己的 Window。
+    if (node.tagName === 'SPAN') {
       unwrapMarkElement(node)
       return
     }

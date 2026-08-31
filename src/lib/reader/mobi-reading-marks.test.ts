@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { clearMobiMarkOverlays, findMobiNoteMarkAtPoint, renderMobiMarkOverlays } from './mobi-reading-marks'
+import {
+  clearMobiMarkOverlays,
+  findMobiNoteMarkAtPoint,
+  renderMobiMarkOverlays,
+} from './mobi-reading-marks'
 import type { ReadingMark } from '@shared/types/reading-mark'
 
 function createMark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'kind' | 'anchor'>): ReadingMark {
@@ -169,6 +173,17 @@ describe('renderMobiMarkOverlays', () => {
 })
 
 describe('clearMobiMarkOverlays', () => {
+  it('清理 iframe 文档的文本标记时只解包 span，不删除正文', () => {
+    const iframeDocument = document.implementation.createHTMLDocument('iframe-content')
+    const container = iframeDocument.body
+    container.innerHTML = '<p>保留 <span class="mobi-mark-note" data-mark-id="note-1">这段文字</span></p>'
+
+    clearMobiMarkOverlays(container)
+
+    expect(container.querySelector('span.mobi-mark-note')).toBeNull()
+    expect(container.querySelector('p')?.textContent).toBe('保留 这段文字')
+  })
+
   it('container 为 null 时不抛错', () => {
     expect(() => clearMobiMarkOverlays(null)).not.toThrow()
     expect(() => renderMobiMarkOverlays(null, [], 'ch-1')).not.toThrow()
