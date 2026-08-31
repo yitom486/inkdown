@@ -7,7 +7,7 @@ import {
   isToolActiveStatus,
 } from '@/stores/acp-chat-types'
 import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/agent/acp-plan'
-import { enrichToolMessageWithMarkProposal } from '@/lib/agent/parse-mark-proposal'
+import { enrichAcpToolMessage } from '@/lib/agent/enrich-tool-message'
 import { promoteMarkProposalsToLastAgent, resolveMarkProposalOnMessages } from '@/lib/agent/promote-mark-proposals'
 import { extractAnnotationDraft } from '@/lib/agent/annotation-note-prompts'
 import type { MarkProposalStatus } from '@shared/types/mark-proposal'
@@ -157,7 +157,7 @@ function applyToolCallUpdate(
     markProposal: prev?.markProposal,
     markProposalStatus: prev?.markProposalStatus,
   }
-  const message = enrichToolMessageWithMarkProposal(base, isToolActiveStatus)
+  const message = enrichAcpToolMessage(base)
   if (idx < 0) {
     next.push(message)
     return next
@@ -300,15 +300,12 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
             const frozen = t.messages.map((m) => {
               if (!m.streaming) return m
               if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
-                return enrichToolMessageWithMarkProposal(
-                  {
-                    ...m,
-                    streaming: false,
-                    updatedAt: now,
-                    toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
-                  },
-                  isToolActiveStatus,
-                )
+                return enrichAcpToolMessage({
+                  ...m,
+                  streaming: false,
+                  updatedAt: now,
+                  toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
+                })
               }
               return { ...m, streaming: false, updatedAt: now }
             })
@@ -316,9 +313,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
               ...t,
               updatedAt: now,
               messages: promoteMarkProposalsToLastAgent(
-                frozen.map((m) =>
-                  m.role === 'tool' ? enrichToolMessageWithMarkProposal(m, isToolActiveStatus) : m,
-                ),
+                frozen.map((m) => (m.role === 'tool' ? enrichAcpToolMessage(m) : m)),
               ),
             }
           })

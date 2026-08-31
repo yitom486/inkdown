@@ -28,8 +28,7 @@ import {
   toolCallIdFromPermission,
   type AcpPermissionOptionView,
 } from '@/lib/agent/acp-permission'
-import { enrichToolMessageWithMarkProposal } from '@/lib/agent/parse-mark-proposal'
-import { enrichToolMessageWithChapterPlan } from '@/lib/agent/parse-chapter-mark-plan'
+import { enrichAcpToolMessage } from '@/lib/agent/enrich-tool-message'
 import {
   promoteChapterMarkPlansToLastAgent,
   selectChapterMarkPlanOnMessages,
@@ -127,17 +126,10 @@ interface AcpUiStore {
   renameThread: (threadId: string, title: string) => void
 }
 
-function enrichToolMessage(message: AcpChatMessage): AcpChatMessage {
-  return enrichToolMessageWithChapterPlan(
-    enrichToolMessageWithMarkProposal(message, isToolActiveStatus),
-    isToolActiveStatus,
-  )
-}
-
 function finalizeThreadMessages(messages: AcpChatMessage[]): AcpChatMessage[] {
   return promoteChapterMarkPlansToLastAgent(
     promoteMarkProposalsToLastAgent(
-      messages.map((m) => (m.role === 'tool' ? enrichToolMessage(m) : m)),
+      messages.map((m) => (m.role === 'tool' ? enrichAcpToolMessage(m) : m)),
     ),
   )
 }
@@ -282,7 +274,7 @@ function applyToolCallUpdate(
     markProposals: prev?.markProposals,
     chapterMarkPlan: prev?.chapterMarkPlan,
   }
-  const message = enrichToolMessage(base)
+  const message = enrichAcpToolMessage(base)
 
   if (idx >= 0) next[idx] = message
   else {
@@ -507,7 +499,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
             const frozen = t.messages.map((m) => {
               if (!m.streaming) return m
               if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
-                return enrichToolMessage({
+                return enrichAcpToolMessage({
                   ...m,
                   streaming: false,
                   updatedAt: now,
