@@ -14,11 +14,14 @@ interface SidebarProps {
   workspaceRoot?: string
   fileTree: FileTreeNode[]
   activeFilePath?: string
+  webPageUrl?: string | null
+  recentWebUrls?: string[]
   headings: MarkdownHeading[]
   activeHeadingId?: string
   outlineExpanded: boolean
   onOutlineToggle: () => void
   onOpenFolder: () => void
+  onOpenWebDoc?: (url: string) => void
   onRescanWorkspace?: () => void
   isRescanningWorkspace?: boolean
   onSelectFile: (path: string) => void
@@ -31,11 +34,14 @@ export function Sidebar({
   workspaceRoot,
   fileTree,
   activeFilePath,
+  webPageUrl,
+  recentWebUrls,
   headings,
   activeHeadingId,
   outlineExpanded,
   onOutlineToggle,
   onOpenFolder,
+  onOpenWebDoc,
   onRescanWorkspace,
   isRescanningWorkspace,
   onSelectFile,
@@ -63,7 +69,10 @@ export function Sidebar({
               workspaceRoot={workspaceRoot}
               tree={fileTree}
               activeFilePath={activeFilePath}
+              webPageUrl={webPageUrl}
+              recentWebUrls={recentWebUrls}
               onOpenFolder={onOpenFolder}
+              onOpenWebDoc={onOpenWebDoc}
               onRescanWorkspace={onRescanWorkspace}
               isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}
@@ -88,7 +97,10 @@ export function Sidebar({
               workspaceRoot={workspaceRoot}
               tree={fileTree}
               activeFilePath={activeFilePath}
+              webPageUrl={webPageUrl}
+              recentWebUrls={recentWebUrls}
               onOpenFolder={onOpenFolder}
+              onOpenWebDoc={onOpenWebDoc}
               onRescanWorkspace={onRescanWorkspace}
               isRescanning={isRescanningWorkspace}
               onSelectFile={onSelectFile}

@@ -266,6 +266,8 @@ function App() {
         workspaceRoot={workspaceRoot}
         fileTree={fileTree}
         activeFilePath={filePath}
+        webPageUrl={webPageUrl}
+        recentWebUrls={recentWebUrls}
         recentFiles={recentFiles}
         treeActions={treeActions}
         headings={isReader || isWebDoc ? [] : outline.headings}
@@ -274,6 +276,7 @@ function App() {
         readOnly={isReader || isWebDoc}
         onOpenFile={() => void openFile()}
         onOpenFolder={() => void openFolder()}
+        onOpenWebDoc={handleOpenWebDoc}
         onRescanWorkspace={() => void rescanWorkspace()}
         isRescanningWorkspace={isFileBusy}
         onSelectFile={(path) => void openFileFromTree(path)}

@@ -19,6 +19,7 @@ import type {
   InkdownSnapshotResource,
 } from '@shared/agent/inkdown-snapshot'
 import { getAcpRuntime } from './agent-registry'
+import { resolveAgentCwd } from './agent-sandbox-cwd'
 import { parseAcpConfigOptions } from './config-options'
 import {
   createAcpClientMethodRouter,
@@ -323,6 +324,13 @@ export function getAcpSessionId(): string | null {
   return sessionId
 }
 
+export {
+  ensureAgentSandboxCwd,
+  resolveAgentCwd,
+  type AgentCwdSource,
+  type ResolvedAgentCwd,
+} from './agent-sandbox-cwd'
+
 export async function connectAcp(payload: {
   runtimeId: string
   cwd?: string
@@ -354,7 +362,7 @@ export async function connectAcp(payload: {
   pendingResumeSessionId = payload.resumeSessionId?.trim() || null
   setStatus('connecting')
 
-  const cwd = payload.cwd?.trim() || process.cwd()
+  const { cwd } = resolveAgentCwd(payload.cwd)
   workspaceRoot = cwd
 
   try {
@@ -522,7 +530,7 @@ export async function authenticateAcp(payload: {
 }): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
   const t = requireTransport(true)
   if (!t.ok) return t
-  const cwd = workspaceRoot?.trim() || process.cwd()
+  const cwd = resolveAgentCwd(workspaceRoot).cwd
 
   try {
     await t.value.request('authenticate', { methodId: payload.methodId })
@@ -534,7 +542,7 @@ export async function authenticateAcp(payload: {
 
 export async function loadAcpSession(payload: {
   sessionId: string
-  cwd: string
+  cwd?: string
   secondary?: boolean
 }): Promise<
   Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>
@@ -548,13 +556,7 @@ export async function loadAcpSession(payload: {
     })
   }
 
-  const cwd = payload.cwd.trim() || workspaceRoot?.trim() || ''
-  if (!cwd) {
-    return err({
-      code: 'ACP_NOT_CONNECTED',
-      message: '无工作区路径，无法加载会话',
-    })
-  }
+  const cwd = resolveAgentCwd(payload.cwd || workspaceRoot).cwd
 
   const secondary = payload.secondary === true
   if (secondary) suppressSessionUpdates = true
@@ -636,13 +638,7 @@ export async function createAcpSession(
   const t = requireTransport()
   if (!t.ok) return t
 
-  const resolvedCwd = cwd?.trim() || workspaceRoot?.trim() || ''
-  if (!resolvedCwd) {
-    return err({
-      code: 'ACP_NOT_CONNECTED',
-      message: '无工作区路径，无法创建批注会话（请先打开文件夹并连接 AI）',
-    })
-  }
+  const resolvedCwd = resolveAgentCwd(cwd || workspaceRoot).cwd
 
   try {
     const result = (await t.value.request('session/new', {

@@ -395,8 +395,10 @@ export function AgentComposer({
         className="min-h-[72px] w-full resize-none bg-transparent px-3 py-2.5 text-xs leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
         placeholder={
           disabled
-            ? '暂不可发送（需工作区，或等待连接/认证完成）'
-            : '输入消息，Enter 发送 · 未连接时将自动连接 · 可拖入文件或粘贴图片'
+            ? '暂不可发送（等待连接或认证完成）'
+            : workspaceRoot?.trim()
+              ? '输入消息，Enter 发送 · 未连接时将自动连接 · 可拖入文件或粘贴图片'
+              : '输入消息，Enter 发送 · 网页会话可直接提问当前页 · 附加本地文件需先打开文件夹'
         }
         value={draft}
         disabled={disabled}

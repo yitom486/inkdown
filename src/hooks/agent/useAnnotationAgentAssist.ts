@@ -23,7 +23,7 @@ import {
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { toast } from 'sonner'
 
-function resolveWorkspaceCwd(): string | undefined {
+function resolvePreferredAgentCwd(): string | undefined {
   const s = useAcpUiStore.getState()
   const active = s.threads.find((t) => t.id === s.activeThreadId)
   const fromActive = active?.workspaceRoot?.trim()
@@ -86,13 +86,13 @@ export function useAnnotationAgentAssist(options: {
     // 同一次连接内、未标记过期：直接复用（模型侧仍是同一条 session）
     if (existing && !stale) return existing
 
-    const cwd = resolveWorkspaceCwd()
+    const cwd = resolvePreferredAgentCwd()
 
     // 重连后：用 session/load 恢复模型记忆（ACP 无独立短期记忆，靠 session 续上）
     if (existing && stale) {
       const loaded = await acpApi.loadSession({
         sessionId: existing,
-        cwd: cwd ?? '',
+        cwd,
         secondary: true,
       })
       if (isOk(loaded)) {

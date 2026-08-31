@@ -21,6 +21,8 @@ export interface WorkspaceShellProps {
   workspaceRoot?: string
   fileTree: FileTreeNode[]
   activeFilePath?: string
+  webPageUrl?: string | null
+  recentWebUrls?: string[]
   recentFiles: string[]
   treeActions?: ReturnType<typeof useFileTreeActions>
   /** Markdown 大纲；阅读器模式传空数组即可 */
@@ -31,6 +33,7 @@ export interface WorkspaceShellProps {
   readOnly?: boolean
   onOpenFile: () => void
   onOpenFolder: () => void
+  onOpenWebDoc?: (url: string) => void
   onRescanWorkspace?: () => void
   isRescanningWorkspace?: boolean
   onSelectFile: (path: string) => void
@@ -58,6 +61,8 @@ export function WorkspaceShell({
   workspaceRoot,
   fileTree,
   activeFilePath,
+  webPageUrl,
+  recentWebUrls,
   recentFiles,
   treeActions,
   headings = [],
@@ -66,6 +71,7 @@ export function WorkspaceShell({
   readOnly = false,
   onOpenFile,
   onOpenFolder,
+  onOpenWebDoc,
   onRescanWorkspace,
   isRescanningWorkspace,
   onSelectFile,
@@ -164,11 +170,14 @@ export function WorkspaceShell({
               workspaceRoot={workspaceRoot}
               fileTree={fileTree}
               activeFilePath={activeFilePath}
+              webPageUrl={webPageUrl}
+              recentWebUrls={recentWebUrls}
               headings={headings}
               activeHeadingId={activeHeadingId}
               outlineExpanded={outlineExpanded && headings.length > 0}
               onOutlineToggle={() => setOutlineExpanded(!outlineExpanded)}
               onOpenFolder={onOpenFolder}
+              onOpenWebDoc={onOpenWebDoc}
               onRescanWorkspace={onRescanWorkspace}
               isRescanningWorkspace={isRescanningWorkspace}
               onSelectFile={onSelectFile}

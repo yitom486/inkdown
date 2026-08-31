@@ -81,6 +81,7 @@ describe('INKDOWN_STATIC_SKILL', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('turn-context')
     expect(INKDOWN_STATIC_SKILL).toContain('Soft cues')
     expect(INKDOWN_STATIC_SKILL).toContain('normal workspace file read/write')
+    expect(INKDOWN_STATIC_SKILL).toContain('No user workspace folder')
     expect(INKDOWN_STATIC_SKILL).toContain('Do **not** call tools only to "prove"')
     expect(INKDOWN_STATIC_SKILL).toContain('inkdown_read')
     expect(INKDOWN_STATIC_SKILL).toContain('inkdown_list_marks')

@@ -58,6 +58,8 @@ Do **not** call \`inkdown_read(scope=current)\` first just because the user said
 | \`.epub\` / \`.mobi\` / \`.azw3\` / \`.azw\` / \`.pdf\` / **online doc (web URL)** | Use **Inkdown tools**. Do not parse these binaries yourself; do not fetch external URLs yourself—the client rejects raw reads / off-app HTTP. |
 | \`.md\` / \`.markdown\` / \`.txt\` and other plain text | Prefer your **normal workspace file read/write**. Do not use Inkdown tools just to read the current file. |
 
+**No user workspace folder:** ACP may still be connected with an app sandbox cwd. In that case treat the session as **online doc / reader context only**—use Inkdown tools; do **not** assume you can write or list the user's documents on disk.
+
 ## Inkdown tools (ebook / PDF / online doc)
 
 Exposed via MCP; names start with \`inkdown_\`. Values come from Inkdown's **in-memory parsed data** (or read-mode fetched web pages), not a second disk copy.

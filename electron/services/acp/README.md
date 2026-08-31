@@ -6,6 +6,7 @@ ACP Agent 主进程侧：拉起 `codex-acp`、JSON-RPC、权限、会话、进�
 | 组 | 文件 | 功能 |
 |----|------|------|
 | 入口 | `acp-client.ts` / `process-manager.ts` / `jsonrpc-transport.ts` | 连接生命周期、子进程、stdio JSON-RPC |
+| cwd | `agent-sandbox-cwd.ts` | 无用户工作区时 ACP 沙箱 cwd（`userData/agent-sandbox`） |
 | 注册 | `agent-registry.ts` | 可用运行时（默认 `codex-acp`） |
 | 认证 | `connect-auth-gate.ts` / `connect-auth-decision.ts` / `codex-auth-preflight.ts` / `auth-method-order.ts` | 连接前探活、authMethods 顺序、`~/.codex` |
 | 会话 | `session-open.ts` / `session-capabilities.ts` / `config-options.ts` | `session/new`、能力、Mode/Model |

@@ -491,8 +491,8 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
       </div>
 
       {!workspaceRoot ? (
-        <div className="shrink-0 border-b border-border/50 bg-amber-500/10 px-3 py-1.5 text-[10px] text-amber-700 dark:text-amber-400">
-          请先打开工作区文件夹（Agent 需要 cwd）
+        <div className="shrink-0 border-b border-border/50 bg-sky-500/10 px-3 py-1.5 text-[10px] text-sky-800 dark:text-sky-300">
+          当前为网页会话（无本地工作区）；可读在线文档，附加本地文件需先打开文件夹
         </div>
       ) : null}
 
@@ -506,7 +506,6 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
       <div className="shrink-0 space-y-1.5 p-3 pt-2">
         <AgentComposer
           disabled={
-            !workspaceRoot ||
             view.status === 'connecting' ||
             view.status === 'awaiting_auth'
           }
@@ -589,7 +588,7 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
                   <div className="px-2 py-1.5">
                     <p className="text-[10px] text-muted-foreground">工作区</p>
                     <p className="mt-0.5 truncate text-[11px]" title={workspaceRoot ?? ''}>
-                      {workspaceRoot ?? '未打开'}
+                      {workspaceRoot ?? '网页会话（应用沙箱）'}
                     </p>
                     <p className="mt-1 truncate text-[10px] text-muted-foreground" title={runtimeName}>
                       当前运行时 · {runtimeName}

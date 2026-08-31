@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { isOk } from '@shared/core/result'
 import type {
   AcpAuthMethod,
@@ -149,11 +149,7 @@ export function useAcpSession(workspaceRoot?: string) {
   )
 
   const connect = useCallback(async () => {
-    const cwd = workspaceRoot?.trim()
-    if (!cwd) {
-      appendSystemMessage('请先打开工作区文件夹，再连接 Agent。')
-      return
-    }
+    const cwd = workspaceRoot?.trim() || undefined
     const statusNow = useAcpUiStore.getState().status
     if (statusNow === 'connecting' || statusNow === 'awaiting_auth') {
       appendSystemMessage('正在连接中，请稍候…')
@@ -165,7 +161,7 @@ export function useAcpSession(workspaceRoot?: string) {
     appendSystemMessage(
       resumeSessionId
         ? `正在连接 ${selectedRuntimeId}（尝试恢复会话 ${resumeSessionId.slice(0, 8)}…）…`
-        : `正在连接 ${selectedRuntimeId}…`,
+        : `正在连接 ${selectedRuntimeId}${cwd ? '' : '（网页会话）'}…`,
     )
     const result = await acpApi.connect({
       runtimeId: selectedRuntimeId,
@@ -241,15 +237,13 @@ export function useAcpSession(workspaceRoot?: string) {
    * 对齐 Agent 到当前本地线程：离线会自动连接；已连接则按需重连并 resume。
    * - 有 agentSessionId → connect(resume)
    * - 无 agentSessionId → connect(new)
+   * @param forceReconnect 工作区 cwd 变更时强制重连（即使 sessionId 已对齐）
    */
-  const syncAgentSessionToActiveThread = useCallback(async (): Promise<boolean> => {
-    const cwd = workspaceRoot?.trim()
+  const syncAgentSessionToActiveThread = useCallback(async (
+    forceReconnect = false,
+  ): Promise<boolean> => {
+    const cwd = workspaceRoot?.trim() || undefined
     const statusNow = useAcpUiStore.getState().status
-    if (!cwd) {
-      acpDevLog('sync skip: no workspace cwd')
-      appendSystemMessage('请先打开工作区文件夹，再使用 Agent。')
-      return false
-    }
     if (statusNow === 'connecting' || statusNow === 'awaiting_auth') {
       acpDevLog('sync skip: status busy', { statusNow })
       return false
@@ -262,6 +256,7 @@ export function useAcpSession(workspaceRoot?: string) {
     const resumeSessionId = activeThreadAgentSessionId()
     const liveSessionId = useAcpUiStore.getState().sessionId?.trim() || undefined
     const alreadyAligned =
+      !forceReconnect &&
       statusNow === 'connected' &&
       Boolean(resumeSessionId) &&
       Boolean(liveSessionId) &&
@@ -276,10 +271,11 @@ export function useAcpSession(workspaceRoot?: string) {
     acpDevLog('sync start', {
       statusNow,
       wasOnline,
+      forceReconnect,
       resumeSessionId: resumeSessionId ?? null,
       liveSessionId: liveSessionId ?? null,
       runtimeId: selectedRuntimeId,
-      cwd,
+      cwd: cwd ?? '(sandbox)',
     })
 
     setStatus('connecting')
@@ -291,7 +287,7 @@ export function useAcpSession(workspaceRoot?: string) {
           : `正在连接并恢复历史会话 ${resumeSessionId.slice(0, 8)}…`
         : wasOnline
           ? '正在为当前对话创建新的 Agent 会话…'
-          : `正在连接 ${selectedRuntimeId}…`,
+          : `正在连接 ${selectedRuntimeId}${cwd ? '' : '（网页会话）'}…`,
     )
 
     if (wasOnline) {
@@ -355,6 +351,28 @@ export function useAcpSession(workspaceRoot?: string) {
     workspaceRoot,
   ])
 
+  /** 打开 / 关闭用户工作区时，已连接会话需换 cwd（沙箱 ↔ 本地目录） */
+  const cwdKeyRef = useRef<string | undefined>(undefined)
+  const cwdReadyRef = useRef(false)
+  useEffect(() => {
+    const next = workspaceRoot?.trim() || undefined
+    if (!cwdReadyRef.current) {
+      cwdReadyRef.current = true
+      cwdKeyRef.current = next
+      return
+    }
+    if (cwdKeyRef.current === next) return
+    cwdKeyRef.current = next
+    if (useAcpUiStore.getState().status !== 'connected') return
+    if (useAcpUiStore.getState().prompting) return
+    appendSystemMessage(
+      next
+        ? '已打开本地工作区，正在将 Agent 切到该目录…'
+        : '本地工作区已关闭，正在切换为网页会话…',
+    )
+    void syncAgentSessionToActiveThread(true)
+  }, [appendSystemMessage, syncAgentSessionToActiveThread, workspaceRoot])
+
   const sendPrompt = useCallback(
     async (payload: {
       text: string
@@ -370,7 +388,7 @@ export function useAcpSession(workspaceRoot?: string) {
         const ok = await syncAgentSessionToActiveThread()
         sid = useAcpUiStore.getState().sessionId
         if (!ok || !sid) {
-          appendSystemMessage('自动连接未完成，请检查工作区或完成认证后再发送。')
+          appendSystemMessage('自动连接未完成，请完成认证后再发送。')
           return
         }
       }

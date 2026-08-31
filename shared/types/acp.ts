@@ -25,7 +25,7 @@ export interface AcpRuntimeInfo {
 
 export interface AcpConnectPayload {
   runtimeId: string
-  /** 覆盖默认 cwd；缺省用 process.cwd() */
+  /** 用户工作区；缺省时主进程使用应用沙箱目录（网页阅读等无文件夹场景） */
   cwd?: string
   /**
    * 当前聊天线程关联的 Agent sessionId。
@@ -116,7 +116,8 @@ export interface AcpAuthenticatePayload {
 
 export interface AcpLoadSessionPayload {
   sessionId: string
-  cwd: string
+  /** 用户工作区；缺省时主进程回落沙箱 cwd */
+  cwd?: string
   /**
    * 批注等副会话：加载时不覆盖主面板 sessionId，并压制回放更新（本地已有气泡）。
    */

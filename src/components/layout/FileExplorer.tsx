@@ -11,6 +11,7 @@ import {
   FolderOpen,
   FolderPlus,
   FilePlus,
+  Globe,
   RefreshCw,
   PanelLeftClose,
 } from 'lucide-react'
@@ -27,12 +28,27 @@ interface FileExplorerProps {
   workspaceRoot?: string
   tree: FileTreeNode[]
   activeFilePath?: string
+  /** 无工作区时：当前在线文档 URL */
+  webPageUrl?: string | null
+  /** 最近打开的网页 */
+  recentWebUrls?: string[]
   onOpenFolder: () => void
+  onOpenWebDoc?: (url: string) => void
   onRescanWorkspace?: () => void
   isRescanning?: boolean
   onSelectFile: (path: string) => void
   onHideSidebar?: () => void
   treeActions?: TreeActions
+}
+
+function formatWebDocLabel(url: string): string {
+  try {
+    const parsed = new URL(url)
+    const path = parsed.pathname === '/' ? '' : parsed.pathname
+    return `${parsed.hostname}${path}`
+  } catch {
+    return url
+  }
 }
 
 type MenuState =
@@ -303,7 +319,10 @@ export function FileExplorer({
   workspaceRoot,
   tree,
   activeFilePath,
+  webPageUrl,
+  recentWebUrls = [],
   onOpenFolder,
+  onOpenWebDoc,
   onRescanWorkspace,
   isRescanning = false,
   onSelectFile,
@@ -311,6 +330,8 @@ export function FileExplorer({
   treeActions,
 }: FileExplorerProps) {
   const rootName = workspaceRoot?.split(/[/\\]/).pop() ?? '工作区'
+  const webMode = !workspaceRoot && Boolean(webPageUrl)
+  const recentOthers = recentWebUrls.filter((url) => url !== webPageUrl)
   const [menu, setMenu] = useState<MenuState>(null)
   const [inlineEdit, setInlineEdit] = useState<InlineEdit>(null)
   const [forceExpandPath, setForceExpandPath] = useState<string | null>(null)
@@ -389,9 +410,9 @@ export function FileExplorer({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-2.5">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          <FolderOpen className="size-3.5" />
-          资源管理器
+        <div className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {webMode ? <Globe className="size-3.5 shrink-0" /> : <FolderOpen className="size-3.5 shrink-0" />}
+          <span className="truncate">{webMode ? '在线文档' : '资源管理器'}</span>
         </div>
         <div className="flex items-center gap-1">
           {workspaceRoot && treeActions ? (
@@ -459,13 +480,65 @@ export function FileExplorer({
         }}
       >
         {!workspaceRoot ? (
-          <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-            <FolderOpen className="size-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">打开文件夹以浏览 Markdown 与电子书</p>
-            <Button size="sm" onClick={onOpenFolder}>
-              打开文件夹
-            </Button>
-          </div>
+          webMode && webPageUrl ? (
+            <div className="space-y-3 p-2">
+              <div>
+                <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  当前页
+                </p>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs',
+                    'bg-accent/60 text-accent-foreground',
+                  )}
+                  title={webPageUrl}
+                  onClick={() => onOpenWebDoc?.(webPageUrl)}
+                >
+                  <Globe className="mt-0.5 size-3.5 shrink-0 opacity-80" />
+                  <span className="min-w-0 break-all leading-snug">{formatWebDocLabel(webPageUrl)}</span>
+                </button>
+              </div>
+              {recentOthers.length > 0 ? (
+                <div>
+                  <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    最近打开
+                  </p>
+                  <ul className="space-y-0.5">
+                    {recentOthers.map((url) => (
+                      <li key={url}>
+                        <button
+                          type="button"
+                          className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+                          title={url}
+                          onClick={() => onOpenWebDoc?.(url)}
+                        >
+                          <Globe className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+                          <span className="min-w-0 break-all leading-snug">{formatWebDocLabel(url)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <div className="border-t border-border/50 px-2 pt-3">
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  也可打开本地文件夹浏览 Markdown / 电子书
+                </p>
+                <Button size="sm" variant="outline" className="w-full" onClick={onOpenFolder}>
+                  打开文件夹
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+              <FolderOpen className="size-10 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">打开文件夹以浏览 Markdown 与电子书</p>
+              <Button size="sm" onClick={onOpenFolder}>
+                打开文件夹
+              </Button>
+            </div>
+          )
         ) : (
           <div className="space-y-0.5 p-2">
             <div
