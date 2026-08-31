@@ -10,14 +10,17 @@ import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { formatDuration } from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'
 import { isProposalPromotedToAgent } from '@/lib/agent/promote-mark-proposals'
+import { isChapterPlanPromotedToAgent } from '@/lib/agent/promote-chapter-mark-plans'
+import type { ChapterMarkPlanSelectPayload } from '@/components/agent/ChapterMarkPlanCard'
 
 interface AgentActivityGroupProps {
   messages: AcpChatMessage[]
   /** 用于进行中实时刷新时长 */
   nowMs?: number
+  onChapterPlanSelect?: (payload: ChapterMarkPlanSelectPayload) => void
 }
 
-export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps) {
+export function AgentActivityGroup({ messages, nowMs, onChapterPlanSelect }: AgentActivityGroupProps) {
   const pendingPermission = useAcpPendingPermission()
   const awaitingPermission = messages.some(
     (m) =>
@@ -92,7 +95,11 @@ export function AgentActivityGroup({ messages, nowMs }: AgentActivityGroupProps)
       {open ? (
         <AgentChatItemBody className="space-y-2 border-border/30 px-2 py-2">
           {messages.map((msg) => (
-            <AgentMessageBubble key={msg.id} message={msg} />
+            <AgentMessageBubble
+              key={msg.id}
+              message={msg}
+              onChapterPlanSelect={onChapterPlanSelect}
+            />
           ))}
         </AgentChatItemBody>
       ) : null}
@@ -131,6 +138,26 @@ export function groupAgentMessages(messages: AcpChatMessage[]): AgentTimelineIte
         msg.markProposal &&
         isProposalPromotedToAgent(messages, msg.markProposal.id)
       ) {
+        continue
+      }
+      if (msg.role === 'tool' && msg.markProposals?.length) {
+        const hide = msg.markProposals.every((row) =>
+          isProposalPromotedToAgent(messages, row.proposal.id),
+        )
+        if (!hide) {
+          flush()
+          items.push({ type: 'single', message: msg })
+        }
+        continue
+      }
+      if (msg.role === 'tool' && msg.chapterMarkPlan?.length) {
+        const hide = msg.chapterMarkPlan.every((row) =>
+          isChapterPlanPromotedToAgent(messages, row.id),
+        )
+        if (!hide) {
+          flush()
+          items.push({ type: 'single', message: msg })
+        }
         continue
       }
       buffer.push(msg)

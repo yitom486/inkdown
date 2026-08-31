@@ -7,6 +7,10 @@ import {
 } from '@/components/agent/AgentChatItem'
 import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
 import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
+import {
+  ChapterMarkPlanCard,
+  type ChapterMarkPlanSelectPayload,
+} from '@/components/agent/ChapterMarkPlanCard'
 import { ProposeMarkBlockList, ProposeMarkChatBlock } from '@/components/agent/ProposeMarkChatBlock'
 import type { ResolveMarkProposal } from '@/components/agent/AgentBlockRenderer'
 import { dismissProposedMark } from '@/lib/agent/context/propose-mark'
@@ -20,9 +24,14 @@ import '@/styles/markdown-preview.css'
 interface AgentMessageBubbleProps {
   message: AcpChatMessage
   resolveMarkProposal?: ResolveMarkProposal
+  onChapterPlanSelect?: (payload: ChapterMarkPlanSelectPayload) => void
 }
 
-export function AgentMessageBubble({ message, resolveMarkProposal }: AgentMessageBubbleProps) {
+export function AgentMessageBubble({
+  message,
+  resolveMarkProposal,
+  onChapterPlanSelect,
+}: AgentMessageBubbleProps) {
   const resolveFromStore = useAcpUiStore((s) => s.resolveMarkProposal)
   const resolve = resolveMarkProposal ?? resolveFromStore
 
@@ -196,6 +205,13 @@ export function AgentMessageBubble({ message, resolveMarkProposal }: AgentMessag
             status: row.status,
           }))}
           onResolved={handleResolved}
+        />
+      ) : null}
+      {(message.chapterMarkPlan?.length ?? 0) > 0 ? (
+        <ChapterMarkPlanCard
+          embedded
+          entries={message.chapterMarkPlan!}
+          onSelectChapter={onChapterPlanSelect}
         />
       ) : null}
       {message.streaming && !isUser && !showEmptyStreaming ? (

@@ -8,7 +8,7 @@ import {
   Wifi,
   X,
 } from 'lucide-react'
-import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   AgentActivityGroup,
   groupAgentMessages,
@@ -18,6 +18,7 @@ import { AgentMark } from '@/components/agent/AgentMark'
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
+import type { ChapterMarkPlanSelectPayload } from '@/components/agent/ChapterMarkPlanCard'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
 import { AGENT_CHAT_COL_CLASS } from '@/components/agent/AgentChatItem'
 import { Button } from '@/components/ui/button'
@@ -160,6 +161,7 @@ interface AgentMessageListProps {
   bottomRef: RefObject<HTMLDivElement | null>
   messagesRef: RefObject<HTMLDivElement | null>
   authHint: string | null
+  onChapterPlanSelect?: (payload: ChapterMarkPlanSelectPayload) => void
 }
 
 /**
@@ -169,6 +171,7 @@ const AgentMessageList = memo(function AgentMessageList({
   bottomRef,
   messagesRef,
   authHint,
+  onChapterPlanSelect,
 }: AgentMessageListProps) {
   const messages = useAcpActiveMessages()
   const pendingPermission = useAcpPendingPermission()
@@ -252,9 +255,14 @@ const AgentMessageList = memo(function AgentMessageList({
               key={item.messages.map((m) => m.id).join('-')}
               messages={item.messages}
               nowMs={nowMs}
+              onChapterPlanSelect={onChapterPlanSelect}
             />
           ) : (
-            <AgentMessageBubble key={item.message.id} message={item.message} />
+            <AgentMessageBubble
+              key={item.message.id}
+              message={item.message}
+              onChapterPlanSelect={onChapterPlanSelect}
+            />
           ),
         )}
         {prompting && !messages.some((m) => m.streaming) ? (
@@ -300,6 +308,19 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
   const theme = useEditorUiStore((s) => s.theme)
 
   useHighlightTheme(theme)
+
+  const selectChapterMarkPlan = useAcpUiStore((s) => s.selectChapterMarkPlan)
+
+  const handleChapterPlanSelect = useCallback(
+    (payload: ChapterMarkPlanSelectPayload) => {
+      selectChapterMarkPlan(payload.entry.id)
+      void sendPrompt({
+        text: payload.displayText,
+        prompt: [{ type: 'text', text: payload.promptText }],
+      })
+    },
+    [selectChapterMarkPlan, sendPrompt],
+  )
 
   useEffect(() => {
     if (composerInsertNonce === 0) return
@@ -479,6 +500,7 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
         bottomRef={bottomRef}
         messagesRef={messagesRef}
         authHint={authHint}
+        onChapterPlanSelect={handleChapterPlanSelect}
       />
 
       <div className="shrink-0 space-y-1.5 p-3 pt-2">

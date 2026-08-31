@@ -35,6 +35,7 @@ describe('handleInkdownMcpRpc', () => {
       'inkdown_read',
       'inkdown_get_selection',
       'inkdown_list_marks',
+      'inkdown_suggest_chapters',
       'inkdown_create_bookmark',
       'inkdown_propose_mark',
     ])

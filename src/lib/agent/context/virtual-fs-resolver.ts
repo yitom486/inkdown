@@ -17,6 +17,7 @@ import {
   listMarksForAgent,
   proposeMarkAtForAgentResult,
 } from './read-marks-for-agent'
+import { suggestChaptersForAgent } from './suggest-chapters-for-agent'
 import { readSelectionWithContext } from './read-selection-context'
 import { searchReaderContent } from './search-reader-content'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
@@ -190,5 +191,23 @@ export async function resolveInkdownSnapshot(
         null,
         2,
       )
+    case 'suggest-chapters': {
+      const chapters = Array.isArray(args?.chapters)
+        ? args.chapters
+            .map((row) => {
+              if (!row || typeof row !== 'object') return null
+              const item = row as Record<string, unknown>
+              const flatIndex = item.flatIndex
+              const title = typeof item.title === 'string' ? item.title : ''
+              const reason = typeof item.reason === 'string' ? item.reason : ''
+              if (typeof flatIndex !== 'number' || !Number.isFinite(flatIndex) || !title.trim()) {
+                return null
+              }
+              return { flatIndex, title: title.trim(), reason: reason.trim() }
+            })
+            .filter((row): row is { flatIndex: number; title: string; reason: string } => row !== null)
+        : []
+      return JSON.stringify(await suggestChaptersForAgent(chapters), null, 2)
+    }
   }
 }

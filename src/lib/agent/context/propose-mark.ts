@@ -33,6 +33,8 @@ export interface ProposeMarkOptions {
   fileFingerprint?: string
   locationHint?: string
   source?: ProposedMarkSource
+  /** 批量提议时不弹 toast、不写 pendingDraft */
+  silent?: boolean
 }
 
 export interface ProposeMarkResult {
@@ -82,19 +84,21 @@ export async function proposeMarkForAgent(
   })
 
   const store = useAnnotationAgentStore.getState()
-  store.ensureFile(fileKey)
-  store.setPendingDraft({
-    fileKey,
-    excerpt,
-    note: trimmed,
-    source: 'ai',
-    lastIntentLabel: mark.kind === 'highlight' ? '高亮提议' : '批注草稿',
-  })
-  store.setPhase('editing')
-  store.setProposeHost(options.source === 'annotation' ? 'annotation' : 'main-agent')
-  toast.message(
-    mark.kind === 'highlight' ? '已提出高亮，可在会话内确认' : '已提出批注草稿，可在会话内确认',
-  )
+  if (!options.silent) {
+    store.ensureFile(fileKey)
+    store.setPendingDraft({
+      fileKey,
+      excerpt,
+      note: trimmed,
+      source: 'ai',
+      lastIntentLabel: mark.kind === 'highlight' ? '高亮提议' : '批注草稿',
+    })
+    store.setPhase('editing')
+    store.setProposeHost(options.source === 'annotation' ? 'annotation' : 'main-agent')
+    toast.message(
+      mark.kind === 'highlight' ? '已提出高亮，可在会话内确认' : '已提出批注草稿，可在会话内确认',
+    )
+  }
 
   return {
     proposed: true,
@@ -158,13 +162,12 @@ export async function proposeMarksBatchForAgent(
   payload: MarkProposalPayload,
   options: Omit<ProposeMarkOptions, 'excerpt' | 'flatIndex' | 'kind'> = {},
 ): Promise<MarkProposalBatchToolResult> {
-  const items = payload.marks ?? []
-  if (items.length === 0) {
+  const rawItems = payload.marks ?? []
+  if (rawItems.length === 0) {
     throw new Error('marks 数组不能为空')
   }
-  if (items.length > MARK_PROPOSAL_BATCH_MAX) {
-    throw new Error(`单批提议最多 ${MARK_PROPOSAL_BATCH_MAX} 条，收到 ${items.length} 条`)
-  }
+  const truncated = rawItems.length > MARK_PROPOSAL_BATCH_MAX
+  const items = rawItems.slice(0, MARK_PROPOSAL_BATCH_MAX)
 
   const marks: MarkProposalToolResult[] = []
   for (const item of items) {
@@ -172,19 +175,23 @@ export async function proposeMarksBatchForAgent(
       {
         excerpt: item.excerpt,
         note: resolveNote(item),
-        flatIndex: item.flatIndex,
+        flatIndex: item.flatIndex ?? payload.flatIndex,
         kind: item.kind,
       },
-      options,
+      { ...options, silent: true },
     )
     marks.push(toToolResult(result))
   }
+
+  const truncateNote = truncated
+    ? `（收到 ${rawItems.length} 条，超出 ${MARK_PROPOSAL_BATCH_MAX} 上限，已截断）`
+    : ''
 
   return {
     proposed: true,
     count: marks.length,
     marks,
-    message: `已生成 ${marks.length} 条标记提议；用户确认「采用」后才会写入，请勿假定已保存。`,
+    message: `已生成 ${marks.length} 条标记提议${truncateNote}；用户确认「采用」后才会写入，请勿假定已保存。`,
   }
 }
 

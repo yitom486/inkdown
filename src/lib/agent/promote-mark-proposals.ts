@@ -138,6 +138,17 @@ export function resolveMarkProposalOnMessages(
     ) {
       next = { ...next, markProposalStatus: status }
     }
+    if (
+      message.role === 'tool' &&
+      message.markProposals?.some((row) => row.proposal.id === proposalId)
+    ) {
+      next = {
+        ...next,
+        markProposals: message.markProposals.map((row) =>
+          row.proposal.id === proposalId ? { ...row, status } : row,
+        ),
+      }
+    }
     return next
   })
 }

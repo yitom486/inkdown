@@ -17,6 +17,7 @@ export type InkdownSnapshotResource =
   | 'create-note'
   | 'propose-note'
   | 'propose-mark'
+  | 'suggest-chapters'
 
 export interface InkdownSnapshotArgs {
   query?: string
@@ -27,6 +28,11 @@ export interface InkdownSnapshotArgs {
   kind?: 'highlight' | 'note' | 'auto'
   /** inkdown_list_marks：all | highlights | bookmarks */
   filter?: 'all' | 'highlights' | 'bookmarks'
+  chapters?: Array<{
+    flatIndex: number
+    title: string
+    reason: string
+  }>
   marks?: Array<{
     excerpt: string
     note?: string

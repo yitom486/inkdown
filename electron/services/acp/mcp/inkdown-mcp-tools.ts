@@ -91,6 +91,36 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
     },
   },
   {
+    name: 'inkdown_suggest_chapters',
+    description:
+      '提交章级划重点建议供用户点选（不写 marks、不调 propose_mark）。' +
+      '先 inkdown_read(scope=toc)；再提交 2～5 章，每章含 flatIndex、title、reason。' +
+      '用户点选一章后，再 read(scope=chapter) + inkdown_propose_mark(marks)，单批≤10。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chapters: {
+          type: 'array',
+          description: '建议划重点的章节（2～5 条为宜）',
+          minItems: 1,
+          maxItems: 5,
+          items: {
+            type: 'object',
+            properties: {
+              flatIndex: { type: 'number', description: '与 toc.entries[].index 一致' },
+              title: { type: 'string', description: '章节标题' },
+              reason: { type: 'string', description: '一句推荐理由' },
+            },
+            required: ['flatIndex', 'title', 'reason'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['chapters'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'inkdown_create_bookmark',
     description:
       '在当前阅读位置创建书签（不跳转）。用户明确要求「加个书签」时调用；仅 EPUB/PDF/MOBI。',
@@ -276,6 +306,17 @@ export async function callInkdownMcpTool(
     case 'inkdown_propose_note': {
       const note = typeof args?.note === 'string' ? args.note : ''
       const text = await context.readSnapshot('propose-mark', { note })
+      return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_suggest_chapters': {
+      const chapters = args?.chapters
+      if (!Array.isArray(chapters) || chapters.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'inkdown_suggest_chapters 需要非空 chapters 数组' }],
+          isError: true,
+        }
+      }
+      const text = await context.readSnapshot('suggest-chapters', { chapters })
       return { content: [{ type: 'text', text }] }
     }
     case 'inkdown_propose_mark': {

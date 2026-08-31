@@ -1,4 +1,5 @@
 import type { AcpToolCallKind, AcpToolCallStatus } from '@shared/types/acp'
+import type { ChapterMarkPlanEntry } from '@shared/types/chapter-mark-plan'
 import type { MarkProposalStatus, ProposedMark } from '@shared/types/mark-proposal'
 import type { AcpPlanEntry } from '@/lib/agent/acp-plan'
 import type { AcpMessageAttachment } from '@/lib/agent/acp-composer'
@@ -41,6 +42,8 @@ export interface AcpChatMessage {
     status: MarkProposalStatus
     toolCallId?: string
   }>
+  /** inkdown_suggest_chapters 章级建议（promote 前在 tool，promote 后在 agent） */
+  chapterMarkPlan?: ChapterMarkPlanEntry[]
 }
 
 export function extractTextFromContent(content: unknown): string {
