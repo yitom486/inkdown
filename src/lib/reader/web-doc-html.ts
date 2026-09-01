@@ -6,7 +6,7 @@ import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/r
 import { buildWebDocCodeBlockCss, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
 import { ensureWebDocHeadingIds } from '@/lib/reader/web-doc-outline'
 
-const ARTICLE_SELECTORS = [
+const GENERIC_ARTICLE_SELECTORS = [
   'article',
   'main',
   '[role="main"]',
@@ -17,23 +17,13 @@ const ARTICLE_SELECTORS = [
   '.content',
 ]
 
-function parseHtmlDocument(html: string): Document {
-  return new DOMParser().parseFromString(html, 'text/html')
+const SITE_ARTICLE_SELECTORS: Partial<Record<WebDocSiteId, string[]>> = {
+  'people-daily-paper': ['.article', '#ozoom', '.article-box'],
 }
 
-export function extractDocumentTitle(doc: Document): string {
-  const h1 = doc.querySelector('article h1, main h1, h1')
-  const h1Text = h1?.textContent?.replace(/\s+/g, ' ').trim()
-  if (h1Text) return h1Text
-
-  const title = doc.querySelector('title')?.textContent?.replace(/\s+/g, ' ').trim()
-  if (title) return title
-
-  return '未命名页面'
-}
-
-export function pickArticleRoot(doc: Document): HTMLElement {
-  for (const selector of ARTICLE_SELECTORS) {
+export function pickArticleRoot(doc: Document, siteId: WebDocSiteId = 'generic-ssr'): HTMLElement {
+  const selectors = SITE_ARTICLE_SELECTORS[siteId] ?? GENERIC_ARTICLE_SELECTORS
+  for (const selector of selectors) {
     const node = doc.querySelector(selector)
     if (node instanceof HTMLElement && node.textContent?.trim()) {
       return node
@@ -50,7 +40,20 @@ export function pickArticleRoot(doc: Document): HTMLElement {
   return fallback
 }
 
-/** 将相对 URL 改写为绝对地址，便于 iframe 内加载图片与链接 */
+function parseHtmlDocument(html: string): Document {
+  return new DOMParser().parseFromString(html, 'text/html')
+}
+
+export function extractDocumentTitle(doc: Document): string {
+  const h1 = doc.querySelector('article h1, main h1, .article h1, h1')
+  const h1Text = h1?.textContent?.replace(/\s+/g, ' ').trim()
+  if (h1Text) return h1Text
+
+  const title = doc.querySelector('title')?.textContent?.replace(/\s+/g, ' ').trim()
+  if (title) return title
+
+  return '未命名页面'
+}
 export function rewriteRelativeUrls(root: HTMLElement, baseUrl: string): void {
   const base = new URL(baseUrl)
 
@@ -89,7 +92,7 @@ export function rewriteRelativeUrls(root: HTMLElement, baseUrl: string): void {
 
 export function sanitizeWebDocBodyHtml(html: string): string {
   const doc = new DOMParser().parseFromString(`<div id="web-doc-root">${html}</div>`, 'text/html')
-  doc.querySelectorAll('script, iframe, object, embed, form').forEach((node) => node.remove())
+  doc.querySelectorAll('script, iframe, object, embed, form, map, area').forEach((node) => node.remove())
   const root = doc.getElementById('web-doc-root')
   const inner = root?.innerHTML ?? html
 
@@ -120,7 +123,7 @@ export function extractWebDocArticle(
   siteId: WebDocSiteId = 'generic-ssr',
 ): { title: string; bodyHtml: string } {
   const doc = parseHtmlDocument(html)
-  const root = pickArticleRoot(doc)
+  const root = pickArticleRoot(doc, siteId)
   const clone = root.cloneNode(true) as HTMLElement
   stripWebDocChrome(clone, siteId)
   rewriteRelativeUrls(clone, pageUrl)

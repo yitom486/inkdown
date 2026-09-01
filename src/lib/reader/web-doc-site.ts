@@ -1,4 +1,5 @@
 import type { WebDocSiteId } from '@shared/types/web-doc'
+import { isPeopleDailyPaperHost, resolvePeopleDailyEditionUrl } from '@shared/web-doc/people-daily'
 
 export function resolveWebDocSiteId(pageUrl: string): WebDocSiteId {
   try {
@@ -6,11 +7,16 @@ export function resolveWebDocSiteId(pageUrl: string): WebDocSiteId {
     if (host === 'react.dev' || host.endsWith('.react.dev')) {
       return 'react-dev'
     }
+    if (isPeopleDailyPaperHost(host)) {
+      return 'people-daily-paper'
+    }
   } catch {
     // ignore
   }
   return 'generic-ssr'
 }
+
+export { resolvePeopleDailyEditionUrl }
 
 export function normalizeWebDocInputUrl(raw: string): string | null {
   const trimmed = raw.trim()
@@ -59,6 +65,9 @@ export function resolveWebDocTocDiscoveryUrl(pageUrl: string, siteId: WebDocSite
 
 /** 在线文档书级 id：与 TOC 发现入口一致，用于阅读标记 filePath */
 export function resolveWebDocDocumentId(pageUrl: string, siteId: WebDocSiteId): string {
+  if (siteId === 'people-daily-paper') {
+    return resolvePeopleDailyEditionUrl(pageUrl) ?? pageUrl
+  }
   return resolveWebDocTocDiscoveryUrl(pageUrl, siteId)
 }
 

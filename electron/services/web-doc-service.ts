@@ -10,6 +10,7 @@ import type {
 import { extractSameOriginDocLinks } from './web-doc/extract-toc-links'
 import { tryFetchE2eWebDocFixture } from './web-doc/e2e-fixture'
 import { extractReactDevToc } from './web-doc/adapters/react-dev-toc'
+import { extractPeopleDailyToc } from './web-doc/adapters/people-daily-toc'
 import { resolveWebDocSiteId } from './web-doc/site-registry'
 import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy'
 
@@ -105,11 +106,15 @@ export async function discoverWebDocToc(
     const entries =
       siteId === 'react-dev'
         ? extractReactDevToc(fetchResult.value.html, fetchResult.value.url)
-        : extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
+        : siteId === 'people-daily-paper'
+          ? extractPeopleDailyToc(fetchResult.value.html, fetchResult.value.url)
+          : extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
     const resolvedEntries =
       entries.length > 0
         ? entries
-        : extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
+        : siteId === 'people-daily-paper'
+          ? []
+          : extractSameOriginDocLinks(fetchResult.value.html, fetchResult.value.url)
 
     return ok({
       siteId,

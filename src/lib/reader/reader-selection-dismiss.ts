@@ -18,7 +18,11 @@ export function isReaderOverlayUiTarget(target: EventTarget | null): boolean {
 }
 
 export function clearWindowSelection(win: Window | null | undefined): void {
-  win?.getSelection()?.removeAllRanges()
+  try {
+    win?.getSelection()?.removeAllRanges()
+  } catch {
+    // 跨域 iframe（阅读区逃逸到原始站点）时忽略
+  }
 }
 
 /** 选区折叠时同步关闭工具栏（不重复 removeAllRanges） */
@@ -28,8 +32,12 @@ export function bindDocumentSelectionCollapse(
   onCollapse: () => void,
 ): () => void {
   const onSelectionChange = () => {
-    const selection = win.getSelection()
-    if (selection && !selection.isCollapsed && selection.toString().trim()) return
+    try {
+      const selection = win.getSelection()
+      if (selection && !selection.isCollapsed && selection.toString().trim()) return
+    } catch {
+      // 跨域 iframe
+    }
     onCollapse()
   }
 

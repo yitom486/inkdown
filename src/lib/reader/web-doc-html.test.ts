@@ -63,4 +63,28 @@ describe('web-doc-html', () => {
     expect(result.bodyHtml).not.toContain('Learn React')
     expect(result.bodyHtml).not.toContain('aria-label="Link for this heading"')
   })
+
+  it('人民日报电子版仅提取 .article 正文', () => {
+    const html = `<!DOCTYPE html><html><head><title> 测试标题 </title></head><body>
+      <div class="main w1000">
+        <div class="paper-box">
+          <img usemap="#PagePicMap" src="paper.jpg" />
+          <map name="PagePicMap"><area href="content_30178365.html"></map>
+        </div>
+        <ul class="news-list"><li><a href="content_30178365.html">下一篇</a></li></ul>
+        <div class="article">
+          <h1><p> 测试标题 </p></h1>
+          <div id="ozoom"><p>正文段落</p></div>
+        </div>
+      </div>
+    </body></html>`
+    const pageUrl = 'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178364.html'
+    const result = extractWebDocArticle(html, pageUrl, 'people-daily-paper')
+
+    expect(result.title).toContain('测试标题')
+    expect(result.bodyHtml).toContain('正文段落')
+    expect(result.bodyHtml).not.toContain('paper-box')
+    expect(result.bodyHtml).not.toContain('news-list')
+    expect(result.bodyHtml).not.toContain('<area')
+  })
 })

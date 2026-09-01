@@ -1,5 +1,5 @@
 /** 在线文档站点适配器 id */
-export type WebDocSiteId = 'generic-ssr' | 'react-dev'
+export type WebDocSiteId = 'generic-ssr' | 'react-dev' | 'people-daily-paper'
 
 export interface WebDocFetchPayload {
   url: string

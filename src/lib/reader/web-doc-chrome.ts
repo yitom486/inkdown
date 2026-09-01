@@ -24,10 +24,19 @@ function stripReactDevChrome(root: HTMLElement): void {
     .forEach((node) => node.remove())
 }
 
+function stripPeopleDailyChrome(root: HTMLElement): void {
+  root.querySelectorAll('style, map, area, img[usemap]').forEach((node) => node.remove())
+  root.querySelectorAll('h2:empty, h3:empty').forEach((node) => node.remove())
+}
+
 export function stripWebDocChrome(root: HTMLElement, siteId: WebDocSiteId): void {
   stripGenericChrome(root)
 
   if (siteId === 'react-dev') {
     stripReactDevChrome(root)
+  }
+
+  if (siteId === 'people-daily-paper') {
+    stripPeopleDailyChrome(root)
   }
 }

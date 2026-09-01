@@ -49,6 +49,7 @@ import {
   resolveWebDocSiteId,
   resolveWebDocTocDiscoveryUrl,
 } from '@/lib/reader/web-doc-site'
+import { resolveWebDocClickHref, shouldNavigateWebDocInApp } from '@/lib/reader/web-doc-link'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
 import {
   iterateWebDocUnits,
@@ -290,6 +291,14 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const navigateToUrl = useCallback(
     (targetUrl: string, flatIndex?: number) => {
+      const iframe = iframeRef.current
+      if (iframe) {
+        frameCleanupRef.current?.()
+        frameCleanupRef.current = null
+        iframe.srcdoc = ''
+        setIframeReady(false)
+      }
+
       const currentUnits = unitsRef.current
       const resolvedIndex =
         typeof flatIndex === 'number' ? flatIndex : findWebDocFlatIndex(currentUnits, targetUrl)
@@ -299,6 +308,17 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       openPage(targetUrl)
     },
     [openPage],
+  )
+
+  const handleWebDocLink = useCallback(
+    (href: string) => {
+      if (shouldNavigateWebDocInApp(href, pageUrlRef.current)) {
+        navigateToUrl(href)
+        return
+      }
+      void appApi.openExternal(href)
+    },
+    [navigateToUrl],
   )
 
   const goPrevious = useCallback(() => {
@@ -545,15 +565,12 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       }
 
       const onClick = (event: MouseEvent) => {
-        const target = event.target as HTMLElement | null
-        const anchor = target?.closest('a')
-        if (!(anchor instanceof HTMLAnchorElement)) return
-
-        const href = anchor.getAttribute('href')?.trim()
-        if (!href || href.startsWith('#')) return
+        const href = resolveWebDocClickHref(event.target, pageUrlRef.current)
+        if (!href) return
 
         event.preventDefault()
-        void appApi.openExternal(href)
+        event.stopPropagation()
+        handleWebDocLink(href)
       }
 
       const onSelectionChange = bindDocumentSelectionCollapse(doc, win, () => {
@@ -594,7 +611,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('scroll', onScroll, { passive: true })
-      doc.addEventListener('click', onClick)
+      doc.addEventListener('click', onClick, true)
       doc.addEventListener('mousemove', onMouseMove, { passive: true })
       restoreScrollProgress()
       syncActiveHeadingFromScroll()
@@ -604,19 +621,27 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
         doc.removeEventListener('scroll', onScroll)
-        doc.removeEventListener('click', onClick)
+        doc.removeEventListener('click', onClick, true)
         doc.removeEventListener('mousemove', onMouseMove)
         onSelectionChange()
         if (hoverRaf !== 0) window.cancelAnimationFrame(hoverRaf)
       }
     },
-    [documentId, persistScrollProgress, restoreScrollProgress, scheduleWebMarkLayout, syncActiveHeadingFromScroll],
+    [documentId, handleWebDocLink, persistScrollProgress, restoreScrollProgress, scheduleWebMarkLayout, syncActiveHeadingFromScroll],
   )
 
   useEffect(() => {
     setIframeReady(false)
     const iframe = iframeRef.current
-    if (!iframe || !readerDocument) return
+    if (!iframe) return
+
+    frameCleanupRef.current?.()
+    frameCleanupRef.current = null
+
+    if (!readerDocument) {
+      iframe.srcdoc = ''
+      return
+    }
 
     const onLoad = () => {
       setIframeReady(true)
