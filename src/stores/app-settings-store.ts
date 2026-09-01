@@ -72,6 +72,10 @@ export interface AppSettingsState {
   editorFontSize: EditorFontSize
   readerFontSize: ReaderFontSize
   readerLineHeight: ReaderLineHeight
+  /** 扫描 PDF 后台预识别当前章邻近页（默认关） */
+  pdfOcrBackgroundPrefetch: boolean
+  /** Agent 读扫描版正文时自动 OCR 未识别页 */
+  pdfOcrAgentAutoOcr: boolean
   verboseRendererLogs: boolean
 }
 
@@ -91,6 +95,8 @@ interface AppSettingsStore extends AppSettingsState {
   setEditorFontSize: (fontSize: EditorFontSize) => void
   setReaderFontSize: (fontSize: ReaderFontSize) => void
   setReaderLineHeight: (lineHeight: ReaderLineHeight) => void
+  setPdfOcrBackgroundPrefetch: (enabled: boolean) => void
+  setPdfOcrAgentAutoOcr: (enabled: boolean) => void
   setVerboseRendererLogs: (enabled: boolean) => void
   addRecentFile: (filePath: string) => void
   removeRecentFile: (filePath: string) => void
@@ -120,6 +126,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       editorFontSize: 15,
       readerFontSize: DEFAULT_READER_TYPOGRAPHY.fontSize,
       readerLineHeight: DEFAULT_READER_TYPOGRAPHY.lineHeight,
+      pdfOcrBackgroundPrefetch: false,
+      pdfOcrAgentAutoOcr: true,
       verboseRendererLogs: false,
 
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
@@ -157,6 +165,10 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       setReaderFontSize: (fontSize) => set({ readerFontSize: fontSize }),
 
       setReaderLineHeight: (lineHeight) => set({ readerLineHeight: lineHeight }),
+
+      setPdfOcrBackgroundPrefetch: (enabled) => set({ pdfOcrBackgroundPrefetch: enabled }),
+
+      setPdfOcrAgentAutoOcr: (enabled) => set({ pdfOcrAgentAutoOcr: enabled }),
 
       setVerboseRendererLogs: (enabled) => set({ verboseRendererLogs: enabled }),
 
@@ -203,6 +215,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         editorFontSize: state.editorFontSize,
         readerFontSize: state.readerFontSize,
         readerLineHeight: state.readerLineHeight,
+        pdfOcrBackgroundPrefetch: state.pdfOcrBackgroundPrefetch,
+        pdfOcrAgentAutoOcr: state.pdfOcrAgentAutoOcr,
         verboseRendererLogs: state.verboseRendererLogs,
       }),
       merge: (persisted, current) => {
@@ -212,6 +226,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
           ...p,
           restoreLastFileOnStartup: p.restoreLastFileOnStartup ?? true,
           lastActiveSurface: p.lastActiveSurface ?? 'none',
+          pdfOcrBackgroundPrefetch: p.pdfOcrBackgroundPrefetch ?? false,
+          pdfOcrAgentAutoOcr: p.pdfOcrAgentAutoOcr ?? true,
         }
       },
     },

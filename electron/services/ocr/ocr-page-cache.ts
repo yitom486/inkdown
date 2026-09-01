@@ -19,7 +19,9 @@ export async function readPdfOcrPageCache(
 ): Promise<PdfOcrPageCache | null> {
   try {
     const raw = await readFile(pageFilePath(fileFingerprint, page), 'utf8')
-    return JSON.parse(raw) as PdfOcrPageCache
+    const cache = JSON.parse(raw) as PdfOcrPageCache
+    if (cache.page !== page) return null
+    return cache
   } catch {
     return null
   }

@@ -142,6 +142,10 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
   const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
   const setReaderFontSize = useAppSettingsStore((state) => state.setReaderFontSize)
   const setReaderLineHeight = useAppSettingsStore((state) => state.setReaderLineHeight)
+  const pdfOcrBackgroundPrefetch = useAppSettingsStore((state) => state.pdfOcrBackgroundPrefetch)
+  const setPdfOcrBackgroundPrefetch = useAppSettingsStore((state) => state.setPdfOcrBackgroundPrefetch)
+  const pdfOcrAgentAutoOcr = useAppSettingsStore((state) => state.pdfOcrAgentAutoOcr)
+  const setPdfOcrAgentAutoOcr = useAppSettingsStore((state) => state.setPdfOcrAgentAutoOcr)
   const verboseRendererLogs = useAppSettingsStore((state) => state.verboseRendererLogs)
   const setVerboseRendererLogs = useAppSettingsStore((state) => state.setVerboseRendererLogs)
 
@@ -229,6 +233,26 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
                 value={readerLineHeight}
                 options={READER_LINE_HEIGHT_OPTION_LABELS}
                 onChange={setReaderLineHeight}
+              />
+            </SettingRow>
+            <SettingRow
+              title="PDF 后台预识别"
+              description="扫描版 PDF 在后台识别当前章邻近页，减少翻页等待；默认关闭，不打开文件即全书识别。"
+            >
+              <ToggleSwitch
+                checked={pdfOcrBackgroundPrefetch}
+                onChange={setPdfOcrBackgroundPrefetch}
+                label="PDF 后台预识别"
+              />
+            </SettingRow>
+            <SettingRow
+              title="Agent 自动识别"
+              description="Agent 读扫描版正文时自动 OCR 未识别页；关闭后需手动点工具栏「识别本页」。"
+            >
+              <ToggleSwitch
+                checked={pdfOcrAgentAutoOcr}
+                onChange={setPdfOcrAgentAutoOcr}
+                label="Agent 自动识别"
               />
             </SettingRow>
           </section>

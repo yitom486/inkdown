@@ -30,6 +30,7 @@ import type {
   AcpSnapshotResponsePayload,
 } from '@shared/types/acp'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
+import { resolveSnapshotTimeoutMs } from '@shared/agent/inkdown-snapshot'
 import type {
   GetPdfOcrTocPayload,
   GetPdfOcrPagePayload,
@@ -136,8 +137,7 @@ function resolveAgentOwnerWebContents(): Electron.WebContents | null {
   return windows[0]?.webContents ?? null
 }
 
-/** 快照全部来自渲染进程内存，正常应在毫秒级返回 */
-const ACP_SNAPSHOT_TIMEOUT_MS = 5_000
+/** 快照来自渲染进程内存；可能触发 OCR 的资源用更长超时 */
 
 /** 集中注册 IPC；文件/书签等耗时操作均为 async，不阻塞主进程事件循环 */
 export function registerIpcHandlers(): void {
@@ -206,10 +206,11 @@ export function registerIpcHandlers(): void {
     target.send(IPC.ACP_SNAPSHOT_REQUEST, { requestId, resource, args })
 
     return await new Promise<string>((resolve, reject) => {
+      const timeoutMs = resolveSnapshotTimeoutMs(resource)
       const timer = setTimeout(() => {
         cleanup()
         reject(new Error(`Inkdown 快照请求超时：${resource}`))
-      }, ACP_SNAPSHOT_TIMEOUT_MS)
+      }, timeoutMs)
 
       const handler = (
         _event: Electron.IpcMainEvent,

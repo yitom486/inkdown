@@ -32,6 +32,8 @@ import {
   pdfPageNeedsOcr,
   readPdfPageNativeText,
   textFromOcrPageCache,
+  formatPdfPageTextForAgent,
+  assertOcrCachePage,
 } from '@/lib/reader/pdf-page-text'
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import type { PdfOcrPageCache } from '@shared/types/ocr'
@@ -72,6 +74,8 @@ import {
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
 import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
+import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr-prefetch'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
 import type { AppError } from '@shared/core/errors'
@@ -273,7 +277,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             const entries = await Promise.all(
               pagesResult.value.map(async (pageNumber) => {
                 const pageResult = await getPdfOcrPage({ fileFingerprint, page: pageNumber })
-                return pageResult.ok ? ([pageNumber, pageResult.value] as const) : null
+                if (!pageResult.ok || pageResult.value.page !== pageNumber) return null
+                return [pageNumber, pageResult.value] as const
               }),
             )
             if (!cancelled) {
@@ -336,10 +341,23 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const currentPageOcrReady = Boolean(ocrPageCaches[pageNum]?.words.length)
 
   const ocrPagePendingRef = useRef<Map<number, Promise<string>>>(new Map())
+  const ocrPageCachesRef = useRef(ocrPageCaches)
+  const pdfOcrBackgroundPrefetch = useAppSettingsStore((state) => state.pdfOcrBackgroundPrefetch)
+
+  useEffect(() => {
+    ocrPageCachesRef.current = ocrPageCaches
+  }, [ocrPageCaches])
+
+  const ocrRecognizedCount = useMemo(
+    () => Object.values(ocrPageCaches).filter((cache) => cache.words.length > 0).length,
+    [ocrPageCaches],
+  )
 
   const runPageOcr = useCallback(
     async (page: number): Promise<string> => {
-      if (!fileFingerprint) return ''
+      if (!fileFingerprint) {
+        throw new Error(`第 ${page} 页 OCR 失败：文档指纹未就绪`)
+      }
 
       const pending = ocrPagePendingRef.current.get(page)
       if (pending) return pending
@@ -351,10 +369,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           page,
         })
         if (result.ok) {
+          if (result.value.page !== page) {
+            throw new Error(`OCR 结果页码不一致：请求第 ${page} 页，返回第 ${result.value.page} 页`)
+          }
           setOcrPageCaches((prev) => ({ ...prev, [page]: result.value }))
           return textFromOcrPageCache(result.value)
         }
-        return ''
+        throw new Error(`第 ${page} 页 OCR 失败：${result.error.message}`)
       })().finally(() => {
         ocrPagePendingRef.current.delete(page)
       })
@@ -369,12 +390,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     if (!fileFingerprint || ocrPageRecognizing !== null) return
     setOcrPageRecognizing(pageNum)
     try {
-      const text = await runPageOcr(pageNum)
-      if (text) {
-        toast.success(`第 ${pageNum} 页已识别，可划词划重点`)
-      } else {
-        toast.error('本页识别失败或无文字')
-      }
+      await runPageOcr(pageNum)
+      toast.success(`第 ${pageNum} 页已识别，可划词划重点`)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '本页识别失败或无文字'
+      toast.error(message)
     } finally {
       setOcrPageRecognizing(null)
     }
@@ -389,35 +409,115 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
    * Agent（inkdown_read 等）与 UI 共用此路径，MCP 工具接口不变。
    */
   const readPageText = useCallback(
-    async (page: number): Promise<string> => {
+    async (page: number, options?: { allowAutoOcr?: boolean }): Promise<string> => {
+      const allowAutoOcr = options?.allowAutoOcr ?? true
       const cached = ocrPageCaches[page]
       if (cached?.words.length) {
+        assertOcrCachePage(cached, page)
         return textFromOcrPageCache(cached)
       }
 
       const pdf = pdfDocRef.current
-      if (!pdf) return ''
+      if (!pdf) {
+        throw new Error(`第 ${page} 页无法读取：PDF 尚未加载完成`)
+      }
 
       const native = await readPdfPageNativeText(pdf, page)
       if (!pdfPageNeedsOcr(native)) return native
 
       if (!isScannedPdf || !fileFingerprint) return native
 
+      if (!allowAutoOcr) {
+        throw new Error(
+          `第 ${page} 页尚未识别，且已关闭 Agent 自动 OCR。请手动点击工具栏「识别本页」。`,
+        )
+      }
+
       return runPageOcr(page)
     },
     [fileFingerprint, isScannedPdf, ocrPageCaches, runPageOcr],
   )
 
+  const readAgentPageText = useCallback(
+    async (page: number): Promise<string> => {
+      if (!Number.isFinite(page) || page < 1) {
+        throw new Error(`无效的 PDF 页码：${page}`)
+      }
+      const allowAutoOcr = useAppSettingsStore.getState().pdfOcrAgentAutoOcr
+      const text = await readPageText(page, { allowAutoOcr })
+      const total = numPages || pdfDocRef.current?.numPages || 0
+      return formatPdfPageTextForAgent(page, total, text)
+    },
+    [numPages, readPageText],
+  )
+
   useEffect(() => {
+    if (!pdfOcrBackgroundPrefetch || !isScannedPdf || !fileFingerprint || !ready || numPages < 1) {
+      return
+    }
+
+    let cancelled = false
+    const cachedPages = new Set(
+      Object.entries(ocrPageCachesRef.current)
+        .filter(([, cache]) => cache.words.length > 0)
+        .map(([page]) => Number.parseInt(page, 10))
+        .filter((page) => Number.isFinite(page)),
+    )
+
+    const pages = resolvePdfOcrPrefetchPages(pageNum, numPages, outlineUnits, hasChapterToc, {
+      cachedPages,
+    })
+
+    void (async () => {
+      for (const page of pages) {
+        if (cancelled) return
+        if (ocrPageCachesRef.current[page]?.words.length) continue
+        if (ocrPagePendingRef.current.has(page)) continue
+        if (ocrPageRecognizing === page) continue
+        try {
+          await runPageOcr(page)
+        } catch {
+          // 后台预识别：单页失败不阻断队列
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    fileFingerprint,
+    hasChapterToc,
+    isScannedPdf,
+    numPages,
+    ocrPageRecognizing,
+    outlineUnits,
+    pageNum,
+    pdfOcrBackgroundPrefetch,
+    ready,
+    runPageOcr,
+  ])
+
+  useEffect(() => {
+    const agentAutoOcr = () => useAppSettingsStore.getState().pdfOcrAgentAutoOcr
     return registerReaderContent({
       filePath,
-      getCurrentText: () => readPageText(pageNumRef.current),
+      getCurrentText: () => readAgentPageText(pageNumRef.current),
       // PDF 一页 ≈ 视口；多页同时露边时仍以当前页为主
-      getViewportText: () => readPageText(pageNumRef.current),
+      getViewportText: () => readAgentPageText(pageNumRef.current),
       iterateUnits: async function* () {
         const total = pdfDocRef.current?.numPages ?? 0
         for (let page = 1; page <= total; page += 1) {
-          yield { label: `第 ${page} 页`, text: await readPageText(page) }
+          try {
+            const allowAutoOcr = agentAutoOcr()
+            const text = await readPageText(page, { allowAutoOcr })
+            yield {
+              label: `第 ${page} 页`,
+              text: formatPdfPageTextForAgent(page, total, text),
+            }
+          } catch {
+            // 全书搜索：跳过未识别/失败页，不中断迭代
+          }
         }
       },
       getUnitByIndex: async (flatIndex) => {
@@ -426,15 +526,21 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         if (!unit) return null
         const page = Number.parseInt('href' in unit ? unit.href : '', 10)
         if (!Number.isFinite(page) || page < 1) {
-          // 无页码时退回按目录标签在全文页里搜不到——直接读不到
           return null
         }
-        const text = await readPageText(page)
-        if (!text.trim()) return null
-        return { label: unit.label || `第 ${page} 页`, text }
+        try {
+          const raw = await readPageText(page, { allowAutoOcr: agentAutoOcr() })
+          const total = pdfDocRef.current?.numPages ?? numPages
+          return {
+            label: unit.label || `第 ${page} 页`,
+            text: formatPdfPageTextForAgent(page, total, raw),
+          }
+        } catch {
+          return null
+        }
       },
     })
-  }, [filePath, readPageText])
+  }, [filePath, isScannedPdf, readAgentPageText, readPageText])
 
   useEffect(() => {
     return registerSelectionProvider({
@@ -1054,8 +1160,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         trailing={
           isLoading ? (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          ) : isScannedPdf && !currentPageOcrReady ? (
-            <span className="text-xs text-muted-foreground">本页未识别</span>
+          ) : isScannedPdf ? (
+            <span className="text-xs text-muted-foreground">
+              {currentPageOcrReady
+                ? `已识别 ${ocrRecognizedCount}/${numPages}`
+                : `本页未识别 · ${ocrRecognizedCount}/${numPages}`}
+            </span>
           ) : null
         }
       />
