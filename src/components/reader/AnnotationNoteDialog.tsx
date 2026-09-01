@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 import {
@@ -23,6 +23,8 @@ import {
 import { ProposeMarkChatBlock } from '@/components/agent/ProposeMarkChatBlock'
 import { groupAgentMessages } from '@/components/agent/AgentActivityGroup'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
+import { AgentScrollToBottomButton } from '@/components/agent/AgentScrollToBottomButton'
+import { useStickToBottomScroll } from '@/hooks/agent/useStickToBottomScroll'
 import { toProposedMark } from '@shared/types/mark-proposal'
 import { toast } from 'sonner'
 
@@ -58,6 +60,7 @@ export function AnnotationNoteDialog({
   const [polishPreview, setPolishPreview] = useState<string | null>(null)
   const askInputRef = useRef<HTMLTextAreaElement>(null)
   const noteInputRef = useRef<HTMLTextAreaElement>(null)
+  const aiMessagesRef = useRef<HTMLDivElement>(null)
 
   const assist = useAnnotationAgentAssist({
     filePath,
@@ -72,6 +75,22 @@ export function AnnotationNoteDialog({
 
   const hasDraft = Boolean(assist.pendingDraft)
   const canPolish = aiAssist && note.trim().length > 0
+  const streamingAny =
+    messages.some((m) => m.streaming) || assist.busy || assist.phase === 'generating'
+  const stickToBottomState = useMemo(
+    () => ({
+      messageCount: messages.length,
+      lastMessageId: messages.at(-1)?.id,
+      lastMessageStreaming: Boolean(messages.at(-1)?.streaming),
+      prompting: assist.busy,
+    }),
+    [messages.length, messages.at(-1)?.id, messages.at(-1)?.streaming, assist.busy],
+  )
+  const { pinned, scrollToBottom } = useStickToBottomScroll({
+    contentRef: aiMessagesRef,
+    messageState: stickToBottomState,
+    streaming: streamingAny,
+  })
 
   useEffect(() => {
     if (!open) return
@@ -334,7 +353,9 @@ export function AnnotationNoteDialog({
               />
             ) : null}
 
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md border border-border/60 p-2">
+            <div className="relative min-h-0 flex-1">
+              <div className="min-h-0 h-full space-y-2 overflow-y-auto rounded-md border border-border/60 p-2">
+                <div ref={aiMessagesRef} className="space-y-2">
               {messages.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
                   先聊聊这段话。想留批注时点「写成批注」或说「写批注」即可生成到上方。
@@ -365,6 +386,14 @@ export function AnnotationNoteDialog({
               )}
               {assist.phase === 'generating' && !polishPreview ? (
                 <p className="text-xs text-muted-foreground">正在整理…</p>
+              ) : null}
+                </div>
+              </div>
+              {!pinned && messages.length > 0 ? (
+                <AgentScrollToBottomButton
+                  className="absolute bottom-2 left-1/2 z-10 h-7 -translate-x-1/2 gap-1 rounded-full border border-border/60 bg-background/95 px-3 text-[11px] shadow-md backdrop-blur-sm"
+                  onClick={scrollToBottom}
+                />
               ) : null}
             </div>
 

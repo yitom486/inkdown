@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { describe, expect, it, vi } from 'vitest'
 import {
   isNearBottom,
+  rafCoalesce,
   shouldRePinOnMessageChange,
 } from './stick-to-bottom'
 
@@ -30,5 +32,15 @@ describe('stick-to-bottom', () => {
         { ...base, lastMessageStreaming: true },
       ),
     ).toBe(false)
+  })
+
+  it('rafCoalesce 同一帧内只执行一次', async () => {
+    const spy = vi.fn()
+    const schedule = rafCoalesce(spy)
+    schedule()
+    schedule()
+    schedule()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 })

@@ -18,6 +18,7 @@ import { AgentMark } from '@/components/agent/AgentMark'
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
+import { AgentScrollToBottomButton } from '@/components/agent/AgentScrollToBottomButton'
 import type { ChapterMarkPlanSelectPayload } from '@/components/agent/ChapterMarkPlanCard'
 import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
 import { AGENT_CHAT_COL_CLASS } from '@/components/agent/AgentChatItem'
@@ -197,6 +198,7 @@ const AgentMessageList = memo(function AgentMessageList({
   const { pinned, scrollToBottom } = useStickToBottomScroll({
     contentRef: messagesRef,
     messageState: stickToBottomState,
+    streaming: streamingAny,
   })
 
   const pendingOrphan = shouldShowOrphanPermissionCard(pendingPermission, messages)
@@ -291,16 +293,7 @@ const AgentMessageList = memo(function AgentMessageList({
       </div>
     </ScrollArea>
       {!pinned && messages.length > 0 ? (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="absolute bottom-3 left-1/2 z-10 h-7 -translate-x-1/2 gap-1 rounded-full border border-border/60 bg-background/95 px-3 text-[11px] shadow-md backdrop-blur-sm"
-          onClick={scrollToBottom}
-        >
-          <ChevronDown className="size-3.5" />
-          回到底部
-        </Button>
+        <AgentScrollToBottomButton onClick={scrollToBottom} />
       ) : null}
     </div>
   )

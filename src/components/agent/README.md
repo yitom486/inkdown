@@ -7,6 +7,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。
 | `AgentPanel` | 右侧 Agent 主面板 |
 | `AgentComposer` | 输入框、附件、选区标记 |
 | `AgentChatItem` / `AgentMessageBubble` / `AgentMermaidBlock` | 消息列表与气泡 |
+| `AgentScrollToBottomButton` | 消息列表「回到底部」浮动按钮 |
 | `AgentToolCallCard` / `AgentDiffPreview` / `AgentPlanCard` | 工具调用、diff、计划 |
 | `ProposeMarkChatBlock` / `ProposeMarkBlockList` / `ProposeMarkCard` | 聊天气泡内可折叠提议块（含批量勾选采用） |
 | `ChapterMarkPlanCard` | 章级划重点建议（用户点选章后继续 Agent） |

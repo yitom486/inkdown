@@ -39,9 +39,26 @@ export function resolveScrollViewport(
   const viewport = contentEl.closest('[data-slot=scroll-area-viewport]')
   if (viewport instanceof HTMLElement) return viewport
   const parent = contentEl.parentElement
+  if (parent instanceof HTMLElement) {
+    const style = getComputedStyle(parent)
+    if (/(auto|scroll)/.test(style.overflowY)) return parent
+  }
   return parent instanceof HTMLElement ? parent : null
 }
 
 export function scrollViewportToBottom(viewport: HTMLElement): void {
   viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight
+}
+
+/** 将高频回调合并到下一帧，避免 ResizeObserver 在流式输出时过度触发滚动。 */
+export function rafCoalesce(callback: () => void): () => void {
+  let scheduled = false
+  return () => {
+    if (scheduled) return
+    scheduled = true
+    requestAnimationFrame(() => {
+      scheduled = false
+      callback()
+    })
+  }
 }

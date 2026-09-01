@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import {
   DEFAULT_STICK_TO_BOTTOM_THRESHOLD_PX,
   isNearBottom,
+  rafCoalesce,
   resolveScrollViewport,
   scrollViewportToBottom,
   shouldRePinOnMessageChange,
@@ -12,6 +13,8 @@ interface UseStickToBottomScrollOptions {
   contentRef: RefObject<HTMLElement | null>
   messageState: MessagePinState
   thresholdPx?: number
+  /** 流式输出时用 rAF 合并 ResizeObserver 回调，减轻代码块增高时的滚动抖动。 */
+  streaming?: boolean
 }
 
 interface UseStickToBottomScrollResult {
@@ -28,6 +31,7 @@ export function useStickToBottomScroll({
   contentRef,
   messageState,
   thresholdPx = DEFAULT_STICK_TO_BOTTOM_THRESHOLD_PX,
+  streaming = false,
 }: UseStickToBottomScrollOptions): UseStickToBottomScrollResult {
   const [pinned, setPinned] = useState(true)
   const pinnedRef = useRef(true)
@@ -74,12 +78,12 @@ export function useStickToBottomScroll({
       })
     }
 
+    const onResize = streaming ? rafCoalesce(followBottomIfPinned) : followBottomIfPinned
+
     viewport.addEventListener('scroll', syncPinnedFromScroll, { passive: true })
 
     const resizeObserver =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => followBottomIfPinned())
-        : null
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => onResize()) : null
     resizeObserver?.observe(content)
 
     followBottomIfPinned()
@@ -88,7 +92,7 @@ export function useStickToBottomScroll({
       viewport.removeEventListener('scroll', syncPinnedFromScroll)
       resizeObserver?.disconnect()
     }
-  }, [contentRef, thresholdPx])
+  }, [contentRef, streaming, thresholdPx])
 
   return { pinned, scrollToBottom }
 }
