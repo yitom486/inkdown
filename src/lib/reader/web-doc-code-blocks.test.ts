@@ -52,6 +52,7 @@ describe('buildWebDocReaderDocument', () => {
       {
         title: 'Demo',
         bodyHtml: `<div class="language-bash"><pre class="language-bash"><code>echo hi</code></pre></div>`,
+        baseUrl: 'https://example.com/docs',
       },
       'dark',
     )

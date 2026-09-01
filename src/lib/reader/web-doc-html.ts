@@ -4,7 +4,12 @@ import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
 import { buildWebDocCodeBlockCss, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
+import { neutralizeWebDocNavigationLinks } from '@/lib/reader/web-doc-link'
 import { ensureWebDocHeadingIds } from '@/lib/reader/web-doc-outline'
+import {
+  extractPeopleDailyTitle,
+  pickPeopleDailyArticleRoot,
+} from '@/lib/reader/web-doc/people-daily-extract'
 
 const GENERIC_ARTICLE_SELECTORS = [
   'article',
@@ -17,11 +22,17 @@ const GENERIC_ARTICLE_SELECTORS = [
   '.content',
 ]
 
-const SITE_ARTICLE_SELECTORS: Partial<Record<WebDocSiteId, string[]>> = {
-  'people-daily-paper': ['.article', '#ozoom', '.article-box'],
-}
+const SITE_ARTICLE_SELECTORS: Partial<Record<WebDocSiteId, string[]>> = {}
 
-export function pickArticleRoot(doc: Document, siteId: WebDocSiteId = 'generic-ssr'): HTMLElement {
+export function pickArticleRoot(
+  doc: Document,
+  siteId: WebDocSiteId = 'generic-ssr',
+  pageUrl?: string,
+): HTMLElement {
+  if (siteId === 'people-daily-paper' && pageUrl) {
+    return pickPeopleDailyArticleRoot(doc, pageUrl)
+  }
+
   const selectors = SITE_ARTICLE_SELECTORS[siteId] ?? GENERIC_ARTICLE_SELECTORS
   for (const selector of selectors) {
     const node = doc.querySelector(selector)
@@ -97,7 +108,7 @@ export function sanitizeWebDocBodyHtml(html: string): string {
   const inner = root?.innerHTML ?? html
 
   return DOMPurify.sanitize(inner, {
-    ADD_TAGS: ['img', 'svg', 'video', 'audio', 'picture', 'source', 'pre', 'code'],
+    ADD_TAGS: ['img', 'svg', 'video', 'audio', 'picture', 'source', 'pre', 'code', 'h1', 'h2', 'h3', 'section', 'nav'],
     ADD_ATTR: [
       'href',
       'class',
@@ -113,6 +124,7 @@ export function sanitizeWebDocBodyHtml(html: string): string {
       'loading',
       'aria-hidden',
       'role',
+      'data-inkdown-href',
     ],
   })
 }
@@ -123,27 +135,33 @@ export function extractWebDocArticle(
   siteId: WebDocSiteId = 'generic-ssr',
 ): { title: string; bodyHtml: string } {
   const doc = parseHtmlDocument(html)
-  const root = pickArticleRoot(doc, siteId)
+  const root = pickArticleRoot(doc, siteId, pageUrl)
   const clone = root.cloneNode(true) as HTMLElement
   stripWebDocChrome(clone, siteId)
   rewriteRelativeUrls(clone, pageUrl)
   const sanitized = sanitizeWebDocBodyHtml(clone.innerHTML)
   const { bodyHtml } = ensureWebDocHeadingIds(sanitized)
+  const title =
+    (siteId === 'people-daily-paper' ? extractPeopleDailyTitle(doc, pageUrl) : null) ??
+    extractDocumentTitle(doc)
   return {
-    title: extractDocumentTitle(doc),
+    title,
     bodyHtml,
   }
 }
 
 export function buildWebDocReaderDocument(
-  content: Pick<WebDocPageContent, 'title' | 'bodyHtml'>,
+  content: Pick<WebDocPageContent, 'title' | 'bodyHtml' | 'baseUrl'>,
   theme: EpubThemeMode,
   typography: ReaderTypography = DEFAULT_READER_TYPOGRAPHY,
 ): string {
   const layoutCss = buildReaderLayoutCss(theme, typography)
   const codeBlockCss = buildWebDocCodeBlockCss(theme)
   const safeTitle = DOMPurify.sanitize(content.title)
-  const body = enhanceWebDocCodeBlocks(content.bodyHtml)
+  const body = neutralizeWebDocNavigationLinks(
+    enhanceWebDocCodeBlocks(content.bodyHtml),
+    content.baseUrl,
+  )
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -158,6 +176,22 @@ export function buildWebDocReaderDocument(
     a { word-break: break-word; }
     pre { overflow-x: auto; }
     img { max-width: 100%; height: auto; }
+    .people-daily-edition-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1.25rem;
+    }
+    .people-daily-edition-nav a {
+      text-decoration: none;
+      opacity: 0.85;
+    }
+    .people-daily-edition-nav a:hover {
+      text-decoration: underline;
+      opacity: 1;
+    }
   </style>
 </head>
 <body>${body}</body>

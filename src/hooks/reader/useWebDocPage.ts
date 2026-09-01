@@ -12,9 +12,13 @@ export interface WebDocPageData {
   content: WebDocPageContent
 }
 
+import { logWebDoc } from '@/lib/reader/web-doc-debug'
+
 async function fetchWebDocPageData(pageUrl: string): Promise<WebDocPageData> {
+  logWebDoc('fetch-start', { pageUrl })
   const result = await webDocApi.fetchPage({ url: pageUrl })
   if (!isOk(result)) {
+    logWebDoc('fetch-error', { pageUrl, message: result.error.message })
     throw result.error satisfies AppError
   }
 
@@ -23,6 +27,12 @@ async function fetchWebDocPageData(pageUrl: string): Promise<WebDocPageData> {
     result.value.url,
     resolveWebDocSiteId(result.value.url),
   )
+  logWebDoc('fetch-done', {
+    pageUrl: result.value.url,
+    siteId: content.siteId,
+    title: content.title,
+    bodyLen: content.bodyHtml.length,
+  })
   return {
     pageUrl: result.value.url,
     content,

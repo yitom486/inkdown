@@ -50,6 +50,7 @@ import {
   resolveWebDocTocDiscoveryUrl,
 } from '@/lib/reader/web-doc-site'
 import { resolveWebDocClickHref, shouldNavigateWebDocInApp } from '@/lib/reader/web-doc-link'
+import { logWebDoc } from '@/lib/reader/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
 import {
   iterateWebDocUnits,
@@ -113,6 +114,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
   themeRef.current = theme
   const pageUrlRef = useRef(pageUrl)
   pageUrlRef.current = pageUrl
+  const pendingNavHrefRef = useRef<string | null>(null)
   const queryClient = useQueryClient()
   const openPage = useWebDocStore((state) => state.openPage)
   const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
@@ -291,13 +293,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const navigateToUrl = useCallback(
     (targetUrl: string, flatIndex?: number) => {
-      const iframe = iframeRef.current
-      if (iframe) {
-        frameCleanupRef.current?.()
-        frameCleanupRef.current = null
-        iframe.srcdoc = ''
-        setIframeReady(false)
-      }
+      logWebDoc('navigate', { from: pageUrlRef.current, to: targetUrl, flatIndex })
 
       const currentUnits = unitsRef.current
       const resolvedIndex =
@@ -312,6 +308,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const handleWebDocLink = useCallback(
     (href: string) => {
+      logWebDoc('link-click', { href, pageUrl: pageUrlRef.current })
       if (shouldNavigateWebDocInApp(href, pageUrlRef.current)) {
         navigateToUrl(href)
         return
@@ -564,12 +561,26 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         })
       }
 
-      const onClick = (event: MouseEvent) => {
+      const onPointerDownCapture = (event: PointerEvent) => {
+        if (event.button !== 0) return
         const href = resolveWebDocClickHref(event.target, pageUrlRef.current)
+        if (!href) return
+        pendingNavHrefRef.current = href
+        event.preventDefault()
+      }
+
+      const onClick = (event: MouseEvent) => {
+        const href = resolveWebDocClickHref(event.target, pageUrlRef.current) ?? pendingNavHrefRef.current
+        pendingNavHrefRef.current = null
         if (!href) return
 
         event.preventDefault()
         event.stopPropagation()
+
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1) {
+          void appApi.openExternal(href)
+          return
+        }
         handleWebDocLink(href)
       }
 
@@ -608,6 +619,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       }
 
       doc.addEventListener('click', onCopyCodeBlock)
+      doc.addEventListener('pointerdown', onPointerDownCapture, true)
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('scroll', onScroll, { passive: true })
@@ -618,6 +630,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
       frameCleanupRef.current = () => {
         doc.removeEventListener('click', onCopyCodeBlock)
+        doc.removeEventListener('pointerdown', onPointerDownCapture, true)
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
         doc.removeEventListener('scroll', onScroll)
@@ -631,6 +644,19 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
   )
 
   useEffect(() => {
+    logWebDoc('page-state', {
+      pageUrl,
+      isLoading,
+      isFetching,
+      hasData: Boolean(data),
+      bodyLen: data?.content.bodyHtml.length ?? 0,
+      readerDocLen: readerDocument.length,
+      iframeReady,
+      error: error?.message,
+    })
+  }, [data, error, iframeReady, isFetching, isLoading, pageUrl, readerDocument.length])
+
+  useEffect(() => {
     setIframeReady(false)
     const iframe = iframeRef.current
     if (!iframe) return
@@ -640,10 +666,16 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
     if (!readerDocument) {
       iframe.srcdoc = ''
+      logWebDoc('iframe-clear', { pageUrl, reason: 'empty-reader-document' })
       return
     }
 
     const onLoad = () => {
+      logWebDoc('iframe-load', {
+        pageUrl,
+        readerDocLen: readerDocument.length,
+        bodyTextLen: iframe.contentDocument?.body?.textContent?.trim().length ?? 0,
+      })
       setIframeReady(true)
       bindIframeFrame(iframe)
       const text = extractDocumentText(iframe.contentDocument)
@@ -654,6 +686,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
     iframe.addEventListener('load', onLoad)
     iframe.srcdoc = readerDocument
+    logWebDoc('iframe-srcdoc', { pageUrl, readerDocLen: readerDocument.length })
 
     return () => {
       iframe.removeEventListener('load', onLoad)
