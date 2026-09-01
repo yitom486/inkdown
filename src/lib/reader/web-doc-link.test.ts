@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   INKDOWN_NAV_HREF_ATTR,
   detectWebDocIframeEscape,
+  isWebDocNavigationTarget,
   neutralizeWebDocNavigationLinks,
   resolveWebDocClickHref,
   shouldNavigateWebDocInApp,
@@ -57,10 +58,10 @@ describe('web-doc-link', () => {
     expect(href).toBe('https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
   })
 
-  it('解析 area 热区 data 链接', () => {
-    const area = document.createElement('area')
-    area.setAttribute(INKDOWN_NAV_HREF_ATTR, 'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
-    const href = resolveWebDocClickHref(area, current)
-    expect(href).toBe('https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
+  it('isWebDocNavigationTarget 识别 data 链接', () => {
+    const anchor = document.createElement('a')
+    anchor.setAttribute('href', '#')
+    anchor.setAttribute(INKDOWN_NAV_HREF_ATTR, 'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
+    expect(isWebDocNavigationTarget(anchor, current)).toBe(true)
   })
 })

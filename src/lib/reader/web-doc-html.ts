@@ -174,6 +174,7 @@ export function buildWebDocReaderDocument(
   <style>
     body { margin: 0; padding: 1.25rem 1.5rem 2rem; }
     a { word-break: break-word; }
+    a[data-inkdown-href] { cursor: pointer; }
     pre { overflow-x: auto; }
     img { max-width: 100%; height: auto; }
     .people-daily-edition-nav {

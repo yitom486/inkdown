@@ -77,15 +77,6 @@ export function shouldNavigateWebDocInApp(href: string, currentPageUrl: string):
   }
 }
 
-function readInkdownNavHref(element: Element): string | null {
-  const fromData = element.getAttribute(INKDOWN_NAV_HREF_ATTR)?.trim()
-  if (fromData) return fromData
-
-  const href = element.getAttribute('href')?.trim()
-  if (!href || !isNavigableHref(href)) return null
-  return href
-}
-
 export function resolveWebDocClickHref(
   target: EventTarget | null,
   currentPageUrl: string,
@@ -146,4 +137,21 @@ export function detectWebDocIframeEscape(
 
 export function isCrossOriginIframeEscape(mark: string | null): mark is '__cross_origin__' {
   return mark === '__cross_origin__'
+}
+
+function readInkdownNavHref(element: Element): string | null {
+  const fromData = element.getAttribute(INKDOWN_NAV_HREF_ATTR)?.trim()
+  if (fromData) return fromData
+
+  const href = element.getAttribute('href')?.trim()
+  if (!href || !isNavigableHref(href)) return null
+  return href
+}
+
+/** 事件目标是否落在可应用内导航的链接/热区上 */
+export function isWebDocNavigationTarget(
+  target: EventTarget | null,
+  currentPageUrl: string,
+): boolean {
+  return resolveWebDocClickHref(target, currentPageUrl) !== null
 }

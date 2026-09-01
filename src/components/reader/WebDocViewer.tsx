@@ -49,7 +49,7 @@ import {
   resolveWebDocSiteId,
   resolveWebDocTocDiscoveryUrl,
 } from '@/lib/reader/web-doc-site'
-import { resolveWebDocClickHref, shouldNavigateWebDocInApp } from '@/lib/reader/web-doc-link'
+import { resolveWebDocClickHref, shouldNavigateWebDocInApp, isWebDocNavigationTarget } from '@/lib/reader/web-doc-link'
 import { logWebDoc } from '@/lib/reader/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
 import {
@@ -114,7 +114,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
   themeRef.current = theme
   const pageUrlRef = useRef(pageUrl)
   pageUrlRef.current = pageUrl
-  const pendingNavHrefRef = useRef<string | null>(null)
+  const lastInContentNavRef = useRef<{ href: string; at: number } | null>(null)
   const queryClient = useQueryClient()
   const openPage = useWebDocStore((state) => state.openPage)
   const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
@@ -493,7 +493,24 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         pointerOriginRef.current = { x: event.clientX, y: event.clientY }
       }
 
+      const tryInContentNavigate = (href: string, win: Window) => {
+        const now = Date.now()
+        const last = lastInContentNavRef.current
+        if (last && last.href === href && now - last.at < 400) return
+        lastInContentNavRef.current = { href, at: now }
+
+        clearWindowSelection(win)
+        setSelectionToolbarPos(null)
+        inspectorRef.current.close()
+        handleWebDocLink(href)
+      }
+
       const onMouseUp = (event: MouseEvent) => {
+        if (isWebDocNavigationTarget(event.target, pageUrlRef.current)) {
+          pointerOriginRef.current = null
+          return
+        }
+
         window.setTimeout(() => {
           if (isClickNotDrag(pointerOriginRef.current, event)) {
             const hits = findMobiMarksAtPoint(doc, event.clientX, event.clientY)
@@ -563,25 +580,19 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
       const onPointerDownCapture = (event: PointerEvent) => {
         if (event.button !== 0) return
-        const href = resolveWebDocClickHref(event.target, pageUrlRef.current)
-        if (!href) return
-        pendingNavHrefRef.current = href
-        event.preventDefault()
-      }
 
-      const onClick = (event: MouseEvent) => {
-        const href = resolveWebDocClickHref(event.target, pageUrlRef.current) ?? pendingNavHrefRef.current
-        pendingNavHrefRef.current = null
+        const href = resolveWebDocClickHref(event.target, pageUrlRef.current)
         if (!href) return
 
         event.preventDefault()
         event.stopPropagation()
 
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1) {
+        if (event.metaKey || event.ctrlKey || event.shiftKey) {
           void appApi.openExternal(href)
           return
         }
-        handleWebDocLink(href)
+
+        tryInContentNavigate(href, win)
       }
 
       const onSelectionChange = bindDocumentSelectionCollapse(doc, win, () => {
@@ -623,7 +634,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('scroll', onScroll, { passive: true })
-      doc.addEventListener('click', onClick, true)
+      doc.addEventListener('pointerdown', onPointerDownCapture, true)
       doc.addEventListener('mousemove', onMouseMove, { passive: true })
       restoreScrollProgress()
       syncActiveHeadingFromScroll()
@@ -634,7 +645,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
         doc.removeEventListener('scroll', onScroll)
-        doc.removeEventListener('click', onClick, true)
+        doc.removeEventListener('pointerdown', onPointerDownCapture, true)
         doc.removeEventListener('mousemove', onMouseMove)
         onSelectionChange()
         if (hoverRaf !== 0) window.cancelAnimationFrame(hoverRaf)
