@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAcpSession } from '@/hooks/agent/useAcpSession'
+import { useStickToBottomScroll } from '@/hooks/agent/useStickToBottomScroll'
 import { useCodeBlockCopy } from '@/hooks/preview/useCodeBlockCopy'
 import { useHighlightTheme } from '@/hooks/preview/useHighlightTheme'
 import { cn } from '@/lib/utils'
@@ -182,9 +183,21 @@ const AgentMessageList = memo(function AgentMessageList({
 
   const timeline = useMemo(() => groupAgentMessages(messages), [messages])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [bottomRef, messages, pendingPermission, prompting])
+  const streamingAny = messages.some((m) => m.streaming) || prompting
+  const stickToBottomState = useMemo(
+    () => ({
+      messageCount: messages.length,
+      lastMessageId: messages.at(-1)?.id,
+      lastMessageStreaming: Boolean(messages.at(-1)?.streaming),
+      prompting,
+    }),
+    [messages.length, messages.at(-1)?.id, messages.at(-1)?.streaming, prompting],
+  )
+
+  useStickToBottomScroll({
+    contentRef: messagesRef,
+    messageState: stickToBottomState,
+  })
 
   const pendingOrphan = shouldShowOrphanPermissionCard(pendingPermission, messages)
 
@@ -195,7 +208,6 @@ const AgentMessageList = memo(function AgentMessageList({
     return () => window.clearInterval(id)
   }, [prompting])
 
-  const streamingAny = messages.some((m) => m.streaming) || prompting
   const prevStreamingAny = useRef(streamingAny)
 
   useEffect(() => {

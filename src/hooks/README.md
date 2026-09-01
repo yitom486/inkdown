@@ -59,6 +59,7 @@
 |------|------|
 | `useAcpSession` | 连接 ACP、发 prompt、流式消息、权限与配置；Agent 面板主状态机 |
 | `useAnnotationAgentAssist` | 批注对话框：独立 ACP session；意图/写成批注 → 不进右侧时间线 |
+| `useStickToBottomScroll` | Agent 消息列表贴底滚动：用户上滑后暂停自动跟随，新回复再贴底 |
 
 ---
 
