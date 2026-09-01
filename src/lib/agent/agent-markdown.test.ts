@@ -141,4 +141,30 @@ describe('renderAgentMarkdown + splitAgentMarkdownParts', () => {
         .every((p) => p.type === 'html' && !/class=["'][^"']*\bmermaid\b/.test(p.html)),
     ).toBe(true)
   })
+
+  it('渲染 $...$ 与 $$...$$ 数学公式', () => {
+    expect(renderAgentMarkdown('行内 $E=mc^2$ 测试')).toContain('class="katex"')
+    expect(renderAgentMarkdown('$$\frac{a}{b}$$')).toContain('katex-display')
+  })
+
+  it('渲染 \\[...\\] 与省略反斜杠的 [ ... ] 块级公式', () => {
+    const bracket = String.raw`\[
+\begin{aligned}
+A-B &= A + B
+\end{aligned}
+\]`
+    expect(renderAgentMarkdown(bracket)).toContain('katex')
+
+    const bareBrackets = [
+      '[',
+      String.raw`\text{补码}=\text{反码}+1`,
+      ']',
+    ].join('\n')
+    expect(renderAgentMarkdown(bareBrackets)).toContain('katex')
+  })
+
+  it('渲染 \\(...\\) 行内公式', () => {
+    const html = renderAgentMarkdown(String.raw`补码 \((A+\sim B+1)\) 示例`)
+    expect(html).toContain('katex')
+  })
 })
