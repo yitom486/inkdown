@@ -19,6 +19,8 @@
     "test:e2e:web-doc": "playwright test e2e/web-doc-smoke.spec.ts",
     "test:all": "bun run typecheck && bun run test && bun run build && bun run test:e2e",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "release": "bun run scripts/release.ts",
+    "release:push": "bun run scripts/release.ts -- --push",
     "postinstall": "node node_modules/electron/install.js"
   },
   "dependencies": {

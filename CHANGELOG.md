@@ -2,7 +2,7 @@
 
 记录 [Inkdown](README.md) 各版本**主要功能更新**。版本号与 Git tag 对齐。
 
-**发版时**：在 `[未发布]` 写好本节要点 → 改版本号与日期 → 打 tag 发布；不必罗列每条 commit 或小修复。
+**发版时**：日常把要点写在 `[未发布]` → 执行 `bun run release`（默认 **patch** 自动 +1）→ 确认后 `bun run release:push` 推送 tag 触发 GitHub Release。不必手算版本号；大改动用 `bun run release -- minor` / `major`。不必罗列每条 commit 或小修复。
 
 ## [未发布]
 

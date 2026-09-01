@@ -143,12 +143,22 @@ bun run pack
 
 只有推送版本 tag 才会触发 GitHub Actions 打包发布，普通 `git push` 不会创建 Release。
 
-发版前在 [CHANGELOG.md](./CHANGELOG.md) 的 `[未发布]` 写好本版主要功能，再改版本号、日期并打 tag：
+**约定**：版本号默认每次 **patch** 自动递增（如 `0.2.5` → `0.2.6`），无需手记下一个号。
+
+1. 在 [CHANGELOG.md](./CHANGELOG.md) 的 `[未发布]` 写好本版主要功能（至少一条 `-` 要点）
+2. 本地发版（改版本号、收 CHANGELOG、commit、打 tag）：
 
 ```bash
-git tag v0.2.3
-git push origin master
-git push origin v0.2.3
+bun run release          # 默认 patch
+# bun run release -- minor
+# bun run release -- major
+```
+
+3. 推送以触发多平台打包与 GitHub Release：
+
+```bash
+bun run release:push
+# 若已执行过 bun run release：git push origin HEAD && git push origin vX.Y.Z
 ```
 
 发布工作流位于 [`.github/workflows/release.yml`](./.github/workflows/release.yml)。

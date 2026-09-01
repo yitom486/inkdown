@@ -95,6 +95,7 @@ Zustand selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand
 
 - **作者身份 / Attribution**：`.cursor/rules/git-identity.mdc`（`yitom486@gmail.com`）
 - Message：`type: 中文描述`（feat / fix / docs / chore…）
+- **发版**：`bun run release`（默认 patch 自动 +1）→ `bun run release:push` 推送 tag；细节见 README「发布版本」
 - 最小改动；不擅自引入冲突技术栈；不擅自 commit；不提交密钥
 - 任务进度可写本地 `.plan/`（不提交）；状态标记见该目录 README
 - 改动带 README 的目录时，同步更新该 README 的文件引用（见上方「子目录 README」）
