@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import {
   DEFAULT_STICK_TO_BOTTOM_THRESHOLD_PX,
   isNearBottom,
@@ -14,6 +14,12 @@ interface UseStickToBottomScrollOptions {
   thresholdPx?: number
 }
 
+interface UseStickToBottomScrollResult {
+  /** 是否贴在底部（未上滑离开）。 */
+  pinned: boolean
+  scrollToBottom: () => void
+}
+
 /**
  * Agent 消息列表贴底滚动：仅在用户位于底部附近时跟随内容增高；
  * 用户上滑阅读后停止自动滚动，新消息或新一轮流式再贴底。
@@ -22,25 +28,30 @@ export function useStickToBottomScroll({
   contentRef,
   messageState,
   thresholdPx = DEFAULT_STICK_TO_BOTTOM_THRESHOLD_PX,
-}: UseStickToBottomScrollOptions): void {
+}: UseStickToBottomScrollOptions): UseStickToBottomScrollResult {
+  const [pinned, setPinned] = useState(true)
   const pinnedRef = useRef(true)
   const programmaticRef = useRef(false)
   const prevMessageStateRef = useRef<MessagePinState>(messageState)
 
+  const scrollToBottom = useCallback(() => {
+    const viewport = resolveScrollViewport(contentRef.current)
+    if (!viewport) return
+    pinnedRef.current = true
+    setPinned(true)
+    programmaticRef.current = true
+    scrollViewportToBottom(viewport)
+    requestAnimationFrame(() => {
+      programmaticRef.current = false
+    })
+  }, [contentRef])
+
   useEffect(() => {
     if (shouldRePinOnMessageChange(prevMessageStateRef.current, messageState)) {
-      pinnedRef.current = true
-      const viewport = resolveScrollViewport(contentRef.current)
-      if (viewport) {
-        programmaticRef.current = true
-        scrollViewportToBottom(viewport)
-        requestAnimationFrame(() => {
-          programmaticRef.current = false
-        })
-      }
+      scrollToBottom()
     }
     prevMessageStateRef.current = messageState
-  }, [contentRef, messageState])
+  }, [messageState, scrollToBottom])
 
   useEffect(() => {
     const content = contentRef.current
@@ -49,7 +60,9 @@ export function useStickToBottomScroll({
 
     const syncPinnedFromScroll = () => {
       if (programmaticRef.current) return
-      pinnedRef.current = isNearBottom(viewport, thresholdPx)
+      const near = isNearBottom(viewport, thresholdPx)
+      pinnedRef.current = near
+      setPinned(near)
     }
 
     const followBottomIfPinned = () => {
@@ -76,4 +89,6 @@ export function useStickToBottomScroll({
       resizeObserver?.disconnect()
     }
   }, [contentRef, thresholdPx])
+
+  return { pinned, scrollToBottom }
 }

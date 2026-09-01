@@ -1,6 +1,5 @@
 import DOMPurify, { type Config } from 'dompurify'
-import { normalizeLatexDelimiters } from '@/lib/editor/latex-delimiters'
-import { markdownParser } from '@/lib/editor/markdown'
+import { renderMarkdown } from '@/lib/editor/markdown'
 
 export type { AgentMarkdownPart, MarkdownPart } from '@/lib/editor/markdown-parts'
 export { splitAgentMarkdownParts, splitMarkdownParts } from '@/lib/editor/markdown-parts'
@@ -38,8 +37,7 @@ export function renderAgentMarkdown(
 ): string {
   if (!text.trim()) return ''
   const patched = options?.streaming ? patchStreamingMarkdownFences(text) : text
-  const source = normalizeLatexDelimiters(patched)
-  return sanitizeAgentHtml(markdownParser.render(source))
+  return sanitizeAgentHtml(renderMarkdown(patched))
 }
 
 /** @deprecated 使用 renderAgentMarkdown(text, { streaming: true }) */

@@ -9,7 +9,7 @@ import {
   extractLocalImageRefsFromHtml,
   replaceImageSrcInHtml,
 } from '@/lib/editor/markdown-images'
-import { markdownParser } from '@/lib/editor/markdown'
+import { renderMarkdown } from '@/lib/editor/markdown'
 import { isOk } from '@shared/core/result'
 
 const PREVIEW_SANITIZE_OPTIONS: Config = {
@@ -46,7 +46,7 @@ export async function buildExportHtml(content: string, filePath?: string): Promi
   const env: { headingSlugCounts: Map<string, number> } = {
     headingSlugCounts: new Map(),
   }
-  const raw = markdownParser.render(content, env)
+  const raw = renderMarkdown(content, env)
   const withImages = await resolveLocalImagesInHtml(raw, filePath)
   const sanitized = String(DOMPurify.sanitize(withImages, PREVIEW_SANITIZE_OPTIONS))
   const body = stripExportChrome(sanitized)

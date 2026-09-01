@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markdownParser } from './markdown'
+import { markdownParser, renderMarkdown } from './markdown'
 
 describe('markdownParser', () => {
   it('渲染行内与块级 KaTeX 公式', () => {
@@ -8,6 +8,11 @@ describe('markdownParser', () => {
 
     expect(inlineHtml).toContain('class="katex"')
     expect(blockHtml).toContain('class="katex-display"')
+  })
+
+  it('renderMarkdown 将 \\[...\\] 规范为 KaTeX 块级公式', () => {
+    const html = renderMarkdown(String.raw`\[\text{补码}=\text{反码}+1\]`)
+    expect(html).toContain('katex')
   })
 
   it('将 mermaid 代码块标记为待渲染图表', () => {

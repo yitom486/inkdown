@@ -194,7 +194,7 @@ const AgentMessageList = memo(function AgentMessageList({
     [messages.length, messages.at(-1)?.id, messages.at(-1)?.streaming, prompting],
   )
 
-  useStickToBottomScroll({
+  const { pinned, scrollToBottom } = useStickToBottomScroll({
     contentRef: messagesRef,
     messageState: stickToBottomState,
   })
@@ -225,16 +225,17 @@ const AgentMessageList = memo(function AgentMessageList({
   }, [messages, messagesRef, streamingAny])
 
   return (
-    <ScrollArea
-      className={cn(
-        'min-h-0 min-w-0 flex-1 overflow-x-hidden',
-        // Radix Viewport 内层常为 display:table + min-width:100%，长内容会撑开整列
-        '[&_[data-slot=scroll-area-viewport]]:min-w-0',
-        '[&_[data-slot=scroll-area-viewport]>div]:!block',
-        '[&_[data-slot=scroll-area-viewport]>div]:!min-w-0',
-        '[&_[data-slot=scroll-area-viewport]>div]:max-w-full',
-      )}
-    >
+    <div className="relative min-h-0 min-w-0 flex-1">
+      <ScrollArea
+        className={cn(
+          'h-full min-h-0 min-w-0 overflow-x-hidden',
+          // Radix Viewport 内层常为 display:table + min-width:100%，长内容会撑开整列
+          '[&_[data-slot=scroll-area-viewport]]:min-w-0',
+          '[&_[data-slot=scroll-area-viewport]>div]:!block',
+          '[&_[data-slot=scroll-area-viewport]>div]:!min-w-0',
+          '[&_[data-slot=scroll-area-viewport]>div]:max-w-full',
+        )}
+      >
       <div
         ref={messagesRef}
         data-acp-probe="message-list"
@@ -289,6 +290,19 @@ const AgentMessageList = memo(function AgentMessageList({
         <div ref={bottomRef} />
       </div>
     </ScrollArea>
+      {!pinned && messages.length > 0 ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="absolute bottom-3 left-1/2 z-10 h-7 -translate-x-1/2 gap-1 rounded-full border border-border/60 bg-background/95 px-3 text-[11px] shadow-md backdrop-blur-sm"
+          onClick={scrollToBottom}
+        >
+          <ChevronDown className="size-3.5" />
+          回到底部
+        </Button>
+      ) : null}
+    </div>
   )
 })
 

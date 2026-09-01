@@ -3,6 +3,7 @@ import markdownItKatexImport from '@vscode/markdown-it-katex'
 import markdownItTaskLists from 'markdown-it-task-lists'
 import { highlightCode } from '@/lib/editor/code-highlight'
 import { wrapHighlightedCodeBlock } from '@/lib/editor/code-block-lines'
+import { normalizeLatexDelimiters } from '@/lib/editor/latex-delimiters'
 import { slugifyHeading } from '@/lib/editor/markdown-headings'
 import { buildCodeBlockCopyButtonHtml, escapeCodeBlockLangLabel } from '@/lib/preview/code-block-chrome'
 
@@ -19,6 +20,13 @@ export const markdownParser = new MarkdownIt({
 })
   .use(markdownItKatex, { throwOnError: false })
   .use(markdownItTaskLists, { enabled: true, label: true, labelAfter: true })
+
+export type MarkdownRenderEnv = { headingSlugCounts?: Map<string, number> }
+
+/** 预览 / Agent / 导出共用的 Markdown 渲染入口（含 LaTeX 定界符规范化）。 */
+export function renderMarkdown(source: string, env?: MarkdownRenderEnv): string {
+  return markdownParser.render(normalizeLatexDelimiters(source), env)
+}
 
 markdownParser.renderer.rules.fence = (tokens, index, _options, _environment, _self) => {
   const token = tokens[index]

@@ -6,7 +6,7 @@ import {
   extractLocalImageRefsFromHtml,
   replaceImageSrcInHtml,
 } from '@/lib/editor/markdown-images'
-import { markdownParser } from '@/lib/editor/markdown'
+import { renderMarkdown } from '@/lib/editor/markdown'
 import { PREVIEW_SANITIZE_OPTIONS } from '@/lib/preview/preview-sanitize'
 import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 import { isOk } from '@shared/core/result'
@@ -46,7 +46,7 @@ export function useMarkdownPreview(content: string, filePath?: string, delay = 3
           const env: { headingSlugCounts: Map<string, number> } = {
             headingSlugCounts: new Map(),
           }
-          const raw = markdownParser.render(content, env)
+          const raw = renderMarkdown(content, env)
           const withImages = await resolveLocalImagesInHtml(raw, filePath)
 
           if (!cancelled) {
