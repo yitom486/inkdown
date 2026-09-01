@@ -317,6 +317,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [data, filePath, fileFingerprint])
 
   const hasChapterToc = outlineSource === 'embedded' || outlineSource === 'ocr'
+  const pdfOcrScale = useAppSettingsStore((state) => state.pdfOcrScale)
 
   const handleRecognizeToc = useCallback(async () => {
     if (!fileFingerprint || ocrRecognizing) return
@@ -328,6 +329,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         fromPage: Math.min(tocPageFrom, tocPageTo),
         toPage: Math.max(tocPageFrom, tocPageTo),
         pageOffset: tocPageOffset,
+        scale: pdfOcrScale,
       })
       if (result.ok) {
         setOutlineUnits(result.value.units)
@@ -341,7 +343,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     } finally {
       setOcrRecognizing(false)
     }
-  }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo, tocPageOffset])
+  }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale])
 
   useEffect(() => {
     if (outlineSource === 'ocr') return
@@ -411,6 +413,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             filePath,
             fileFingerprint,
             page,
+            scale: pdfOcrScale,
           })
           if (result.ok) {
             if (result.value.page !== page) {
@@ -434,7 +437,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       ocrPagePendingRef.current.set(page, task)
       return task
     },
-    [fileFingerprint, filePath],
+    [fileFingerprint, filePath, pdfOcrScale],
   )
 
   const handleRecognizePage = useCallback(async () => {

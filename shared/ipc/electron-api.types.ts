@@ -162,6 +162,7 @@ export interface ElectronAPI {
   ) => Promise<Result<PdfOcrPageCache, AppError>>
   listPdfOcrPages: (payload: ListPdfOcrPagesPayload) => Promise<Result<number[], AppError>>
   clearPdfOcrCache: (payload: GetPdfOcrTocPayload) => Promise<Result<void, AppError>>
+  clearAllPdfOcrCache: () => Promise<Result<void, AppError>>
   checkAppUpdate: () => Promise<AppUpdateStatus>
   downloadAppUpdate: () => Promise<AppUpdateStatus>
   installAppUpdate: () => Promise<Result<void, AppError>>

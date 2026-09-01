@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import {
   READER_LINE_HEIGHT_OPTION_LABELS,
   RECENT_FILES_LIMIT_OPTIONS,
   TAB_SIZE_OPTION_LABELS,
+  PDF_OCR_SCALE_OPTION_LABELS,
   useAppSettingsStore,
   type AutoSaveIntervalMs,
   type EditorFontSize,
@@ -25,12 +27,15 @@ import {
   type RecentFilesLimit,
   type ReaderFontSize,
   type ReaderLineHeight,
+  type PdfOcrScale,
 } from '@/stores/app-settings-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import type { AppTheme } from '@shared/types/editor'
 import type { EditorViewMode } from '@shared/types/editor'
 import { cn } from '@/lib/utils'
 import { appApi } from '@/api/app-api'
+import { clearAllPdfOcrCache } from '@/api/ocr-api'
+import { toast } from 'sonner'
 
 interface SettingsDialogProps {
   open: boolean
@@ -146,8 +151,32 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
   const setPdfOcrBackgroundPrefetch = useAppSettingsStore((state) => state.setPdfOcrBackgroundPrefetch)
   const pdfOcrAgentAutoOcr = useAppSettingsStore((state) => state.pdfOcrAgentAutoOcr)
   const setPdfOcrAgentAutoOcr = useAppSettingsStore((state) => state.setPdfOcrAgentAutoOcr)
+  const pdfOcrScale = useAppSettingsStore((state) => state.pdfOcrScale)
+  const setPdfOcrScale = useAppSettingsStore((state) => state.setPdfOcrScale)
   const verboseRendererLogs = useAppSettingsStore((state) => state.verboseRendererLogs)
   const setVerboseRendererLogs = useAppSettingsStore((state) => state.setVerboseRendererLogs)
+  const [clearingOcrCache, setClearingOcrCache] = useState(false)
+
+  const handleClearAllOcrCache = async () => {
+    if (
+      !window.confirm(
+        '将清除所有 PDF 的正文页与目录 OCR 缓存（不含语言包）。已打开的文件需重新识别，是否继续？',
+      )
+    ) {
+      return
+    }
+    setClearingOcrCache(true)
+    try {
+      const result = await clearAllPdfOcrCache()
+      if (result.ok) {
+        toast.success('已清除全部 OCR 缓存')
+      } else {
+        toast.error(result.error.message)
+      }
+    } finally {
+      setClearingOcrCache(false)
+    }
+  }
 
   const themeOptions: Array<{ value: AppTheme; label: string }> = [
     { value: 'dark', label: '深色' },
@@ -246,6 +275,16 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
               />
             </SettingRow>
             <SettingRow
+              title="PDF OCR 精度"
+              description="越高识别越清晰但更慢；修改后建议清除 OCR 缓存并重新识别。"
+            >
+              <OptionButtons<PdfOcrScale>
+                value={pdfOcrScale}
+                options={PDF_OCR_SCALE_OPTION_LABELS}
+                onChange={setPdfOcrScale}
+              />
+            </SettingRow>
+            <SettingRow
               title="Agent 自动识别"
               description="Agent 读扫描版正文时自动 OCR 未识别页；关闭后需手动点工具栏「识别本页」。"
             >
@@ -254,6 +293,20 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
                 onChange={setPdfOcrAgentAutoOcr}
                 label="Agent 自动识别"
               />
+            </SettingRow>
+            <SettingRow
+              title="清除 OCR 缓存"
+              description="删除所有已保存的 PDF 正文页与目录识别结果；语言包仍保留在本地。"
+            >
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                disabled={clearingOcrCache}
+                onClick={() => void handleClearAllOcrCache()}
+              >
+                {clearingOcrCache ? '清除中…' : '全部清除'}
+              </Button>
             </SettingRow>
           </section>
 

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { PdfOcrTocCache } from '@shared/types/ocr'
@@ -33,6 +33,14 @@ export async function deletePdfOcrTocCache(fileFingerprint: string): Promise<voi
   try {
     const { unlink } = await import('node:fs/promises')
     await unlink(cacheFilePath(fileFingerprint))
+  } catch {
+    // ignore missing
+  }
+}
+
+export async function clearAllPdfOcrCaches(): Promise<void> {
+  try {
+    await rm(ocrCacheRoot(), { recursive: true, force: true })
   } catch {
     // ignore missing
   }

@@ -3,13 +3,14 @@ import { pdf } from 'pdf-to-img'
 import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 import { normalizeOcrWords } from '@shared/reader/ocr-page-words'
-import type { PdfOcrPageCache, RecognizePdfPagePayload } from '@shared/types/ocr'
+import type { PdfOcrPageCache, PdfOcrScale, RecognizePdfPagePayload } from '@shared/types/ocr'
+import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
 import { writePdfOcrPageCache } from './ocr-page-cache'
 import { getOcrWorker } from './ocr-worker'
 import { extractTesseractWords } from './tesseract-words'
 import { recognizeImageWithBlocks } from './recognize-image'
 
-const OCR_SCALE = 2
+const OCR_SCALE = DEFAULT_PDF_OCR_SCALE
 
 function readPngSize(image: Buffer): { width: number; height: number } {
   return {
@@ -21,9 +22,10 @@ function readPngSize(image: Buffer): { width: number; height: number } {
 async function renderPdfPageImage(
   filePath: string,
   pageNumber: number,
+  scale: PdfOcrScale = OCR_SCALE,
 ): Promise<{ image: Buffer; width: number; height: number }> {
   const data = await readFile(filePath)
-  const doc = await pdf(data, { scale: OCR_SCALE })
+  const doc = await pdf(data, { scale })
   let current = 0
   for await (const image of doc) {
     current += 1
@@ -41,12 +43,13 @@ export async function recognizePdfPage(
   payload: RecognizePdfPagePayload,
 ): Promise<Result<PdfOcrPageCache, AppError>> {
   const { filePath, fileFingerprint, page } = payload
+  const scale = payload.scale ?? OCR_SCALE
   if (page < 1) {
     return err({ code: 'INVALID_ARGUMENT', message: '页码无效' })
   }
 
   try {
-    const { image, width, height } = await renderPdfPageImage(filePath, page)
+    const { image, width, height } = await renderPdfPageImage(filePath, page, scale)
     const worker = await getOcrWorker()
     const { data } = await recognizeImageWithBlocks(worker, image)
 
@@ -62,9 +65,9 @@ export async function recognizePdfPage(
     const cache: PdfOcrPageCache = {
       fileFingerprint,
       page,
-      pageWidth: width / OCR_SCALE,
-      pageHeight: height / OCR_SCALE,
-      ocrScale: OCR_SCALE,
+      pageWidth: width / scale,
+      pageHeight: height / scale,
+      ocrScale: scale,
       words,
       createdAt: new Date().toISOString(),
     }

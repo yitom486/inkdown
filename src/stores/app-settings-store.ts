@@ -6,6 +6,16 @@ import {
   type ReaderFontSize,
   type ReaderLineHeight,
 } from '@/lib/reader/reader-typography'
+import {
+  DEFAULT_PDF_OCR_SCALE,
+  PDF_OCR_SCALE_OPTION_LABELS,
+  type PdfOcrScale,
+} from '@shared/types/ocr'
+
+export {
+  PDF_OCR_SCALE_OPTION_LABELS,
+  type PdfOcrScale,
+} from '@shared/types/ocr'
 
 export {
   READER_FONT_SIZE_OPTIONS,
@@ -76,6 +86,8 @@ export interface AppSettingsState {
   pdfOcrBackgroundPrefetch: boolean
   /** Agent 读扫描版正文时自动 OCR 未识别页 */
   pdfOcrAgentAutoOcr: boolean
+  /** PDF 页面渲染倍率，影响 OCR 速度与清晰度 */
+  pdfOcrScale: PdfOcrScale
   verboseRendererLogs: boolean
 }
 
@@ -97,6 +109,7 @@ interface AppSettingsStore extends AppSettingsState {
   setReaderLineHeight: (lineHeight: ReaderLineHeight) => void
   setPdfOcrBackgroundPrefetch: (enabled: boolean) => void
   setPdfOcrAgentAutoOcr: (enabled: boolean) => void
+  setPdfOcrScale: (scale: PdfOcrScale) => void
   setVerboseRendererLogs: (enabled: boolean) => void
   addRecentFile: (filePath: string) => void
   removeRecentFile: (filePath: string) => void
@@ -128,6 +141,7 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       readerLineHeight: DEFAULT_READER_TYPOGRAPHY.lineHeight,
       pdfOcrBackgroundPrefetch: false,
       pdfOcrAgentAutoOcr: true,
+      pdfOcrScale: DEFAULT_PDF_OCR_SCALE,
       verboseRendererLogs: false,
 
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
@@ -169,6 +183,8 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       setPdfOcrBackgroundPrefetch: (enabled) => set({ pdfOcrBackgroundPrefetch: enabled }),
 
       setPdfOcrAgentAutoOcr: (enabled) => set({ pdfOcrAgentAutoOcr: enabled }),
+
+      setPdfOcrScale: (scale) => set({ pdfOcrScale: scale }),
 
       setVerboseRendererLogs: (enabled) => set({ verboseRendererLogs: enabled }),
 
@@ -217,6 +233,7 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         readerLineHeight: state.readerLineHeight,
         pdfOcrBackgroundPrefetch: state.pdfOcrBackgroundPrefetch,
         pdfOcrAgentAutoOcr: state.pdfOcrAgentAutoOcr,
+        pdfOcrScale: state.pdfOcrScale,
         verboseRendererLogs: state.verboseRendererLogs,
       }),
       merge: (persisted, current) => {
@@ -228,6 +245,7 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
           lastActiveSurface: p.lastActiveSurface ?? 'none',
           pdfOcrBackgroundPrefetch: p.pdfOcrBackgroundPrefetch ?? false,
           pdfOcrAgentAutoOcr: p.pdfOcrAgentAutoOcr ?? true,
+          pdfOcrScale: p.pdfOcrScale ?? DEFAULT_PDF_OCR_SCALE,
         }
       },
     },

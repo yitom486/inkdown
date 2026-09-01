@@ -8,6 +8,7 @@ import {
   ocrTocToReaderUnits,
 } from '@shared/reader/ocr-toc-extractor'
 import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@shared/types/ocr'
+import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
 import { writePdfOcrTocCache } from './ocr-toc-cache'
 import { getOcrWorker } from './ocr-worker'
 import { recognizeImageWithBlocks } from './recognize-image'
@@ -16,13 +17,14 @@ export async function recognizePdfToc(
   payload: RecognizePdfTocPayload,
 ): Promise<Result<PdfOcrTocCache, AppError>> {
   const { filePath, fileFingerprint, fromPage, toPage, pageOffset } = payload
+  const scale = payload.scale ?? DEFAULT_PDF_OCR_SCALE
   if (fromPage < 1 || toPage < fromPage) {
     return err({ code: 'INVALID_ARGUMENT', message: '目录页范围无效' })
   }
 
   try {
     const data = await readFile(filePath)
-    const doc = await pdf(data, { scale: 2 })
+    const doc = await pdf(data, { scale })
     const worker = await getOcrWorker()
 
     let pageNum = 0

@@ -58,3 +58,7 @@ export function clearPdfOcrCache(
 ): Promise<Result<void, AppError>> {
   return api().clearPdfOcrCache(payload)
 }
+
+export function clearAllPdfOcrCache(): Promise<Result<void, AppError>> {
+  return api().clearAllPdfOcrCache()
+}

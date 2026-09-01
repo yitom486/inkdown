@@ -4,6 +4,16 @@ export interface ReaderTocUnit {
   level: number
 }
 
+export const PDF_OCR_SCALE_OPTIONS = [1.5, 2, 2.5] as const
+export type PdfOcrScale = (typeof PDF_OCR_SCALE_OPTIONS)[number]
+export const DEFAULT_PDF_OCR_SCALE: PdfOcrScale = 2
+
+export const PDF_OCR_SCALE_OPTION_LABELS: Array<{ value: PdfOcrScale; label: string }> = [
+  { value: 1.5, label: '快速' },
+  { value: 2, label: '标准' },
+  { value: 2.5, label: '清晰' },
+]
+
 export interface OcrTocEntry {
   title: string
   printedPage: number
@@ -26,6 +36,8 @@ export interface RecognizePdfTocPayload {
   toPage: number
   /** 不传则按 toPage 自动估算 */
   pageOffset?: number
+  /** 渲染倍率，越高越清晰但更慢 */
+  scale?: PdfOcrScale
 }
 
 export interface GetPdfOcrTocPayload {
@@ -63,6 +75,7 @@ export interface RecognizePdfPagePayload {
   filePath: string
   fileFingerprint: string
   page: number
+  scale?: PdfOcrScale
 }
 
 export interface GetPdfOcrPagePayload {
