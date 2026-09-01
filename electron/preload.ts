@@ -154,6 +154,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(IPC.OCR_RECOGNIZE_PDF_PAGE, payload),
   listPdfOcrPages: (payload: ListPdfOcrPagesPayload) =>
     ipcRenderer.invoke(IPC.OCR_LIST_PDF_PAGES, payload),
+  clearPdfOcrCache: (payload: GetPdfOcrTocPayload) =>
+    ipcRenderer.invoke(IPC.OCR_CLEAR_PDF_CACHE, payload),
   checkAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_CHECK),
   downloadAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_DOWNLOAD),
   installAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_INSTALL),

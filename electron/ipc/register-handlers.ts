@@ -84,6 +84,7 @@ import {
 } from '../services/web-doc-service'
 import { readPdfOcrTocCache, deletePdfOcrTocCache } from '../services/ocr/ocr-toc-cache'
 import {
+  deleteAllPdfOcrPageCaches,
   listPdfOcrPageCachePages,
   readPdfOcrPageCache,
 } from '../services/ocr/ocr-page-cache'
@@ -456,4 +457,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.OCR_LIST_PDF_PAGES, async (_event, payload: ListPdfOcrPagesPayload) =>
     ok(await listPdfOcrPageCachePages(payload.fileFingerprint)),
   )
+
+  ipcMain.handle(IPC.OCR_CLEAR_PDF_CACHE, async (_event, payload: GetPdfOcrTocPayload) => {
+    await Promise.all([
+      deleteAllPdfOcrPageCaches(payload.fileFingerprint),
+      deletePdfOcrTocCache(payload.fileFingerprint),
+    ])
+    return ok(undefined)
+  })
 }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { PdfOcrPageCache } from '@shared/types/ocr'
@@ -45,5 +45,13 @@ export async function listPdfOcrPageCachePages(fileFingerprint: string): Promise
       .sort((a, b) => a - b)
   } catch {
     return []
+  }
+}
+
+export async function deleteAllPdfOcrPageCaches(fileFingerprint: string): Promise<void> {
+  try {
+    await rm(docCacheDir(fileFingerprint), { recursive: true, force: true })
+  } catch {
+    // ignore missing
   }
 }

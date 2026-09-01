@@ -52,3 +52,9 @@ export function listPdfOcrPages(
 ): Promise<Result<number[], AppError>> {
   return api().listPdfOcrPages(payload)
 }
+
+export function clearPdfOcrCache(
+  payload: GetPdfOcrTocPayload,
+): Promise<Result<void, AppError>> {
+  return api().clearPdfOcrCache(payload)
+}

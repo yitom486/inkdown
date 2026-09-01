@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 
 export type PdfOcrBannerMode =
   | 'scanned-no-outline'
-  | 'scanned-ocr-ready'
+  | 're-recognize-toc'
   | 'recognizing'
 
 interface PdfOcrBannerProps {
@@ -31,9 +31,7 @@ export function PdfOcrBanner({
   onDismiss,
   entryCount,
 }: PdfOcrBannerProps) {
-  if (mode === 'scanned-ocr-ready' && entryCount && entryCount > 0) {
-    return null
-  }
+  const recognizeLabel = mode === 're-recognize-toc' ? '重新识别' : '识别目录'
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-950 dark:text-amber-100">
@@ -44,6 +42,15 @@ export function PdfOcrBanner({
             <Loader2 className="size-4 animate-spin" aria-hidden />
             正在识别目录页，首次使用会下载 OCR 语言包…
           </p>
+        ) : mode === 're-recognize-toc' ? (
+          <>
+            <p className="font-medium">
+              OCR 目录{entryCount ? `（${entryCount} 条）` : ''}
+            </p>
+            <p className="text-amber-900/80 dark:text-amber-100/80">
+              调整目录页范围或页码偏移后重新识别。偏移错误会导致章节跳转不准。
+            </p>
+          </>
         ) : (
           <>
             <p className="font-medium">扫描版 PDF，无嵌入目录</p>
@@ -88,7 +95,7 @@ export function PdfOcrBanner({
             />
           </label>
           <Button type="button" size="sm" variant="secondary" onClick={onRecognize}>
-            识别目录
+            {recognizeLabel}
           </Button>
         </div>
       ) : null}

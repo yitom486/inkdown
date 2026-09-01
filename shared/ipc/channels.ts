@@ -66,6 +66,7 @@ export const IPC = {
   OCR_GET_PDF_PAGE: 'ocr:get-pdf-page',
   OCR_RECOGNIZE_PDF_PAGE: 'ocr:recognize-pdf-page',
   OCR_LIST_PDF_PAGES: 'ocr:list-pdf-pages',
+  OCR_CLEAR_PDF_CACHE: 'ocr:clear-pdf-cache',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

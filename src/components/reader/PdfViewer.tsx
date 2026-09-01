@@ -22,6 +22,7 @@ import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { loadPdfOutlineInfo, type PdfOutlineSource } from '@/lib/reader/pdf-outline'
 import { detectPdfDocumentProfile } from '@/lib/reader/pdf-scan-detector'
 import {
+  clearPdfOcrCache,
   getPdfOcrPage,
   listPdfOcrPages,
   recognizePdfOcrPage,
@@ -111,6 +112,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [outlineSource, setOutlineSource] = useState<PdfOutlineSource | 'ocr'>('page-fallback')
   const [isScannedPdf, setIsScannedPdf] = useState(false)
   const [ocrBannerDismissed, setOcrBannerDismissed] = useState(false)
+  const [ocrTocEditorOpen, setOcrTocEditorOpen] = useState(false)
   const [ocrRecognizing, setOcrRecognizing] = useState(false)
   const [tocPageFrom, setTocPageFrom] = useState(8)
   const [tocPageTo, setTocPageTo] = useState(12)
@@ -210,6 +212,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOutlineSource('page-fallback')
     setIsScannedPdf(false)
     setOcrBannerDismissed(false)
+    setOcrTocEditorOpen(false)
     setOcrRecognizing(false)
     setOcrPageCaches({})
     setOcrPageRecognizing(null)
@@ -330,6 +333,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         setOutlineUnits(result.value.units)
         setOutlineSource('ocr')
         setTocOpen(true)
+        setOcrTocEditorOpen(false)
         toast.success(`已识别 ${result.value.units.length} 条目录`)
       } else {
         toast.error(result.error.message)
@@ -345,7 +349,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [outlineSource, tocPageTo])
 
   const showOcrBanner =
-    (isScannedPdf && outlineSource === 'page-fallback' && !ocrBannerDismissed) || ocrRecognizing
+    (isScannedPdf && outlineSource === 'page-fallback' && !ocrBannerDismissed) ||
+    ocrRecognizing ||
+    (isScannedPdf && ocrTocEditorOpen)
 
   const currentPageOcrReady = Boolean(ocrPageCaches[pageNum]?.words.length)
   const currentPageOcrBusy =
@@ -363,6 +369,31 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     () => Object.values(ocrPageCaches).filter((cache) => cache.words.length > 0).length,
     [ocrPageCaches],
   )
+
+  const handleClearOcrCache = useCallback(async () => {
+    if (!fileFingerprint) return
+    if (!window.confirm('将清除本书已识别的正文页与目录缓存，是否继续？')) return
+
+    const result = await clearPdfOcrCache({ fileFingerprint })
+    if (!result.ok) {
+      toast.error(result.error.message)
+      return
+    }
+
+    setOcrPageCaches({})
+    ocrPagePendingRef.current.clear()
+    setOcrPagesInFlight(new Set())
+
+    if (outlineSource === 'ocr' && pdfDocRef.current) {
+      const units = await loadPdfOutlineInfo(pdfDocRef.current)
+      setOutlineUnits(units.units)
+      setOutlineSource(units.source)
+    }
+
+    setOcrTocEditorOpen(true)
+    setOcrBannerDismissed(false)
+    toast.success('已清除本书 OCR 缓存')
+  }, [fileFingerprint, outlineSource])
 
   const runPageOcr = useCallback(
     async (page: number): Promise<string> => {
@@ -1101,7 +1132,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     <div className="flex h-full min-h-0 flex-col">
       {showOcrBanner ? (
         <PdfOcrBanner
-          mode={ocrRecognizing ? 'recognizing' : 'scanned-no-outline'}
+          mode={
+            ocrRecognizing
+              ? 'recognizing'
+              : ocrTocEditorOpen
+                ? 're-recognize-toc'
+                : 'scanned-no-outline'
+          }
           tocPageFrom={tocPageFrom}
           tocPageTo={tocPageTo}
           tocPageOffset={tocPageOffset}
@@ -1109,7 +1146,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           onTocPageToChange={setTocPageTo}
           onTocPageOffsetChange={setTocPageOffset}
           onRecognize={() => void handleRecognizeToc()}
-          onDismiss={() => setOcrBannerDismissed(true)}
+          onDismiss={() => {
+            setOcrTocEditorOpen(false)
+            setOcrBannerDismissed(true)
+          }}
           entryCount={outlineSource === 'ocr' ? outlineUnits.length : undefined}
         />
       ) : null}
@@ -1175,6 +1215,27 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                 ) : (
                   '识别本页'
                 )}
+              </Button>
+            ) : null}
+            {isScannedPdf && outlineSource === 'ocr' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-1 h-7 text-xs"
+                disabled={ocrRecognizing}
+                onClick={() => setOcrTocEditorOpen(true)}
+              >
+                重新识别目录
+              </Button>
+            ) : null}
+            {isScannedPdf && (ocrRecognizedCount > 0 || outlineSource === 'ocr') ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-1 h-7 text-xs text-muted-foreground"
+                onClick={() => void handleClearOcrCache()}
+              >
+                清除缓存
               </Button>
             ) : null}
           </>
