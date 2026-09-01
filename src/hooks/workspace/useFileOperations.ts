@@ -108,6 +108,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
         reportError({ code: 'FILE_READ_ERROR', message: 'URL 无效，请输入 http(s) 链接' })
         return false
       }
+      useAppSettingsStore.getState().setLastWebDocUrl(normalized)
       setFilePath(undefined)
       setContent('')
       setSavedContent('')

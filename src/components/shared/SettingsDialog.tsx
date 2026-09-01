@@ -262,11 +262,14 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
                 清除
               </Button>
             </SettingRow>
-            <SettingRow title="启动时恢复上次文件" description="无崩溃草稿时，自动打开上次编辑的文档。">
+            <SettingRow
+              title="启动时恢复上次工作区"
+              description="重启或更新后自动回到上次打开的文档、电子书或在线网页（有未保存草稿时优先恢复草稿）。"
+            >
               <ToggleSwitch
                 checked={restoreLastFileOnStartup}
                 onChange={setRestoreLastFileOnStartup}
-                label="启动时恢复上次文件"
+                label="启动时恢复上次工作区"
               />
             </SettingRow>
           </section>

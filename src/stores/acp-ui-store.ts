@@ -764,7 +764,8 @@ export const useAcpUiStore = create<AcpUiStore>()(
     {
       name: 'inkdown-acp-ui',
       partialize: (state) => ({
-        // panelOpen 不持久化：新窗口 / 重启默认收起 Agent（对齐 Cursor）
+        // 重启 / 更新后恢复 Agent 面板展开状态（聊天记录本身另存）
+        panelOpen: state.panelOpen,
         selectedRuntimeId: state.selectedRuntimeId,
         preferredConfigByRuntime: state.preferredConfigByRuntime,
         activeThreadId: state.activeThreadId,
@@ -795,7 +796,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
         return {
           ...current,
           ...p,
-          panelOpen: false,
+          panelOpen: Boolean(p.panelOpen),
           threads: ensured,
           activeThreadId,
           preferredConfigByRuntime,

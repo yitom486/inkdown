@@ -65,6 +65,7 @@
 |------|------|
 | `file-tree-ops` | 文件树路径、剪贴板、粘贴目标 |
 | `dialog-default-path` | 打开/保存对话框默认目录 |
+| `workspace-session` | 启动时恢复上次文件 / 在线文档 |
 | `report-error` / `error-reporter` | AppError 与运行时错误上报 |
 | `path-utils.test` / `document-types.test` | 测的是 `@shared` 路径与文档类型，放在工作区侧 |
 

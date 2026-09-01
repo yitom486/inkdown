@@ -17,6 +17,7 @@ export {
 
 export type AutoSaveIntervalMs = 15000 | 30000 | 60000
 export type PreviewDebounceMs = 150 | 300 | 500
+export type WorkspaceActiveSurface = 'none' | 'file' | 'web-doc'
 
 export const AUTO_SAVE_INTERVAL_OPTIONS: Array<{ value: AutoSaveIntervalMs; label: string }> = [
   { value: 15000, label: '15 秒' },
@@ -61,7 +62,10 @@ export interface AppSettingsState {
   defaultViewMode: EditorViewMode
   previewDebounceMs: PreviewDebounceMs
   restoreLastFileOnStartup: boolean
+  /** 上次主区展示：本地文件 / 在线文档 / 无 */
+  lastActiveSurface: WorkspaceActiveSurface
   lastOpenedFilePath?: string
+  lastWebDocUrl?: string
   lastOpenedFolderPath?: string
   lastWorkspaceRoot?: string
   tabSize: EditorTabSize
@@ -78,7 +82,9 @@ interface AppSettingsStore extends AppSettingsState {
   setDefaultViewMode: (mode: EditorViewMode) => void
   setPreviewDebounceMs: (ms: PreviewDebounceMs) => void
   setRestoreLastFileOnStartup: (enabled: boolean) => void
+  setLastActiveSurface: (surface: WorkspaceActiveSurface) => void
   setLastOpenedFilePath: (filePath?: string) => void
+  setLastWebDocUrl: (url?: string) => void
   setLastOpenedFolderPath: (folderPath?: string) => void
   setLastWorkspaceRoot: (rootPath?: string) => void
   setTabSize: (tabSize: EditorTabSize) => void
@@ -104,8 +110,10 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
       recentFiles: [],
       defaultViewMode: 'split',
       previewDebounceMs: 300,
-      restoreLastFileOnStartup: false,
+      restoreLastFileOnStartup: true,
+      lastActiveSurface: 'none',
       lastOpenedFilePath: undefined,
+      lastWebDocUrl: undefined,
       lastOpenedFolderPath: undefined,
       lastWorkspaceRoot: undefined,
       tabSize: 2,
@@ -124,7 +132,19 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
 
       setRestoreLastFileOnStartup: (enabled) => set({ restoreLastFileOnStartup: enabled }),
 
-      setLastOpenedFilePath: (filePath) => set({ lastOpenedFilePath: filePath }),
+      setLastActiveSurface: (surface) => set({ lastActiveSurface: surface }),
+
+      setLastOpenedFilePath: (filePath) =>
+        set({
+          lastOpenedFilePath: filePath,
+          ...(filePath ? { lastActiveSurface: 'file' as const } : {}),
+        }),
+
+      setLastWebDocUrl: (url) =>
+        set({
+          lastWebDocUrl: url,
+          ...(url ? { lastActiveSurface: 'web-doc' as const } : {}),
+        }),
 
       setLastOpenedFolderPath: (folderPath) => set({ lastOpenedFolderPath: folderPath }),
 
@@ -174,7 +194,9 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         defaultViewMode: state.defaultViewMode,
         previewDebounceMs: state.previewDebounceMs,
         restoreLastFileOnStartup: state.restoreLastFileOnStartup,
+        lastActiveSurface: state.lastActiveSurface,
         lastOpenedFilePath: state.lastOpenedFilePath,
+        lastWebDocUrl: state.lastWebDocUrl,
         lastOpenedFolderPath: state.lastOpenedFolderPath,
         lastWorkspaceRoot: state.lastWorkspaceRoot,
         tabSize: state.tabSize,
@@ -183,6 +205,15 @@ export const useAppSettingsStore = create<AppSettingsStore>()(
         readerLineHeight: state.readerLineHeight,
         verboseRendererLogs: state.verboseRendererLogs,
       }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<AppSettingsState>
+        return {
+          ...current,
+          ...p,
+          restoreLastFileOnStartup: p.restoreLastFileOnStartup ?? true,
+          lastActiveSurface: p.lastActiveSurface ?? 'none',
+        }
+      },
     },
   ),
 )

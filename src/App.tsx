@@ -25,6 +25,7 @@ import { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 import { useGlobalErrorHandlers } from '@/hooks/workspace/useGlobalErrorHandlers'
 import { useAppMeta, useFileOperations } from '@/hooks/workspace/useFileOperations'
 import { pickLatestRecoverableDraft } from '@/lib/editor/draft-utils'
+import { resolveStartupRestoreTarget } from '@/lib/workspace/workspace-session'
 import { reportAppError, reportUnknownError } from '@/lib/workspace/report-error'
 import { appApi } from '@/api/app-api'
 import { useActiveDocumentStore } from '@/stores/active-document-store'
@@ -52,7 +53,9 @@ function App() {
   const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
   const recentFiles = useAppSettingsStore((state) => state.recentFiles)
   const restoreLastFileOnStartup = useAppSettingsStore((state) => state.restoreLastFileOnStartup)
+  const lastActiveSurface = useAppSettingsStore((state) => state.lastActiveSurface)
   const lastOpenedFilePath = useAppSettingsStore((state) => state.lastOpenedFilePath)
+  const lastWebDocUrl = useAppSettingsStore((state) => state.lastWebDocUrl)
   const { data: appMeta } = useAppMeta()
   const { recoveryDraftKey, dismissRecovery } = useDraftRecoveryPrompt({
     enabled: !window.electronAPI?.isFreshWindow,
@@ -177,10 +180,27 @@ function App() {
       pickLatestRecoverableDraft(useDraftStore.getState().drafts) !== null
     if (hadRecoverableDraft) return
 
-    if (restoreLastFileOnStartup && lastOpenedFilePath) {
-      void openRecentFile(lastOpenedFilePath)
+    const target = resolveStartupRestoreTarget({
+      restoreOnStartup: restoreLastFileOnStartup,
+      activeSurface: lastActiveSurface,
+      lastOpenedFilePath,
+      lastWebDocUrl,
+    })
+    if (!target) return
+
+    if (target.kind === 'web-doc') {
+      openWebDocument(target.path)
+      return
     }
-  }, [lastOpenedFilePath, openRecentFile, restoreLastFileOnStartup])
+    void openRecentFile(target.path)
+  }, [
+    lastActiveSurface,
+    lastOpenedFilePath,
+    lastWebDocUrl,
+    openRecentFile,
+    openWebDocument,
+    restoreLastFileOnStartup,
+  ])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
