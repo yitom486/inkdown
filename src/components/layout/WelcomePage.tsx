@@ -1,9 +1,8 @@
-import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
-import { useState } from 'react'
+import type { ReactNode } from 'react'
+import { WebDocUrlField } from '@/components/layout/WebDocUrlField'
 import { Clock, FileText, FolderOpen, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
 import { APP_TAGLINE, APP_TITLE } from '@shared/constants/app'
 
 function getFileName(filePath: string): string {
@@ -54,17 +53,6 @@ export function WelcomePage({
   onOpenRecentFile,
   onOpenWebDoc,
 }: WelcomePageProps) {
-  const [webUrlInput, setWebUrlInput] = useState('')
-
-  const submitWebUrl = () => {
-    const value = webUrlInput.trim()
-    if (!value) {
-      toast.error('请输入文档 URL')
-      return
-    }
-    onOpenWebDoc(value)
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto bg-editor px-6 py-10">
       <div className="w-full max-w-lg space-y-8">
@@ -90,25 +78,10 @@ export function WelcomePage({
 
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-muted-foreground">在线文档</h2>
-          <div className="flex gap-2">
-            <input
-              value={webUrlInput}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                setWebUrlInput(event.target.value)
-              }
-              className={cn(
-                'flex h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1 text-sm',
-                'shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-              )}
-              placeholder="https://react.dev/learn"
-              onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                if (event.key === 'Enter') submitWebUrl()
-              }}
-            />
-            <Button type="button" onClick={submitWebUrl}>
-              打开
-            </Button>
-          </div>
+          <WebDocUrlField
+            onOpen={onOpenWebDoc}
+            className="[&_input]:h-9 [&_input]:px-3 [&_input]:text-sm [&_button]:h-9"
+          />
           <WelcomeAction
             icon={<Globe className="size-5" />}
             title="React 官方文档"

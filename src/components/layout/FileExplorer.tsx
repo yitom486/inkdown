@@ -21,6 +21,7 @@ import { writeWorkspacePathsToDataTransfer } from '@/lib/agent/acp-composer'
 import { getParentDir, isMarkdownPath } from '@/lib/workspace/file-tree-ops'
 import { cn } from '@/lib/utils'
 import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
+import { WebDocSidebarPanel } from '@/components/layout/WebDocSidebarPanel'
 
 type TreeActions = ReturnType<typeof useFileTreeActions>
 
@@ -605,6 +606,10 @@ export function FileExplorer({
           </div>
         )}
       </div>
+
+      {workspaceRoot && onOpenWebDoc ? (
+        <WebDocSidebarPanel onOpenWebDoc={onOpenWebDoc} recentWebUrls={recentWebUrls} />
+      ) : null}
 
       {menu && treeActions && workspaceRoot ? (
         <div
