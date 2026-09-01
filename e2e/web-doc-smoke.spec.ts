@@ -25,8 +25,10 @@ test.describe('在线文档阅读', () => {
       await window.getByPlaceholder('https://react.dev/learn').fill(E2E_WEB_DOC_START_URL)
       await window.getByPlaceholder('https://react.dev/learn').press('Enter')
 
-      await expect(window.getByText('在线文档')).toBeVisible({ timeout: 15_000 })
-      await expect(window.locator('input[placeholder="https://"]')).toHaveValue(E2E_WEB_DOC_START_URL)
+      // 侧栏 / 主区 / Agent 横幅都可能含「在线文档」，须限定主区且 exact
+      const panel = mainPanel(window)
+      await expect(panel.getByText('在线文档', { exact: true })).toBeVisible({ timeout: 15_000 })
+      await expect(panel.locator('input[placeholder="https://"]')).toHaveValue(E2E_WEB_DOC_START_URL)
 
       const frame = webDocFrame(window)
       await expect(frame.getByRole('heading', { name: 'Quick Start' })).toBeVisible({ timeout: 15_000 })
