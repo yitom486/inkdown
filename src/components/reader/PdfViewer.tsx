@@ -114,8 +114,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [ocrRecognizing, setOcrRecognizing] = useState(false)
   const [tocPageFrom, setTocPageFrom] = useState(8)
   const [tocPageTo, setTocPageTo] = useState(12)
+  const [tocPageOffset, setTocPageOffset] = useState(12)
   const [ocrPageCaches, setOcrPageCaches] = useState<Record<number, PdfOcrPageCache>>({})
   const [ocrPageRecognizing, setOcrPageRecognizing] = useState<number | null>(null)
+  const [ocrPagesInFlight, setOcrPagesInFlight] = useState<ReadonlySet<number>>(() => new Set())
   const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
   const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
     null,
@@ -263,6 +265,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             nextSource = 'ocr'
             setTocPageFrom(cacheResult.value.tocPageRange[0])
             setTocPageTo(cacheResult.value.tocPageRange[1])
+            setTocPageOffset(cacheResult.value.pageOffset)
           }
         }
 
@@ -321,6 +324,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         fileFingerprint,
         fromPage: Math.min(tocPageFrom, tocPageTo),
         toPage: Math.max(tocPageFrom, tocPageTo),
+        pageOffset: tocPageOffset,
       })
       if (result.ok) {
         setOutlineUnits(result.value.units)
@@ -333,12 +337,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     } finally {
       setOcrRecognizing(false)
     }
-  }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo])
+  }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo, tocPageOffset])
+
+  useEffect(() => {
+    if (outlineSource === 'ocr') return
+    setTocPageOffset(tocPageTo)
+  }, [outlineSource, tocPageTo])
 
   const showOcrBanner =
     (isScannedPdf && outlineSource === 'page-fallback' && !ocrBannerDismissed) || ocrRecognizing
 
   const currentPageOcrReady = Boolean(ocrPageCaches[pageNum]?.words.length)
+  const currentPageOcrBusy =
+    ocrPageRecognizing === pageNum || ocrPagesInFlight.has(pageNum)
 
   const ocrPagePendingRef = useRef<Map<number, Promise<string>>>(new Map())
   const ocrPageCachesRef = useRef(ocrPageCaches)
@@ -363,19 +374,28 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       if (pending) return pending
 
       const task = (async () => {
-        const result = await recognizePdfOcrPage({
-          filePath,
-          fileFingerprint,
-          page,
-        })
-        if (result.ok) {
-          if (result.value.page !== page) {
-            throw new Error(`OCR 结果页码不一致：请求第 ${page} 页，返回第 ${result.value.page} 页`)
+        setOcrPagesInFlight((prev) => new Set(prev).add(page))
+        try {
+          const result = await recognizePdfOcrPage({
+            filePath,
+            fileFingerprint,
+            page,
+          })
+          if (result.ok) {
+            if (result.value.page !== page) {
+              throw new Error(`OCR 结果页码不一致：请求第 ${page} 页，返回第 ${result.value.page} 页`)
+            }
+            setOcrPageCaches((prev) => ({ ...prev, [page]: result.value }))
+            return textFromOcrPageCache(result.value)
           }
-          setOcrPageCaches((prev) => ({ ...prev, [page]: result.value }))
-          return textFromOcrPageCache(result.value)
+          throw new Error(`第 ${page} 页 OCR 失败：${result.error.message}`)
+        } finally {
+          setOcrPagesInFlight((prev) => {
+            const next = new Set(prev)
+            next.delete(page)
+            return next
+          })
         }
-        throw new Error(`第 ${page} 页 OCR 失败：${result.error.message}`)
       })().finally(() => {
         ocrPagePendingRef.current.delete(page)
       })
@@ -1084,8 +1104,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           mode={ocrRecognizing ? 'recognizing' : 'scanned-no-outline'}
           tocPageFrom={tocPageFrom}
           tocPageTo={tocPageTo}
+          tocPageOffset={tocPageOffset}
           onTocPageFromChange={setTocPageFrom}
           onTocPageToChange={setTocPageTo}
+          onTocPageOffsetChange={setTocPageOffset}
           onRecognize={() => void handleRecognizeToc()}
           onDismiss={() => setOcrBannerDismissed(true)}
           entryCount={outlineSource === 'ocr' ? outlineUnits.length : undefined}
@@ -1140,10 +1162,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                 variant="ghost"
                 size="sm"
                 className="ml-1 h-7 text-xs"
-                disabled={!ready || ocrPageRecognizing === pageNum}
+                disabled={!ready || currentPageOcrBusy}
                 onClick={() => void handleRecognizePage()}
               >
-                {ocrPageRecognizing === pageNum ? (
+                {currentPageOcrBusy ? (
                   <>
                     <Loader2 className="mr-1 size-3.5 animate-spin" />
                     识别中
@@ -1162,9 +1184,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           ) : isScannedPdf ? (
             <span className="text-xs text-muted-foreground">
-              {currentPageOcrReady
-                ? `已识别 ${ocrRecognizedCount}/${numPages}`
-                : `本页未识别 · ${ocrRecognizedCount}/${numPages}`}
+              {currentPageOcrBusy
+                ? `识别中… · ${ocrRecognizedCount}/${numPages}`
+                : currentPageOcrReady
+                  ? `已识别 ${ocrRecognizedCount}/${numPages}`
+                  : `本页未识别 · ${ocrRecognizedCount}/${numPages}`}
             </span>
           ) : null
         }

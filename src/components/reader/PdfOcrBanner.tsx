@@ -10,8 +10,10 @@ interface PdfOcrBannerProps {
   mode: PdfOcrBannerMode
   tocPageFrom: number
   tocPageTo: number
+  tocPageOffset: number
   onTocPageFromChange: (value: number) => void
   onTocPageToChange: (value: number) => void
+  onTocPageOffsetChange: (value: number) => void
   onRecognize: () => void
   onDismiss: () => void
   entryCount?: number
@@ -21,8 +23,10 @@ export function PdfOcrBanner({
   mode,
   tocPageFrom,
   tocPageTo,
+  tocPageOffset,
   onTocPageFromChange,
   onTocPageToChange,
+  onTocPageOffsetChange,
   onRecognize,
   onDismiss,
   entryCount,
@@ -46,6 +50,9 @@ export function PdfOcrBanner({
             <p className="text-amber-900/80 dark:text-amber-100/80">
               划词划重点需先点工具栏「识别本页」。可识别印刷目录页以生成章节目录（按需 OCR）。
             </p>
+            <p className="mt-0.5 text-xs text-amber-900/70 dark:text-amber-100/70">
+              页码偏移：印刷页码 + 偏移 = PDF 页（例：印刷第 1 页在 PDF 第 13 页则填 12）。
+            </p>
           </>
         )}
       </div>
@@ -67,6 +74,17 @@ export function PdfOcrBanner({
               className="w-14 rounded border border-amber-500/40 bg-background px-1.5 py-0.5 text-foreground"
               value={tocPageTo}
               onChange={(e) => onTocPageToChange(Number.parseInt(e.target.value, 10) || 1)}
+            />
+          </label>
+          <label className="flex items-center gap-1 text-xs">
+            偏移
+            <input
+              type="number"
+              min={0}
+              className="w-14 rounded border border-amber-500/40 bg-background px-1.5 py-0.5 text-foreground"
+              value={tocPageOffset}
+              onChange={(e) => onTocPageOffsetChange(Number.parseInt(e.target.value, 10) || 0)}
+              title="印刷页码 + 偏移 = PDF 页码"
             />
           </label>
           <Button type="button" size="sm" variant="secondary" onClick={onRecognize}>
