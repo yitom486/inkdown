@@ -23,7 +23,7 @@ import {
   rememberPreferredConfig,
   type AcpPreferredConfigMap,
 } from '@/lib/agent/acp-config-preferences'
-import { isBlankThread, pruneBlankThreads } from '@/lib/agent/acp-thread-prune'
+import { pruneBlankThreads } from '@/lib/agent/acp-thread-prune'
 import {
   toolCallIdFromPermission,
   type AcpPermissionOptionView,
@@ -188,19 +188,17 @@ function ensureThreadList(threads: AcpChatThread[], workspaceRoot?: string): {
   return { threads, activeThreadId: threads[0]!.id }
 }
 
-function openPanelWithBlankDraft(
+function openPanelPreservingThread(
   state: Pick<AcpUiStore, 'threads' | 'activeThreadId'>,
   workspaceRoot?: string,
 ): Pick<AcpUiStore, 'threads' | 'activeThreadId' | 'historyOpen'> {
-  // 打开面板：丢掉其它空白草稿，若当前有内容则再开一条空白
-  let threads = pruneBlankThreads(state.threads)
-  const active = threads.find((t) => t.id === state.activeThreadId)
-  if (active && isBlankThread(active)) {
-    return { threads, activeThreadId: active.id, historyOpen: false }
-  }
-  const fresh = createEmptyThread(workspaceRoot ?? active?.workspaceRoot)
-  threads = [fresh, ...threads].slice(0, MAX_THREADS)
-  return { threads, activeThreadId: fresh.id, historyOpen: false }
+  // 打开面板：保留当前会话（有内容的继续聊）；仅在没有任何线程时补一条空草稿
+  const pruned = pruneBlankThreads(state.threads, { keepId: state.activeThreadId })
+  const next = ensureThreadList(pruned, workspaceRoot)
+  const activeThreadId = next.threads.some((t) => t.id === state.activeThreadId)
+    ? state.activeThreadId
+    : next.activeThreadId
+  return { threads: next.threads, activeThreadId, historyOpen: false }
 }
 
 function patchActiveThread(
@@ -327,7 +325,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           }
           return {
             panelOpen: true,
-            ...openPanelWithBlankDraft(s),
+            ...openPanelPreservingThread(s),
           }
         }),
       togglePanel: () => {
@@ -343,14 +341,14 @@ export const useAcpUiStore = create<AcpUiStore>()(
         set((s) => ({
           ...(s.panelOpen
             ? { panelOpen: true }
-            : { panelOpen: true, ...openPanelWithBlankDraft(s) }),
+            : { panelOpen: true, ...openPanelPreservingThread(s) }),
           composerFocusNonce: s.composerFocusNonce + 1,
         })),
       insertComposerSelectionMarker: () =>
         set((s) => ({
           ...(s.panelOpen
             ? { panelOpen: true }
-            : { panelOpen: true, ...openPanelWithBlankDraft(s) }),
+            : { panelOpen: true, ...openPanelPreservingThread(s) }),
           composerFocusNonce: s.composerFocusNonce + 1,
           composerInsertNonce: s.composerInsertNonce + 1,
         })),

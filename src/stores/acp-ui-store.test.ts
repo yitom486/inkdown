@@ -79,15 +79,15 @@ describe('acp-ui-store history + plan', () => {
     expect(useAcpUiStore.getState().threads).toHaveLength(1)
   })
 
-  it('opening panel starts a blank draft when active has content', () => {
+  it('opening panel keeps the active conversation instead of a blank draft', () => {
     useAcpUiStore.getState().appendUserMessage('旧会话')
     const oldId = useAcpUiStore.getState().activeThreadId
+    useAcpUiStore.getState().setPanelOpen(false)
     useAcpUiStore.getState().setPanelOpen(true)
     const state = useAcpUiStore.getState()
     expect(state.panelOpen).toBe(true)
-    expect(state.activeThreadId).not.toBe(oldId)
-    expect(state.threads.find((t) => t.id === state.activeThreadId)?.messages).toEqual([])
-    expect(state.threads.some((t) => t.id === oldId)).toBe(true)
+    expect(state.activeThreadId).toBe(oldId)
+    expect(state.threads.find((t) => t.id === oldId)?.messages[0]?.text).toBe('旧会话')
   })
 
   it('closing panel prunes blank drafts', () => {
