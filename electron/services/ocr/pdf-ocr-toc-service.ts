@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises'
 import { pdf } from 'pdf-to-img'
-import { createWorker, type Worker } from 'tesseract.js'
 import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 import {
@@ -10,24 +9,8 @@ import {
 } from '@shared/reader/ocr-toc-extractor'
 import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@shared/types/ocr'
 import { writePdfOcrTocCache } from './ocr-toc-cache'
-
-let workerPromise: Promise<Worker> | null = null
-
-async function getOcrWorker(): Promise<Worker> {
-  workerPromise ??= createWorker('chi_sim+eng', 1, {
-    logger: () => {
-      // 主进程 OCR 不刷屏
-    },
-  })
-  return workerPromise
-}
-
-export async function shutdownOcrWorker(): Promise<void> {
-  if (!workerPromise) return
-  const worker = await workerPromise
-  await worker.terminate()
-  workerPromise = null
-}
+import { getOcrWorker } from './ocr-worker'
+import { recognizeImageWithBlocks } from './recognize-image'
 
 export async function recognizePdfToc(
   payload: RecognizePdfTocPayload,
@@ -49,7 +32,7 @@ export async function recognizePdfToc(
       pageNum += 1
       if (pageNum < fromPage) continue
       if (pageNum > toPage) break
-      const { data: ocrData } = await worker.recognize(image)
+      const { data: ocrData } = await recognizeImageWithBlocks(worker, image)
       textParts.push(ocrData.text)
     }
 

@@ -21,8 +21,20 @@ import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { loadPdfOutlineInfo, type PdfOutlineSource } from '@/lib/reader/pdf-outline'
 import { detectPdfDocumentProfile } from '@/lib/reader/pdf-scan-detector'
-import { getPdfOcrToc, recognizePdfOcrToc } from '@/api/ocr-api'
+import {
+  getPdfOcrPage,
+  listPdfOcrPages,
+  recognizePdfOcrPage,
+  recognizePdfOcrToc,
+  getPdfOcrToc,
+} from '@/api/ocr-api'
+import {
+  pdfPageNeedsOcr,
+  readPdfPageNativeText,
+  textFromOcrPageCache,
+} from '@/lib/reader/pdf-page-text'
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
+import type { PdfOcrPageCache } from '@shared/types/ocr'
 import {
   PDF_JUMP_SYNC_HOLD_MS,
   PDF_PAGE_GAP_PX,
@@ -98,6 +110,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [ocrRecognizing, setOcrRecognizing] = useState(false)
   const [tocPageFrom, setTocPageFrom] = useState(8)
   const [tocPageTo, setTocPageTo] = useState(12)
+  const [ocrPageCaches, setOcrPageCaches] = useState<Record<number, PdfOcrPageCache>>({})
+  const [ocrPageRecognizing, setOcrPageRecognizing] = useState<number | null>(null)
   const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
   const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
     null,
@@ -191,6 +205,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setIsScannedPdf(false)
     setOcrBannerDismissed(false)
     setOcrRecognizing(false)
+    setOcrPageCaches({})
+    setOcrPageRecognizing(null)
     setTocOpen(false)
     pageAnchorRefs.current.clear()
 
@@ -250,6 +266,21 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           setOutlineUnits(nextUnits)
           setOutlineSource(nextSource)
         }
+
+        if (profile.isScanned && fileFingerprint) {
+          const pagesResult = await listPdfOcrPages({ fileFingerprint })
+          if (!cancelled && pagesResult.ok && pagesResult.value.length > 0) {
+            const entries = await Promise.all(
+              pagesResult.value.map(async (pageNumber) => {
+                const pageResult = await getPdfOcrPage({ fileFingerprint, page: pageNumber })
+                return pageResult.ok ? ([pageNumber, pageResult.value] as const) : null
+              }),
+            )
+            if (!cancelled) {
+              setOcrPageCaches(Object.fromEntries(entries.filter((item) => item !== null)))
+            }
+          }
+        }
       } catch (cause) {
         if (!cancelled) {
           reportAppError({
@@ -302,17 +333,80 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const showOcrBanner =
     (isScannedPdf && outlineSource === 'page-fallback' && !ocrBannerDismissed) || ocrRecognizing
 
+  const currentPageOcrReady = Boolean(ocrPageCaches[pageNum]?.words.length)
+
+  const ocrPagePendingRef = useRef<Map<number, Promise<string>>>(new Map())
+
+  const runPageOcr = useCallback(
+    async (page: number): Promise<string> => {
+      if (!fileFingerprint) return ''
+
+      const pending = ocrPagePendingRef.current.get(page)
+      if (pending) return pending
+
+      const task = (async () => {
+        const result = await recognizePdfOcrPage({
+          filePath,
+          fileFingerprint,
+          page,
+        })
+        if (result.ok) {
+          setOcrPageCaches((prev) => ({ ...prev, [page]: result.value }))
+          return textFromOcrPageCache(result.value)
+        }
+        return ''
+      })().finally(() => {
+        ocrPagePendingRef.current.delete(page)
+      })
+
+      ocrPagePendingRef.current.set(page, task)
+      return task
+    },
+    [fileFingerprint, filePath],
+  )
+
+  const handleRecognizePage = useCallback(async () => {
+    if (!fileFingerprint || ocrPageRecognizing !== null) return
+    setOcrPageRecognizing(pageNum)
+    try {
+      const text = await runPageOcr(pageNum)
+      if (text) {
+        toast.success(`第 ${pageNum} 页已识别，可划词划重点`)
+      } else {
+        toast.error('本页识别失败或无文字')
+      }
+    } finally {
+      setOcrPageRecognizing(null)
+    }
+  }, [fileFingerprint, ocrPageRecognizing, pageNum, runPageOcr])
+
   useEffect(() => {
     pageNumRef.current = pageNum
   }, [pageNum])
 
-  const readPageText = useCallback(async (page: number): Promise<string> => {
-    const pdf = pdfDocRef.current
-    if (!pdf) return ''
-    // 走 getTextContent 而非 textLayer DOM：未渲染的页也能取到
-    const content = await (await pdf.getPage(page)).getTextContent()
-    return content.items.map((item) => ('str' in item ? item.str : '')).join('')
-  }, [])
+  /**
+   * 统一正文读取：嵌入文字层 → OCR 缓存 → 扫描版按需 OCR。
+   * Agent（inkdown_read 等）与 UI 共用此路径，MCP 工具接口不变。
+   */
+  const readPageText = useCallback(
+    async (page: number): Promise<string> => {
+      const cached = ocrPageCaches[page]
+      if (cached?.words.length) {
+        return textFromOcrPageCache(cached)
+      }
+
+      const pdf = pdfDocRef.current
+      if (!pdf) return ''
+
+      const native = await readPdfPageNativeText(pdf, page)
+      if (!pdfPageNeedsOcr(native)) return native
+
+      if (!isScannedPdf || !fileFingerprint) return native
+
+      return runPageOcr(page)
+    },
+    [fileFingerprint, isScannedPdf, ocrPageCaches, runPageOcr],
+  )
 
   useEffect(() => {
     return registerReaderContent({
@@ -935,9 +1029,35 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             <Button variant="ghost" size="sm" className="ml-1 h-7 text-xs" onClick={fitWidth}>
               适合宽度
             </Button>
+            {isScannedPdf ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-1 h-7 text-xs"
+                disabled={!ready || ocrPageRecognizing === pageNum}
+                onClick={() => void handleRecognizePage()}
+              >
+                {ocrPageRecognizing === pageNum ? (
+                  <>
+                    <Loader2 className="mr-1 size-3.5 animate-spin" />
+                    识别中
+                  </>
+                ) : currentPageOcrReady ? (
+                  '重新识别本页'
+                ) : (
+                  '识别本页'
+                )}
+              </Button>
+            ) : null}
           </>
         }
-        trailing={isLoading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
+        trailing={
+          isLoading ? (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          ) : isScannedPdf && !currentPageOcrReady ? (
+            <span className="text-xs text-muted-foreground">本页未识别</span>
+          ) : null
+        }
       />
 
       <ReaderContentShell
@@ -997,6 +1117,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                           scale={scale}
                           theme={theme}
                           marks={marks}
+                          ocrPageCache={ocrPageCaches[page] ?? null}
                           transientSelection={
                             selectionSnapshot?.page === page ? selectionSnapshot : null
                           }

@@ -10,6 +10,9 @@ import {
   loadPdfTextLayerBuilder,
   type PdfTextLayerBuilderInstance,
 } from '@/lib/reader/pdf-text-layer-builder'
+import { mountOcrTextLayer } from '@/lib/reader/pdf-ocr-text-layer'
+import { pageHasNativeText } from '@shared/reader/ocr-page-words'
+import type { PdfOcrPageCache } from '@shared/types/ocr'
 import {
   PdfTextLayerMappingSink,
   registerPdfPageTextGeometry,
@@ -24,6 +27,7 @@ interface PdfPageViewProps {
   scale: number
   theme: 'dark' | 'light'
   marks: ReadingMark[]
+  ocrPageCache?: PdfOcrPageCache | null
   transientSelection?: PdfSelectionSnapshot | null
   onMouseUp?: (pageNumber: number, pageElement: HTMLElement, point: { clientX: number; clientY: number }) => void
   onPointerOrigin?: (x: number, y: number) => void
@@ -35,6 +39,7 @@ export function PdfPageView({
   scale,
   theme,
   marks,
+  ocrPageCache,
   transientSelection,
   onMouseUp,
   onPointerOrigin,
@@ -130,15 +135,32 @@ export function PdfPageView({
         const textContent = await textContentPromise
         if (cancelled) return
 
-        // 同步提交三层，避免 canvas、文字层和 SVG 标记在不同帧短暂错位。
+        const nativeCharCount = textContent.items.reduce((sum, item) => {
+          const str = 'str' in item && typeof item.str === 'string' ? item.str : ''
+          return sum + str.replace(/\s/g, '').length
+        }, 0)
+        const useOcrLayer = !pageHasNativeText(nativeCharCount) && !!ocrPageCache?.words.length
+
         pageRoot.style.setProperty('--scale-factor', String(cssViewport.scale))
         pageRoot.style.setProperty('--user-unit', String(cssViewport.userUnit))
         pageRoot.style.width = `${cssWidth}px`
         pageRoot.style.height = `${cssHeight}px`
         canvasHost.replaceChildren(canvas)
-        textLayerHost.replaceChildren(renderedTextLayer ?? completedTextLayerBuilder.div)
+
         geometryDisposeRef.current?.()
-        geometryDisposeRef.current = registerPdfPageTextGeometry(pageRoot, cssViewport, textContent)
+        if (useOcrLayer && ocrPageCache) {
+          completedTextLayerBuilder.cancel()
+          geometryDisposeRef.current = mountOcrTextLayer(
+            textLayerHost,
+            pageRoot,
+            cssViewport,
+            ocrPageCache,
+          )
+        } else {
+          textLayerHost.replaceChildren(renderedTextLayer ?? completedTextLayerBuilder.div)
+          geometryDisposeRef.current = registerPdfPageTextGeometry(pageRoot, cssViewport, textContent)
+        }
+
         committedSourceRef.current = { pdf, pageNumber }
         setPageViewport(cssViewport)
         setHasCommittedPage(true)
@@ -159,7 +181,7 @@ export function PdfPageView({
       renderTask?.cancel()
       textLayerBuilder?.cancel()
     }
-  }, [pageNumber, pdf, scale])
+  }, [ocrPageCache, pageNumber, pdf, scale])
 
   useEffect(() => {
     return () => {

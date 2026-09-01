@@ -44,7 +44,7 @@ export function PdfOcrBanner({
           <>
             <p className="font-medium">扫描版 PDF，无嵌入目录</p>
             <p className="text-amber-900/80 dark:text-amber-100/80">
-              划词划重点暂不可用。可识别印刷目录页以生成章节目录（按需 OCR，不会自动全书识别）。
+              划词划重点需先点工具栏「识别本页」。可识别印刷目录页以生成章节目录（按需 OCR）。
             </p>
           </>
         )}

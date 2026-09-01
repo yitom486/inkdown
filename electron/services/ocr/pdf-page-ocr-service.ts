@@ -1,0 +1,80 @@
+import { readFile } from 'node:fs/promises'
+import { pdf } from 'pdf-to-img'
+import { err, ok, type Result } from '@shared/core/result'
+import type { AppError } from '@shared/core/errors'
+import { normalizeOcrWords } from '@shared/reader/ocr-page-words'
+import type { PdfOcrPageCache, RecognizePdfPagePayload } from '@shared/types/ocr'
+import { writePdfOcrPageCache } from './ocr-page-cache'
+import { getOcrWorker } from './ocr-worker'
+import { extractTesseractWords } from './tesseract-words'
+import { recognizeImageWithBlocks } from './recognize-image'
+
+const OCR_SCALE = 2
+
+function readPngSize(image: Buffer): { width: number; height: number } {
+  return {
+    width: image.readUInt32BE(16),
+    height: image.readUInt32BE(20),
+  }
+}
+
+async function renderPdfPageImage(
+  filePath: string,
+  pageNumber: number,
+): Promise<{ image: Buffer; width: number; height: number }> {
+  const data = await readFile(filePath)
+  const doc = await pdf(data, { scale: OCR_SCALE })
+  let current = 0
+  for await (const image of doc) {
+    current += 1
+    if (current === pageNumber) {
+      const buffer = Buffer.from(image)
+      const { width, height } = readPngSize(buffer)
+      return { image: buffer, width, height }
+    }
+    if (current > pageNumber) break
+  }
+  throw new Error(`PDF 页码超出范围：${pageNumber}`)
+}
+
+export async function recognizePdfPage(
+  payload: RecognizePdfPagePayload,
+): Promise<Result<PdfOcrPageCache, AppError>> {
+  const { filePath, fileFingerprint, page } = payload
+  if (page < 1) {
+    return err({ code: 'INVALID_ARGUMENT', message: '页码无效' })
+  }
+
+  try {
+    const { image, width, height } = await renderPdfPageImage(filePath, page)
+    const worker = await getOcrWorker()
+    const { data } = await recognizeImageWithBlocks(worker, image)
+
+    const words = normalizeOcrWords(extractTesseractWords(data), width, height)
+
+    if (words.length === 0) {
+      return err({
+        code: 'OCR_PAGE_EMPTY',
+        message: '本页未识别到文字，请确认是否为正文页',
+      })
+    }
+
+    const cache: PdfOcrPageCache = {
+      fileFingerprint,
+      page,
+      pageWidth: width / OCR_SCALE,
+      pageHeight: height / OCR_SCALE,
+      ocrScale: OCR_SCALE,
+      words,
+      createdAt: new Date().toISOString(),
+    }
+
+    await writePdfOcrPageCache(cache)
+    return ok(cache)
+  } catch (cause) {
+    return err({
+      code: 'OCR_FAILED',
+      message: cause instanceof Error ? cause.message : '页面识别失败',
+    })
+  }
+}

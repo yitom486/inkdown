@@ -35,3 +35,41 @@ export interface GetPdfOcrTocPayload {
 export interface SavePdfOcrTocPayload {
   cache: PdfOcrTocCache
 }
+
+export interface OcrPageBBox {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+export interface OcrPageWord {
+  text: string
+  bbox: OcrPageBBox
+}
+
+export interface PdfOcrPageCache {
+  fileFingerprint: string
+  page: number
+  /** PDF 用户空间页宽（scale=1 viewport） */
+  pageWidth: number
+  pageHeight: number
+  ocrScale: number
+  words: OcrPageWord[]
+  createdAt: string
+}
+
+export interface RecognizePdfPagePayload {
+  filePath: string
+  fileFingerprint: string
+  page: number
+}
+
+export interface GetPdfOcrPagePayload {
+  fileFingerprint: string
+  page: number
+}
+
+export interface ListPdfOcrPagesPayload {
+  fileFingerprint: string
+}

@@ -74,6 +74,8 @@ Exposed via MCP; names start with \`inkdown_\`. Values come from Inkdown's **in-
 Content usually does not change within a turn—do not spam the same tool. If a tool errors or returns empty, say so; do not pretend you read the body.
 Only propose bookmarks/notes when the user clearly asks; do not invent marks unprompted.
 
+**Scanned PDFs (image-only pages):** Inkdown may **on demand** OCR a page when you read it via \`inkdown_read\` / viewport / chapter tools—**same tool names, no extra OCR tool**. The first read of an unseen page can take several seconds; cached pages are instant. Do not assume the whole book is pre-OCR'd.
+
 ## Chapter-level highlighting (when the user asks which chapters to mark)
 
 1. \`inkdown_read(scope=toc)\` — understand structure.

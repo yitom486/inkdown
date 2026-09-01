@@ -1,6 +1,10 @@
 import type {
+  GetPdfOcrPagePayload,
   GetPdfOcrTocPayload,
+  ListPdfOcrPagesPayload,
+  PdfOcrPageCache,
   PdfOcrTocCache,
+  RecognizePdfPagePayload,
   RecognizePdfTocPayload,
 } from '@shared/types/ocr'
 import type { AppError } from '@shared/core/errors'
@@ -29,4 +33,22 @@ export function deletePdfOcrToc(
   payload: GetPdfOcrTocPayload,
 ): Promise<Result<void, AppError>> {
   return api().deletePdfOcrToc(payload)
+}
+
+export function getPdfOcrPage(
+  payload: GetPdfOcrPagePayload,
+): Promise<Result<PdfOcrPageCache, AppError>> {
+  return api().getPdfOcrPage(payload)
+}
+
+export function recognizePdfOcrPage(
+  payload: RecognizePdfPagePayload,
+): Promise<Result<PdfOcrPageCache, AppError>> {
+  return api().recognizePdfOcrPage(payload)
+}
+
+export function listPdfOcrPages(
+  payload: ListPdfOcrPagesPayload,
+): Promise<Result<number[], AppError>> {
+  return api().listPdfOcrPages(payload)
 }

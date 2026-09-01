@@ -32,6 +32,9 @@ import type {
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import type {
   GetPdfOcrTocPayload,
+  GetPdfOcrPagePayload,
+  ListPdfOcrPagesPayload,
+  RecognizePdfPagePayload,
   RecognizePdfTocPayload,
 } from '@shared/types/ocr'
 import { ok, err } from '@shared/core/result'
@@ -79,6 +82,11 @@ import {
   parseWebDocUrlInput,
 } from '../services/web-doc-service'
 import { readPdfOcrTocCache, deletePdfOcrTocCache } from '../services/ocr/ocr-toc-cache'
+import {
+  listPdfOcrPageCachePages,
+  readPdfOcrPageCache,
+} from '../services/ocr/ocr-page-cache'
+import { recognizePdfPage } from '../services/ocr/pdf-page-ocr-service'
 import { recognizePdfToc } from '../services/ocr/pdf-ocr-toc-service'
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
@@ -434,4 +442,17 @@ export function registerIpcHandlers(): void {
     await deletePdfOcrTocCache(payload.fileFingerprint)
     return ok(undefined)
   })
+
+  ipcMain.handle(IPC.OCR_GET_PDF_PAGE, async (_event, payload: GetPdfOcrPagePayload) => {
+    const cache = await readPdfOcrPageCache(payload.fileFingerprint, payload.page)
+    return cache ? ok(cache) : err({ code: 'FILE_NOT_FOUND', message: '本页尚无 OCR 缓存' })
+  })
+
+  ipcMain.handle(IPC.OCR_RECOGNIZE_PDF_PAGE, async (_event, payload: RecognizePdfPagePayload) =>
+    recognizePdfPage(payload),
+  )
+
+  ipcMain.handle(IPC.OCR_LIST_PDF_PAGES, async (_event, payload: ListPdfOcrPagesPayload) =>
+    ok(await listPdfOcrPageCachePages(payload.fileFingerprint)),
+  )
 }

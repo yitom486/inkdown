@@ -11,6 +11,7 @@ export type AppErrorCode =
   | 'ACP_NOT_CONNECTED'
   | 'ACP_TIMEOUT'
   | 'OCR_TOC_EMPTY'
+  | 'OCR_PAGE_EMPTY'
   | 'OCR_FAILED'
   | 'INVALID_ARGUMENT'
   | 'UNKNOWN'

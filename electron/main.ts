@@ -4,7 +4,7 @@ import { registerIpcHandlers } from './ipc/register-handlers'
 import { initAppUpdater } from './services/app-updater'
 import { disposeAllAcp } from './services/acp/acp-client'
 import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
-import { shutdownOcrWorker } from './services/ocr/pdf-ocr-toc-service'
+import { shutdownOcrWorker } from './services/ocr/ocr-worker'
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
