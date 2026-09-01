@@ -1,6 +1,6 @@
 {
   "name": "inkdown",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Inkdown — Markdown 编辑、电子书与在线文档阅读、Agent 助手",
   "main": "out/main/main.js",
   "type": "module",

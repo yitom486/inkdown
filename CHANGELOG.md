@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.2.6] - 2026-09-01
+
 ### 在线文档
 
 - **人民日报电子版**：阅读模式解析版面与文章页；本版新闻目录；正文链接应用内跳转
@@ -109,7 +113,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.5...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/yitom486/inkdown/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/yitom486/inkdown/compare/v0.2.3...v0.2.5
 [0.2.3]: https://github.com/yitom486/inkdown/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yitom486/inkdown/compare/v0.2.1...v0.2.2
