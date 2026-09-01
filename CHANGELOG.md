@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.2.5] - 2026-09-01
+
 ### 网页模式 Agent
 
 - **无本地工作区也可聊**：打开在线文档即可连接 Agent（ACP 使用应用沙箱 cwd）；附加本地文件仍需先打开文件夹
@@ -89,7 +93,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.3...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/yitom486/inkdown/compare/v0.2.3...v0.2.5
 [0.2.3]: https://github.com/yitom486/inkdown/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yitom486/inkdown/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/yitom486/inkdown/compare/v0.1.1...v0.2.1
