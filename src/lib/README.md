@@ -81,6 +81,7 @@
 | `agent-markdown` | Agent 气泡 Markdown（与预览同源解析） |
 | `annotation-note-prompts` | 批注 AI 意图/改写 chip 与草稿抽取 |
 | `enrich-tool-message` | tool 消息 enrich（提议卡 + 章级建议） |
+| `tool-failure-message` | 工具失败 → 聊天气泡内业务说明（折叠标题 + 展开正文） |
 | `parse-chapter-mark-plan` / `promote-chapter-mark-plans` | 章级划重点 tool 解析与 promote |
 | `mark-proposal-failure` | 提议/采用失败分类与「打开该章 / 去划词」引导 |
 
