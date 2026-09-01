@@ -5,6 +5,7 @@ import type { RendererErrorPayload } from '@shared/types/error-log'
 import type { WindowInit } from '@shared/types/window'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
+import type { GetPdfOcrTocPayload, RecognizePdfTocPayload } from '@shared/types/ocr'
 
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
 const isFreshWindow = windowInit?.isFreshWindow ?? false
@@ -141,6 +142,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(IPC.WEB_DOC_FETCH_PAGE, payload),
   discoverWebDocToc: (payload: WebDocDiscoverTocPayload) =>
     ipcRenderer.invoke(IPC.WEB_DOC_DISCOVER_TOC, payload),
+  getPdfOcrToc: (payload: GetPdfOcrTocPayload) =>
+    ipcRenderer.invoke(IPC.OCR_GET_PDF_TOC, payload),
+  recognizePdfOcrToc: (payload: RecognizePdfTocPayload) =>
+    ipcRenderer.invoke(IPC.OCR_RECOGNIZE_PDF_TOC, payload),
+  deletePdfOcrToc: (payload: GetPdfOcrTocPayload) =>
+    ipcRenderer.invoke(IPC.OCR_DELETE_PDF_TOC, payload),
   checkAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_CHECK),
   downloadAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_DOWNLOAD),
   installAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_INSTALL),

@@ -10,6 +10,9 @@ export type AppErrorCode =
   | 'ACP_PROTOCOL_ERROR'
   | 'ACP_NOT_CONNECTED'
   | 'ACP_TIMEOUT'
+  | 'OCR_TOC_EMPTY'
+  | 'OCR_FAILED'
+  | 'INVALID_ARGUMENT'
   | 'UNKNOWN'
 
 export interface AppError {

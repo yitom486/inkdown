@@ -1,6 +1,14 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 
+export type PdfOutlineSource = 'embedded' | 'page-fallback'
+
+export interface PdfOutlineLoadResult {
+  units: ReaderUnit[]
+  source: PdfOutlineSource
+  embeddedItemCount: number
+}
+
 interface PdfOutlineItem {
   title: string
   dest: string | unknown[] | null
@@ -57,12 +65,34 @@ function buildPageUnits(numPages: number): ReaderUnit[] {
 }
 
 /** 读取 PDF 书签目录；无 outline 时按页生成占位单元 */
-export async function loadPdfOutlineUnits(pdf: PDFDocumentProxy): Promise<ReaderUnit[]> {
+export async function loadPdfOutlineInfo(pdf: PDFDocumentProxy): Promise<PdfOutlineLoadResult> {
   const outline = (await pdf.getOutline()) as PdfOutlineItem[] | null
   if (!outline?.length) {
-    return buildPageUnits(pdf.numPages)
+    return {
+      units: buildPageUnits(pdf.numPages),
+      source: 'page-fallback',
+      embeddedItemCount: 0,
+    }
   }
 
   const units = await flattenPdfOutline(pdf, outline)
-  return units.length > 0 ? units : buildPageUnits(pdf.numPages)
+  if (units.length > 0) {
+    return {
+      units,
+      source: 'embedded',
+      embeddedItemCount: units.length,
+    }
+  }
+
+  return {
+    units: buildPageUnits(pdf.numPages),
+    source: 'page-fallback',
+    embeddedItemCount: 0,
+  }
+}
+
+/** @deprecated 使用 loadPdfOutlineInfo */
+export async function loadPdfOutlineUnits(pdf: PDFDocumentProxy): Promise<ReaderUnit[]> {
+  const result = await loadPdfOutlineInfo(pdf)
+  return result.units
 }

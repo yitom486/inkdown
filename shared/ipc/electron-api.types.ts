@@ -55,6 +55,11 @@ import type {
   WebDocFetchPayload,
   WebDocFetchResult,
 } from '@shared/types/web-doc'
+import type {
+  GetPdfOcrTocPayload,
+  PdfOcrTocCache,
+  RecognizePdfTocPayload,
+} from '@shared/types/ocr'
 import type { AppUpdateStatus } from '@shared/types/app-update'
 
 export interface ElectronAPI {
@@ -138,6 +143,13 @@ export interface ElectronAPI {
   discoverWebDocToc: (
     payload: WebDocDiscoverTocPayload,
   ) => Promise<Result<WebDocDiscoverTocResult, AppError>>
+  getPdfOcrToc: (
+    payload: GetPdfOcrTocPayload,
+  ) => Promise<Result<PdfOcrTocCache, AppError>>
+  recognizePdfOcrToc: (
+    payload: RecognizePdfTocPayload,
+  ) => Promise<Result<PdfOcrTocCache, AppError>>
+  deletePdfOcrToc: (payload: GetPdfOcrTocPayload) => Promise<Result<void, AppError>>
   checkAppUpdate: () => Promise<AppUpdateStatus>
   downloadAppUpdate: () => Promise<AppUpdateStatus>
   installAppUpdate: () => Promise<Result<void, AppError>>

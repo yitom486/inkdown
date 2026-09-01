@@ -19,7 +19,10 @@ import { registerSelectionProvider, commitReaderSelection, clearReaderSelection 
 import { openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
-import { loadPdfOutlineUnits } from '@/lib/reader/pdf-outline'
+import { loadPdfOutlineInfo, type PdfOutlineSource } from '@/lib/reader/pdf-outline'
+import { detectPdfDocumentProfile } from '@/lib/reader/pdf-scan-detector'
+import { getPdfOcrToc, recognizePdfOcrToc } from '@/api/ocr-api'
+import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import {
   PDF_JUMP_SYNC_HOLD_MS,
   PDF_PAGE_GAP_PX,
@@ -89,6 +92,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [tocOpen, setTocOpen] = useState(false)
   const [marksOpen, setMarksOpen] = useState(false)
   const [outlineUnits, setOutlineUnits] = useState<ReaderUnit[]>([])
+  const [outlineSource, setOutlineSource] = useState<PdfOutlineSource | 'ocr'>('page-fallback')
+  const [isScannedPdf, setIsScannedPdf] = useState(false)
+  const [ocrBannerDismissed, setOcrBannerDismissed] = useState(false)
+  const [ocrRecognizing, setOcrRecognizing] = useState(false)
+  const [tocPageFrom, setTocPageFrom] = useState(8)
+  const [tocPageTo, setTocPageTo] = useState(12)
   const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
   const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
     null,
@@ -178,6 +187,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setPageNum(1)
     setNumPages(0)
     setOutlineUnits([])
+    setOutlineSource('page-fallback')
+    setIsScannedPdf(false)
+    setOcrBannerDismissed(false)
+    setOcrRecognizing(false)
     setTocOpen(false)
     pageAnchorRefs.current.clear()
 
@@ -214,8 +227,29 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           setPageCssSize({ width: viewport.width, height: viewport.height })
         }
 
-        const units = await loadPdfOutlineUnits(pdf)
-        if (!cancelled) setOutlineUnits(units)
+        const units = await loadPdfOutlineInfo(pdf)
+        const profile = await detectPdfDocumentProfile(pdf)
+        if (!cancelled) {
+          setIsScannedPdf(profile.isScanned)
+        }
+
+        let nextUnits = units.units
+        let nextSource: PdfOutlineSource | 'ocr' = units.source
+
+        if (units.source === 'page-fallback' && profile.isScanned && fileFingerprint) {
+          const cacheResult = await getPdfOcrToc({ fileFingerprint })
+          if (cacheResult.ok && cacheResult.value.units.length > 0) {
+            nextUnits = cacheResult.value.units
+            nextSource = 'ocr'
+            setTocPageFrom(cacheResult.value.tocPageRange[0])
+            setTocPageTo(cacheResult.value.tocPageRange[1])
+          }
+        }
+
+        if (!cancelled) {
+          setOutlineUnits(nextUnits)
+          setOutlineSource(nextSource)
+        }
       } catch (cause) {
         if (!cancelled) {
           reportAppError({
@@ -238,7 +272,35 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       loadingTaskRef.current = null
       setPdfDoc(null)
     }
-  }, [data, filePath])
+  }, [data, filePath, fileFingerprint])
+
+  const hasChapterToc = outlineSource === 'embedded' || outlineSource === 'ocr'
+
+  const handleRecognizeToc = useCallback(async () => {
+    if (!fileFingerprint || ocrRecognizing) return
+    setOcrRecognizing(true)
+    try {
+      const result = await recognizePdfOcrToc({
+        filePath,
+        fileFingerprint,
+        fromPage: Math.min(tocPageFrom, tocPageTo),
+        toPage: Math.max(tocPageFrom, tocPageTo),
+      })
+      if (result.ok) {
+        setOutlineUnits(result.value.units)
+        setOutlineSource('ocr')
+        setTocOpen(true)
+        toast.success(`已识别 ${result.value.units.length} 条目录`)
+      } else {
+        toast.error(result.error.message)
+      }
+    } finally {
+      setOcrRecognizing(false)
+    }
+  }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo])
+
+  const showOcrBanner =
+    (isScannedPdf && outlineSource === 'page-fallback' && !ocrBannerDismissed) || ocrRecognizing
 
   useEffect(() => {
     pageNumRef.current = pageNum
@@ -817,9 +879,21 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {showOcrBanner ? (
+        <PdfOcrBanner
+          mode={ocrRecognizing ? 'recognizing' : 'scanned-no-outline'}
+          tocPageFrom={tocPageFrom}
+          tocPageTo={tocPageTo}
+          onTocPageFromChange={setTocPageFrom}
+          onTocPageToChange={setTocPageTo}
+          onRecognize={() => void handleRecognizeToc()}
+          onDismiss={() => setOcrBannerDismissed(true)}
+          entryCount={outlineSource === 'ocr' ? outlineUnits.length : undefined}
+        />
+      ) : null}
       <ReaderToolbarShell
         ready={ready}
-        tocDisabled={outlineUnits.length === 0}
+        tocDisabled={!hasChapterToc}
         onTocToggle={() => {
           setMarksOpen(false)
           setTocOpen((value) => !value)

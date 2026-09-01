@@ -4,6 +4,7 @@ import { registerIpcHandlers } from './ipc/register-handlers'
 import { initAppUpdater } from './services/app-updater'
 import { disposeAllAcp } from './services/acp/acp-client'
 import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
+import { shutdownOcrWorker } from './services/ocr/pdf-ocr-toc-service'
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
@@ -20,6 +21,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   disposeAllAcp()
+  void shutdownOcrWorker()
 })
 
 app.on('window-all-closed', () => {

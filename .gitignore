@@ -37,6 +37,10 @@ src/public/pdfjs
 # 本地开发计划（不发布）
 .plan/
 
+# OCR 诊断产物（tesseract 语言包、临时渲染图）
+*.traineddata
+scripts/.tmp-toc-ocr/
+
 # Playwright
 test-results/
 playwright-report/
