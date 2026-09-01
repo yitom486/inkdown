@@ -1,4 +1,5 @@
 import DOMPurify, { type Config } from 'dompurify'
+import { patchStreamingMathDelimiters } from '@/lib/editor/latex-delimiters'
 import { renderMarkdown } from '@/lib/editor/markdown'
 
 export type { AgentMarkdownPart, MarkdownPart } from '@/lib/editor/markdown-parts'
@@ -36,7 +37,9 @@ export function renderAgentMarkdown(
   options?: { streaming?: boolean },
 ): string {
   if (!text.trim()) return ''
-  const patched = options?.streaming ? patchStreamingMarkdownFences(text) : text
+  const patched = options?.streaming
+    ? patchStreamingMathDelimiters(patchStreamingMarkdownFences(text))
+    : text
   return sanitizeAgentHtml(renderMarkdown(patched))
 }
 

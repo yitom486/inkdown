@@ -167,4 +167,14 @@ A-B &= A + B
     const html = renderAgentMarkdown(String.raw`补码 \((A+\sim B+1)\) 示例`)
     expect(html).toContain('katex')
   })
+
+  it('渲染裸括号内的 LaTeX 命令', () => {
+    const html = renderAgentMarkdown(String.raw`- (A+\sim B+1)`)
+    expect(html).toContain('katex')
+  })
+
+  it('流式时临时闭合未完成的公式定界符', () => {
+    const html = renderAgentMarkdown(String.raw`$$\frac{a}{`, { streaming: true })
+    expect(html).toContain('katex')
+  })
 })
