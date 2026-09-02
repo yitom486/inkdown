@@ -28,6 +28,7 @@ interface ReaderContentShellProps {
   onCloseToc: () => void
   onSelectUnit: (unit: ReaderUnit) => void
   onEditToc?: () => void
+  outlineNotice?: string
   tocAside?: ReactNode
   children: ReactNode
 }
@@ -48,6 +49,7 @@ export function ReaderContentShell({
   onCloseToc,
   onSelectUnit,
   onEditToc,
+  outlineNotice,
   tocAside,
   children,
 }: ReaderContentShellProps) {
@@ -74,6 +76,7 @@ export function ReaderContentShell({
             onToggle={onCloseToc}
             onSelectUnit={onSelectUnit}
             onEditToc={onEditToc}
+            outlineNotice={outlineNotice}
           />
         </aside>
       ) : null}

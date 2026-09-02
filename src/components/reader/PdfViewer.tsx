@@ -19,7 +19,7 @@ import { registerSelectionProvider, commitReaderSelection, clearReaderSelection 
 import { openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
-import { loadPdfOutlineInfo, type PdfOutlineSource } from '@/lib/reader/pdf-outline'
+import { loadPdfOutlineInfo, formatPdfOutlineNotice, type PdfOutlineSource } from '@/lib/reader/pdf-outline'
 import { detectPdfDocumentProfile } from '@/lib/reader/pdf-scan-detector'
 import {
   clearPdfOcrCache,
@@ -113,6 +113,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [marksOpen, setMarksOpen] = useState(false)
   const [outlineUnits, setOutlineUnits] = useState<ReaderUnit[]>([])
   const [outlineSource, setOutlineSource] = useState<PdfOutlineSource | 'ocr'>('page-fallback')
+  const [outlineNotice, setOutlineNotice] = useState<string | undefined>()
   const [isScannedPdf, setIsScannedPdf] = useState(false)
   const [ocrBannerDismissed, setOcrBannerDismissed] = useState(false)
   const [ocrTocEditorOpen, setOcrTocEditorOpen] = useState(false)
@@ -216,6 +217,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setNumPages(0)
     setOutlineUnits([])
     setOutlineSource('page-fallback')
+    setOutlineNotice(undefined)
     setIsScannedPdf(false)
     setOcrBannerDismissed(false)
     setOcrTocEditorOpen(false)
@@ -269,6 +271,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
         let nextUnits = units.units
         let nextSource: PdfOutlineSource | 'ocr' = units.source
+        let nextNotice = formatPdfOutlineNotice(units, profile.isScanned)
 
         if (units.source === 'page-fallback' && profile.isScanned && fileFingerprint) {
           const cacheResult = await getPdfOcrToc({ fileFingerprint })
@@ -279,12 +282,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             setTocPageTo(cacheResult.value.tocPageRange[1])
             setTocPageOffset(cacheResult.value.pageOffset)
             setOcrTocEntries(cacheResult.value.entries)
+            nextNotice = undefined
           }
         }
 
         if (!cancelled) {
           setOutlineUnits(nextUnits)
           setOutlineSource(nextSource)
+          setOutlineNotice(nextNotice)
         }
 
         if (profile.isScanned && fileFingerprint) {
@@ -449,6 +454,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       const units = await loadPdfOutlineInfo(pdfDocRef.current)
       setOutlineUnits(units.units)
       setOutlineSource(units.source)
+      setOutlineNotice(formatPdfOutlineNotice(units, isScannedPdf))
     }
 
     setOcrTocEntries([])
@@ -456,7 +462,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrTocEditorOpen(true)
     setOcrBannerDismissed(false)
     toast.success('已清除本书 OCR 缓存')
-  }, [fileFingerprint, outlineSource])
+  }, [fileFingerprint, outlineSource, isScannedPdf])
 
   const runPageOcr = useCallback(
     async (page: number): Promise<string> => {
@@ -1338,6 +1344,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           setTocOpen(false)
         }}
         onEditToc={outlineSource === 'ocr' ? handleOpenOcrTocEditor : undefined}
+        outlineNotice={outlineSource === 'ocr' ? undefined : outlineNotice}
         tocAside={
           ocrTocEditMode && outlineSource === 'ocr' ? (
             <PdfOcrTocEditor

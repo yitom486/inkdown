@@ -15,6 +15,7 @@ interface ReaderUnitOutlineProps {
   onToggle: () => void
   onSelectUnit: (unit: ReaderUnit) => void
   onEditToc?: () => void
+  outlineNotice?: string
 }
 
 function OutlineTreeNode({
@@ -84,6 +85,7 @@ export function ReaderUnitOutline({
   onToggle,
   onSelectUnit,
   onEditToc,
+  outlineNotice,
 }: ReaderUnitOutlineProps) {
   const tree = useMemo(() => buildReaderUnitTree(units), [units])
 
@@ -130,6 +132,11 @@ export function ReaderUnitOutline({
 
       {!collapsed && (
         <div className="min-h-0 flex-1 overflow-auto">
+          {outlineNotice ? (
+            <p className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-950 dark:text-amber-100">
+              {outlineNotice}
+            </p>
+          ) : null}
           {units.length === 0 ? (
             <p className="px-4 py-3 text-xs text-muted-foreground">暂无目录</p>
           ) : (
