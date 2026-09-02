@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.2.7] - 2026-09-02
+
 ### PDF OCR（扫描版）
 
 - **按需组件**：打包版不内置 Tesseract；首次使用从 GitHub Release 下载 OCR 运行时；开发环境沿用 devDependency
@@ -125,7 +129,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.6...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/yitom486/inkdown/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/yitom486/inkdown/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/yitom486/inkdown/compare/v0.2.3...v0.2.5
 [0.2.3]: https://github.com/yitom486/inkdown/compare/v0.2.2...v0.2.3
