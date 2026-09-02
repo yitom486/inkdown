@@ -28,7 +28,9 @@ import {
   recognizePdfOcrPage,
   recognizePdfOcrToc,
   getPdfOcrToc,
+  savePdfOcrToc,
 } from '@/api/ocr-api'
+import { buildPdfOcrTocCache, readerUnitsToOcrEntries } from '@/lib/reader/pdf-ocr-toc-cache'
 import {
   pdfPageNeedsOcr,
   readPdfPageNativeText,
@@ -37,7 +39,8 @@ import {
   assertOcrCachePage,
 } from '@/lib/reader/pdf-page-text'
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import { PdfOcrTocEditor } from '@/components/reader/PdfOcrTocEditor'
+import type { OcrTocEntry, PdfOcrPageCache } from '@shared/types/ocr'
 import {
   PDF_JUMP_SYNC_HOLD_MS,
   PDF_PAGE_GAP_PX,
@@ -113,6 +116,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [isScannedPdf, setIsScannedPdf] = useState(false)
   const [ocrBannerDismissed, setOcrBannerDismissed] = useState(false)
   const [ocrTocEditorOpen, setOcrTocEditorOpen] = useState(false)
+  const [ocrTocEditMode, setOcrTocEditMode] = useState(false)
+  const [ocrTocEntries, setOcrTocEntries] = useState<OcrTocEntry[]>([])
+  const [ocrTocSaving, setOcrTocSaving] = useState(false)
   const [ocrRecognizing, setOcrRecognizing] = useState(false)
   const [tocPageFrom, setTocPageFrom] = useState(8)
   const [tocPageTo, setTocPageTo] = useState(12)
@@ -213,6 +219,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setIsScannedPdf(false)
     setOcrBannerDismissed(false)
     setOcrTocEditorOpen(false)
+    setOcrTocEditMode(false)
+    setOcrTocEntries([])
+    setOcrTocSaving(false)
     setOcrRecognizing(false)
     setOcrPageCaches({})
     setOcrPageRecognizing(null)
@@ -269,6 +278,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             setTocPageFrom(cacheResult.value.tocPageRange[0])
             setTocPageTo(cacheResult.value.tocPageRange[1])
             setTocPageOffset(cacheResult.value.pageOffset)
+            setOcrTocEntries(cacheResult.value.entries)
           }
         }
 
@@ -334,6 +344,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       if (result.ok) {
         setOutlineUnits(result.value.units)
         setOutlineSource('ocr')
+        setOcrTocEntries(result.value.entries)
         setTocOpen(true)
         setOcrTocEditorOpen(false)
         toast.success(`已识别 ${result.value.units.length} 条目录`)
@@ -344,6 +355,54 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       setOcrRecognizing(false)
     }
   }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale])
+
+  const handleSaveOcrToc = useCallback(
+    async (entries: OcrTocEntry[]) => {
+      if (!fileFingerprint) return
+      setOcrTocSaving(true)
+      try {
+        const cache = buildPdfOcrTocCache({
+          fileFingerprint,
+          tocPageRange: [Math.min(tocPageFrom, tocPageTo), Math.max(tocPageFrom, tocPageTo)],
+          pageOffset: tocPageOffset,
+          entries,
+        })
+        if (cache.entries.length === 0) {
+          toast.error('至少保留一条有效目录')
+          return
+        }
+        const result = await savePdfOcrToc({ cache })
+        if (!result.ok) {
+          toast.error(result.error.message)
+          return
+        }
+        setOcrTocEntries(cache.entries)
+        setOutlineUnits(cache.units)
+        setOcrTocEditMode(false)
+        toast.success('目录已保存')
+      } finally {
+        setOcrTocSaving(false)
+      }
+    },
+    [fileFingerprint, tocPageFrom, tocPageTo, tocPageOffset],
+  )
+
+  const handleOpenOcrTocEditor = useCallback(() => {
+    setOcrTocEntries((prev) => {
+      if (prev.length > 0) return prev
+      if (outlineUnits.length === 0) return prev
+      return readerUnitsToOcrEntries(
+        outlineUnits.map((unit) => ({
+          label: unit.label,
+          href: unit.href,
+          level: unit.level,
+        })),
+        tocPageOffset,
+      )
+    })
+    setOcrTocEditMode(true)
+    setTocOpen(true)
+  }, [outlineUnits, tocPageOffset])
 
   useEffect(() => {
     if (outlineSource === 'ocr') return
@@ -392,6 +451,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       setOutlineSource(units.source)
     }
 
+    setOcrTocEntries([])
+    setOcrTocEditMode(false)
     setOcrTocEditorOpen(true)
     setOcrBannerDismissed(false)
     toast.success('已清除本书 OCR 缓存')
@@ -1276,6 +1337,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           goToUnit(unit)
           setTocOpen(false)
         }}
+        onEditToc={outlineSource === 'ocr' ? handleOpenOcrTocEditor : undefined}
+        tocAside={
+          ocrTocEditMode && outlineSource === 'ocr' ? (
+            <PdfOcrTocEditor
+              entries={ocrTocEntries}
+              pageOffset={tocPageOffset}
+              saving={ocrTocSaving}
+              onToggle={() => setTocOpen(false)}
+              onSave={(entries) => void handleSaveOcrToc(entries)}
+              onCancel={() => setOcrTocEditMode(false)}
+            />
+          ) : undefined
+        }
       >
         <div
           ref={containerRef}

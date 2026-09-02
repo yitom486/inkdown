@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ListTree } from 'lucide-react'
+import { ChevronDown, ChevronRight, ListTree, Pencil } from 'lucide-react'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import {
   buildReaderUnitTree,
@@ -14,6 +14,7 @@ interface ReaderUnitOutlineProps {
   collapsed?: boolean
   onToggle: () => void
   onSelectUnit: (unit: ReaderUnit) => void
+  onEditToc?: () => void
 }
 
 function OutlineTreeNode({
@@ -82,6 +83,7 @@ export function ReaderUnitOutline({
   collapsed = false,
   onToggle,
   onSelectUnit,
+  onEditToc,
 }: ReaderUnitOutlineProps) {
   const tree = useMemo(() => buildReaderUnitTree(units), [units])
 
@@ -106,7 +108,21 @@ export function ReaderUnitOutline({
         <ListTree className="size-3.5 shrink-0" />
         目录
         {units.length > 0 && (
-          <span className="ml-auto text-[10px] font-normal normal-case text-muted-foreground/80">
+          <span className="ml-auto flex items-center gap-1 text-[10px] font-normal normal-case text-muted-foreground/80">
+            {onEditToc ? (
+              <button
+                type="button"
+                className="rounded p-0.5 hover:bg-accent/50 hover:text-foreground"
+                aria-label="校正目录"
+                title="校正目录"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onEditToc()
+                }}
+              >
+                <Pencil className="size-3" />
+              </button>
+            ) : null}
             {units.length}
           </span>
         )}

@@ -63,6 +63,7 @@ import type {
   PdfOcrTocCache,
   RecognizePdfPagePayload,
   RecognizePdfTocPayload,
+  SavePdfOcrTocPayload,
 } from '@shared/types/ocr'
 import type { AppUpdateStatus } from '@shared/types/app-update'
 
@@ -163,6 +164,7 @@ export interface ElectronAPI {
   listPdfOcrPages: (payload: ListPdfOcrPagesPayload) => Promise<Result<number[], AppError>>
   clearPdfOcrCache: (payload: GetPdfOcrTocPayload) => Promise<Result<void, AppError>>
   clearAllPdfOcrCache: () => Promise<Result<void, AppError>>
+  savePdfOcrToc: (payload: SavePdfOcrTocPayload) => Promise<Result<void, AppError>>
   checkAppUpdate: () => Promise<AppUpdateStatus>
   downloadAppUpdate: () => Promise<AppUpdateStatus>
   installAppUpdate: () => Promise<Result<void, AppError>>

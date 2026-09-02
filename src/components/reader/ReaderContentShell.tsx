@@ -27,6 +27,8 @@ interface ReaderContentShellProps {
   currentUnitId?: string
   onCloseToc: () => void
   onSelectUnit: (unit: ReaderUnit) => void
+  onEditToc?: () => void
+  tocAside?: ReactNode
   children: ReactNode
 }
 
@@ -45,6 +47,8 @@ export function ReaderContentShell({
   currentUnitId,
   onCloseToc,
   onSelectUnit,
+  onEditToc,
+  tocAside,
   children,
 }: ReaderContentShellProps) {
   return (
@@ -61,13 +65,15 @@ export function ReaderContentShell({
           resolveChapter={marksResolveChapter}
         />
       ) : null}
-      {tocOpen && units.length > 0 ? (
+      {tocOpen && tocAside ? tocAside : null}
+      {tocOpen && !tocAside && units.length > 0 ? (
         <aside className="flex w-[min(28%,320px)] min-w-[180px] shrink-0 flex-col border-r border-border/60">
           <ReaderUnitOutline
             units={units}
             currentUnitId={currentUnitId}
             onToggle={onCloseToc}
             onSelectUnit={onSelectUnit}
+            onEditToc={onEditToc}
           />
         </aside>
       ) : null}

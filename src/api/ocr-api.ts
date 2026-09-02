@@ -6,6 +6,7 @@ import type {
   PdfOcrTocCache,
   RecognizePdfPagePayload,
   RecognizePdfTocPayload,
+  SavePdfOcrTocPayload,
 } from '@shared/types/ocr'
 import type { AppError } from '@shared/core/errors'
 import type { Result } from '@shared/core/result'
@@ -61,4 +62,10 @@ export function clearPdfOcrCache(
 
 export function clearAllPdfOcrCache(): Promise<Result<void, AppError>> {
   return api().clearAllPdfOcrCache()
+}
+
+export function savePdfOcrToc(
+  payload: SavePdfOcrTocPayload,
+): Promise<Result<void, AppError>> {
+  return api().savePdfOcrToc(payload)
 }

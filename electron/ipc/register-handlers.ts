@@ -37,6 +37,7 @@ import type {
   ListPdfOcrPagesPayload,
   RecognizePdfPagePayload,
   RecognizePdfTocPayload,
+  SavePdfOcrTocPayload,
 } from '@shared/types/ocr'
 import { ok, err } from '@shared/core/result'
 import {
@@ -82,7 +83,7 @@ import {
   fetchWebDocPage,
   parseWebDocUrlInput,
 } from '../services/web-doc-service'
-import { readPdfOcrTocCache, deletePdfOcrTocCache, clearAllPdfOcrCaches } from '../services/ocr/ocr-toc-cache'
+import { readPdfOcrTocCache, deletePdfOcrTocCache, clearAllPdfOcrCaches, writePdfOcrTocCache } from '../services/ocr/ocr-toc-cache'
 import {
   deleteAllPdfOcrPageCaches,
   listPdfOcrPageCachePages,
@@ -468,6 +469,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.OCR_CLEAR_ALL_CACHE, async () => {
     await clearAllPdfOcrCaches()
+    return ok(undefined)
+  })
+
+  ipcMain.handle(IPC.OCR_SAVE_PDF_TOC, async (_event, payload: SavePdfOcrTocPayload) => {
+    if (!payload?.cache?.fileFingerprint) {
+      return err({ code: 'INVALID_ARGUMENT', message: '目录缓存无效' })
+    }
+    await writePdfOcrTocCache(payload.cache)
     return ok(undefined)
   })
 }
