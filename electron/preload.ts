@@ -159,6 +159,18 @@ const electronAPI: ElectronAPI = {
   clearAllPdfOcrCache: () => ipcRenderer.invoke(IPC.OCR_CLEAR_ALL_CACHE),
   savePdfOcrToc: (payload: SavePdfOcrTocPayload) =>
     ipcRenderer.invoke(IPC.OCR_SAVE_PDF_TOC, payload),
+  getOcrComponentStatus: () => ipcRenderer.invoke(IPC.OCR_GET_COMPONENT_STATUS),
+  ensureOcrComponent: () => ipcRenderer.invoke(IPC.OCR_ENSURE_COMPONENT),
+  cancelOcrComponentDownload: () => ipcRenderer.invoke(IPC.OCR_CANCEL_COMPONENT_DOWNLOAD),
+  onOcrComponentStatus: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
+      callback(payload)
+    }
+    ipcRenderer.on(IPC.OCR_COMPONENT_STATUS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.OCR_COMPONENT_STATUS, handler)
+    }
+  },
   checkAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_CHECK),
   downloadAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_DOWNLOAD),
   installAppUpdate: () => ipcRenderer.invoke(IPC.APP_UPDATE_INSTALL),

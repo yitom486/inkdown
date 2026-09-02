@@ -6,6 +6,7 @@ import { normalizeOcrWords } from '@shared/reader/ocr-page-words'
 import type { PdfOcrPageCache, PdfOcrScale, RecognizePdfPagePayload } from '@shared/types/ocr'
 import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
 import { writePdfOcrPageCache } from './ocr-page-cache'
+import { ensureOcrComponent } from './ocr-component-manager'
 import { getOcrWorker } from './ocr-worker'
 import { extractTesseractWords } from './tesseract-words'
 import { recognizeImageWithBlocks } from './recognize-image'
@@ -49,6 +50,9 @@ export async function recognizePdfPage(
   }
 
   try {
+    const component = await ensureOcrComponent()
+    if (!component.ok) return component
+
     const { image, width, height } = await renderPdfPageImage(filePath, page, scale)
     const worker = await getOcrWorker()
     const { data } = await recognizeImageWithBlocks(worker, image)

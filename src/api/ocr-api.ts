@@ -7,6 +7,7 @@ import type {
   RecognizePdfPagePayload,
   RecognizePdfTocPayload,
   SavePdfOcrTocPayload,
+  OcrComponentStatus,
 } from '@shared/types/ocr'
 import type { AppError } from '@shared/core/errors'
 import type { Result } from '@shared/core/result'
@@ -68,4 +69,22 @@ export function savePdfOcrToc(
   payload: SavePdfOcrTocPayload,
 ): Promise<Result<void, AppError>> {
   return api().savePdfOcrToc(payload)
+}
+
+export function getOcrComponentStatus(): Promise<Result<OcrComponentStatus, AppError>> {
+  return api().getOcrComponentStatus()
+}
+
+export function ensureOcrComponent(): Promise<Result<void, AppError>> {
+  return api().ensureOcrComponent()
+}
+
+export function cancelOcrComponentDownload(): Promise<Result<OcrComponentStatus, AppError>> {
+  return api().cancelOcrComponentDownload()
+}
+
+export function onOcrComponentStatus(
+  callback: (status: OcrComponentStatus) => void,
+): (() => void) | undefined {
+  return api().onOcrComponentStatus(callback)
 }

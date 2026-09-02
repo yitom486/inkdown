@@ -86,3 +86,14 @@ export interface GetPdfOcrPagePayload {
 export interface ListPdfOcrPagesPayload {
   fileFingerprint: string
 }
+
+export type OcrComponentPhase = 'not-ready' | 'downloading' | 'ready' | 'error'
+
+export interface OcrComponentStatus {
+  phase: OcrComponentPhase
+  /** 0–100 */
+  progress: number
+  message?: string
+  languages: string[]
+  missingLanguages: string[]
+}

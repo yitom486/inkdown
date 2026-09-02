@@ -10,6 +10,7 @@ import {
 import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@shared/types/ocr'
 import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
 import { writePdfOcrTocCache } from './ocr-toc-cache'
+import { ensureOcrComponent } from './ocr-component-manager'
 import { getOcrWorker } from './ocr-worker'
 import { recognizeImageWithBlocks } from './recognize-image'
 
@@ -23,6 +24,9 @@ export async function recognizePdfToc(
   }
 
   try {
+    const component = await ensureOcrComponent()
+    if (!component.ok) return component
+
     const data = await readFile(filePath)
     const doc = await pdf(data, { scale })
     const worker = await getOcrWorker()

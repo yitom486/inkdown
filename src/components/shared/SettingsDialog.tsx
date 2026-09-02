@@ -35,6 +35,7 @@ import type { EditorViewMode } from '@shared/types/editor'
 import { cn } from '@/lib/utils'
 import { appApi } from '@/api/app-api'
 import { clearAllPdfOcrCache } from '@/api/ocr-api'
+import { useOcrComponent } from '@/hooks/reader/useOcrComponent'
 import { toast } from 'sonner'
 
 interface SettingsDialogProps {
@@ -156,6 +157,12 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
   const verboseRendererLogs = useAppSettingsStore((state) => state.verboseRendererLogs)
   const setVerboseRendererLogs = useAppSettingsStore((state) => state.setVerboseRendererLogs)
   const [clearingOcrCache, setClearingOcrCache] = useState(false)
+  const {
+    status: ocrComponentStatus,
+    loading: ocrComponentLoading,
+    download: downloadOcrComponent,
+    cancel: cancelOcrComponentDownload,
+  } = useOcrComponent(open)
 
   const handleClearAllOcrCache = async () => {
     if (
@@ -263,6 +270,55 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
                 options={READER_LINE_HEIGHT_OPTION_LABELS}
                 onChange={setReaderLineHeight}
               />
+            </SettingRow>
+            <SettingRow
+              title="OCR 语言包"
+              description={
+                ocrComponentStatus.message ??
+                (ocrComponentStatus.phase === 'ready'
+                  ? '中英语言包已缓存，可离线识别扫描版 PDF。'
+                  : '首次识别前需下载语言包（约 20MB），不会自动开始。')
+              }
+            >
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {ocrComponentStatus.phase === 'ready'
+                    ? '已就绪'
+                    : ocrComponentStatus.phase === 'downloading'
+                      ? `${ocrComponentStatus.progress}%`
+                      : ocrComponentStatus.phase === 'error'
+                        ? '失败'
+                        : '未安装'}
+                </span>
+                {ocrComponentStatus.phase === 'downloading' ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    onClick={() => void cancelOcrComponentDownload()}
+                  >
+                    取消
+                  </Button>
+                ) : ocrComponentStatus.phase !== 'ready' ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={ocrComponentLoading}
+                    onClick={() => {
+                      void downloadOcrComponent().then((result) => {
+                        if (!result.ok && result.error.code !== 'CANCELLED') {
+                          toast.error(result.error.message)
+                        } else if (result.ok) {
+                          toast.success('OCR 语言包已就绪')
+                        }
+                      })
+                    }}
+                  >
+                    {ocrComponentLoading ? '下载中…' : '下载'}
+                  </Button>
+                ) : null}
+              </div>
             </SettingRow>
             <SettingRow
               title="PDF 后台预识别"

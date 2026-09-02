@@ -91,6 +91,11 @@ import {
 } from '../services/ocr/ocr-page-cache'
 import { recognizePdfPage } from '../services/ocr/pdf-page-ocr-service'
 import { recognizePdfToc } from '../services/ocr/pdf-ocr-toc-service'
+import {
+  cancelOcrComponentDownload,
+  ensureOcrComponent,
+  inspectOcrComponentStatus,
+} from '../services/ocr/ocr-component-manager'
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
 import { listAcpRuntimes } from '../services/acp/agent-registry'
@@ -479,4 +484,12 @@ export function registerIpcHandlers(): void {
     await writePdfOcrTocCache(payload.cache)
     return ok(undefined)
   })
+
+  ipcMain.handle(IPC.OCR_GET_COMPONENT_STATUS, async () => ok(await inspectOcrComponentStatus()))
+
+  ipcMain.handle(IPC.OCR_ENSURE_COMPONENT, async () => ensureOcrComponent())
+
+  ipcMain.handle(IPC.OCR_CANCEL_COMPONENT_DOWNLOAD, async () =>
+    ok(await cancelOcrComponentDownload()),
+  )
 }

@@ -69,6 +69,10 @@ export const IPC = {
   OCR_CLEAR_PDF_CACHE: 'ocr:clear-pdf-cache',
   OCR_CLEAR_ALL_CACHE: 'ocr:clear-all-cache',
   OCR_SAVE_PDF_TOC: 'ocr:save-pdf-toc',
+  OCR_GET_COMPONENT_STATUS: 'ocr:get-component-status',
+  OCR_ENSURE_COMPONENT: 'ocr:ensure-component',
+  OCR_CANCEL_COMPONENT_DOWNLOAD: 'ocr:cancel-component-download',
+  OCR_COMPONENT_STATUS: 'ocr:component-status',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
