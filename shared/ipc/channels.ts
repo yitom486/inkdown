@@ -11,6 +11,8 @@ export const IPC = {
   APP_NEW_WINDOW: 'app:new-window',
   APP_GET_WINDOW_INIT: 'app:get-window-init',
   APP_OPEN_EXTERNAL: 'app:open-external',
+  BUN_GET_STATUS: 'bun:get-status',
+  BUN_INSTALL: 'bun:install',
   APP_UPDATE_CHECK: 'app:update-check',
   APP_UPDATE_DOWNLOAD: 'app:update-download',
   APP_UPDATE_INSTALL: 'app:update-install',

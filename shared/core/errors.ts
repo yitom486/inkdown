@@ -10,6 +10,7 @@ export type AppErrorCode =
   | 'ACP_PROTOCOL_ERROR'
   | 'ACP_NOT_CONNECTED'
   | 'ACP_TIMEOUT'
+  | 'BUN_NOT_INSTALLED'
   | 'OCR_TOC_EMPTY'
   | 'OCR_PAGE_EMPTY'
   | 'OCR_FAILED'

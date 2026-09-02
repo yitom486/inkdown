@@ -16,6 +16,7 @@ import {
 import { AgentComposer } from '@/components/agent/AgentComposer'
 import { AgentMark } from '@/components/agent/AgentMark'
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
+import { AgentBunInstallBanner } from '@/components/agent/AgentBunInstallBanner'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { AgentScrollToBottomButton } from '@/components/agent/AgentScrollToBottomButton'
@@ -639,8 +640,10 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
           }
         />
 
-        {view.statusError ? (
-          <p className="text-[10px] text-destructive">{view.statusError}</p>
+        {view.statusErrorCode === 'BUN_NOT_INSTALLED' ? (
+          <AgentBunInstallBanner onInstalled={() => void connect()} />
+        ) : view.statusError ? (
+          <p className="px-3 pb-2 text-[10px] text-destructive">{view.statusError}</p>
         ) : null}
       </div>
 

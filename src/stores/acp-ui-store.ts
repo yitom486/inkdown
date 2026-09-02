@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { DEFAULT_ACP_RUNTIME_ID } from '@shared/constants/acp-agents'
+import type { AppErrorCode } from '@shared/core/errors'
 import type {
   AcpConfigOption,
   AcpConnectionStatus,
@@ -70,6 +71,7 @@ interface AcpUiStore {
   status: AcpConnectionStatus
   sessionId: string | null
   statusError?: string
+  statusErrorCode?: AppErrorCode
   configOptions: AcpConfigOption[]
   prompting: boolean
   /** 当前连接 Agent 的 prompt 能力（不持久化） */
@@ -98,7 +100,7 @@ interface AcpUiStore {
   insertComposerSelectionMarker: () => void
   setHistoryOpen: (open: boolean) => void
   setSelectedRuntimeId: (id: string) => void
-  setStatus: (status: AcpConnectionStatus, errorMessage?: string) => void
+  setStatus: (status: AcpConnectionStatus, errorMessage?: string, errorCode?: AppErrorCode) => void
   setSession: (sessionId: string | null, configOptions?: AcpConfigOption[]) => void
   setConfigOptions: (options: AcpConfigOption[]) => void
   setPromptCapabilities: (caps: AcpPromptCapabilities) => void
@@ -355,10 +357,14 @@ export const useAcpUiStore = create<AcpUiStore>()(
       setHistoryOpen: (open) => set({ historyOpen: open }),
       setSelectedRuntimeId: (id) => set({ selectedRuntimeId: id }),
 
-      setStatus: (status, errorMessage) =>
+      setStatus: (status, errorMessage, errorCode) =>
         set({
           status,
           statusError: errorMessage,
+          statusErrorCode: errorCode,
+          ...(status === 'connected'
+            ? { statusError: undefined, statusErrorCode: undefined }
+            : {}),
           ...(status === 'disconnected' || status === 'error'
             ? { prompting: false, pendingPermission: null, promptCapabilities: {} }
             : {}),
@@ -844,6 +850,7 @@ export function useAcpChatShell() {
       return {
         status: s.status,
         statusError: s.statusError,
+        statusErrorCode: s.statusErrorCode,
         configOptions: s.configOptions,
         promptCapabilities: s.promptCapabilities,
         prompting: s.prompting,

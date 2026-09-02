@@ -67,6 +67,7 @@ import type {
   SavePdfOcrTocPayload,
 } from '@shared/types/ocr'
 import type { AppUpdateStatus } from '@shared/types/app-update'
+import type { BunRuntimeStatus } from '@shared/types/bun'
 
 export interface ElectronAPI {
   platform: string
@@ -113,6 +114,8 @@ export interface ElectronAPI {
   quit: () => void
   newWindow: () => void
   openExternal: (url: string) => Promise<Result<void, AppError>>
+  getBunRuntimeStatus: () => Promise<Result<BunRuntimeStatus, AppError>>
+  installBunRuntime: () => Promise<Result<void, AppError>>
   toggleDevTools: () => void
   logRendererError: (payload: RendererErrorPayload) => Promise<Result<string, AppError>>
   getErrorLogPath: () => Promise<Result<string, AppError>>

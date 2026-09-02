@@ -47,6 +47,7 @@ import {
   JsonRpcTransport,
 } from './jsonrpc-transport'
 import { disposeAllAcpProcesses, spawnAcpProcess, type SpawnedAcpProcess } from './process-manager'
+import { ensureBunForCommand, mapSpawnErrorToAppError } from '../bun-runtime'
 
 const PROTOCOL_VERSION = 1
 
@@ -109,17 +110,7 @@ function setStatus(next: AcpConnectionStatus, errorMessage?: string): void {
 }
 
 function toProtocolError(error: unknown, fallback: string): AppError {
-  if (error instanceof Error) {
-    const message = error.message
-    const code =
-      message.includes('超时') || message.toLowerCase().includes('timeout')
-        ? 'ACP_TIMEOUT'
-        : message.includes('spawn') || message.includes('ENOENT')
-          ? 'ACP_SPAWN_ERROR'
-          : 'ACP_PROTOCOL_ERROR'
-    return { code, message: message || fallback }
-  }
-  return { code: 'ACP_PROTOCOL_ERROR', message: fallback }
+  return mapSpawnErrorToAppError(error, fallback)
 }
 
 function requireTransport(allowAuthPhase = false): Result<JsonRpcTransport, AppError> {
@@ -361,6 +352,15 @@ export async function connectAcp(payload: {
   runtimeId = runtime.id
   pendingResumeSessionId = payload.resumeSessionId?.trim() || null
   setStatus('connecting')
+
+  const bunCheck = await ensureBunForCommand(runtime.command)
+  if (!bunCheck.ok) {
+    setStatus('error', bunCheck.error.message)
+    return bunCheck
+  }
+  if (gen !== connectGeneration) {
+    return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
+  }
 
   const { cwd } = resolveAgentCwd(payload.cwd)
   workspaceRoot = cwd

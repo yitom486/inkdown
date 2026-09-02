@@ -62,6 +62,7 @@ import {
   workspaceRename,
 } from '../services/workspace-fs'
 import { getAppVersion } from '../services/app-service'
+import { installBunRuntime, probeBunRuntime } from '../services/bun-runtime'
 import {
   checkAppUpdate,
   downloadAppUpdate,
@@ -389,6 +390,10 @@ export function registerIpcHandlers(): void {
       })
     }
   })
+
+  ipcMain.handle(IPC.BUN_GET_STATUS, async () => ok(await probeBunRuntime()))
+
+  ipcMain.handle(IPC.BUN_INSTALL, async () => installBunRuntime())
 
   /** preload 启动时同步读取，仅访问内存中的 session 映射 */
   ipcMain.on(IPC.APP_GET_WINDOW_INIT, (event) => {

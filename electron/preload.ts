@@ -73,6 +73,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.send(IPC.APP_NEW_WINDOW)
   },
   openExternal: (url: string) => ipcRenderer.invoke(IPC.APP_OPEN_EXTERNAL, url),
+  getBunRuntimeStatus: () => ipcRenderer.invoke(IPC.BUN_GET_STATUS),
+  installBunRuntime: () => ipcRenderer.invoke(IPC.BUN_INSTALL),
   toggleDevTools: () => {
     ipcRenderer.send(IPC.APP_TOGGLE_DEVTOOLS)
   },

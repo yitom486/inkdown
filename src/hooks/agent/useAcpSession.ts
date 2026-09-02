@@ -169,7 +169,7 @@ export function useAcpSession(workspaceRoot?: string) {
       resumeSessionId,
     })
     if (!isOk(result)) {
-      setStatus('error', result.error.message)
+      setStatus('error', result.error.message, result.error.code)
       reportAppError(result.error)
       appendSystemMessage(`连接失败：${result.error.message}`)
       return
@@ -294,7 +294,7 @@ export function useAcpSession(workspaceRoot?: string) {
       const disconnected = await acpApi.disconnect()
       if (!isOk(disconnected)) {
         acpDevWarn('sync disconnect failed', disconnected.error)
-        setStatus('error', disconnected.error.message)
+        setStatus('error', disconnected.error.message, disconnected.error.code)
         reportAppError(disconnected.error)
         appendSystemMessage(`切换会话失败：${disconnected.error.message}`)
         return false
@@ -311,7 +311,7 @@ export function useAcpSession(workspaceRoot?: string) {
     })
     if (!isOk(result)) {
       acpDevWarn('sync connect failed', result.error)
-      setStatus('error', result.error.message)
+      setStatus('error', result.error.message, result.error.code)
       reportAppError(result.error)
       appendSystemMessage(`连接失败：${result.error.message}`)
       return false
