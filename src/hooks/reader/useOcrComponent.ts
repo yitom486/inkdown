@@ -10,6 +10,7 @@ import type { OcrComponentStatus } from '@shared/types/ocr'
 const DEFAULT_STATUS: OcrComponentStatus = {
   phase: 'not-ready',
   progress: 0,
+  runtimeReady: false,
   languages: [],
   missingLanguages: ['chi_sim', 'eng'],
 }

@@ -9,6 +9,8 @@
  *   bun run release -- --dry-run
  *
  * 约定：日常把要点写在 CHANGELOG「未发布」；发版时不必手算下一个版本号。
+ *
+ * 发版附带 OCR：先 `bun run build:ocr-runtime`，将 release/ocr-runtime-*.tar.gz 上传到 GitHub Release。
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

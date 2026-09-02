@@ -1,10 +1,8 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { createRequire } from 'node:module'
 import { app } from 'electron'
 import type { WorkerOptions } from 'tesseract.js'
-
-const cjsRequire = createRequire(import.meta.url)
+import { resolveTesseractRoot } from './ocr-runtime'
 
 /** tesseract.js 语言包缓存目录（首次 OCR 时从 CDN 下载） */
 export async function resolveTesseractCachePath(): Promise<string> {
@@ -16,7 +14,7 @@ export async function resolveTesseractCachePath(): Promise<string> {
 /** Electron 主进程：禁用 Blob worker，语言包写入 userData */
 export async function resolveTesseractWorkerOptions(): Promise<Partial<WorkerOptions>> {
   const cachePath = await resolveTesseractCachePath()
-  const tesseractRoot = join(cjsRequire.resolve('tesseract.js/package.json'), '..')
+  const tesseractRoot = await resolveTesseractRoot()
 
   return {
     cachePath,

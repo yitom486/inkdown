@@ -164,6 +164,15 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
     cancel: cancelOcrComponentDownload,
   } = useOcrComponent(open)
 
+  const ocrComponentPhaseLabel =
+    ocrComponentStatus.phase === 'ready'
+      ? '已就绪'
+      : ocrComponentStatus.phase === 'downloading'
+        ? `${ocrComponentStatus.progress}%`
+        : ocrComponentStatus.phase === 'error'
+          ? '失败'
+          : '未安装'
+
   const handleClearAllOcrCache = async () => {
     if (
       !window.confirm(
@@ -272,23 +281,23 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
               />
             </SettingRow>
             <SettingRow
-              title="OCR 语言包"
+              title="OCR 组件"
               description={
                 ocrComponentStatus.message ??
                 (ocrComponentStatus.phase === 'ready'
-                  ? '中英语言包已缓存，可离线识别扫描版 PDF。'
-                  : '首次识别前需下载语言包（约 20MB），不会自动开始。')
+                  ? '运行时与语言包已就绪，可离线识别扫描版 PDF。'
+                  : '首次识别前需下载（不会自动开始）。')
               }
             >
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className="text-xs text-muted-foreground">
-                  {ocrComponentStatus.phase === 'ready'
-                    ? '已就绪'
-                    : ocrComponentStatus.phase === 'downloading'
-                      ? `${ocrComponentStatus.progress}%`
-                      : ocrComponentStatus.phase === 'error'
-                        ? '失败'
-                        : '未安装'}
+                  {ocrComponentPhaseLabel}
+                  {!ocrComponentStatus.runtimeReady && ocrComponentStatus.phase !== 'ready'
+                    ? ' · 缺运行时'
+                    : ocrComponentStatus.missingLanguages.length > 0 &&
+                        ocrComponentStatus.phase !== 'ready'
+                      ? ' · 缺语言包'
+                      : ''}
                 </span>
                 {ocrComponentStatus.phase === 'downloading' ? (
                   <Button
@@ -310,7 +319,7 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
                         if (!result.ok && result.error.code !== 'CANCELLED') {
                           toast.error(result.error.message)
                         } else if (result.ok) {
-                          toast.success('OCR 语言包已就绪')
+                          toast.success('OCR 组件已就绪')
                         }
                       })
                     }}

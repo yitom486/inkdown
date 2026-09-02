@@ -94,6 +94,7 @@ export interface OcrComponentStatus {
   /** 0–100 */
   progress: number
   message?: string
+  runtimeReady: boolean
   languages: string[]
   missingLanguages: string[]
 }

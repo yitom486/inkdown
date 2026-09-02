@@ -1,11 +1,16 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { BrowserWindow } from 'electron'
-import { createWorker } from 'tesseract.js'
 import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 import { IPC } from '@shared/ipc/channels'
 import type { OcrComponentStatus } from '@shared/types/ocr'
+import {
+  downloadOcrRuntime,
+  isOcrRuntimeInstalled,
+  loadCreateWorker,
+  usesBundledDevRuntime,
+} from './ocr-runtime'
 import { resolveTesseractCachePath, resolveTesseractWorkerOptions } from './tesseract-config'
 
 export const OCR_REQUIRED_LANGS = ['chi_sim', 'eng'] as const
@@ -13,13 +18,14 @@ export const OCR_REQUIRED_LANGS = ['chi_sim', 'eng'] as const
 let lastStatus: OcrComponentStatus = {
   phase: 'not-ready',
   progress: 0,
+  runtimeReady: false,
   languages: [],
   missingLanguages: [...OCR_REQUIRED_LANGS],
 }
 
 let ensurePromise: Promise<Result<void, AppError>> | null = null
 let cancelRequested = false
-let activeDownloadWorker: Awaited<ReturnType<typeof createWorker>> | null = null
+let activeDownloadWorker: { terminate: () => Promise<unknown> } | null = null
 
 async function langPackExists(cachePath: string, lang: string): Promise<boolean> {
   try {
@@ -39,7 +45,26 @@ function broadcastOcrComponentStatus(status: OcrComponentStatus): void {
   }
 }
 
+function buildStatusMessage(
+  runtimeReady: boolean,
+  missingLanguages: string[],
+): string | undefined {
+  if (!runtimeReady) {
+    return usesBundledDevRuntime()
+      ? '开发模式使用内置 OCR 运行时'
+      : '需下载 OCR 运行时与语言包（约 25MB）'
+  }
+  if (missingLanguages.length === 0) {
+    return 'OCR 组件已就绪'
+  }
+  if (missingLanguages.length === OCR_REQUIRED_LANGS.length) {
+    return '需下载中英语言包（约 20MB）'
+  }
+  return `缺少语言包：${missingLanguages.join('、')}`
+}
+
 export async function inspectOcrComponentStatus(): Promise<OcrComponentStatus> {
+  const runtimeReady = await isOcrRuntimeInstalled()
   const cachePath = await resolveTesseractCachePath()
   const languages: string[] = []
   const missingLanguages: string[] = []
@@ -52,33 +77,21 @@ export async function inspectOcrComponentStatus(): Promise<OcrComponentStatus> {
     }
   }
 
-  const status: OcrComponentStatus =
-    missingLanguages.length === 0
-      ? {
-          phase: 'ready',
-          progress: 100,
-          message: 'OCR 语言包已就绪',
-          languages,
-          missingLanguages,
-        }
-      : {
-          phase:
-            missingLanguages.length === 0
-              ? 'ready'
-              : ensurePromise
-                ? 'downloading'
-                : lastStatus.phase === 'error'
-                  ? 'error'
-                  : 'not-ready',
-          progress:
-            ensurePromise && lastStatus.phase === 'downloading' ? lastStatus.progress : 0,
-          message:
-            missingLanguages.length === OCR_REQUIRED_LANGS.length
-              ? '首次 OCR 需下载中英语言包（约 20MB）'
-              : `缺少语言包：${missingLanguages.join('、')}`,
-          languages,
-          missingLanguages,
-        }
+  const fullyReady = runtimeReady && missingLanguages.length === 0
+  const status: OcrComponentStatus = {
+    phase: fullyReady
+      ? 'ready'
+      : ensurePromise
+        ? 'downloading'
+        : lastStatus.phase === 'error'
+          ? 'error'
+          : 'not-ready',
+    progress: fullyReady ? 100 : ensurePromise ? lastStatus.progress : 0,
+    message: buildStatusMessage(runtimeReady, missingLanguages),
+    runtimeReady,
+    languages,
+    missingLanguages,
+  }
 
   lastStatus = status
   return status
@@ -99,14 +112,45 @@ export async function ensureOcrComponent(): Promise<Result<void, AppError>> {
 
   ensurePromise = (async (): Promise<Result<void, AppError>> => {
     cancelRequested = false
-    broadcastOcrComponentStatus({
-      ...current,
-      phase: 'downloading',
-      progress: 0,
-      message: '正在下载 OCR 语言包…',
-    })
 
     try {
+      if (!current.runtimeReady) {
+        broadcastOcrComponentStatus({
+          ...current,
+          phase: 'downloading',
+          progress: 0,
+          message: '正在下载 OCR 运行时…',
+        })
+        await downloadOcrRuntime((message, progress) => {
+          if (cancelRequested) return
+          broadcastOcrComponentStatus({
+            phase: 'downloading',
+            progress: Math.min(40, progress),
+            message,
+            runtimeReady: false,
+            languages: current.languages,
+            missingLanguages: current.missingLanguages,
+          })
+        })
+        if (cancelRequested) {
+          return err({ code: 'CANCELLED', message: '已取消下载' })
+        }
+      }
+
+      const afterRuntime = await inspectOcrComponentStatus()
+      if (afterRuntime.missingLanguages.length === 0) {
+        broadcastOcrComponentStatus(afterRuntime)
+        return ok(undefined)
+      }
+
+      broadcastOcrComponentStatus({
+        ...afterRuntime,
+        phase: 'downloading',
+        progress: 45,
+        message: '正在下载 OCR 语言包…',
+      })
+
+      const createWorker = await loadCreateWorker()
       const options = await resolveTesseractWorkerOptions()
       const worker = await createWorker([...OCR_REQUIRED_LANGS], 1, {
         ...options,
@@ -114,10 +158,11 @@ export async function ensureOcrComponent(): Promise<Result<void, AppError>> {
           if (cancelRequested) return
           broadcastOcrComponentStatus({
             phase: 'downloading',
-            progress: Math.round(message.progress * 100),
+            progress: 45 + Math.round(message.progress * 55),
             message: message.status,
-            languages: current.languages,
-            missingLanguages: current.missingLanguages,
+            runtimeReady: true,
+            languages: afterRuntime.languages,
+            missingLanguages: afterRuntime.missingLanguages,
           })
         },
       })
@@ -139,10 +184,10 @@ export async function ensureOcrComponent(): Promise<Result<void, AppError>> {
         const failed: OcrComponentStatus = {
           ...ready,
           phase: 'error',
-          message: '语言包下载未完成，请重试',
+          message: 'OCR 组件安装未完成，请重试',
         }
         broadcastOcrComponentStatus(failed)
-        return err({ code: 'OCR_FAILED', message: failed.message ?? '语言包下载失败' })
+        return err({ code: 'OCR_FAILED', message: failed.message ?? 'OCR 组件安装失败' })
       }
 
       broadcastOcrComponentStatus(ready)
@@ -152,12 +197,12 @@ export async function ensureOcrComponent(): Promise<Result<void, AppError>> {
       const failed: OcrComponentStatus = {
         ...(await inspectOcrComponentStatus()),
         phase: 'error',
-        message: cause instanceof Error ? cause.message : '语言包下载失败',
+        message: cause instanceof Error ? cause.message : 'OCR 组件安装失败',
       }
       broadcastOcrComponentStatus(failed)
       return err({
         code: 'OCR_FAILED',
-        message: failed.message ?? '语言包下载失败',
+        message: failed.message ?? 'OCR 组件安装失败',
       })
     }
   })().finally(() => {
