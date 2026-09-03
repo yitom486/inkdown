@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  decodeHtmlEntities,
   extractGenericWebDocToc,
   extractSameOriginDocLinks,
   extractStructuredNavToc,
@@ -41,6 +42,46 @@ const MINTLIFY_SIDEBAR_FIXTURE = `<!DOCTYPE html><html><body>
 <main><a href="/other">Other page buried in content</a></main>
 </body></html>`
 
+/** MkDocs Material：主侧栏内嵌套 chapter nav（非贪婪正则会截断） */
+const MKDOCS_NAV_FIXTURE = `<!DOCTYPE html><html><body>
+<nav class="md-header__inner" aria-label="页眉"><a href="/">Logo</a></nav>
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <ul class="md-nav__list">
+    <li class="md-nav__item">
+      <a href="/chapter_hello_algo/" class="md-nav__link">
+        <span class="md-ellipsis">🚀 序</span>
+      </a>
+    </li>
+    <li class="md-nav__item md-nav__item--nested">
+      <a href="/chapter_sorting/" class="md-nav__link">
+        <span class="md-ellipsis">第 11 章 &nbsp; 排序</span>
+      </a>
+      <nav class="md-nav" data-md-level="1" aria-expanded="true">
+        <ul class="md-nav__list">
+          <li class="md-nav__item">
+            <a href="/chapter_sorting/sorting_algorithm/" class="md-nav__link">
+              <span class="md-ellipsis">11.1 &nbsp; 排序算法</span>
+            </a>
+          </li>
+          <li class="md-nav__item">
+            <a href="/chapter_sorting/bubble_sort/" class="md-nav__link">
+              <span class="md-ellipsis">11.3 &nbsp; 冒泡排序</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </li>
+  </ul>
+</nav>
+</body></html>`
+
+describe('decodeHtmlEntities', () => {
+  it('解码 &nbsp; 与数字实体', () => {
+    expect(decodeHtmlEntities('11.1 &nbsp; 排序算法')).toBe('11.1 排序算法')
+    expect(decodeHtmlEntities('A&#160;B')).toBe('A B')
+  })
+})
+
 describe('extractStructuredNavToc', () => {
   it('识别 Mintlify sidebar nav', () => {
     const nav = pickDocsNavHtml(MINTLIFY_SIDEBAR_FIXTURE)
@@ -73,6 +114,24 @@ describe('extractStructuredNavToc', () => {
     )
     expect(entries.some((e) => e.label === 'GitHub')).toBe(false)
     expect(entries.some((e) => e.label === 'Other page buried in content')).toBe(false)
+  })
+
+  it('MkDocs 主侧栏：解码实体并保留章 → 节层级', () => {
+    const nav = pickDocsNavHtml(MKDOCS_NAV_FIXTURE)
+    expect(nav).toContain('md-nav--primary')
+    expect(nav).toContain('11.1')
+
+    const entries = extractGenericWebDocToc(
+      MKDOCS_NAV_FIXTURE,
+      'https://www.hello-algo.com/chapter_hello_algo/',
+    )
+    expect(entries.map((e) => `${e.level}:${e.label}`)).toEqual([
+      '0:🚀 序',
+      '0:第 11 章 排序',
+      '1:11.1 排序算法',
+      '1:11.3 冒泡排序',
+    ])
+    expect(entries.every((e) => !e.label.includes('&nbsp;'))).toBe(true)
   })
 })
 
