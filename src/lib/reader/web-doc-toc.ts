@@ -35,7 +35,18 @@ export function webDocTocEntriesToReaderUnits(entries: WebDocTocEntry[]): Reader
 
 export function findWebDocFlatIndex(units: ReaderUnit[], pageUrl: string): number {
   const target = normalizeWebDocNavUrl(pageUrl)
-  return units.findIndex((unit) => normalizeWebDocNavUrl(unit.href) === target)
+  let bestIndex = -1
+  let bestLevel = -1
+  for (let index = 0; index < units.length; index++) {
+    const unit = units[index]!
+    if (normalizeWebDocNavUrl(unit.href) !== target) continue
+    // 分组标题常与首个子页共用 href：优先更深的叶子，避免底栏显示成父分组
+    if (unit.level >= bestLevel) {
+      bestIndex = index
+      bestLevel = unit.level
+    }
+  }
+  return bestIndex
 }
 
 export function syncWebNavigation(

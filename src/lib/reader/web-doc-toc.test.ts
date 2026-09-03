@@ -22,6 +22,28 @@ describe('web-doc-toc', () => {
     expect(findWebDocFlatIndex(units, 'https://react.dev/learn/installation/')).toBe(1)
   })
 
+  it('分组与首链同 href 时优先更深叶子', () => {
+    const nested = webDocTocEntriesToReaderUnits([
+      { href: 'https://agentclientprotocol.com/protocol/v1/overview', label: 'Protocol', level: 0 },
+      { href: 'https://agentclientprotocol.com/protocol/v1/overview', label: 'v1', level: 1 },
+      { href: 'https://agentclientprotocol.com/protocol/v1/overview', label: 'Overview', level: 2 },
+      {
+        href: 'https://agentclientprotocol.com/protocol/v1/initialization',
+        label: 'Initialization',
+        level: 2,
+      },
+    ])
+    const index = findWebDocFlatIndex(
+      nested,
+      'https://agentclientprotocol.com/protocol/v1/overview',
+    )
+    expect(index).toBe(2)
+    expect(nested[index]?.label).toBe('Overview')
+    const nav = syncWebNavigation(nested, 'https://agentclientprotocol.com/protocol/v1/overview')
+    expect(nav.current?.label).toBe('Overview')
+    expect(nav.next?.label).toBe('Initialization')
+  })
+
   it('syncWebNavigation 返回相邻节', () => {
     const nav = syncWebNavigation(units, 'https://react.dev/learn/installation')
     expect(nav.current?.label).toBe('Installation')

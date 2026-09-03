@@ -57,6 +57,10 @@ export function resolveWebDocTocDiscoveryUrl(pageUrl: string, siteId: WebDocSite
       }
       return `${url.origin}/learn`
     }
+    // generic：按站点 origin 缓存目录，避免各页 Mintlify 侧栏 SSR 不一致
+    if (siteId === 'generic-ssr') {
+      return `${url.origin}/`
+    }
     return url.toString()
   } catch {
     return pageUrl

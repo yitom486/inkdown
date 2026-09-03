@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest'
+import {
+  extractLlmsTxtToc,
+  humanizePathSegment,
+  normalizeLlmsDocHref,
+} from './extract-llms-toc'
+
+const LLMS_FIXTURE = `# Agent Client Protocol
+
+- [Introduction](https://agentclientprotocol.com/get-started/introduction.md): Get started
+- [Architecture](https://agentclientprotocol.com/get-started/architecture.md): Overview
+- [Overview](https://agentclientprotocol.com/protocol/v1/overview.md): How ACP works
+- [Initialization](https://agentclientprotocol.com/protocol/v1/initialization.md): Begin
+- [Overview](https://agentclientprotocol.com/protocol/v2/overview.md): v2 draft
+- [Kotlin](https://agentclientprotocol.com/libraries/kotlin.md): Kotlin library
+- [Brand](https://agentclientprotocol.com/brand.md): Brand assets
+`
+
+describe('extractLlmsTxtToc', () => {
+  it('按路径生成 Protocol → v1 → 页面 层级', () => {
+    const entries = extractLlmsTxtToc(LLMS_FIXTURE, 'https://agentclientprotocol.com')
+    expect(entries.map((e) => `${e.level}:${e.label}`)).toEqual([
+      '0:Get Started',
+      '1:Introduction',
+      '1:Architecture',
+      '0:Protocol',
+      '1:v1',
+      '2:Overview',
+      '2:Initialization',
+      '1:v2',
+      '2:Overview',
+      '0:Libraries',
+      '1:Kotlin',
+      '0:Brand',
+    ])
+    expect(entries.find((e) => e.label === 'v1')?.href).toContain('/protocol/v1/overview')
+    expect(normalizeLlmsDocHref('/protocol/v1/overview.md', 'https://agentclientprotocol.com')).toBe(
+      'https://agentclientprotocol.com/protocol/v1/overview',
+    )
+  })
+
+  it('humanize 常见 docs 段名', () => {
+    expect(humanizePathSegment('get-started')).toBe('Get Started')
+    expect(humanizePathSegment('v1')).toBe('v1')
+  })
+})
