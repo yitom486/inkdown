@@ -9,6 +9,7 @@ describe('acp-ui-store history + plan', () => {
       prompting: false,
       sessionId: null,
       status: 'disconnected',
+      pendingMarkProposalSnapshotContents: [],
     })
     // 只保留刚建的空线程，避免持久化干扰
     const thread = useAcpUiStore.getState().threads.find((t) => t.id === fresh)
@@ -157,6 +158,126 @@ describe('acp-ui-store history + plan', () => {
     expect(agents[0]?.text).toBe('最终结果：已完成')
     expect(agents[0]?.streaming).toBe(false)
     expect(messages.some((m) => m.role === 'thought')).toBe(true)
+  })
+
+  it('promotes late batch proposal chunks after the turn has already finished', () => {
+    useAcpUiStore.getState().appendUserMessage('给这一章划重点')
+    useAcpUiStore.getState().beginAgentReply()
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: '已生成建议，请确认采用。' },
+    })
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'tool_call',
+      toolCallId: 'late-propose',
+      title: 'mcp.inkdown.inkdown_propose_mark',
+      kind: 'other',
+      status: 'in_progress',
+    })
+
+    // ACP 的 prompt 已结束，但最后一个 tool content chunk 仍在路上。
+    useAcpUiStore.getState().finishStreaming()
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'tool_call_content_chunk',
+      toolCallId: 'late-propose',
+      content: {
+        type: 'text',
+        text: JSON.stringify({
+          proposed: true,
+          count: 2,
+          marks: [
+            { proposed: true, excerpt: '重点一', note: '', message: '' },
+            { proposed: true, excerpt: '重点二', note: '补充说明', message: '' },
+          ],
+          message: '等待采用',
+        }),
+      },
+    })
+
+    const messages =
+      useAcpUiStore.getState().threads.find(
+        (t) => t.id === useAcpUiStore.getState().activeThreadId,
+      )?.messages ?? []
+    const agent = messages.find((m) => m.role === 'agent')
+    const tool = messages.find((m) => m.role === 'tool' && m.toolCallId === 'late-propose')
+    expect(agent?.markProposals).toHaveLength(2)
+    expect(agent?.markProposals?.map((row) => row.proposal.excerpt)).toEqual(['重点一', '重点二'])
+    expect(tool?.streaming).toBe(false)
+  })
+
+  it('attaches batch proposals from the MCP snapshot when ACP omits tool result content', () => {
+    useAcpUiStore.getState().appendUserMessage('给这一章划重点')
+    useAcpUiStore.getState().beginAgentReply()
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: '已生成建议，请确认采用。' },
+    })
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'tool_call',
+      toolCallId: 'mcp-propose',
+      title: 'mcp.inkdown.inkdown_propose_mark',
+      kind: 'other',
+      status: 'completed',
+    })
+
+    // codex-acp 的 tool_call 只有标题和状态；真实 result.content 在 MCP 快照响应里。
+    useAcpUiStore.getState().attachMarkProposalsFromSnapshot(
+      JSON.stringify({
+        proposed: true,
+        count: 2,
+        marks: [
+          { proposed: true, excerpt: '重点一', note: '', message: '' },
+          { proposed: true, excerpt: '重点二', note: '补充说明', message: '' },
+        ],
+        message: '等待采用',
+      }),
+    )
+    useAcpUiStore.getState().finishStreaming()
+
+    const messages =
+      useAcpUiStore.getState().threads.find(
+        (t) => t.id === useAcpUiStore.getState().activeThreadId,
+      )?.messages ?? []
+    const agent = messages.find((m) => m.role === 'agent')
+    expect(agent?.markProposals).toHaveLength(2)
+    expect(agent?.markProposals?.[0]?.proposal.id).toBe('tool:mcp-propose:0')
+  })
+
+  it('queues an MCP snapshot that arrives before its propose-mark tool event', () => {
+    useAcpUiStore.getState().appendUserMessage('给这一章划重点')
+    useAcpUiStore.getState().beginAgentReply()
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: '正在整理。' },
+    })
+
+    // MCP HTTP 请求会先向渲染进程索取快照；codex-acp 的 tool_call 事件随后才到。
+    useAcpUiStore.getState().attachMarkProposalsFromSnapshot(
+      JSON.stringify({
+        proposed: true,
+        count: 1,
+        marks: [{ proposed: true, excerpt: '重点一', note: '补充说明', message: '' }],
+        message: '等待采用',
+      }),
+    )
+    expect(useAcpUiStore.getState().pendingMarkProposalSnapshotContents).toHaveLength(1)
+
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'tool_call',
+      toolCallId: 'mcp-late-tool-event',
+      title: 'mcp.inkdown.inkdown_propose_mark',
+      kind: 'other',
+      status: 'completed',
+    })
+    useAcpUiStore.getState().finishStreaming()
+
+    const messages =
+      useAcpUiStore.getState().threads.find(
+        (t) => t.id === useAcpUiStore.getState().activeThreadId,
+      )?.messages ?? []
+    const agent = messages.find((m) => m.role === 'agent')
+    expect(agent?.markProposals).toHaveLength(1)
+    expect(useAcpUiStore.getState().pendingMarkProposalSnapshotContents).toEqual([])
   })
 
   it('rememberConfigPreference persists per runtime', () => {

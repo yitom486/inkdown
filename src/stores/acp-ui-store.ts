@@ -30,6 +30,7 @@ import {
   type AcpPermissionOptionView,
 } from '@/lib/agent/acp-permission'
 import { enrichAcpToolMessage } from '@/lib/agent/enrich-tool-message'
+import { acpDevLog } from '@/lib/agent/acp-dev-log'
 import {
   promoteChapterMarkPlansToLastAgent,
   selectChapterMarkPlanOnMessages,
@@ -38,6 +39,10 @@ import {
   promoteMarkProposalsToLastAgent,
   resolveMarkProposalOnMessages,
 } from '@/lib/agent/promote-mark-proposals'
+import {
+  isProposeMarkToolTitle,
+  parseMarkProposalsFromTool,
+} from '@/lib/agent/parse-mark-proposal'
 import type { MarkProposalStatus } from '@shared/types/mark-proposal'
 
 export interface AcpPendingPermission {
@@ -86,6 +91,8 @@ interface AcpUiStore {
   preferredConfigByRuntime: AcpPreferredConfigMap
   /** 当前待用户审批的工具权限（不持久化） */
   pendingPermission: AcpPendingPermission | null
+  /** MCP 快照先于对应 tool_call 到达时暂存；仅当前回合有效，不持久化。 */
+  pendingMarkProposalSnapshotContents: string[]
   /** 递增以触发 AgentComposer 聚焦（不持久化） */
   composerFocusNonce: number
   /** 递增以在输入框追加「选区」短标记（不持久化） */
@@ -120,6 +127,8 @@ interface AcpUiStore {
   clearMessages: () => void
   applySessionUpdate: (update: Record<string, unknown>) => void
   finishStreaming: () => void
+  /** MCP 结果不会回传到 ACP session/update 时，由快照响应直接补到对应工具消息。 */
+  attachMarkProposalsFromSnapshot: (content: string) => void
   resolveMarkProposal: (proposalId: string, status: Exclude<MarkProposalStatus, 'pending'>) => void
   selectChapterMarkPlan: (entryId: string) => void
   createThread: (workspaceRoot?: string) => string
@@ -215,6 +224,90 @@ function patchActiveThread(
 
 
 
+interface MarkProposalAttachResult {
+  messages: AcpChatMessage[]
+  attached: boolean
+  toolCallId?: string
+  proposalCount?: number
+}
+
+function attachMarkProposalsToCurrentTurn(
+  messages: AcpChatMessage[],
+  content: string,
+): MarkProposalAttachResult {
+  let turnStart = -1
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === 'user') {
+      turnStart = i
+      break
+    }
+  }
+
+  let index = -1
+  for (let i = messages.length - 1; i > turnStart; i -= 1) {
+    const message = messages[i]
+    if (
+      message?.role === 'tool' &&
+      !message.markProposal &&
+      !message.markProposals?.length &&
+      isProposeMarkToolTitle(message.toolTitle)
+    ) {
+      index = i
+      break
+    }
+  }
+  if (index < 0) return { messages, attached: false }
+
+  const tool = messages[index]!
+  const proposals = parseMarkProposalsFromTool(tool.toolTitle, content, tool.toolCallId)
+  if (proposals.length === 0) return { messages, attached: false, toolCallId: tool.toolCallId }
+
+  const next = [...messages]
+  next[index] =
+    proposals.length === 1
+      ? {
+          ...tool,
+          toolContentText: content,
+          text: content,
+          markProposal: proposals[0],
+          markProposalStatus: 'pending',
+        }
+      : {
+          ...tool,
+          toolContentText: content,
+          text: content,
+          markProposals: proposals.map((proposal) => ({
+            proposal,
+            status: 'pending' as const,
+          })),
+        }
+  return {
+    messages: next,
+    attached: true,
+    toolCallId: tool.toolCallId,
+    proposalCount: proposals.length,
+  }
+}
+
+function attachPendingMarkProposals(
+  messages: AcpChatMessage[],
+  contents: string[],
+): { messages: AcpChatMessage[]; remaining: string[]; attachedCount: number } {
+  let next = messages
+  const remaining: string[] = []
+  let attachedCount = 0
+  for (const content of contents) {
+    const attached = attachMarkProposalsToCurrentTurn(next, content)
+    if (!attached.attached) {
+      remaining.push(content)
+      continue
+    }
+    next = attached.messages
+    attachedCount += attached.proposalCount ?? 0
+  }
+  return { messages: next, remaining, attachedCount }
+}
+
 function applyToolCallUpdate(
   messages: AcpChatMessage[],
   update: Record<string, unknown>,
@@ -305,6 +398,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
       historyOpen: false,
       preferredConfigByRuntime: {},
       pendingPermission: null,
+      pendingMarkProposalSnapshotContents: [],
       composerFocusNonce: 0,
       composerInsertNonce: 0,
 
@@ -429,8 +523,9 @@ export const useAcpUiStore = create<AcpUiStore>()(
       },
 
       appendUserMessage: (text, attachments) =>
-        set((s) =>
-          patchActiveThread(s, (t) => {
+        set((s) => ({
+          pendingMarkProposalSnapshotContents: [],
+          ...patchActiveThread(s, (t) => {
             const messages = [
               ...t.messages,
               {
@@ -448,7 +543,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
               updatedAt: Date.now(),
             }
           }),
-        ),
+        })),
 
       appendSystemMessage: (text) =>
         set((s) =>
@@ -486,14 +581,15 @@ export const useAcpUiStore = create<AcpUiStore>()(
         ),
 
       clearMessages: () =>
-        set((s) =>
-          patchActiveThread(s, (t) => ({
+        set((s) => ({
+          pendingMarkProposalSnapshotContents: [],
+          ...patchActiveThread(s, (t) => ({
             ...t,
             messages: [],
             title: '新对话',
             updatedAt: Date.now(),
           })),
-        ),
+        })),
 
       finishStreaming: () =>
         set((s) => ({
@@ -519,6 +615,33 @@ export const useAcpUiStore = create<AcpUiStore>()(
             }
           }),
         })),
+
+      attachMarkProposalsFromSnapshot: (content) =>
+        set((s) => {
+          let remaining = [...s.pendingMarkProposalSnapshotContents, content]
+          let attachedCount = 0
+          const patched = patchActiveThread(s, (t) => {
+            const attached = attachPendingMarkProposals(t.messages, remaining)
+            remaining = attached.remaining.slice(-3)
+            attachedCount = attached.attachedCount
+            const hasStreamingAgent = attached.messages.some(
+              (message) => message.role === 'agent' && message.streaming,
+            )
+            return {
+              ...t,
+              messages: hasStreamingAgent
+                ? attached.messages
+                : finalizeThreadMessages(attached.messages),
+              updatedAt: Date.now(),
+            }
+          })
+          acpDevLog('mark-proposal snapshot result', {
+            chars: content.length,
+            attachedCount,
+            queuedCount: remaining.length,
+          })
+          return { ...patched, pendingMarkProposalSnapshotContents: remaining }
+        }),
 
       resolveMarkProposal: (proposalId, status) =>
         set((s) =>
@@ -554,6 +677,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
             activeThreadId: thread.id,
             prompting: false,
             historyOpen: false,
+            pendingMarkProposalSnapshotContents: [],
           }
         })
         return thread.id
@@ -576,6 +700,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           prompting: false,
           historyOpen: false,
           threads,
+          pendingMarkProposalSnapshotContents: [],
         })
       },
 
@@ -647,13 +772,52 @@ export const useAcpUiStore = create<AcpUiStore>()(
         }
 
         if (kind === 'tool_call' || kind === 'tool_call_update') {
-          set((s) =>
-            patchActiveThread(s, (t) => ({
-              ...t,
-              messages: applyToolCallUpdate(t.messages, update),
-              updatedAt: Date.now(),
-            })),
-          )
+          set((s) => {
+            let remaining = s.pendingMarkProposalSnapshotContents
+            let attachedCount = 0
+            let proposalToolTitle: string | undefined
+            const toolCallId =
+              typeof update.toolCallId === 'string'
+                ? update.toolCallId
+                : typeof update.tool_call_id === 'string'
+                  ? update.tool_call_id
+                  : undefined
+            const patched = patchActiveThread(s, (t) => {
+              const updated = applyToolCallUpdate(t.messages, update)
+              const currentTool = [...updated]
+                .reverse()
+                .find(
+                  (message) =>
+                    message.role === 'tool' &&
+                    message.toolCallId === toolCallId,
+                )
+              proposalToolTitle = currentTool?.toolTitle
+              const attached = attachPendingMarkProposals(updated, remaining)
+              remaining = attached.remaining
+              attachedCount = attached.attachedCount
+              const hasStreamingAgent = attached.messages.some(
+                (message) => message.role === 'agent' && message.streaming,
+              )
+              return {
+                ...t,
+                messages: hasStreamingAgent
+                  ? attached.messages
+                  : finalizeThreadMessages(attached.messages),
+                updatedAt: Date.now(),
+              }
+            })
+            if (isProposeMarkToolTitle(proposalToolTitle)) {
+              acpDevLog('mark-proposal tool update', {
+                toolCallId,
+                title: proposalToolTitle,
+                status: update.status,
+                queuedBefore: s.pendingMarkProposalSnapshotContents.length,
+                attachedCount,
+                queuedAfter: remaining.length,
+              })
+            }
+            return { ...patched, pendingMarkProposalSnapshotContents: remaining }
+          })
           return
         }
 
@@ -691,12 +855,21 @@ export const useAcpUiStore = create<AcpUiStore>()(
                   ...prev,
                   toolContentText: merged,
                   text: merged,
-                  streaming: true,
+                  // prompt 已结束时，结果分块仍可能晚到；不可把已完成工具重新标为流式，
+                  // 否则不会重新解析为提议卡。
+                  streaming: isToolActiveStatus(prev.toolStatus),
                   updatedAt: Date.now(),
                   toolStatus: prev.toolStatus ?? 'in_progress',
                 }
               }
-              return { ...t, messages, updatedAt: Date.now() }
+              const hasStreamingAgent = messages.some(
+                (message) => message.role === 'agent' && message.streaming,
+              )
+              return {
+                ...t,
+                messages: hasStreamingAgent ? messages : finalizeThreadMessages(messages),
+                updatedAt: Date.now(),
+              }
             }),
           )
           return

@@ -24,6 +24,7 @@ import { registerSelectionProvider, commitReaderSelection, clearReaderSelection 
 import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { scrollEpubChapterInRendition } from '@/lib/reader/epub-scroll-toc'
+import { stopPendingEpubRenditionWork } from '@/lib/reader/epub-rendition-lifecycle'
 import {
   collectEpubSpineItems,
   labelForSpineHref,
@@ -870,6 +871,9 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       selectionCleanupRef.current = null
       rendition.off('relocated', onRelocated)
       rendition.off('rendered', onRendered)
+      // epub.js 的 destroy 不会停止构造期 requestAnimationFrame 队列；先清掉，
+      // 避免卸载/HMR 后遗留的 Rendition.start 读取已销毁的 book。
+      stopPendingEpubRenditionWork(rendition)
       book.destroy()
       bookRef.current = null
       renditionRef.current = null

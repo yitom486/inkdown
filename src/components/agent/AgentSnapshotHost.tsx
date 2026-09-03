@@ -7,6 +7,8 @@ import {
   markProposalDevLog,
 } from '@/lib/agent/context/mark-proposal-dev-log'
 import { resolveInkdownSnapshot } from '@/lib/agent/context/virtual-fs-resolver'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
+import { useAnnotationAgentStore } from '@/stores/annotation-agent-store'
 
 /**
  * 挂在 App 根：应答主进程对 Inkdown 内存快照的请求。
@@ -37,6 +39,11 @@ export function AgentSnapshotHost() {
               ms: Math.round(performance.now() - started),
               chars: content.length,
             })
+            // codex-acp 仅显示 MCP 工具名，不会在 session/update 回传 result.content。
+            // 在快照响应的源头绑定 JSON，回合结束时即可挂到最终 Agent 回复。
+            if (!useAnnotationAgentStore.getState().capturing) {
+              useAcpUiStore.getState().attachMarkProposalsFromSnapshot(content)
+            }
           } else {
             acpDevLog('snapshot served', { resource: event.resource, chars: content.length })
           }
