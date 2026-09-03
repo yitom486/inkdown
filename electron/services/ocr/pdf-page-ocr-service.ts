@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises'
-import { pdf } from 'pdf-to-img'
 import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 import { normalizeOcrWords } from '@shared/reader/ocr-page-words'
@@ -12,6 +11,11 @@ import { extractTesseractWords } from './tesseract-words'
 import { recognizeImageWithBlocks } from './recognize-image'
 
 const OCR_SCALE = DEFAULT_PDF_OCR_SCALE
+
+async function loadPdfConverter() {
+  const mod = await import('pdf-to-img')
+  return mod.pdf
+}
 
 function readPngSize(image: Buffer): { width: number; height: number } {
   return {
@@ -26,6 +30,7 @@ async function renderPdfPageImage(
   scale: PdfOcrScale = OCR_SCALE,
 ): Promise<{ image: Buffer; width: number; height: number }> {
   const data = await readFile(filePath)
+  const pdf = await loadPdfConverter()
   const doc = await pdf(data, { scale })
   let current = 0
   for await (const image of doc) {

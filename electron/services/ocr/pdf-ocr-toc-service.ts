@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises'
-import { pdf } from 'pdf-to-img'
 import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 import {
@@ -13,6 +12,11 @@ import { writePdfOcrTocCache } from './ocr-toc-cache'
 import { ensureOcrComponent } from './ocr-component-manager'
 import { getOcrWorker } from './ocr-worker'
 import { recognizeImageWithBlocks } from './recognize-image'
+
+async function loadPdfConverter() {
+  const mod = await import('pdf-to-img')
+  return mod.pdf
+}
 
 export async function recognizePdfToc(
   payload: RecognizePdfTocPayload,
@@ -28,6 +32,7 @@ export async function recognizePdfToc(
     if (!component.ok) return component
 
     const data = await readFile(filePath)
+    const pdf = await loadPdfConverter()
     const doc = await pdf(data, { scale })
     const worker = await getOcrWorker()
 

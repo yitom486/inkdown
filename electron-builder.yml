@@ -7,7 +7,7 @@ publish:
 directories:
   buildResources: resources
   output: release
-# 渲染进程已由 Vite 打进 out/，主进程无 npm 依赖，无需整包 node_modules
+# 主进程仅包含运行时必需依赖（updater 与 PDF OCR 图片转换），渲染端由 Vite 打进 out/
 files:
   - out/**/*
   - package.json
@@ -25,7 +25,9 @@ files:
   - node_modules/universalify/**/*
   - node_modules/argparse/**/*
   - node_modules/sax/**/*
-  - '!node_modules'
+  - node_modules/pdf-to-img/**/*
+  - node_modules/pdfjs-dist/**/*
+  - '!node_modules/{@codemirror,codemirror,@lingo-reader,@tanstack,@vscode,dompurify,epubjs,highlight.js,katex,markdown-it,markdown-it-task-lists,mermaid,next-themes,radix-ui,react,react-dom,react-resizable-panels,sonner,zustand,d3,d3-*,cytoscape*,dagre*,cose-base,layout-base,khroma,stylus,pug,coffeescript}/**'
 electronLanguages:
   - zh-CN
   - en-US
