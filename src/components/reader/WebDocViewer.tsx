@@ -76,6 +76,7 @@ import {
 } from '@/lib/reader/reader-selection-dismiss'
 import { copyTextToClipboard, type PdfSelectionSnapshot } from '@/lib/reader/pdf-selection'
 import { applyCopyButtonFeedback, getCodeBlockTextFromCopyButton } from '@/lib/preview/code-block-copy'
+import { activateWebDocCodeTab } from '@/lib/reader/web-doc-code-blocks'
 import {
   resolveWebChapter,
   tocFromWebUnits,
@@ -559,9 +560,17 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         }, WEB_PROGRESS_SAVE_MS)
       }
 
-      const onCopyCodeBlock = (event: MouseEvent) => {
+      const onCodeChromeClick = (event: MouseEvent) => {
         const target = event.target
         if (!(target instanceof Element)) return
+
+        const tab = target.closest<HTMLElement>('[data-web-doc-tab]')
+        if (tab) {
+          event.preventDefault()
+          event.stopPropagation()
+          activateWebDocCodeTab(tab)
+          return
+        }
 
         const button = target.closest<HTMLButtonElement>('.code-block-copy')
         if (!button) return
@@ -630,7 +639,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         })
       }
 
-      doc.addEventListener('click', onCopyCodeBlock)
+      doc.addEventListener('click', onCodeChromeClick)
       doc.addEventListener('pointerdown', onPointerDownCapture, true)
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
@@ -641,7 +650,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       syncActiveHeadingFromScroll()
 
       frameCleanupRef.current = () => {
-        doc.removeEventListener('click', onCopyCodeBlock)
+        doc.removeEventListener('click', onCodeChromeClick)
         doc.removeEventListener('pointerdown', onPointerDownCapture, true)
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)

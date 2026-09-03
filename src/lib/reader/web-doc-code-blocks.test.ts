@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { getCodeBlockTextFromCopyButton } from '@/lib/preview/code-block-copy'
-import { enhanceWebDocCodeBlocks } from './web-doc-code-blocks'
+import { activateWebDocCodeTab, enhanceWebDocCodeBlocks } from './web-doc-code-blocks'
 import { buildWebDocReaderDocument } from './web-doc-html'
 
 describe('enhanceWebDocCodeBlocks', () => {
@@ -42,6 +42,62 @@ describe('enhanceWebDocCodeBlocks', () => {
     document.body.innerHTML = enhanced
     const button = document.querySelector('.code-block-copy')!
     expect(getCodeBlockTextFromCopyButton(button)).toBe('$ curl minikube')
+    document.body.innerHTML = ''
+  })
+
+  it('MkDocs tabbed-set 转为可切换的语言 Tab，默认 Python', () => {
+    const html = `
+      <div class="tabbed-set tabbed-alternate" data-tabs="1:3">
+        <input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" />
+        <input id="__tabbed_1_2" name="__tabbed_1" type="radio" />
+        <input id="__tabbed_1_3" name="__tabbed_1" type="radio" />
+        <div class="tabbed-labels">
+          <label for="__tabbed_1_1">Python</label>
+          <label for="__tabbed_1_2">C++</label>
+          <label for="__tabbed_1_3">Java</label>
+        </div>
+        <div class="tabbed-content">
+          <div class="tabbed-block">
+            <div class="highlight"><span class="filename">a.py</span><pre><code>def f(): pass</code></pre></div>
+          </div>
+          <div class="tabbed-block">
+            <div class="highlight"><span class="filename">a.cpp</span><pre><code>int main(){}</code></pre></div>
+          </div>
+          <div class="tabbed-block">
+            <div class="highlight"><span class="filename">a.java</span><pre><code>class A{}</code></pre></div>
+          </div>
+        </div>
+      </div>`
+
+    const enhanced = enhanceWebDocCodeBlocks(html)
+    document.body.innerHTML = enhanced
+
+    expect(enhanced).toContain('web-doc-tabs')
+    expect(enhanced).not.toContain('tabbed-set')
+    expect(enhanced).not.toContain('PythonC++')
+    expect(document.querySelectorAll('[data-web-doc-tab]')).toHaveLength(3)
+
+    const pythonTab = [...document.querySelectorAll('[data-web-doc-tab]')].find(
+      (el) => el.textContent === 'Python',
+    )!
+    const cppTab = [...document.querySelectorAll('[data-web-doc-tab]')].find(
+      (el) => el.textContent === 'C++',
+    )!
+    expect(pythonTab.getAttribute('aria-selected')).toBe('true')
+    expect(document.body.textContent).toContain('def f(): pass')
+    expect(document.querySelector('[data-tab-index="1"][role="tabpanel"]')?.hasAttribute('hidden')).toBe(
+      true,
+    )
+
+    activateWebDocCodeTab(cppTab)
+    expect(cppTab.getAttribute('aria-selected')).toBe('true')
+    expect(pythonTab.getAttribute('aria-selected')).toBe('false')
+    expect(document.querySelector('[data-tab-index="1"][role="tabpanel"]')?.hasAttribute('hidden')).toBe(
+      false,
+    )
+    expect(document.body.textContent).toContain('int main(){}')
+    expect(enhanced).toContain('class="code-block-lang">python')
+
     document.body.innerHTML = ''
   })
 })

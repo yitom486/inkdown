@@ -1,9 +1,39 @@
 import type { WebDocSiteId } from '@shared/types/web-doc'
 
+const EDIT_PAGE_LABEL =
+  /编辑此页|编辑本页|在\s*github\s*上编辑|edit this page|edit this file|edit on github|improve this page/i
+
+/** MkDocs Material / 常见 docs：「编辑此页」等站点控件，非正文插图 */
+function stripDocsEditChrome(root: HTMLElement): void {
+  root.querySelectorAll('a.md-content__button, .md-content__button, a.md-source').forEach((node) => {
+    node.remove()
+  })
+
+  root.querySelectorAll('a[title], a[aria-label]').forEach((anchor) => {
+    const label = `${anchor.getAttribute('title') ?? ''} ${anchor.getAttribute('aria-label') ?? ''}`
+    if (EDIT_PAGE_LABEL.test(label)) {
+      anchor.remove()
+    }
+  })
+
+  // GitHub 源码/编辑链且几乎只有图标（无尺寸 SVG 会撑满阅读区）
+  root.querySelectorAll('a[href*="github.com"]').forEach((anchor) => {
+    const href = anchor.getAttribute('href') ?? ''
+    if (!/\/(edit|blob|tree)\//.test(href)) return
+    const text = (anchor.textContent ?? '').replace(/\s+/g, ' ').trim()
+    const hasIcon = Boolean(anchor.querySelector('svg, img'))
+    if (hasIcon && text.length < 12) {
+      anchor.remove()
+    }
+  })
+}
+
 function stripGenericChrome(root: HTMLElement): void {
   root.querySelectorAll('button, form, [role="navigation"], nav, script, iframe, object, embed').forEach(
     (node) => node.remove(),
   )
+
+  stripDocsEditChrome(root)
 
   // 常见 docs 主题：面包屑工具条、标题旁「复制链接」图标（不绑域名）
   root.querySelectorAll('div').forEach((div) => {

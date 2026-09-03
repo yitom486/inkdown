@@ -12,6 +12,9 @@ import {
 } from '@/lib/reader/web-doc/people-daily-extract'
 
 const GENERIC_ARTICLE_SELECTORS = [
+  'article.md-content__inner',
+  '.md-content__inner.md-typeset',
+  '.md-content__inner',
   'article',
   'main',
   '[role="main"]',
@@ -19,6 +22,8 @@ const GENERIC_ARTICLE_SELECTORS = [
   '#__next main',
   '.docs-content',
   '.doc-content',
+  '.md-typeset',
+  '.md-content',
   '.content',
 ]
 
@@ -177,6 +182,8 @@ export function buildWebDocReaderDocument(
     a[data-inkdown-href] { cursor: pointer; }
     pre { overflow-x: auto; }
     img { max-width: 100%; height: auto; }
+    /* 无宽高的图标 SVG（如「编辑此页」）否则会按 viewBox 撑满版面 */
+    svg { max-width: 100%; height: auto; max-height: min(70vh, 28rem); }
     .people-daily-edition-nav {
       display: flex;
       flex-wrap: wrap;

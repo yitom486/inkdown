@@ -44,6 +44,32 @@ describe('web-doc-html', () => {
     expect(root.querySelector('a')?.getAttribute('href')).toBe('#intro')
   })
 
+  it('剥离 MkDocs「编辑此页」图标按钮', () => {
+    const html = `<!DOCTYPE html><html><body>
+      <article class="md-content__inner md-typeset">
+        <a href="https://github.com/krahets/hello-algo/tree/main/docs/x.md"
+           title="编辑此页" class="md-content__button md-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M1"/></svg>
+        </a>
+        <h1>14.1 初探动态规划</h1>
+        <p>正文段落</p>
+        <p><img src="/assets/dp.png" alt="动态规划示意图" /></p>
+      </article>
+    </body></html>`
+
+    const result = extractWebDocArticle(
+      html,
+      'https://www.hello-algo.com/chapter_dynamic_programming/intro_to_dynamic_programming/',
+      'generic-ssr',
+    )
+    expect(result.bodyHtml).toContain('14.1 初探动态规划')
+    expect(result.bodyHtml).toContain('正文段落')
+    expect(result.bodyHtml).toContain('动态规划示意图')
+    expect(result.bodyHtml).not.toContain('编辑此页')
+    expect(result.bodyHtml).not.toContain('md-content__button')
+    expect(result.bodyHtml).not.toContain('viewBox="0 0 512 512"')
+  })
+
   it('react.dev 页头控件会被剥离', () => {
     const html = `<!DOCTYPE html><html><body><article>
       <div class="flex justify-between items-start">

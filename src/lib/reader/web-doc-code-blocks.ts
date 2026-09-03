@@ -7,6 +7,36 @@ const LANG_CLASS = /\blang-([\w-]+)\b/i
 const SP_LANG_CLASS = /\bsp-(javascript|typescript|jsx|tsx|json|css|html|bash|shell|python|java|go|rust|yaml|markdown|md)\b/i
 const HLJS_LANG_CLASS = /\bhljs-([\w-]+)\b/i
 
+/** MkDocs / pymdownx 多语言 Tab 标签 → 工具栏语言名 */
+const TABBED_LABEL_LANG: Record<string, string> = {
+  python: 'python',
+  'c++': 'cpp',
+  cpp: 'cpp',
+  java: 'java',
+  'c#': 'csharp',
+  csharp: 'csharp',
+  go: 'go',
+  golang: 'go',
+  swift: 'swift',
+  js: 'javascript',
+  javascript: 'javascript',
+  ts: 'typescript',
+  typescript: 'typescript',
+  dart: 'dart',
+  rust: 'rust',
+  c: 'c',
+  kotlin: 'kotlin',
+  ruby: 'ruby',
+}
+
+function langFromTabLabel(label: string): string {
+  const key = label.trim().toLowerCase()
+  const mapped = TABBED_LABEL_LANG[key]
+  if (mapped) return mapped
+  const cleaned = key.replace(/[^a-z0-9#+.-]/gi, '')
+  return cleaned || 'text'
+}
+
 function inferLanguageFromContent(text: string): string | null {
   const sample = text.trim().slice(0, 400)
   if (!sample) return null
@@ -40,7 +70,8 @@ function detectCodeLanguage(node: Element): string {
   const dataLang =
     node.getAttribute('data-language') ??
     node.getAttribute('data-lang') ??
-    node.querySelector('code')?.getAttribute('data-language')
+    node.querySelector('code')?.getAttribute('data-language') ??
+    node.closest('[data-language]')?.getAttribute('data-language')
   if (dataLang?.trim()) return dataLang.trim().toLowerCase()
 
   const pre = node.tagName === 'PRE' ? node : node.querySelector('pre')
@@ -116,13 +147,128 @@ function wrapCodeBlockHost(host: HTMLElement): void {
   }
 }
 
+/**
+ * 将 MkDocs pymdownx `tabbed-set`（无站点 CSS 时语言名会粘成 PythonC++Java…）
+ * 转为可读的语言切换 Tab；优先保留默认选中项，否则优先 Python。
+ */
+export function normalizeWebDocTabbedSets(root: ParentNode): void {
+  const sets = [...root.querySelectorAll('.tabbed-set')]
+  for (const set of sets) {
+    if (!(set instanceof HTMLElement)) continue
+    const doc = set.ownerDocument
+    if (!doc) continue
+
+    const labels = [...set.querySelectorAll('.tabbed-labels > label')].map(
+      (node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    )
+    const blocks = [...set.querySelectorAll('.tabbed-content > .tabbed-block')]
+    if (labels.length === 0 || blocks.length === 0) {
+      set.querySelector('.tabbed-labels')?.remove()
+      set.querySelectorAll('input[type="radio"]').forEach((node) => node.remove())
+      continue
+    }
+
+    const count = Math.min(labels.length, blocks.length)
+    let activeIndex = 0
+    const checked = set.querySelector('input[type="radio"][checked], input[type="radio"]:checked')
+    if (checked instanceof HTMLInputElement) {
+      const inputs = [...set.querySelectorAll('input[type="radio"]')]
+      const idx = inputs.indexOf(checked)
+      if (idx >= 0 && idx < count) activeIndex = idx
+    } else {
+      const pythonIdx = labels.findIndex((label, i) => i < count && /^python$/i.test(label))
+      if (pythonIdx >= 0) activeIndex = pythonIdx
+    }
+
+    const tabs = doc.createElement('div')
+    tabs.className = 'web-doc-tabs'
+
+    const bar = doc.createElement('div')
+    bar.className = 'web-doc-tabs-bar'
+    bar.setAttribute('role', 'tablist')
+    bar.setAttribute('aria-label', '代码语言')
+
+    const panels = doc.createElement('div')
+    panels.className = 'web-doc-tabs-panels'
+
+    for (let i = 0; i < count; i++) {
+      const label = labels[i] || `Lang ${i + 1}`
+      const lang = langFromTabLabel(label)
+      const selected = i === activeIndex
+
+      const tab = doc.createElement('button')
+      tab.type = 'button'
+      tab.className = 'web-doc-tabs-tab'
+      tab.setAttribute('role', 'tab')
+      tab.setAttribute('aria-selected', selected ? 'true' : 'false')
+      tab.setAttribute('data-tab-index', String(i))
+      tab.setAttribute('data-web-doc-tab', '')
+      tab.textContent = label
+      bar.appendChild(tab)
+
+      const panel = doc.createElement('div')
+      panel.className = 'web-doc-tabs-panel'
+      panel.setAttribute('role', 'tabpanel')
+      panel.setAttribute('data-tab-index', String(i))
+      panel.setAttribute('data-language', lang)
+      if (!selected) panel.setAttribute('hidden', '')
+
+      const block = blocks[i]
+      if (block) {
+        while (block.firstChild) {
+          panel.appendChild(block.firstChild)
+        }
+      }
+
+      // 供后续 code-block 包装识别语言（highlight 往往不带 language-*）
+      panel.querySelectorAll('pre, code, .highlight').forEach((node) => {
+        if (!(node instanceof HTMLElement)) return
+        if (!LANGUAGE_CLASS.test(node.className) && !LANG_CLASS.test(node.className)) {
+          node.setAttribute('data-language', lang)
+        }
+      })
+
+      panels.appendChild(panel)
+    }
+
+    tabs.appendChild(bar)
+    tabs.appendChild(panels)
+    set.replaceWith(tabs)
+  }
+}
+
+/** iframe 内切换 web-doc 多语言代码 Tab */
+export function activateWebDocCodeTab(tabButton: Element): boolean {
+  if (!(tabButton instanceof HTMLElement)) return false
+  const root = tabButton.closest('.web-doc-tabs')
+  if (!root) return false
+  const index = tabButton.getAttribute('data-tab-index')
+  if (index == null) return false
+
+  root.querySelectorAll('[role="tab"]').forEach((btn) => {
+    const selected = btn.getAttribute('data-tab-index') === index
+    btn.setAttribute('aria-selected', selected ? 'true' : 'false')
+  })
+  root.querySelectorAll('[role="tabpanel"]').forEach((panel) => {
+    if (!(panel instanceof HTMLElement)) return
+    if (panel.getAttribute('data-tab-index') === index) {
+      panel.removeAttribute('hidden')
+    } else {
+      panel.setAttribute('hidden', '')
+    }
+  })
+  return true
+}
+
 /** 为在线文档正文中的 pre/code 注入与 Markdown 预览一致的复制工具栏 */
 export function enhanceWebDocCodeBlocks(html: string): string {
-  if (!html.includes('<pre')) return html
+  if (!html.includes('<pre') && !html.includes('tabbed-set')) return html
 
   const doc = new DOMParser().parseFromString(`<div id="web-doc-code-root">${html}</div>`, 'text/html')
   const root = doc.getElementById('web-doc-code-root')
   if (!root) return html
+
+  normalizeWebDocTabbedSets(root)
 
   for (const host of collectCodeBlockHosts(root)) {
     wrapCodeBlockHost(host)
@@ -141,12 +287,51 @@ export function buildWebDocCodeBlockCss(mode: EpubThemeMode): string {
   const primary = mode === 'dark' ? '#fafafa' : '#18181b'
 
   return `
+    .web-doc-tabs {
+      margin: 1em 0 !important;
+    }
+    .web-doc-tabs-bar {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 0.35rem !important;
+      margin: 0 0 0.5rem !important;
+    }
+    .web-doc-tabs-tab {
+      appearance: none !important;
+      border: 1px solid ${border} !important;
+      border-radius: 0.375rem !important;
+      background: ${toolbar} !important;
+      color: ${muted} !important;
+      padding: 0.2rem 0.55rem !important;
+      font-size: 0.75rem !important;
+      font-family: ui-sans-serif, system-ui, sans-serif !important;
+      line-height: 1.3 !important;
+      cursor: pointer !important;
+    }
+    .web-doc-tabs-tab[aria-selected="true"] {
+      background: ${surface} !important;
+      color: ${primary} !important;
+      border-color: ${primary} !important;
+    }
+    .web-doc-tabs-panel[hidden] {
+      display: none !important;
+    }
+    .web-doc-tabs .filename {
+      display: block !important;
+      margin: 0 0 0.35rem !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      font-size: 0.75rem !important;
+      color: ${muted} !important;
+    }
     .code-block {
       margin: 1em 0 !important;
       overflow: hidden !important;
       border: 1px solid ${border} !important;
       border-radius: 0.5rem !important;
       background: ${surface} !important;
+    }
+    .web-doc-tabs .code-block {
+      margin: 0 !important;
     }
     .code-block-toolbar {
       display: flex !important;
