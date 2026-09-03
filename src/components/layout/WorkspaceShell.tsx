@@ -33,6 +33,9 @@ export interface WorkspaceShellProps {
   readOnly?: boolean
   onOpenFile: () => void
   onOpenFolder: () => void
+  onQuickOpen?: () => void
+  onFind?: () => void
+  onReplace?: () => void
   onOpenWebDoc?: (url: string) => void
   onRescanWorkspace?: () => void
   isRescanningWorkspace?: boolean
@@ -71,6 +74,9 @@ export function WorkspaceShell({
   readOnly = false,
   onOpenFile,
   onOpenFolder,
+  onQuickOpen,
+  onFind,
+  onReplace,
   onOpenWebDoc,
   onRescanWorkspace,
   isRescanningWorkspace,
@@ -128,6 +134,9 @@ export function WorkspaceShell({
         onToggleTheme={onToggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
+        onQuickOpen={onQuickOpen}
+        onFind={onFind}
+        onReplace={onReplace}
         onOpenRecentFile={onOpenRecentFile}
         onSave={onSave}
         onSaveAs={onSaveAs}

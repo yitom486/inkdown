@@ -86,6 +86,8 @@ export interface ElectronAPI {
   confirmClose: (decision: 'proceed' | 'cancel') => void
   /** 监听主进程「请关闭窗口」；返回取消订阅 */
   onRequestClose: (callback: () => void) => () => void
+  /** 监听主进程全局快捷键动作（quick-open / find / replace 等）；返回取消订阅 */
+  onGlobalAction?: (callback: (action: string) => void) => () => void
   /** 打开文件对话框（文档） */
   openFile: (options?: OpenDialogOptions) => Promise<Result<OpenDocumentResult, AppError>>
   /** 打开文件夹对话框（工作区根） */

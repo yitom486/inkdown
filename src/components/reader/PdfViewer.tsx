@@ -78,6 +78,7 @@ import {
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
 import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
+import { saveAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr-prefetch'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -1195,6 +1196,20 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     [currentPdfChapter, filePath, marks, marksToc],
   )
 
+  const handleExportAnkiCards = useCallback(
+    (scope: ReadingNotesScope) => {
+      void saveAnkiCardsExport({
+        marks,
+        toc: marksToc,
+        scope,
+        currentChapter: scope === 'chapter' ? currentPdfChapter : null,
+        filePath,
+        resolveChapter: resolvePdfChapter,
+      })
+    },
+    [currentPdfChapter, filePath, marks, marksToc],
+  )
+
   const estimatedPageHeight = Math.max(120, scaledPageSize.height)
   const estimatedPageWidth = Math.max(120, scaledPageSize.width)
 
@@ -1332,6 +1347,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         onDeleteMark={(mark) => void handleDeleteMark(mark)}
         onCloseMarks={() => setMarksOpen(false)}
         onExportNotes={handleExportNotes}
+        onExportAnkiCards={handleExportAnkiCards}
         marksToc={marksToc}
         marksCurrentChapterKey={currentPdfChapter.key}
         marksResolveChapter={resolvePdfChapter}

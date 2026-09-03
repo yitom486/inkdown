@@ -116,6 +116,31 @@ export function createWindow(options: { fresh?: boolean } = {}): void {
     if (input.control && input.shift && input.key.toLowerCase() === 'i') {
       window.webContents.toggleDevTools()
       event.preventDefault()
+      return
+    }
+
+    const mod = input.control || input.meta
+    if (mod && !input.shift && !input.alt) {
+      const key = input.key.toLowerCase()
+      const code = input.code
+
+      if (key === 'p' || code === 'KeyP') {
+        event.preventDefault()
+        window.webContents.send(IPC.APP_GLOBAL_ACTION, 'quick-open')
+        return
+      }
+
+      if (key === 'f' || code === 'KeyF') {
+        event.preventDefault()
+        window.webContents.send(IPC.APP_GLOBAL_ACTION, 'find')
+        return
+      }
+
+      if (key === 'h' || code === 'KeyH') {
+        event.preventDefault()
+        window.webContents.send(IPC.APP_GLOBAL_ACTION, 'replace')
+        return
+      }
     }
   })
 

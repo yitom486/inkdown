@@ -70,6 +70,7 @@ import {
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
 import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
+import { saveAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
@@ -1006,6 +1007,27 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     [chapters, currentUnitId, filePath, marks],
   )
 
+  const handleExportAnkiCards = useCallback(
+    (scope: ReadingNotesScope) => {
+      const toc = tocFromEpubUnits(chapters)
+      const currentKey = currentUnitId ? normalizeLoadKey(currentUnitId) : ''
+      const currentHits = toc.filter((entry) => entry.matchKey === currentKey)
+      const currentChapter =
+        currentHits.length > 0
+          ? currentHits.reduce((best, item) => (item.level >= best.level ? item : best))
+          : null
+      void saveAnkiCardsExport({
+        marks,
+        toc,
+        scope,
+        currentChapter: scope === 'chapter' ? currentChapter : null,
+        filePath,
+        resolveChapter: resolveEpubChapter,
+      })
+    },
+    [chapters, currentUnitId, filePath, marks],
+  )
+
   const readerHost = (
     <PaneErrorBoundary name="EPUB 阅读" filePath={filePath}>
       <div
@@ -1054,6 +1076,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         onDeleteMark={(mark) => void handleDeleteMark(mark)}
         onCloseMarks={closeMarks}
         onExportNotes={handleExportNotes}
+        onExportAnkiCards={handleExportAnkiCards}
         marksToc={tocFromEpubUnits(chapters)}
         marksCurrentChapterKey={currentUnitId ? normalizeLoadKey(currentUnitId) : undefined}
         marksResolveChapter={resolveEpubChapter}

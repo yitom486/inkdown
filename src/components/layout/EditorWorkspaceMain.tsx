@@ -38,6 +38,8 @@ import { useAppSettingsStore } from '@/stores/app-settings-store'
 
 export interface EditorWorkspaceMainHandle {
   selectHeading: (heading: MarkdownHeading) => void
+  openFind: () => void
+  openReplace: () => void
 }
 
 export interface EditorOutlineState {
@@ -186,6 +188,8 @@ export const EditorWorkspaceMain = forwardRef<
     ref,
     () => ({
       selectHeading: handleSelectHeading,
+      openFind: () => setFindReplace({ open: true, mode: 'find' }),
+      openReplace: () => setFindReplace({ open: true, mode: 'replace' }),
     }),
     [handleSelectHeading],
   )
@@ -209,22 +213,28 @@ export const EditorWorkspaceMain = forwardRef<
   }, [headings, updateActiveHeading, viewMode])
 
   useEffect(() => {
-    if (!filePath) return
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
 
       const key = event.key.toLowerCase()
-      if (key === 'f') {
-        event.preventDefault()
-        setFindReplace({ open: true, mode: 'find' })
+      const code = event.code
+
+      if (key === 'f' || code === 'KeyF') {
+        if (filePath) {
+          event.preventDefault()
+          setFindReplace({ open: true, mode: 'find' })
+        }
         return
       }
-      if (key === 'h') {
-        event.preventDefault()
-        setFindReplace({ open: true, mode: 'replace' })
+      if (key === 'h' || code === 'KeyH') {
+        if (filePath) {
+          event.preventDefault()
+          setFindReplace({ open: true, mode: 'replace' })
+        }
         return
       }
+
+      if (!filePath) return
 
       const shortcuts: Record<string, EditorViewMode> = {
         '1': 'editor',
@@ -238,8 +248,8 @@ export const EditorWorkspaceMain = forwardRef<
       setViewMode(filePath, nextMode)
     }
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [filePath, setViewMode])
 
   return (

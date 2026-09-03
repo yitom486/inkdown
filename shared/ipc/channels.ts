@@ -23,6 +23,8 @@ export const IPC = {
   APP_SET_VERBOSE_LOGS: 'app:set-verbose-logs',
   /** send：再开一个主窗口（不恢复工作区） */
   APP_NEW_WINDOW: 'app:new-window',
+  /** main→renderer：触发全局快捷动作（quick-open / find / replace 等） */
+  APP_GLOBAL_ACTION: 'app:global-action',
   /** sendSync（preload）：取窗口启动参数，如 isFreshWindow */
   APP_GET_WINDOW_INIT: 'app:get-window-init',
   /** invoke：用系统默认浏览器打开外链 */

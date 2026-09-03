@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AboutDialog } from '@/components/shared/AboutDialog'
 import { DraftRecoveryDialog } from '@/components/shared/DraftRecoveryDialog'
 import { ErrorLogDialog } from '@/components/shared/ErrorLogDialog'
+import { QuickOpenDialog } from '@/components/shared/QuickOpenDialog'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
 import { AgentPermissionHost } from '@/components/agent/AgentPermissionHost'
@@ -42,6 +43,7 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [errorLogOpen, setErrorLogOpen] = useState(false)
+  const [quickOpen, setQuickOpen] = useState(false)
   const [outline, setOutline] = useState<EditorOutlineState>({ headings: [] })
   const editorMainRef = useRef<EditorWorkspaceMainHandle>(null)
   const webDocMainRef = useRef<WebDocWorkspaceMainHandle>(null)
@@ -202,11 +204,43 @@ function App() {
     restoreLastFileOnStartup,
   ])
 
+  const handleToggleQuickOpen = useCallback(() => {
+    setQuickOpen((prev) => !prev)
+  }, [])
+
+  const handleOpenFind = useCallback(() => {
+    if (filePath && isMarkdownDocument) {
+      editorMainRef.current?.openFind()
+    } else {
+      setQuickOpen(true)
+    }
+  }, [filePath, isMarkdownDocument])
+
+  const handleOpenReplace = useCallback(() => {
+    if (filePath && isMarkdownDocument) {
+      editorMainRef.current?.openReplace()
+    }
+  }, [filePath, isMarkdownDocument])
+
+  useEffect(() => {
+    return window.electronAPI?.onGlobalAction?.((action) => {
+      if (action === 'quick-open') {
+        handleToggleQuickOpen()
+      } else if (action === 'find') {
+        handleOpenFind()
+      } else if (action === 'replace') {
+        handleOpenReplace()
+      }
+    })
+  }, [handleOpenFind, handleOpenReplace, handleToggleQuickOpen])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+      const code = event.code
 
-      if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'b') {
+      if (mod && !event.shiftKey && !event.altKey && (key === 'b' || code === 'KeyB')) {
         if (!isMarkdownEditorFocused()) {
           event.preventDefault()
           toggleSidebar()
@@ -215,19 +249,38 @@ function App() {
       }
 
       if (!mod || event.shiftKey || event.altKey) return
-      if (event.key === ',') {
+      if (key === ',' || code === 'Comma') {
         event.preventDefault()
         setSettingsOpen(true)
+        return
       }
-      if (event.key.toLowerCase() === 'n') {
+      if (key === 'n' || code === 'KeyN') {
         event.preventDefault()
         appApi.newWindow()
+        return
+      }
+      if (key === 'p' || code === 'KeyP') {
+        event.preventDefault()
+        handleToggleQuickOpen()
+        return
+      }
+      if (key === 'f' || code === 'KeyF') {
+        event.preventDefault()
+        handleOpenFind()
+        return
+      }
+      if (key === 'h' || code === 'KeyH') {
+        if (filePath && isMarkdownDocument) {
+          event.preventDefault()
+          handleOpenReplace()
+        }
+        return
       }
     }
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [toggleSidebar])
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [filePath, handleOpenFind, handleOpenReplace, handleToggleQuickOpen, isMarkdownDocument, toggleSidebar])
 
   useEffect(() => {
     if (readerDocumentKind && filePath) {
@@ -306,6 +359,9 @@ function App() {
         readOnly={isReader || isWebDoc}
         onOpenFile={() => void openFile()}
         onOpenFolder={() => void openFolder()}
+        onQuickOpen={handleToggleQuickOpen}
+        onFind={handleOpenFind}
+        onReplace={handleOpenReplace}
         onOpenWebDoc={handleOpenWebDoc}
         onRescanWorkspace={() => void rescanWorkspace()}
         isRescanningWorkspace={isFileBusy}
@@ -356,6 +412,15 @@ function App() {
           />
         )}
       </WorkspaceShell>
+
+      <QuickOpenDialog
+        open={quickOpen}
+        onOpenChange={setQuickOpen}
+        fileTree={fileTree}
+        workspaceRoot={workspaceRoot}
+        recentFiles={recentFiles}
+        onSelectFile={(selectedPath) => void openFileFromTree(selectedPath)}
+      />
 
       <AboutDialog
         open={aboutOpen}

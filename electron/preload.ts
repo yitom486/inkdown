@@ -27,6 +27,13 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener(IPC.APP_REQUEST_CLOSE, handler)
     }
   },
+  onGlobalAction: (callback: (action: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, action: string): void => callback(action)
+    ipcRenderer.on(IPC.APP_GLOBAL_ACTION, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.APP_GLOBAL_ACTION, handler)
+    }
+  },
   openFile: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN, options),
   openFolder: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN_FOLDER, options),
   scanWorkspace: (rootPath: string) => ipcRenderer.invoke(IPC.FILE_SCAN_WORKSPACE, rootPath),

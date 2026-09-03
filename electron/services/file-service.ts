@@ -313,13 +313,13 @@ export async function exportMarkdownDocument(
 ): Promise<Result<ExportDocumentResult, AppError>> {
   try {
     const { canceled, filePath } = await resolveExportSavePath({
-      title: '导出 Markdown',
-      filters: markdownFilters,
+      title: payload.title ?? '导出 Markdown',
+      filters: payload.filters ?? markdownFilters,
       defaultPath: payload.suggestedName ?? 'export.md',
     })
 
     if (canceled || !filePath) {
-      return err({ code: 'CANCELLED', message: '已取消导出 Markdown' })
+      return err({ code: 'CANCELLED', message: payload.title ? `已取消${payload.title}` : '已取消导出 Markdown' })
     }
 
     await writeFile(filePath, payload.content, 'utf-8')

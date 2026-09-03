@@ -73,10 +73,12 @@ export interface ExportDocumentPayload {
   suggestedName?: string
 }
 
-/** 另存为 Markdown / 纯文本（笔记导出等） */
+/** 另存为 Markdown / 纯文本（笔记导出、Anki 卡片等） */
 export interface ExportMarkdownPayload {
   content: string
   suggestedName?: string
+  title?: string
+  filters?: Array<{ name: string; extensions: string[] }>
 }
 
 export interface ExportDocumentResult {

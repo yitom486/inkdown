@@ -57,9 +57,8 @@ export function AboutDialog({
         </DialogHeader>
 
         <div className="space-y-4 text-sm">
-          <p className="text-muted-foreground">
-            本地优先的桌面工作区：在同一窗口里写 Markdown、读 PDF / EPUB / MOBI、浏览在线文档，
-            并用 Agent 结合当前阅读上下文协助整理笔记与批注。
+          <p className="text-muted-foreground leading-relaxed">
+            本地优先的桌面知识工作区：在同一窗口里撰写 Markdown、深度阅读各类电子书（PDF / EPUB / MOBI / AZW3）与在线文档，并借助 Agent 感知阅读上下文、高效沉淀高亮与批注。
           </p>
 
           <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -122,7 +121,9 @@ export function AboutDialog({
             </Button>
           </div>
 
-          <p className="text-xs text-muted-foreground">基于 Electron · React · shadcn/ui 构建。</p>
+          <p className="text-xs text-muted-foreground">
+            基于 Electron · React 19 · TypeScript · CodeMirror 6 · ACP 协议构建。
+          </p>
         </div>
       </DialogContent>
     </Dialog>

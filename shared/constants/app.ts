@@ -3,7 +3,7 @@ export const APP_TITLE = 'Inkdown'
 
 /** 一句话产品说明（欢迎页、关于） */
 export const APP_TAGLINE =
-  'Markdown 编辑 · PDF / EPUB / MOBI 阅读 · 在线文档 · Agent 助手'
+  'Markdown 编辑 · 电子书深度阅读 (PDF/EPUB/MOBI/AZW3) · 在线文档 · Agent 伴读'
 
 export const APP_GITHUB_REPO = 'https://github.com/yitom486/inkdown'
 export const APP_GITHUB_RELEASES = `${APP_GITHUB_REPO}/releases`

@@ -403,23 +403,25 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       if (!(event.ctrlKey || event.metaKey)) return
 
       const key = event.key.toLowerCase()
-      if (key === 'o' && event.shiftKey) {
+      const code = event.code
+
+      if ((key === 'o' || code === 'KeyO') && event.shiftKey) {
         event.preventDefault()
         void openFolder()
-      } else if (key === 'o') {
+      } else if (key === 'o' || code === 'KeyO') {
         event.preventDefault()
         void openFile()
-      } else if (isMarkdownDocument && key === 's' && event.shiftKey) {
+      } else if (isMarkdownDocument && (key === 's' || code === 'KeyS') && event.shiftKey) {
         event.preventDefault()
         void saveFileAs()
-      } else if (isMarkdownDocument && key === 's') {
+      } else if (isMarkdownDocument && (key === 's' || code === 'KeyS')) {
         event.preventDefault()
         void saveFile()
       }
     }
 
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [isMarkdownDocument, openFile, openFolder, saveFile, saveFileAs])
 
   const notifyPathDeleted = useCallback(

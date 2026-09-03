@@ -53,7 +53,7 @@
 |------|------|
 | `reader-*` | 跨格式导航（flatIndex / 视口 / 翻页 / 目录树 / 选区关闭） |
 | `reading-mark-*` / `reader-mark-*` | 高亮颜色、命中、标签、几何 |
-| `reading-mark-passages` / `export-reading-notes` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、侧栏类型筛选 |
+| `reading-mark-passages` / `export-reading-notes` / `export-anki-cards` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、Anki 记忆卡片导出、侧栏类型筛选 |
 | `epub-*` | EPUB 目录、主题、选区、批注 overlay、滚动定位 |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay |
 | `mobi-*` / `kindle-*` / `azw3-*` | MOBI/Kindle 初始化、章节 HTML、导航、选区、批注（含 `renderWebMarkOverlays`） |
@@ -64,6 +64,7 @@
 | 文件 | 功能 |
 |------|------|
 | `file-tree-ops` | 文件树路径、剪贴板、粘贴目标 |
+| `quick-open` | 全局快速切换（扁平化文件树、模糊匹配与评分排序） |
 | `dialog-default-path` | 打开/保存对话框默认目录 |
 | `workspace-session` | 启动时恢复上次文件 / 在线文档 |
 | `report-error` / `error-reporter` | AppError 与运行时错误上报 |

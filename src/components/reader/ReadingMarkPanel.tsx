@@ -137,6 +137,7 @@ interface ReadingMarkPanelProps {
   onDelete: (mark: ReadingMark) => void
   onClose: () => void
   onExportNotes?: (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => void
+  onExportAnkiCards?: (scope: ReadingNotesScope) => void
   /** 按目录分组；不传则扁平列表 */
   marksToc?: ReadingNotesChapterRef[]
   currentChapterKey?: string
@@ -149,6 +150,7 @@ export function ReadingMarkPanel({
   onDelete,
   onClose,
   onExportNotes,
+  onExportAnkiCards,
   marksToc,
   currentChapterKey,
   resolveChapter,
@@ -203,7 +205,7 @@ export function ReadingMarkPanel({
       <div className="flex items-center justify-between gap-1 border-b border-border/60 px-3 py-2">
         <span className="text-xs font-medium text-foreground">书签与批注</span>
         <div className="flex items-center gap-0.5">
-          {onExportNotes ? (
+          {onExportNotes || onExportAnkiCards ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
@@ -211,27 +213,53 @@ export function ReadingMarkPanel({
                   导出
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuLabel className="text-[10px] text-muted-foreground">
-                  导出笔记为 Markdown
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {SCOPE_ITEMS.map((scopeItem) => (
-                  <DropdownMenuSub key={scopeItem.scope}>
-                    <DropdownMenuSubTrigger className="text-xs">{scopeItem.label}</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-36">
-                      {CONTENT_KIND_ITEMS.map((contentItem) => (
-                        <DropdownMenuItem
-                          key={contentItem.kind}
-                          className="text-xs"
-                          onClick={() => onExportNotes(contentItem.kind, scopeItem.scope)}
-                        >
-                          {contentItem.label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                ))}
+              <DropdownMenuContent align="end" className="w-48">
+                {onExportNotes ? (
+                  <>
+                    <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                      导出笔记为 Markdown
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {SCOPE_ITEMS.map((scopeItem) => (
+                      <DropdownMenuSub key={scopeItem.scope}>
+                        <DropdownMenuSubTrigger className="text-xs">{scopeItem.label}</DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-36">
+                          {CONTENT_KIND_ITEMS.map((contentItem) => (
+                            <DropdownMenuItem
+                              key={contentItem.kind}
+                              className="text-xs"
+                              onClick={() => onExportNotes(contentItem.kind, scopeItem.scope)}
+                            >
+                              {contentItem.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    ))}
+                  </>
+                ) : null}
+
+                {onExportAnkiCards ? (
+                  <>
+                    {onExportNotes ? <DropdownMenuSeparator /> : null}
+                    <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                      导出为 Anki 记忆卡片
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-xs"
+                      onClick={() => onExportAnkiCards('chapter')}
+                    >
+                      当前章 (.txt)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-xs"
+                      onClick={() => onExportAnkiCards('book')}
+                    >
+                      全书 (.txt)
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}

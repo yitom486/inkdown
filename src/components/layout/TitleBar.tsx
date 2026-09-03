@@ -9,8 +9,10 @@ import {
   Moon,
   PanelLeft,
   PanelLeftClose,
+  Replace,
   Save,
   SaveAll,
+  Search,
   Settings,
   Sun,
 } from 'lucide-react'
@@ -43,6 +45,9 @@ interface TitleBarProps {
   onToggleAgentPanel?: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
+  onQuickOpen?: () => void
+  onFind?: () => void
+  onReplace?: () => void
   onOpenRecentFile: (path: string) => void
   onSave: () => void
   onSaveAs: () => void
@@ -67,6 +72,9 @@ export function TitleBar({
   onToggleAgentPanel,
   onOpenFile,
   onOpenFolder,
+  onQuickOpen,
+  onFind,
+  onReplace,
   onOpenRecentFile,
   onSave,
   onSaveAs,
@@ -117,6 +125,13 @@ export function TitleBar({
             打开文件夹
             <DropdownMenuShortcut>Ctrl+Shift+O</DropdownMenuShortcut>
           </DropdownMenuItem>
+          {onQuickOpen && (
+            <DropdownMenuItem onClick={onQuickOpen}>
+              <Search className="size-4" />
+              快速打开文件…
+              <DropdownMenuShortcut>Ctrl+P</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={onNewWindow}>
             <AppWindow className="size-4" />
             新建窗口
@@ -153,6 +168,43 @@ export function TitleBar({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {(onFind || onReplace || onQuickOpen) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2.5 text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+            >
+              编辑
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {onFind && (
+              <DropdownMenuItem onClick={onFind}>
+                <Search className="size-4" />
+                查找…
+                <DropdownMenuShortcut>Ctrl+F</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
+            {onReplace && !readOnly && (
+              <DropdownMenuItem onClick={onReplace}>
+                <Replace className="size-4" />
+                替换…
+                <DropdownMenuShortcut>Ctrl+H</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
+            {onQuickOpen && (
+              <DropdownMenuItem onClick={onQuickOpen}>
+                <Search className="size-4" />
+                快速打开文件…
+                <DropdownMenuShortcut>Ctrl+P</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {onToggleSidebar && (
         <DropdownMenu>

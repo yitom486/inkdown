@@ -16,6 +16,7 @@ interface ReaderContentShellProps {
   onDeleteMark: (mark: ReadingMark) => void
   onCloseMarks: () => void
   onExportNotes?: (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => void
+  onExportAnkiCards?: (scope: ReadingNotesScope) => void
   marksToc?: ReadingNotesChapterRef[]
   marksCurrentChapterKey?: string
   marksResolveChapter?: (
@@ -40,6 +41,7 @@ export function ReaderContentShell({
   onDeleteMark,
   onCloseMarks,
   onExportNotes,
+  onExportAnkiCards,
   marksToc,
   marksCurrentChapterKey,
   marksResolveChapter,
@@ -62,6 +64,7 @@ export function ReaderContentShell({
           onDelete={onDeleteMark}
           onClose={onCloseMarks}
           onExportNotes={onExportNotes}
+          onExportAnkiCards={onExportAnkiCards}
           marksToc={marksToc}
           currentChapterKey={marksCurrentChapterKey}
           resolveChapter={marksResolveChapter}
