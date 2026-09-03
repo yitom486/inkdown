@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bookmark, ChevronDown, ChevronRight, Download, Highlighter, MessageSquare, Trash2 } from 'lucide-react'
+import { Bookmark, ChevronDown, ChevronRight, Download, Highlighter, MessageSquare, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -138,6 +138,7 @@ interface ReadingMarkPanelProps {
   onClose: () => void
   onExportNotes?: (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => void
   onExportAnkiCards?: (scope: ReadingNotesScope) => void
+  onReviewFlashcards?: (scope: ReadingNotesScope) => void
   /** 按目录分组；不传则扁平列表 */
   marksToc?: ReadingNotesChapterRef[]
   currentChapterKey?: string
@@ -151,6 +152,7 @@ export function ReadingMarkPanel({
   onClose,
   onExportNotes,
   onExportAnkiCards,
+  onReviewFlashcards,
   marksToc,
   currentChapterKey,
   resolveChapter,
@@ -205,6 +207,40 @@ export function ReadingMarkPanel({
       <div className="flex items-center justify-between gap-1 border-b border-border/60 px-3 py-2">
         <span className="text-xs font-medium text-foreground">书签与批注</span>
         <div className="flex items-center gap-0.5">
+          {onReviewFlashcards && marks.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                  title="进入沉浸式闪卡抽认复习"
+                >
+                  <Sparkles className="size-3.5" />
+                  复习
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-36">
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                  闪卡复习模式
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-xs"
+                  onClick={() => onReviewFlashcards('chapter')}
+                >
+                  本章闪卡
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs"
+                  onClick={() => onReviewFlashcards('book')}
+                >
+                  全书闪卡 ({marks.length})
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+
           {onExportNotes || onExportAnkiCards ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

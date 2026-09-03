@@ -1341,6 +1341,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       />
 
       <ReaderContentShell
+        filePath={filePath}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}

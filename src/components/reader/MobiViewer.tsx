@@ -974,6 +974,7 @@ export function MobiViewer({ filePath, theme }: MobiViewerProps) {
       />
 
       <ReaderContentShell
+        filePath={filePath}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}

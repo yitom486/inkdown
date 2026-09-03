@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
+import { FlashcardReviewDialog } from '@/components/reader/FlashcardReviewDialog'
+import { buildAnkiCardsExport } from '@/lib/reader/export-anki-cards'
+import type { Flashcard } from '@shared/types/flashcard'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import type {
   ReadingNotesChapterRef,
@@ -8,8 +12,11 @@ import type {
   ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
 import type { ReadingMark } from '@shared/types/reading-mark'
+import { toast } from 'sonner'
 
 interface ReaderContentShellProps {
+  filePath?: string
+  bookTitle?: string
   marksOpen: boolean
   marks: ReadingMark[]
   onSelectMark: (mark: ReadingMark) => void
@@ -35,6 +42,8 @@ interface ReaderContentShellProps {
 }
 
 export function ReaderContentShell({
+  filePath,
+  bookTitle,
   marksOpen,
   marks,
   onSelectMark,
@@ -55,6 +64,51 @@ export function ReaderContentShell({
   tocAside,
   children,
 }: ReaderContentShellProps) {
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewCards, setReviewCards] = useState<Flashcard[]>([])
+
+  const displayTitle =
+    bookTitle ||
+    (filePath ? filePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') : undefined) ||
+    '当前书籍'
+
+  const handleReviewFlashcards = (scope: ReadingNotesScope) => {
+    const currentChapter = marksToc?.find((c) => c.key === marksCurrentChapterKey)
+    const toc = marksToc ?? []
+    const resolveChapter =
+      marksResolveChapter ??
+      ((mark: ReadingMark): ReadingNotesChapterRef => ({
+        key: mark.id,
+        matchKey: mark.id,
+        label: '书本划线',
+        level: 1,
+      }))
+
+    const exportResult = buildAnkiCardsExport({
+      marks,
+      bookTitle: displayTitle,
+      scope,
+      currentChapter,
+      toc,
+      resolveChapter,
+    })
+
+    if (!exportResult || exportResult.cards.length === 0) {
+      toast.info('当前选定范围内暂无重点划线或批注卡片')
+      return
+    }
+
+    setReviewCards(exportResult.cards)
+    setReviewOpen(true)
+  }
+
+  const handleNavigateToMark = (markId: string) => {
+    const mark = marks.find((m) => m.id === markId)
+    if (mark) {
+      onSelectMark(mark)
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {marksOpen ? (
@@ -65,6 +119,7 @@ export function ReaderContentShell({
           onClose={onCloseMarks}
           onExportNotes={onExportNotes}
           onExportAnkiCards={onExportAnkiCards}
+          onReviewFlashcards={handleReviewFlashcards}
           marksToc={marksToc}
           currentChapterKey={marksCurrentChapterKey}
           resolveChapter={marksResolveChapter}
@@ -84,6 +139,14 @@ export function ReaderContentShell({
         </aside>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+
+      <FlashcardReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        cards={reviewCards}
+        bookTitle={displayTitle}
+        onNavigateToMark={handleNavigateToMark}
+      />
     </div>
   )
 }

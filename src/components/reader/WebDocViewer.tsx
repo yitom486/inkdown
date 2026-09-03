@@ -945,6 +945,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       />
 
       <ReaderContentShell
+        bookTitle={displayTitle}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}

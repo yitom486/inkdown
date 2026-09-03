@@ -1070,6 +1070,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
       />
 
       <ReaderContentShell
+        filePath={filePath}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
