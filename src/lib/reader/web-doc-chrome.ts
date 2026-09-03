@@ -1,4 +1,5 @@
 import type { WebDocSiteId } from '@shared/types/web-doc'
+import { stripDisallowedWebDocEmbeds } from '@/lib/reader/web-doc-embeds'
 
 const EDIT_PAGE_LABEL =
   /编辑此页|编辑本页|在\s*github\s*上编辑|edit this page|edit this file|edit on github|improve this page/i
@@ -29,9 +30,8 @@ function stripDocsEditChrome(root: HTMLElement): void {
 }
 
 function stripGenericChrome(root: HTMLElement): void {
-  root.querySelectorAll('button, form, [role="navigation"], nav, script, iframe, object, embed').forEach(
-    (node) => node.remove(),
-  )
+  root.querySelectorAll('button, form, [role="navigation"], nav').forEach((node) => node.remove())
+  stripDisallowedWebDocEmbeds(root)
 
   stripDocsEditChrome(root)
 

@@ -211,7 +211,10 @@ export function normalizeWebDocTabbedSets(root: ParentNode): void {
       panel.setAttribute('role', 'tabpanel')
       panel.setAttribute('data-tab-index', String(i))
       panel.setAttribute('data-language', lang)
-      if (!selected) panel.setAttribute('hidden', '')
+      if (!selected) {
+        panel.setAttribute('hidden', '')
+        panel.style.setProperty('display', 'none', 'important')
+      }
 
       const block = blocks[i]
       if (block) {
@@ -245,19 +248,53 @@ export function activateWebDocCodeTab(tabButton: Element): boolean {
   const index = tabButton.getAttribute('data-tab-index')
   if (index == null) return false
 
-  root.querySelectorAll('[role="tab"]').forEach((btn) => {
+  root.querySelectorAll('.web-doc-tabs-tab').forEach((btn) => {
     const selected = btn.getAttribute('data-tab-index') === index
     btn.setAttribute('aria-selected', selected ? 'true' : 'false')
   })
-  root.querySelectorAll('[role="tabpanel"]').forEach((panel) => {
+  root.querySelectorAll('.web-doc-tabs-panel').forEach((panel) => {
     if (!(panel instanceof HTMLElement)) return
     if (panel.getAttribute('data-tab-index') === index) {
       panel.removeAttribute('hidden')
+      panel.style.removeProperty('display')
     } else {
       panel.setAttribute('hidden', '')
+      panel.style.setProperty('display', 'none', 'important')
     }
   })
   return true
+}
+
+/** 写入阅读文档的可信脚本（非远端 HTML），不依赖宿主 React 事件绑定 */
+export function buildWebDocTabsRuntimeScript(): string {
+  return `<script>(function(){
+  function activate(tab){
+    var root=tab.closest('.web-doc-tabs');
+    if(!root)return;
+    var index=tab.getAttribute('data-tab-index');
+    if(index==null)return;
+    root.querySelectorAll('.web-doc-tabs-tab').forEach(function(btn){
+      btn.setAttribute('aria-selected', btn.getAttribute('data-tab-index')===index ? 'true' : 'false');
+    });
+    root.querySelectorAll('.web-doc-tabs-panel').forEach(function(panel){
+      if(panel.getAttribute('data-tab-index')===index){
+        panel.removeAttribute('hidden');
+        panel.style.removeProperty('display');
+      }else{
+        panel.setAttribute('hidden','');
+        panel.style.setProperty('display','none','important');
+      }
+    });
+  }
+  document.addEventListener('click',function(event){
+    var t=event.target;
+    if(!t||!t.closest)return;
+    var tab=t.closest('.web-doc-tabs-tab');
+    if(!tab)return;
+    event.preventDefault();
+    activate(tab);
+  },true);
+})();</script>`
 }
 
 /** 为在线文档正文中的 pre/code 注入与 Markdown 预览一致的复制工具栏 */

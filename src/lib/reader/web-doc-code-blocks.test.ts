@@ -85,14 +85,14 @@ describe('enhanceWebDocCodeBlocks', () => {
     )!
     expect(pythonTab.getAttribute('aria-selected')).toBe('true')
     expect(document.body.textContent).toContain('def f(): pass')
-    expect(document.querySelector('[data-tab-index="1"][role="tabpanel"]')?.hasAttribute('hidden')).toBe(
+    expect(document.querySelector('[data-tab-index="1"].web-doc-tabs-panel')?.hasAttribute('hidden')).toBe(
       true,
     )
 
     activateWebDocCodeTab(cppTab)
     expect(cppTab.getAttribute('aria-selected')).toBe('true')
     expect(pythonTab.getAttribute('aria-selected')).toBe('false')
-    expect(document.querySelector('[data-tab-index="1"][role="tabpanel"]')?.hasAttribute('hidden')).toBe(
+    expect(document.querySelector('[data-tab-index="1"].web-doc-tabs-panel')?.hasAttribute('hidden')).toBe(
       false,
     )
     expect(document.body.textContent).toContain('int main(){}')
@@ -116,5 +116,6 @@ describe('buildWebDocReaderDocument', () => {
     expect(doc).toContain('code-block-copy')
     expect(doc).toContain('.code-block-toolbar')
     expect(doc).toContain('echo hi')
+    expect(doc).toContain('web-doc-tabs-tab')
   })
 })

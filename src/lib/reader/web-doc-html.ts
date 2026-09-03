@@ -3,7 +3,12 @@ import type { WebDocPageContent, WebDocSiteId } from '@shared/types/web-doc'
 import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
-import { buildWebDocCodeBlockCss, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
+import { buildWebDocCodeBlockCss, buildWebDocTabsRuntimeScript, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
+import {
+  buildWebDocEmbedCss,
+  normalizeAllowedWebDocEmbeds,
+  stripDisallowedWebDocEmbeds,
+} from '@/lib/reader/web-doc-embeds'
 import {
   buildWebDocKatexStylesheetLink,
   buildWebDocMathCss,
@@ -113,12 +118,31 @@ export function rewriteRelativeUrls(root: HTMLElement, baseUrl: string): void {
 
 export function sanitizeWebDocBodyHtml(html: string): string {
   const doc = new DOMParser().parseFromString(`<div id="web-doc-root">${html}</div>`, 'text/html')
-  doc.querySelectorAll('script, iframe, object, embed, form, map, area').forEach((node) => node.remove())
+  doc.querySelectorAll('form, map, area').forEach((node) => node.remove())
+  stripDisallowedWebDocEmbeds(doc)
+  normalizeAllowedWebDocEmbeds(doc)
   const root = doc.getElementById('web-doc-root')
   const inner = root?.innerHTML ?? html
 
-  return DOMPurify.sanitize(inner, {
-    ADD_TAGS: ['img', 'svg', 'video', 'audio', 'picture', 'source', 'pre', 'code', 'h1', 'h2', 'h3', 'section', 'nav'],
+  const cleaned = DOMPurify.sanitize(inner, {
+    ADD_TAGS: [
+      'img',
+      'svg',
+      'video',
+      'audio',
+      'picture',
+      'source',
+      'pre',
+      'code',
+      'h1',
+      'h2',
+      'h3',
+      'section',
+      'nav',
+      'iframe',
+      'details',
+      'summary',
+    ],
     ADD_ATTR: [
       'href',
       'class',
@@ -135,8 +159,18 @@ export function sanitizeWebDocBodyHtml(html: string): string {
       'aria-hidden',
       'role',
       'data-inkdown-href',
+      'referrerpolicy',
+      'allow',
+      'allowfullscreen',
+      'open',
     ],
   })
+
+  // DOMPurify 放行 iframe 标签后，再按白名单收紧
+  const gated = new DOMParser().parseFromString(`<div id="web-doc-root">${cleaned}</div>`, 'text/html')
+  stripDisallowedWebDocEmbeds(gated)
+  normalizeAllowedWebDocEmbeds(gated)
+  return gated.getElementById('web-doc-root')?.innerHTML ?? cleaned
 }
 
 export function extractWebDocArticle(
@@ -168,6 +202,7 @@ export function buildWebDocReaderDocument(
   const layoutCss = buildReaderLayoutCss(theme, typography)
   const codeBlockCss = buildWebDocCodeBlockCss(theme)
   const mathCss = buildWebDocMathCss()
+  const embedCss = buildWebDocEmbedCss()
   const safeTitle = DOMPurify.sanitize(content.title)
   const body = neutralizeWebDocNavigationLinks(
     enhanceWebDocCodeBlocks(enhanceWebDocMath(content.bodyHtml)),
@@ -184,6 +219,7 @@ export function buildWebDocReaderDocument(
   <style>${layoutCss}</style>
   <style>${codeBlockCss}</style>
   <style>${mathCss}</style>
+  <style>${embedCss}</style>
   <style>
     body { margin: 0; padding: 1.25rem 1.5rem 2rem; }
     a { word-break: break-word; }
@@ -210,7 +246,7 @@ export function buildWebDocReaderDocument(
     }
   </style>
 </head>
-<body>${body}</body>
+<body>${body}${buildWebDocTabsRuntimeScript()}</body>
 </html>`
 }
 

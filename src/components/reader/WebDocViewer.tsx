@@ -564,7 +564,9 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         const target = event.target
         if (!(target instanceof Element)) return
 
-        const tab = target.closest<HTMLElement>('[data-web-doc-tab]')
+        const tab =
+          target.closest<HTMLElement>('.web-doc-tabs-tab') ??
+          target.closest<HTMLElement>('[data-web-doc-tab]')
         if (tab) {
           event.preventDefault()
           event.stopPropagation()
@@ -592,7 +594,9 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         if (event.button !== 0) return
 
         if (event.target instanceof Element) {
-          const tab = event.target.closest<HTMLElement>('[data-web-doc-tab]')
+          const tab =
+            event.target.closest<HTMLElement>('.web-doc-tabs-tab') ??
+            event.target.closest<HTMLElement>('[data-web-doc-tab]')
           if (tab) {
             event.preventDefault()
             event.stopPropagation()
@@ -685,6 +689,9 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     })
   }, [data, error, iframeReady, isFetching, isLoading, pageUrl, readerDocument.length])
 
+  const bindIframeFrameRef = useRef(bindIframeFrame)
+  bindIframeFrameRef.current = bindIframeFrame
+
   useEffect(() => {
     setIframeReady(false)
     const iframe = iframeRef.current
@@ -706,7 +713,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         bodyTextLen: iframe.contentDocument?.body?.textContent?.trim().length ?? 0,
       })
       setIframeReady(true)
-      bindIframeFrame(iframe)
+      bindIframeFrameRef.current(iframe)
       const text = extractDocumentText(iframe.contentDocument)
       if (text.trim()) {
         primeWebDocAgentTextCache(pageUrl, text)
@@ -722,7 +729,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       frameCleanupRef.current?.()
       frameCleanupRef.current = null
     }
-  }, [bindIframeFrame, pageUrl, readerDocument])
+  }, [pageUrl, readerDocument])
 
   useEffect(() => {
     return () => {
@@ -900,7 +907,8 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           ref={iframeRef}
           title={displayTitle}
           className={cn('h-full w-full', !readerDocument && 'hidden')}
-          sandbox="allow-same-origin"
+          // allow-scripts：否则 Chromium 会拦 contentDocument 上的 click 回调（语言 Tab / 复制失效）；正文仍经 DOMPurify 去 script
+          sandbox="allow-same-origin allow-scripts"
         />
       </div>
     </PaneErrorBoundary>
