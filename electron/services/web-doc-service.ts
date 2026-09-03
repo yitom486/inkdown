@@ -23,8 +23,39 @@ import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy
 
 const WEB_DOC_MAX_BYTES = 5 * 1024 * 1024
 const WEB_DOC_FETCH_TIMEOUT_MS = 30_000
+
+/**
+ * 使用接近 Chromium 的 UA。部分 CDN（如 Vercel）会对自定义 bot UA 直接 429。
+ * 末尾保留 Inkdown 标识，便于站点识别桌面阅读器。
+ */
 const WEB_DOC_USER_AGENT =
-  'Inkdown/0.2.3 (Electron; +https://github.com/yitom486/inkdown)'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Inkdown/0.2.7'
+
+function webDocHtmlHeaders(): Record<string, string> {
+  return {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'User-Agent': WEB_DOC_USER_AGENT,
+  }
+}
+
+function webDocPlainTextHeaders(): Record<string, string> {
+  return {
+    Accept: 'text/plain,text/markdown,text/*;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'User-Agent': WEB_DOC_USER_AGENT,
+  }
+}
+
+function httpStatusErrorMessage(status: number): string {
+  if (status === 429) {
+    return '请求过于频繁或站点限制了非浏览器访问（HTTP 429），请稍后再试'
+  }
+  if (status === 403) {
+    return '站点拒绝访问（HTTP 403），可能限制了阅读器抓取'
+  }
+  return `请求失败（HTTP ${status}）`
+}
 
 function toFetchError(message: string): Result<never, AppError> {
   return err({ code: 'FILE_READ_ERROR', message })
@@ -63,17 +94,14 @@ export async function fetchWebDocPage(
       response = await fetch(normalized, {
         signal: controller.signal,
         redirect: 'follow',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
-          'User-Agent': WEB_DOC_USER_AGENT,
-        },
+        headers: webDocHtmlHeaders(),
       })
     } finally {
       clearTimeout(timer)
     }
 
     if (!response.ok) {
-      return toFetchError(`请求失败（HTTP ${response.status}）`)
+      return toFetchError(httpStatusErrorMessage(response.status))
     }
 
     const contentType = response.headers.get('content-type') ?? ''
@@ -115,17 +143,14 @@ async function fetchWebDocPlainText(
       response = await fetch(normalized, {
         signal: controller.signal,
         redirect: 'follow',
-        headers: {
-          Accept: 'text/plain,text/markdown,text/*;q=0.9,*/*;q=0.8',
-          'User-Agent': WEB_DOC_USER_AGENT,
-        },
+        headers: webDocPlainTextHeaders(),
       })
     } finally {
       clearTimeout(timer)
     }
 
     if (!response.ok) {
-      return toFetchError(`请求失败（HTTP ${response.status}）`)
+      return toFetchError(httpStatusErrorMessage(response.status))
     }
 
     const text = await readResponseTextLimited(response)
