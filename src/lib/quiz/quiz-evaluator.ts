@@ -227,36 +227,24 @@ export function evaluateFallbackAnswer(
   }
 }
 
+import { sendQuizPrompt } from './quiz-acp-session'
+import type { QuizAnswerSubmission } from '@shared/types/quiz'
+
 /**
- * 发起 ACP / AI 出题
+ * 发起 ACP / AI 出题（真实调用云端/本地大模型，隔离主时间线）
  */
 export async function generateQuestionWithAi(
   passage: string,
   chapterTitle?: string,
   markId?: string,
 ): Promise<QuizQuestion> {
-  const acpState = useAcpUiStore.getState()
-  const sessionId = acpState.sessionId
-
-  if (!sessionId || acpState.status !== 'connected') {
-    // 离线优雅回退
-    return generateFallbackQuestion(passage, chapterTitle, markId)
-  }
-
   const promptText = buildSingleQuestionPrompt(passage, chapterTitle)
-  const result = await acpApi.prompt({
-    sessionId,
-    prompt: [{ type: 'text', text: promptText }],
-  })
+  const rawResponse = await sendQuizPrompt(promptText)
 
-  if (!isOk(result)) {
+  if (!rawResponse) {
+    // 离线或未连接时的平滑回退
     return generateFallbackQuestion(passage, chapterTitle, markId)
   }
-
-  // 从 session 历史中提取最后的回答
-  const currentThread = acpState.threads.find((t) => t.id === acpState.activeThreadId)
-  const lastMsg = currentThread?.messages[currentThread.messages.length - 1]
-  const rawResponse = lastMsg?.text || ''
 
   const parsed = parseQuestionResponse(rawResponse)
   if (!parsed) {
@@ -271,5 +259,56 @@ export async function generateQuestionWithAi(
     sourceExcerpt: passage.trim(),
     chapterTitle,
     markId,
+  }
+}
+
+/**
+ * 发起 ACP / AI 判卷评分（真实调用大模型比对原文与作答）
+ */
+export async function evaluateAnswerWithAi(
+  question: QuizQuestion,
+  userAnswer: string,
+): Promise<QuizAnswerSubmission> {
+  const promptText = buildEvaluationPrompt(question, userAnswer)
+  const rawResponse = await sendQuizPrompt(promptText)
+
+  if (!rawResponse) {
+    const fallback = evaluateFallbackAnswer(question, userAnswer)
+    return {
+      questionId: question.id,
+      userAnswer,
+      score: fallback.score,
+      grade: fallback.grade,
+      feedback: fallback.feedback,
+      hitKeyPoints: fallback.hitKeyPoints,
+      missedKeyPoints: fallback.missedKeyPoints,
+      gradedAt: new Date().toISOString(),
+    }
+  }
+
+  const parsed = parseEvaluationResponse(rawResponse)
+  if (!parsed) {
+    const fallback = evaluateFallbackAnswer(question, userAnswer)
+    return {
+      questionId: question.id,
+      userAnswer,
+      score: fallback.score,
+      grade: fallback.grade,
+      feedback: fallback.feedback,
+      hitKeyPoints: fallback.hitKeyPoints,
+      missedKeyPoints: fallback.missedKeyPoints,
+      gradedAt: new Date().toISOString(),
+    }
+  }
+
+  return {
+    questionId: question.id,
+    userAnswer,
+    score: parsed.score,
+    grade: parsed.grade,
+    feedback: parsed.feedback,
+    hitKeyPoints: parsed.hitKeyPoints,
+    missedKeyPoints: parsed.missedKeyPoints,
+    gradedAt: new Date().toISOString(),
   }
 }

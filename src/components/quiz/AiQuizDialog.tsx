@@ -22,8 +22,8 @@ import {
 import { cn } from '@/lib/utils'
 import type { QuizAnswerSubmission, QuizQuestion, QuizSessionRecord } from '@shared/types/quiz'
 import {
-  evaluateFallbackAnswer,
-  generateFallbackQuestion,
+  evaluateAnswerWithAi,
+  generateQuestionWithAi,
 } from '@/lib/quiz/quiz-evaluator'
 import { defaultQuizRepository } from '@/lib/quiz/quiz-storage-jsonl'
 import { toast } from 'sonner'
@@ -58,7 +58,7 @@ export function AiQuizDialog({
   const [userAnswer, setUserAnswer] = useState('')
   const [submission, setSubmission] = useState<QuizAnswerSubmission | null>(null)
 
-  // 当弹窗打开时，自动触发出题
+  // 当弹窗打开时，真实调用大模型生成思考考题
   useEffect(() => {
     if (!open) {
       setPhase('generating')
@@ -71,20 +71,18 @@ export function AiQuizDialog({
     let isMounted = true
     setPhase('generating')
 
-    const timer = setTimeout(() => {
+    generateQuestionWithAi(passage, chapterTitle, markId).then((q) => {
       if (!isMounted) return
-      const q = generateFallbackQuestion(passage, chapterTitle, markId)
       setQuestion(q)
       setPhase('answering')
-    }, 600)
+    })
 
     return () => {
       isMounted = false
-      clearTimeout(timer)
     }
   }, [open, passage, chapterTitle, markId])
 
-  // 提交作答进行判卷
+  // 提交作答，真实调用大模型对比原文与采分要点进行判卷
   const handleSubmitAnswer = async () => {
     if (!question) return
     const trimmed = userAnswer.trim()
@@ -95,18 +93,8 @@ export function AiQuizDialog({
 
     setPhase('grading')
 
-    setTimeout(async () => {
-      const result = evaluateFallbackAnswer(question, trimmed)
-      const sub: QuizAnswerSubmission = {
-        questionId: question.id,
-        userAnswer: trimmed,
-        score: result.score,
-        grade: result.grade,
-        feedback: result.feedback,
-        hitKeyPoints: result.hitKeyPoints,
-        missedKeyPoints: result.missedKeyPoints,
-        gradedAt: new Date().toISOString(),
-      }
+    try {
+      const sub = await evaluateAnswerWithAi(question, trimmed)
       setSubmission(sub)
 
       // 保存到本地 JSONL 仓储
@@ -127,7 +115,10 @@ export function AiQuizDialog({
       await defaultQuizRepository.appendSession(sessionRecord)
       setPhase('result')
       toast.success(`AI 判卷完成！得分：${sub.score} 分 (${sub.grade})`)
-    }, 900)
+    } catch {
+      toast.error('判卷过程发生异常，请重试')
+      setPhase('answering')
+    }
   }
 
   return (

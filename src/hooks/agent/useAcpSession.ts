@@ -16,6 +16,7 @@ import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useAnnotationAgentStore, annotationOwnsSessionId } from '@/stores/annotation-agent-store'
+import { quizOwnsSessionId, accumulateQuizSessionUpdate } from '@/lib/quiz/quiz-acp-session'
 
 function activeThreadAgentSessionId(): string | undefined {
   const s = useAcpUiStore.getState()
@@ -98,6 +99,11 @@ export function useAcpSession(workspaceRoot?: string) {
       // 兼容：副会话刚创建、尚未 bind 前的短窗口
       if (ann.capturing) {
         ann.applySessionUpdate(event.update)
+        return
+      }
+      // 按 sessionId 分流：考官副会话绝不进右侧时间线
+      if (quizOwnsSessionId(event.sessionId)) {
+        accumulateQuizSessionUpdate(event.sessionId, event.update)
         return
       }
       applySessionUpdate(event.update)
