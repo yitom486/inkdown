@@ -18,6 +18,11 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('inkdown')
 }
 
+// 开发环境下隔离应用数据目录，避免与已安装的正式版互相冲突锁定或污染数据
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'inkdown-dev'))
+}
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
   app.quit()
