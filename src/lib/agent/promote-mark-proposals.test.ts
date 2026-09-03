@@ -38,4 +38,58 @@ describe('promote-mark-proposals', () => {
     ]
     expect(isProposalPromotedToAgent(messages, 'p1')).toBe(true)
   })
+
+  it('只提升当前用户回合的工具提议，不把已保存的旧卡片搬到最新回复', () => {
+    const previous = toProposedMark({
+      id: 'previous',
+      excerpt: '上一轮原文',
+      note: '',
+      source: 'agent',
+    })
+    const current = toProposedMark({
+      id: 'current',
+      excerpt: '本轮原文',
+      note: '本轮批注',
+      source: 'agent',
+    })
+    const messages: AcpChatMessage[] = [
+      { id: 'u1', role: 'user', text: '上一轮划重点', createdAt: 1 },
+      {
+        id: 't1',
+        role: 'tool',
+        text: '{}',
+        createdAt: 2,
+        toolCallId: 'previous-tool',
+        markProposal: previous,
+        markProposalStatus: 'adopted',
+      },
+      {
+        id: 'a1',
+        role: 'agent',
+        text: '上一轮已保存',
+        createdAt: 3,
+        markProposals: [{ proposal: previous, status: 'adopted' }],
+      },
+      { id: 'u2', role: 'user', text: '本轮划重点', createdAt: 4 },
+      {
+        id: 't2',
+        role: 'tool',
+        text: '{}',
+        createdAt: 5,
+        toolCallId: 'current-tool',
+        markProposal: current,
+        markProposalStatus: 'pending',
+      },
+      { id: 'a2', role: 'agent', text: '本轮待确认', createdAt: 6 },
+    ]
+
+    const next = promoteMarkProposalsToLastAgent(messages)
+
+    expect(next.find((message) => message.id === 'a1')?.markProposals).toEqual([
+      { proposal: previous, status: 'adopted' },
+    ])
+    expect(next.find((message) => message.id === 'a2')?.markProposals).toEqual([
+      { proposal: current, status: 'pending', toolCallId: 'current-tool' },
+    ])
+  })
 })

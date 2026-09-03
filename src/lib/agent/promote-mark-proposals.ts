@@ -40,9 +40,20 @@ function mergeProposals(
   return merged
 }
 
-function collectToolProposals(messages: AcpChatMessage[]): ChatMarkProposal[] {
+function currentTurnStart(messages: AcpChatMessage[]): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'user') return index + 1
+  }
+  return 0
+}
+
+function collectToolProposals(
+  messages: AcpChatMessage[],
+  startIndex = 0,
+): ChatMarkProposal[] {
   const rows: ChatMarkProposal[] = []
-  for (const message of messages) {
+  for (let index = startIndex; index < messages.length; index += 1) {
+    const message = messages[index]!
     if (message.role !== 'tool') continue
     if (message.markProposals?.length) {
       for (const row of message.markProposals) {
@@ -85,7 +96,9 @@ function collectStoreFallbackProposal(): ChatMarkProposal | null {
 export function promoteMarkProposalsToLastAgent(
   messages: AcpChatMessage[],
 ): AcpChatMessage[] {
-  const fromTools = collectToolProposals(messages)
+  // 旧回合的工具提议已固定在其原 Agent 回复上；不可在下一轮结束时再搬运一次，
+  // 否则会在新卡片里同时出现「待确认」和上一轮的「已保存」状态。
+  const fromTools = collectToolProposals(messages, currentTurnStart(messages))
   const fallback = collectStoreFallbackProposal()
   const incoming = fallback
     ? mergeProposals([], [...fromTools, fallback])
