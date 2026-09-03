@@ -3,14 +3,17 @@ import type { ReactNode } from 'react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
 import { FlashcardReviewDialog } from '@/components/reader/FlashcardReviewDialog'
+import { AiQuizDialog } from '@/components/quiz/AiQuizDialog'
+import { QuizHistoryDialog } from '@/components/quiz/QuizHistoryDialog'
 import { buildAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import type { Flashcard } from '@shared/types/flashcard'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
-import type {
-  ReadingNotesChapterRef,
-  ReadingNotesContentKind,
-  ReadingNotesScope,
+import {
+  type ReadingNotesChapterRef,
+  type ReadingNotesContentKind,
+  type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
+import { passageExcerpt } from '@/lib/reader/reading-mark-passages'
 import type { ReadingMark } from '@shared/types/reading-mark'
 import { toast } from 'sonner'
 
@@ -67,6 +70,12 @@ export function ReaderContentShell({
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewCards, setReviewCards] = useState<Flashcard[]>([])
 
+  const [quizOpen, setQuizOpen] = useState(false)
+  const [quizHistoryOpen, setQuizHistoryOpen] = useState(false)
+  const [quizPassage, setQuizPassage] = useState('')
+  const [quizChapterTitle, setQuizChapterTitle] = useState<string | undefined>()
+  const [quizMarkId, setQuizMarkId] = useState<string | undefined>()
+
   const displayTitle =
     bookTitle ||
     (filePath ? filePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') : undefined) ||
@@ -109,6 +118,32 @@ export function ReaderContentShell({
     }
   }
 
+  const handleOpenQuiz = (mark?: ReadingMark) => {
+    const targetMark = mark ?? marks.find((m) => passageExcerpt(m).trim().length > 0)
+    const excerpt = targetMark ? passageExcerpt(targetMark).trim() : ''
+    if (!targetMark || !excerpt) {
+      toast.info('请先在书籍中划选重点，再让 AI 针对该段出题')
+      return
+    }
+
+    let chapterLabel = '当前章节'
+    if (marksToc && marksResolveChapter) {
+      chapterLabel = marksResolveChapter(targetMark, marksToc).label
+    }
+
+    setQuizPassage(excerpt)
+    setQuizChapterTitle(chapterLabel)
+    setQuizMarkId(targetMark.id)
+    setQuizOpen(true)
+  }
+
+  const handleRetryQuestion = (passage: string, chapterTitle?: string, markId?: string) => {
+    setQuizPassage(passage)
+    setQuizChapterTitle(chapterTitle)
+    setQuizMarkId(markId)
+    setQuizOpen(true)
+  }
+
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {marksOpen ? (
@@ -120,6 +155,9 @@ export function ReaderContentShell({
           onExportNotes={onExportNotes}
           onExportAnkiCards={onExportAnkiCards}
           onReviewFlashcards={handleReviewFlashcards}
+          onOpenQuiz={handleOpenQuiz}
+          onOpenQuizHistory={() => setQuizHistoryOpen(true)}
+          onQuizMark={handleOpenQuiz}
           marksToc={marksToc}
           currentChapterKey={marksCurrentChapterKey}
           resolveChapter={marksResolveChapter}
@@ -146,6 +184,27 @@ export function ReaderContentShell({
         cards={reviewCards}
         bookTitle={displayTitle}
         onNavigateToMark={handleNavigateToMark}
+      />
+
+      <AiQuizDialog
+        open={quizOpen}
+        onOpenChange={setQuizOpen}
+        passage={quizPassage}
+        bookTitle={displayTitle}
+        filePath={filePath || ''}
+        chapterTitle={quizChapterTitle}
+        markId={quizMarkId}
+        onNavigateToMark={handleNavigateToMark}
+        onOpenHistory={() => setQuizHistoryOpen(true)}
+      />
+
+      <QuizHistoryDialog
+        open={quizHistoryOpen}
+        onOpenChange={setQuizHistoryOpen}
+        bookTitle={displayTitle}
+        filePath={filePath || ''}
+        onNavigateToMark={handleNavigateToMark}
+        onRetryQuestion={handleRetryQuestion}
       />
     </div>
   )

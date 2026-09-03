@@ -157,6 +157,12 @@ export const IPC = {
   OCR_CANCEL_COMPONENT_DOWNLOAD: 'ocr:cancel-component-download',
   /** main→renderer：OCR 组件下载/就绪状态推送 */
   OCR_COMPONENT_STATUS: 'ocr:component-status',
+  /** invoke：追加保存测验记录到 JSONL */
+  QUIZ_APPEND_SESSION: 'quiz:append-session',
+  /** invoke：读取所有历史测验记录 */
+  QUIZ_GET_ALL_SESSIONS: 'quiz:get-all-sessions',
+  /** invoke：按书籍路径读取测验历史 */
+  QUIZ_GET_SESSIONS_BY_FILE: 'quiz:get-sessions-by-file',
 } as const
 
 /** `IPC` 全部通道字符串的联合类型，用于约束 handle/on/invoke 的 channel 参数 */

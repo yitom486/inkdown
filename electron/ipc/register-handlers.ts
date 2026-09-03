@@ -80,6 +80,12 @@ import {
   updateReadingMark,
 } from '../services/reading-marks-service'
 import {
+  appendQuizSession,
+  readAllQuizSessions,
+  readQuizSessionsByFile,
+} from '../services/quiz-service'
+import type { QuizSessionRecord } from '@shared/types/quiz'
+import {
   discoverWebDocToc,
   fetchWebDocPage,
   parseWebDocUrlInput,
@@ -456,6 +462,15 @@ export function registerIpcHandlers(): void {
     updateReadingMark(payload),
   )
   ipcMain.handle(IPC.MARKS_DELETE, (_event, id: string) => deleteReadingMark(id))
+
+  // --- AI 测验与答题打分记录 (JSONL) ---
+  ipcMain.handle(IPC.QUIZ_APPEND_SESSION, (_event, session: QuizSessionRecord) =>
+    appendQuizSession(session),
+  )
+  ipcMain.handle(IPC.QUIZ_GET_ALL_SESSIONS, () => readAllQuizSessions())
+  ipcMain.handle(IPC.QUIZ_GET_SESSIONS_BY_FILE, (_event, filePath: string) =>
+    readQuizSessionsByFile(filePath),
+  )
 
   // --- 在线文档 ---
   ipcMain.handle(IPC.WEB_DOC_FETCH_PAGE, async (_event, payload: WebDocFetchPayload) => {

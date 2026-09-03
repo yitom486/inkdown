@@ -6,6 +6,7 @@ import type { WindowInit } from '@shared/types/window'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import type { GetPdfOcrTocPayload, GetPdfOcrPagePayload, ListPdfOcrPagesPayload, RecognizePdfPagePayload, RecognizePdfTocPayload, SavePdfOcrTocPayload } from '@shared/types/ocr'
+import type { QuizSessionRecord } from '@shared/types/quiz'
 
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
 const isFreshWindow = windowInit?.isFreshWindow ?? false
@@ -193,6 +194,11 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener(IPC.APP_UPDATE_STATUS, handler)
     }
   },
+  appendQuizSession: (session: QuizSessionRecord) =>
+    ipcRenderer.invoke(IPC.QUIZ_APPEND_SESSION, session),
+  getAllQuizSessions: () => ipcRenderer.invoke(IPC.QUIZ_GET_ALL_SESSIONS),
+  getQuizSessionsByFile: (filePath: string) =>
+    ipcRenderer.invoke(IPC.QUIZ_GET_SESSIONS_BY_FILE, filePath),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

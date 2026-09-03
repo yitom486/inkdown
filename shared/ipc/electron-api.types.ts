@@ -28,6 +28,7 @@ import type {
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '@shared/types/reading-mark'
+import type { QuizSessionRecord } from '@shared/types/quiz'
 import type {
   AcpAuthPreflightResult,
   AcpAuthenticatePayload,
@@ -260,4 +261,10 @@ export interface ElectronAPI {
   getAppUpdateStatus: () => Promise<Result<AppUpdateStatus, AppError>>
   /** 更新状态推送；返回取消订阅 */
   onAppUpdateStatus: (callback: (status: AppUpdateStatus) => void) => () => void
+  /** 追加保存 AI 测验记录到 JSONL */
+  appendQuizSession: (session: QuizSessionRecord) => Promise<Result<void, AppError>>
+  /** 读取全部测验历史记录 */
+  getAllQuizSessions: () => Promise<Result<QuizSessionRecord[], AppError>>
+  /** 按书籍路径读取测验历史 */
+  getQuizSessionsByFile: (filePath: string) => Promise<Result<QuizSessionRecord[], AppError>>
 }

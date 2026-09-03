@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bookmark, ChevronDown, ChevronRight, Download, Highlighter, MessageSquare, Sparkles, Trash2 } from 'lucide-react'
+import { Bookmark, ChevronDown, ChevronRight, Download, Highlighter, History, MessageSquare, Sparkles, Target, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ import {
   type ReadingNotesContentKind,
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
+import { passageExcerpt } from '@/lib/reader/reading-mark-passages'
 import { getReadingMarkDisplayKind, getReadingMarkLabel, getReadingMarkStatusLabel } from '@/lib/reader/reading-mark-labels'
 import { highlightSwatch } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarkKindFilters } from '@/stores/reading-mark-panel-store'
@@ -82,10 +83,12 @@ function MarkListItem({
   mark,
   onSelect,
   onDelete,
+  onQuiz,
 }: {
   mark: ReadingMark
   onSelect: (mark: ReadingMark) => void
   onDelete: (mark: ReadingMark) => void
+  onQuiz?: (mark: ReadingMark) => void
 }) {
   const displayKind = getReadingMarkDisplayKind(mark)
   return (
@@ -114,6 +117,21 @@ function MarkListItem({
             </span>
           ) : null}
         </span>
+        {onQuiz && passageExcerpt(mark).trim().length > 0 ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+            title="让 AI 针对该重点考考我"
+            aria-label="考考我"
+            onClick={(event) => {
+              event.stopPropagation()
+              onQuiz(mark)
+            }}
+          >
+            <Target className="size-3.5" />
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           size="icon-sm"
@@ -139,6 +157,9 @@ interface ReadingMarkPanelProps {
   onExportNotes?: (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => void
   onExportAnkiCards?: (scope: ReadingNotesScope) => void
   onReviewFlashcards?: (scope: ReadingNotesScope) => void
+  onOpenQuiz?: (mark?: ReadingMark) => void
+  onOpenQuizHistory?: () => void
+  onQuizMark?: (mark: ReadingMark) => void
   /** 按目录分组；不传则扁平列表 */
   marksToc?: ReadingNotesChapterRef[]
   currentChapterKey?: string
@@ -153,6 +174,9 @@ export function ReadingMarkPanel({
   onExportNotes,
   onExportAnkiCards,
   onReviewFlashcards,
+  onOpenQuiz,
+  onOpenQuizHistory,
+  onQuizMark,
   marksToc,
   currentChapterKey,
   resolveChapter,
@@ -207,6 +231,44 @@ export function ReadingMarkPanel({
       <div className="flex items-center justify-between gap-1 border-b border-border/60 px-3 py-2">
         <span className="text-xs font-medium text-foreground">书签与批注</span>
         <div className="flex items-center gap-0.5">
+          {onOpenQuiz && marks.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                  title="AI 伴读出题与答题判卷"
+                >
+                  <Target className="size-3.5" />
+                  考考我
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-38">
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                  AI 智能考官
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-xs gap-1.5"
+                  onClick={() => onOpenQuiz()}
+                >
+                  <Sparkles className="size-3.5 text-amber-500" />
+                  针对重点出题
+                </DropdownMenuItem>
+                {onOpenQuizHistory ? (
+                  <DropdownMenuItem
+                    className="text-xs gap-1.5"
+                    onClick={() => onOpenQuizHistory()}
+                  >
+                    <History className="size-3.5 text-primary" />
+                    历史成绩回放
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+
           {onReviewFlashcards && marks.length > 0 ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -373,6 +435,7 @@ export function ReadingMarkPanel({
                           mark={mark}
                           onSelect={onSelect}
                           onDelete={onDelete}
+                          onQuiz={onQuizMark}
                         />
                       ))}
                     </ul>
@@ -384,7 +447,13 @@ export function ReadingMarkPanel({
         ) : (
           <ul className="divide-y divide-border/50">
             {visibleMarks.map((mark) => (
-              <MarkListItem key={mark.id} mark={mark} onSelect={onSelect} onDelete={onDelete} />
+              <MarkListItem
+                key={mark.id}
+                mark={mark}
+                onSelect={onSelect}
+                onDelete={onDelete}
+                onQuiz={onQuizMark}
+              />
             ))}
           </ul>
         )}

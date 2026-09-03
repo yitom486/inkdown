@@ -12,11 +12,12 @@
 | `workspace-watcher.ts` | 监听工作区变更并通知渲染进程 |
 | `export-save-path.ts` | 导出 HTML/PDF/Markdown 的保存路径 |
 
-## 阅读标记
+## 阅读标记与测验
 
 | 文件 | 功能 |
 |------|------|
 | `reading-marks-service.ts` | 书签 / 高亮 / 批注 JSON 持久化（`userData`） |
+| `quiz-service.ts` | AI 测验与答题打分记录 JSONL 追加型持久化（`userData`） |
 
 ## 应用壳
 

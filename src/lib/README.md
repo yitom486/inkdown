@@ -10,6 +10,7 @@
 | `editor/` | Markdown 解析/编辑/导出、CodeMirror、草稿、换行规范化 |
 | `preview/` | 预览 DOM：代码块复制、消毒、Mermaid hydrate |
 | `reader/` | EPUB / PDF / MOBI / **在线文档 HTML** 导航、选区、高亮批注、渲染 |
+| `quiz/` | AI 伴读考官出题、自动判卷打分、JSONL 知识库与仓储抽象 |
 | `workspace/` | 文件树、对话框路径、全局错误上报 |
 | `agent/` | ACP 会话辅助；`context/` 为 Inkdown 注入 Agent 的 Skill / 快照 / 选区 |
 
@@ -73,6 +74,14 @@
 | `workspace-session` | 启动时恢复上次文件 / 在线文档 |
 | `report-error` / `error-reporter` | AppError 与运行时错误上报 |
 | `path-utils.test` / `document-types.test` | 测的是 `@shared` 路径与文档类型，放在工作区侧 |
+
+## quiz/
+
+| 文件 | 功能 |
+|------|------|
+| `quiz-repository` | 统一测验仓储抽象契约（`IQuizRepository`） |
+| `quiz-storage-jsonl` | 基于 JSON Lines（`.jsonl`）的追加型流式存储实现 |
+| `quiz-evaluator` | AI 出题 Prompt 构造、解析、判卷打分与离线启发式考官 |
 
 ## agent/
 
