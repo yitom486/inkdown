@@ -8,6 +8,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 要发布的现有版本 tag（例如 v0.2.8）
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -23,6 +28,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: 安装 Bun
         uses: oven-sh/setup-bun@v2
@@ -58,6 +65,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: 安装 Bun
         uses: oven-sh/setup-bun@v2
@@ -98,8 +107,22 @@ jobs:
     name: 创建 GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    # tag 推送或手动触发时发布；手动触发时用当前 ref 名作为 release 名
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
+      - name: 检出发布版本的更新日志
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 从 CHANGELOG.md 生成 Release Notes
+        run: bun run scripts/release-notes.ts "$RELEASE_TAG" release-notes.md
+
       - name: 下载全部安装包
         uses: actions/download-artifact@v4
         with:
@@ -113,10 +136,11 @@ jobs:
       - name: 创建 GitHub Release 并上传安装包
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: artifacts/*
-          generate_release_notes: true
+          body_path: release-notes.md
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-alpha') || contains(env.RELEASE_TAG, '-beta') || contains(env.RELEASE_TAG, '-rc') }}
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

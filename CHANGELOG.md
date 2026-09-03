@@ -136,6 +136,21 @@
 
 ---
 
+## [0.2.0] - 2026-08-29
+
+### Agent 助手
+
+- 接入 ACP 流式对话、Codex 登录认证、权限审批与终端工具调用
+- 支持本地多会话历史、恢复会话、活动时间线、工具调用与 Mermaid 渲染
+- Agent 面板支持调整宽度；文件可拖入或粘贴为上下文附件
+
+### 工作区与阅读体验
+
+- 资源管理器新增 VS Code 风格右键菜单及新建、重命名、删除、复制等文件操作
+- 优化 Markdown 导出 PDF；修复 PDF 中文缺字、画布清晰度与未保存状态误判
+
+---
+
 ## [0.1.1] - 2026-08-29
 
 - 提供 **Windows / macOS / Linux** 三平台安装包
@@ -161,6 +176,7 @@
 [0.2.5]: https://github.com/yitom486/inkdown/compare/v0.2.3...v0.2.5
 [0.2.3]: https://github.com/yitom486/inkdown/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/yitom486/inkdown/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/yitom486/inkdown/compare/v0.1.1...v0.2.1
+[0.2.1]: https://github.com/yitom486/inkdown/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/yitom486/inkdown/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/yitom486/inkdown/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/yitom486/inkdown/releases/tag/v0.1.0
