@@ -49,9 +49,13 @@ export interface AcpChatMessage {
 export function extractTextFromContent(content: unknown): string {
   if (!content) return ''
   if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map(extractTextFromContent).join('')
+  }
   if (typeof content === 'object' && content !== null) {
     const row = content as Record<string, unknown>
     if (typeof row.text === 'string') return row.text
+    if (typeof row.delta === 'string') return row.delta
     if (row.content) return extractTextFromContent(row.content)
   }
   return ''

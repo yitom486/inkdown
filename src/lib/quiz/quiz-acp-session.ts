@@ -73,7 +73,16 @@ function resolvePreferredAgentCwd(): string | undefined {
  * 获取或按需轮转考官会话（单例持续会话 + 定期平滑轮转）
  */
 export async function getOrCreateQuizSessionId(): Promise<string | null> {
-  const acpState = useAcpUiStore.getState()
+  let acpState = useAcpUiStore.getState()
+  if (acpState.status === 'connecting') {
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 100))
+      acpState = useAcpUiStore.getState()
+      if (acpState.status === 'connected') break
+      if (acpState.status === 'error' || acpState.status === 'disconnected') break
+    }
+  }
+
   if (acpState.status !== 'connected') {
     sessionState.sessionId = null
     return null

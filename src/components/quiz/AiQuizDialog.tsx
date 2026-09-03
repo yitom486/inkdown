@@ -188,7 +188,6 @@ export function AiQuizDialog({
                       )}
                       onClick={() => {
                         setTargetCount(cnt)
-                        loadQuestions(cnt)
                       }}
                       title={`切换为出 ${cnt} 道题`}
                     >
@@ -250,7 +249,7 @@ export function AiQuizDialog({
         {phase === 'answering' && currentQuestion && (
           <div className="space-y-3.5 py-1">
             {/* 试卷题卡导航 Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {questions.map((q, idx) => {
                 const isFilled = (userAnswers[q.id] || '').trim().length > 0
                 return (
@@ -432,7 +431,7 @@ export function AiQuizDialog({
             </div>
 
             {/* 逐题批改切换标签 */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {questions.map((q, idx) => {
                 const sub = submissions[q.id]
                 return (
