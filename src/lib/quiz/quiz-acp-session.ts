@@ -132,3 +132,14 @@ export async function sendQuizPrompt(promptText: string): Promise<string | null>
 
   return currentReplyBuffer.trim()
 }
+
+/**
+ * 手动强制重置并启动全新考官会话（清空短期记忆与上下文）
+ */
+export async function resetQuizSession(): Promise<string | null> {
+  sessionState.sessionId = null
+  sessionState.promptCount = 0
+  sessionState.lastUsedAt = 0
+  currentReplyBuffer = ''
+  return getOrCreateQuizSessionId()
+}

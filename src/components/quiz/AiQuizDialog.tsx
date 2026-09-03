@@ -25,6 +25,7 @@ import {
   evaluateAnswerWithAi,
   generateQuestionWithAi,
 } from '@/lib/quiz/quiz-evaluator'
+import { resetQuizSession } from '@/lib/quiz/quiz-acp-session'
 import { defaultQuizRepository } from '@/lib/quiz/quiz-storage-jsonl'
 import { toast } from 'sonner'
 
@@ -137,20 +138,39 @@ export function AiQuizDialog({
                 AI 伴读考官 · 深度思考提问
               </DialogTitle>
             </div>
-            {onOpenHistory ? (
+            <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  onOpenChange(false)
-                  onOpenHistory()
+                title="手动重置并开启全新考官会话（清空上下文记忆）"
+                onClick={async () => {
+                  setPhase('generating')
+                  await resetQuizSession()
+                  toast.success('已重置考官会话，正在重新出题...')
+                  const q = await generateQuestionWithAi(passage, chapterTitle, markId)
+                  setQuestion(q)
+                  setPhase('answering')
                 }}
               >
-                <History className="size-3.5" />
-                历史成绩回放
+                <RotateCcw className="size-3.5" />
+                重启新会话
               </Button>
-            ) : null}
+              {onOpenHistory ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    onOpenChange(false)
+                    onOpenHistory()
+                  }}
+                >
+                  <History className="size-3.5" />
+                  历史成绩回放
+                </Button>
+              ) : null}
+            </div>
           </div>
           <DialogDescription id="ai-quiz-dialog-desc" className="text-xs text-muted-foreground line-clamp-1">
             《{bookTitle}》· {chapterTitle || '当前章节'}

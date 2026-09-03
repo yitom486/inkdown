@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bookmark, ChevronDown, ChevronRight, Download, Highlighter, History, MessageSquare, Sparkles, Target, Trash2 } from 'lucide-react'
+import { Bookmark, ChevronDown, ChevronRight, Download, Highlighter, History, MessageSquare, RotateCcw, Sparkles, Target, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { resetQuizSession } from '@/lib/quiz/quiz-acp-session'
+import { toast } from 'sonner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -255,6 +257,16 @@ export function ReadingMarkPanel({
                 >
                   <Sparkles className="size-3.5 text-amber-500" />
                   针对重点出题
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs gap-1.5"
+                  onClick={async () => {
+                    await resetQuizSession()
+                    toast.success('已强制重置考官记忆，下次答题将建立全新会话')
+                  }}
+                >
+                  <RotateCcw className="size-3.5 text-muted-foreground" />
+                  强制开启新会话
                 </DropdownMenuItem>
                 {onOpenQuizHistory ? (
                   <DropdownMenuItem
