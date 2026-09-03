@@ -91,6 +91,7 @@ let inkdownMcp: InkdownMcpServerHandle | null = null
 const pendingPermissions = new Map<number, { resolve: (value: PermissionDecision) => void }>()
 const sessionUpdateListeners = new Set<AcpSessionUpdateListener>()
 const statusListeners = new Set<AcpStatusListener>()
+let activePromptSessionId: string | null = null
 
 function setStatus(next: AcpConnectionStatus, errorMessage?: string): void {
   status = next
@@ -259,7 +260,10 @@ async function handlePermissionRequest(
 
 function emitSessionUpdate(params: Record<string, unknown>): void {
   if (suppressSessionUpdates) return
-  const sid = typeof params.sessionId === 'string' ? params.sessionId : (sessionId ?? '')
+  const sid =
+    typeof params.sessionId === 'string' && params.sessionId.trim()
+      ? params.sessionId.trim()
+      : (activePromptSessionId ?? sessionId ?? '')
   const update =
     params.update && typeof params.update === 'object'
       ? (params.update as Record<string, unknown>)
@@ -708,6 +712,8 @@ export async function promptAcp(payload: {
     return err({ code: 'ACP_PROTOCOL_ERROR', message: 'prompt 不能为空' })
   }
 
+  const prevActiveSessionId = activePromptSessionId
+  activePromptSessionId = payload.sessionId
   try {
     const result = (await t.value.request('session/prompt', {
       sessionId: payload.sessionId,
@@ -717,6 +723,8 @@ export async function promptAcp(payload: {
     return ok({ stopReason })
   } catch (error) {
     return err(toProtocolError(error, '发送 prompt 失败'))
+  } finally {
+    activePromptSessionId = prevActiveSessionId
   }
 }
 

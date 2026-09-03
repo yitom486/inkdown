@@ -79,4 +79,22 @@ describe('quiz-evaluator', () => {
     expect(fallbackEval.score).toBeGreaterThan(60)
     expect(fallbackEval.feedback).toContain('字')
   })
+
+  it('parses raw unfenced JSON with leading conversational preamble', () => {
+    const raw = `Natural English: Please design an insightful deep-reading question about the highlighted passage and provide two or three standard scoring points in the specified JSON format.
+{
+  "title": "多重视角下的中国农村研究",
+  "prompt": "这四部著作分别从受苦者叙事、农民反行为、村庄生活和农业不确定性等角度研究中国农村。它们共同提示我们：理解农村历史是否必须结合个体经验、社会行为、村庄日常与次级结构？请说明这些视角之间可能形成的互补关系，并分析单一视角可能带来的局限。",
+  "keyPoints": [
+    "指出四部著作分别代表微观故事、社会行为、村庄生活与宏观结构的相互补充。",
+    "说明综合这些视角有助于把个体苦难、群体行动、日常生活的制度或环境因素联系起来。",
+    "能够批判性分析单一视角的局限，如过度微观化、忽视主体经验、或过度抽象化、难以解释整体机制。"
+  ]
+}`
+    const parsed = parseQuestionResponse(raw)
+    expect(parsed).not.toBeNull()
+    expect(parsed?.title).toBe('多重视角下的中国农村研究')
+    expect(parsed?.prompt).toContain('这四部著作分别从受苦者叙事')
+    expect(parsed?.keyPoints).toHaveLength(3)
+  })
 })

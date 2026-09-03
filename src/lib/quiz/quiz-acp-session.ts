@@ -25,6 +25,14 @@ const MAX_PROMPT_COUNT = 8
 
 // 当前流式回复累加器
 let currentReplyBuffer = ''
+let activePrompting = false
+
+/**
+ * 校验当前是否处于考官出题/判卷 Prompt 流转中
+ */
+export function isQuizPrompting(): boolean {
+  return activePrompting
+}
 
 /**
  * 校验当前 ACP sessionId 是否归属考官副会话
@@ -41,7 +49,7 @@ export function accumulateQuizSessionUpdate(
   sessionId: string,
   update: Record<string, unknown>,
 ): void {
-  if (!quizOwnsSessionId(sessionId)) return
+  if (!quizOwnsSessionId(sessionId) && !activePrompting) return
 
   const text = extractTextFromContent(update.content)
   if (text) {
@@ -120,17 +128,22 @@ export async function sendQuizPrompt(promptText: string): Promise<string | null>
   currentReplyBuffer = ''
   sessionState.promptCount++
   sessionState.lastUsedAt = Date.now()
+  activePrompting = true
 
-  const result = await acpApi.prompt({
-    sessionId: sid,
-    prompt: [{ type: 'text', text: promptText }],
-  })
+  try {
+    const result = await acpApi.prompt({
+      sessionId: sid,
+      prompt: [{ type: 'text', text: promptText }],
+    })
 
-  if (!isOk(result)) {
-    return null
+    if (!isOk(result)) {
+      return null
+    }
+
+    return currentReplyBuffer.trim()
+  } finally {
+    activePrompting = false
   }
-
-  return currentReplyBuffer.trim()
 }
 
 /**
