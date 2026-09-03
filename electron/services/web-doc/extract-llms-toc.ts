@@ -34,9 +34,8 @@ export function normalizeLlmsDocHref(href: string, baseOrigin: string): string |
 }
 
 /**
- * 路径段用于建树时：去掉版本号段（v1/v2）。
- * 原站里版本是 Protocol 下的切换器，不是与章节平行的强制文件夹；
- * 多版本同名页再用 (v2) 区分即可。
+ * 路径段原样用于建树（含 v1/v2）。
+ * 文档站 URL 里版本目录本身就是层级（如 /protocol/v1/overview），与原站侧栏一致。
  */
 export function structuralPathParts(parts: string[]): {
   groupParts: string[]
@@ -48,27 +47,21 @@ export function structuralPathParts(parts: string[]): {
   }
 
   const version = parts.find((part) => isVersionPathSegment(part)) ?? null
-  const withoutVersion = parts.filter((part) => !isVersionPathSegment(part))
-  if (withoutVersion.length === 0) {
-    return { groupParts: [], leafPart: null, version }
-  }
-
   return {
-    groupParts: withoutVersion.slice(0, -1),
-    leafPart: withoutVersion[withoutVersion.length - 1]!,
+    groupParts: parts.slice(0, -1),
+    leafPart: parts[parts.length - 1]!,
     version,
   }
 }
 
 /**
  * 解析 llms.txt（文档站常见索引）：`- [Title](url): desc`
- * 按路径栏目建树；版本号路径段（v1/v2）不强制加成中间层。
+ * 按 URL 路径段建树；版本号段（v1/v2）保留为中间层，对齐原站。
  */
 export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEntry[] {
   const entries: WebDocTocEntry[] = []
   const seenLeaves = new Set<string>()
   const emittedGroups = new Set<string>()
-  /** 同一父级下已出现的叶子标题 → 是否需版本后缀 */
   const labelsUnderParent = new Map<string, Set<string>>()
 
   const linkPattern = /^\s*-\s*\[([^\]]+)\]\(([^)\s]+)\)/gm
@@ -98,7 +91,7 @@ export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEn
       continue
     }
 
-    const { groupParts, version } = structuralPathParts(parts)
+    const { groupParts } = structuralPathParts(parts)
 
     for (let i = 0; i < groupParts.length; i++) {
       const prefix = groupParts.slice(0, i + 1).join('/')
@@ -119,13 +112,10 @@ export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEn
     const parentKey = groupParts.join('/') || '_'
     const used = labelsUnderParent.get(parentKey) ?? new Set<string>()
     let label = rawLabel
-    if (used.has(rawLabel) && version) {
-      label = `${rawLabel} (${version})`
-    } else if (used.has(rawLabel) && !version) {
+    if (used.has(rawLabel)) {
       label = `${rawLabel} (${parts[parts.length - 1]})`
     }
     used.add(rawLabel)
-    // 若已用过带版本的同名，也记下最终展示名避免重复
     used.add(label)
     labelsUnderParent.set(parentKey, used)
 
@@ -148,7 +138,6 @@ export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEn
 export function looksLikeDocsIndexCandidate(html: string): boolean {
   if (/\bhref=["'][^"']*llms\.txt["']/i.test(html)) return true
   if (/\/llms\.txt/i.test(html)) return true
-  // 常见文档侧栏容器（Mintlify / Docusaurus 等都会用，非某一站点）
   if (/<nav\b[^>]*\bid=["']sidebar["']/i.test(html)) return true
   if (/<nav\b[^>]*aria-label=["'][^"']*pages[^"']*["']/i.test(html)) return true
   return false

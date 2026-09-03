@@ -18,32 +18,35 @@ const LLMS_FIXTURE = `# Agent Client Protocol
 `
 
 describe('extractLlmsTxtToc', () => {
-  it('不把 URL 中的 v1 加成强制中间层，页面直接挂在 Protocol 下', () => {
+  it('保留 URL 中的 v1/v2 作为中间层，对齐原站 Protocol → v1 → 页面', () => {
     const entries = extractLlmsTxtToc(LLMS_FIXTURE, 'https://agentclientprotocol.com')
     expect(entries.map((e) => `${e.level}:${e.label}`)).toEqual([
       '0:Get Started',
       '1:Introduction',
       '1:Architecture',
       '0:Protocol',
-      '1:Overview',
-      '1:Initialization',
-      '1:Overview (v2)',
+      '1:v1',
+      '2:Overview',
+      '2:Initialization',
+      '1:v2',
+      '2:Overview',
       '0:Libraries',
       '1:Kotlin',
       '0:Brand',
     ])
-    expect(entries.find((e) => e.label === 'Overview')?.href).toContain('/protocol/v1/overview')
+    expect(entries.find((e) => e.label === 'v1')?.href).toContain('/protocol/v1/overview')
     expect(normalizeLlmsDocHref('/protocol/v1/overview.md', 'https://agentclientprotocol.com')).toBe(
       'https://agentclientprotocol.com/protocol/v1/overview',
     )
   })
 
-  it('structuralPathParts 剥离版本段', () => {
+  it('structuralPathParts 保留版本段', () => {
     expect(structuralPathParts(['protocol', 'v1', 'overview'])).toEqual({
-      groupParts: ['protocol'],
+      groupParts: ['protocol', 'v1'],
       leafPart: 'overview',
       version: 'v1',
     })
     expect(humanizePathSegment('get-started')).toBe('Get Started')
+    expect(humanizePathSegment('v1')).toBe('v1')
   })
 })
