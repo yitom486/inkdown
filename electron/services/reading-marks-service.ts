@@ -11,15 +11,16 @@ import type {
   UpdateReadingMarkPayload,
 } from '@shared/types/reading-mark'
 
-interface ReadingMarksFile {
+export interface ReadingMarksFile {
   marks: ReadingMark[]
+  tombstones?: Record<string, number>
 }
 
-function getMarksFilePath(): string {
+export function getMarksFilePath(): string {
   return join(app.getPath('userData'), 'reading-marks.json')
 }
 
-async function readStore(): Promise<ReadingMarksFile> {
+export async function readMarksStore(): Promise<ReadingMarksFile> {
   const filePath = getMarksFilePath()
   try {
     const raw = await readFile(filePath, 'utf-8')
@@ -36,10 +37,18 @@ async function readStore(): Promise<ReadingMarksFile> {
   }
 }
 
-async function writeStore(store: ReadingMarksFile): Promise<void> {
+export async function writeMarksStore(store: ReadingMarksFile): Promise<void> {
   const filePath = getMarksFilePath()
   await mkdir(app.getPath('userData'), { recursive: true })
   await writeFile(filePath, `${JSON.stringify(store, null, 2)}\n`, 'utf-8')
+}
+
+async function readStore(): Promise<ReadingMarksFile> {
+  return readMarksStore()
+}
+
+async function writeStore(store: ReadingMarksFile): Promise<void> {
+  return writeMarksStore(store)
 }
 
 function normalizeMarkFilePath(filePath: string): string {
@@ -155,7 +164,11 @@ export async function deleteReadingMark(id: string): Promise<Result<void, AppErr
     if (nextMarks.length === store.marks.length) {
       return err({ code: 'FILE_NOT_FOUND', message: '书签不存在' })
     }
-    await writeStore({ marks: nextMarks })
+    const tombstones = {
+      ...(store.tombstones ?? {}),
+      [id]: Date.now(),
+    }
+    await writeStore({ marks: nextMarks, tombstones })
     return ok(undefined)
   } catch (error) {
     return err(toAppError(error, '删除书签失败'))

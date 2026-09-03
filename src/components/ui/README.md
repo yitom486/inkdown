@@ -6,7 +6,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `button` / `dialog` / `alert-dialog` | 按钮与对话框 |
+| `button` / `dialog` / `alert-dialog` / `input` | 按钮与表单对话框 |
 | `dropdown-menu` / `menubar` | 菜单 |
 | `breadcrumb` / `separator` / `scroll-area` | 导航与布局装饰 |
 | `resizable` | `react-resizable-panels` 封装 |

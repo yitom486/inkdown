@@ -40,6 +40,10 @@ import type {
   SavePdfOcrTocPayload,
 } from '@shared/types/ocr'
 import { ok, err } from '@shared/core/result'
+import type { SyncConfig } from '@shared/types/sync'
+import { syncManager } from '../services/sync/sync-manager'
+import { readSyncConfig, writeSyncConfig } from '../services/sync/sync-config-service'
+import { writeLocalProgress } from '../services/sync/reading-progress-sync'
 import {
   exportHtmlDocument,
   exportPdfDocument,
@@ -541,4 +545,24 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.OCR_CANCEL_COMPONENT_DOWNLOAD, async () =>
     ok(await cancelOcrComponentDownload()),
   )
+
+  // --- 云端同步 (WebDAV) ---
+  ipcMain.handle(IPC.SYNC_GET_CONFIG, async () => readSyncConfig())
+  ipcMain.handle(IPC.SYNC_SAVE_CONFIG, async (_event, config: SyncConfig) =>
+    writeSyncConfig(config),
+  )
+  ipcMain.handle(IPC.SYNC_TEST_CONNECTION, async (_event, config?: SyncConfig) =>
+    syncManager.testConnection(config),
+  )
+  ipcMain.handle(IPC.SYNC_RUN_NOW, async () => syncManager.runSyncNow())
+  ipcMain.handle(IPC.SYNC_GET_STATUS, async () => ok(syncManager.getStatus()))
+  ipcMain.handle(IPC.SYNC_SAVE_LOCAL_PROGRESS, async (_event, progressJson: string) => {
+    try {
+      const parsed = JSON.parse(progressJson)
+      await writeLocalProgress(parsed)
+      return ok(undefined)
+    } catch {
+      return ok(undefined)
+    }
+  })
 }

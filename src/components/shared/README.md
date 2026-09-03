@@ -5,6 +5,7 @@
 | 文件 | 功能 |
 |------|------|
 | `SettingsDialog` / `AboutDialog` / `UpdatePromptHost` | 设置、关于、更新提示 |
+| `SyncSettingsSection` | WebDAV 云同步配置与状态管理面板 |
 | `QuickOpenDialog` | 全局快速切换文件对话框（Ctrl+P） |
 | `UnsavedChangesDialog` / `DraftRecoveryDialog` | 未保存确认、草稿恢复 |
 | `ErrorLogDialog` / `ErrorBanner` | 错误日志与横幅 |

@@ -8,6 +8,7 @@ import { initAppUpdater } from './services/app-updater'
 import { disposeAllAcp } from './services/acp/acp-client'
 import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
 import { shutdownOcrWorker } from './services/ocr/ocr-worker'
+import { syncManager } from './services/sync/sync-manager'
 
 // 注册应用自定义深度协议 inkdown://
 if (process.defaultApp) {
@@ -18,9 +19,17 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('inkdown')
 }
 
-// 开发环境下隔离应用数据目录，避免与已安装的正式版互相冲突锁定或污染数据
+// 开发环境下隔离应用数据目录，避免与已安装的正式版互相冲突锁定或污染数据；若命令行显式传入了 --user-data-dir 则优先遵循
 if (!app.isPackaged) {
-  app.setPath('userData', path.join(app.getPath('appData'), 'inkdown-dev'))
+  const customUserDataArg = process.argv.find((arg) => arg.startsWith('--user-data-dir='))
+  if (customUserDataArg) {
+    const customDir = customUserDataArg.slice('--user-data-dir='.length).trim()
+    if (customDir) {
+      app.setPath('userData', customDir)
+    }
+  } else {
+    app.setPath('userData', path.join(app.getPath('appData'), 'inkdown-dev'))
+  }
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -53,6 +62,7 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   initAppUpdater()
   createWindow()
+  syncManager.initAutoSync()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

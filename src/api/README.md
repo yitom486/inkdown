@@ -11,6 +11,7 @@
 | `acp-api.ts` | ACP Agent：连接、prompt、权限、配置 |
 | `reading-marks-api.ts` | 书签 / 高亮 / 批注 CRUD |
 | `quiz-api.ts` | AI 测验与答题打分记录持久化（JSONL） |
+| `sync-api.ts` | 云端同步（WebDAV 配置、连接测试、双向同步） |
 | `web-doc-api.ts` | 在线文档：抓取页面、发现目录 |
 | `query-keys.ts` | TanStack Query key 工厂 |
 

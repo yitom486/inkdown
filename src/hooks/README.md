@@ -43,6 +43,7 @@
 | `useReadingMarkInspector` | 点击高亮后的浮层：命中栈、当前标记、位置 |
 | `useReaderSidePanels` | 目录侧栏与标记侧栏互斥开关 |
 | `useReaderWheelNavigation` | 滚轮到顶/底翻页。逻辑已抽出，Viewer 里仍有内联调用，此 Hook **暂无引用** |
+| `useSyncProgressBridge` | 阅读进度 Store 与主进程云同步双向桥接 |
 
 ## workspace/
 

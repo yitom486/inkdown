@@ -5,7 +5,7 @@ import { toAppError, type AppError } from '@shared/core/errors'
 import { err, ok, type Result } from '@shared/core/result'
 import type { QuizSessionRecord } from '@shared/types/quiz'
 
-function getQuizFilePath(): string {
+export function getQuizFilePath(): string {
   return join(app.getPath('userData'), 'quiz-records.jsonl')
 }
 

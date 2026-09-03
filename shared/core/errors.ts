@@ -15,6 +15,11 @@ export type AppErrorCode =
   | 'OCR_PAGE_EMPTY'
   | 'OCR_FAILED'
   | 'INVALID_ARGUMENT'
+  | 'INVALID_STATE'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NETWORK_ERROR'
+  | 'SYNC_ERROR'
   | 'UNKNOWN'
 
 export interface AppError {

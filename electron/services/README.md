@@ -19,6 +19,12 @@
 | `reading-marks-service.ts` | 书签 / 高亮 / 批注 JSON 持久化（`userData`） |
 | `quiz-service.ts` | AI 测验与答题打分记录 JSONL 追加型持久化（`userData`） |
 
+## 云端同步 (WebDAV)
+
+| 目录 | 功能 |
+|------|------|
+| `sync/` | WebDAV 存储适配器、划线/进度/测验双向智能归并、同步管理器 |
+
 ## 应用壳
 
 | 文件 | 功能 |

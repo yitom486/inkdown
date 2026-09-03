@@ -25,6 +25,7 @@ import { useExportDocument } from '@/hooks/editor/useExportDocument'
 import { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 import { useGlobalErrorHandlers } from '@/hooks/workspace/useGlobalErrorHandlers'
 import { useAppMeta, useFileOperations } from '@/hooks/workspace/useFileOperations'
+import { useSyncProgressBridge } from '@/hooks/reader/useSyncProgressBridge'
 import { pickLatestRecoverableDraft } from '@/lib/editor/draft-utils'
 import { resolveStartupRestoreTarget } from '@/lib/workspace/workspace-session'
 import { reportAppError, reportUnknownError } from '@/lib/workspace/report-error'
@@ -120,6 +121,7 @@ function App() {
     isDirty,
   })
   useGlobalErrorHandlers(filePath)
+  useSyncProgressBridge()
 
   const handleAutoSave = useCallback(async () => {
     if (!isMarkdownDocument || !filePath || !isDirty || isFileBusy) return

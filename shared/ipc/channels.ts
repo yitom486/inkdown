@@ -163,6 +163,22 @@ export const IPC = {
   QUIZ_GET_ALL_SESSIONS: 'quiz:get-all-sessions',
   /** invoke：按书籍路径读取测验历史 */
   QUIZ_GET_SESSIONS_BY_FILE: 'quiz:get-sessions-by-file',
+  /** invoke：读取同步配置 */
+  SYNC_GET_CONFIG: 'sync:get-config',
+  /** invoke：保存同步配置 */
+  SYNC_SAVE_CONFIG: 'sync:save-config',
+  /** invoke：测试 WebDAV 连通性与权限 */
+  SYNC_TEST_CONNECTION: 'sync:test-connection',
+  /** invoke：立即执行一次双向同步 */
+  SYNC_RUN_NOW: 'sync:run-now',
+  /** invoke：获取当前同步状态 */
+  SYNC_GET_STATUS: 'sync:get-status',
+  /** main→renderer：同步状态更新推送 */
+  SYNC_STATUS_CHANGED: 'sync:status-changed',
+  /** main→renderer：推送远端最新阅读进度给渲染端 Store */
+  SYNC_APPLY_REMOTE_PROGRESS: 'sync:apply-remote-progress',
+  /** invoke：渲染端把最新阅读进度快照推送到主进程持久化保存 */
+  SYNC_SAVE_LOCAL_PROGRESS: 'sync:save-local-progress',
 } as const
 
 /** `IPC` 全部通道字符串的联合类型，用于约束 handle/on/invoke 的 channel 参数 */

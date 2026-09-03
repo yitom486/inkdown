@@ -58,6 +58,18 @@ interface ReadingProgressStore {
   getWebProgress: (pageUrl: string) => WebReadingProgress | undefined
   saveWebProgress: (pageUrl: string, progress: Pick<WebReadingProgress, 'scrollRatio'>) => void
   clearWebProgress: (pageUrl: string) => void
+  exportProgressSnapshot: () => {
+    epubByFile: Record<string, EpubReadingProgress>
+    mobiByFile: Record<string, MobiReadingProgress>
+    pdfByFile: Record<string, PdfReadingProgress>
+    webByUrl: Record<string, WebReadingProgress>
+  }
+  importProgressSnapshot: (snapshot: {
+    epubByFile?: Record<string, EpubReadingProgress>
+    mobiByFile?: Record<string, MobiReadingProgress>
+    pdfByFile?: Record<string, PdfReadingProgress>
+    webByUrl?: Record<string, WebReadingProgress>
+  }) => void
 }
 
 function normalizeFilePath(filePath: string): string | undefined {
@@ -266,6 +278,42 @@ export const useReadingProgressStore = create<ReadingProgressStore>()(
           const next = { ...state.webByUrl }
           delete next[normalized]
           return { webByUrl: next }
+        })
+      },
+
+      exportProgressSnapshot: () => {
+        const state = get()
+        return {
+          epubByFile: { ...state.epubByFile },
+          mobiByFile: { ...state.mobiByFile },
+          pdfByFile: { ...state.pdfByFile },
+          webByUrl: { ...state.webByUrl },
+        }
+      },
+
+      importProgressSnapshot: (snapshot) => {
+        set((state) => {
+          const mergeDict = <T extends { updatedAt: number }>(
+            currentDict: Record<string, T>,
+            remoteDict?: Record<string, T>,
+          ): Record<string, T> => {
+            if (!remoteDict) return currentDict
+            const next = { ...currentDict }
+            for (const [key, remoteVal] of Object.entries(remoteDict)) {
+              const currentVal = next[key]
+              if (!currentVal || remoteVal.updatedAt > currentVal.updatedAt) {
+                next[key] = remoteVal
+              }
+            }
+            return next
+          }
+
+          return {
+            epubByFile: mergeDict(state.epubByFile, snapshot.epubByFile),
+            mobiByFile: mergeDict(state.mobiByFile, snapshot.mobiByFile),
+            pdfByFile: mergeDict(state.pdfByFile, snapshot.pdfByFile),
+            webByUrl: mergeDict(state.webByUrl, snapshot.webByUrl),
+          }
         })
       },
     }),

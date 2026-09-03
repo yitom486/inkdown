@@ -71,7 +71,9 @@ describe('reading-marks-service', () => {
     expect(emptyList.value).toHaveLength(0)
 
     const raw = await readFile(join(tempUserData, 'reading-marks.json'), 'utf-8')
-    expect(JSON.parse(raw)).toEqual({ marks: [] })
+    const parsed = JSON.parse(raw)
+    expect(parsed.marks).toEqual([])
+    expect(typeof parsed.tombstones?.[createResult.value.id]).toBe('number')
   })
 
   it('空路径创建失败', async () => {

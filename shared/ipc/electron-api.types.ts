@@ -69,6 +69,12 @@ import type {
 } from '@shared/types/ocr'
 import type { AppUpdateStatus } from '@shared/types/app-update'
 import type { BunRuntimeStatus } from '@shared/types/bun'
+import type {
+  SyncConfig,
+  SyncStatus,
+  TestConnectionResult,
+  SyncExecuteResult,
+} from '@shared/types/sync'
 
 /**
  * preload `contextBridge` 暴露给渲染进程的 API（`window.electronAPI`）。
@@ -267,4 +273,20 @@ export interface ElectronAPI {
   getAllQuizSessions: () => Promise<Result<QuizSessionRecord[], AppError>>
   /** 按书籍路径读取测验历史 */
   getQuizSessionsByFile: (filePath: string) => Promise<Result<QuizSessionRecord[], AppError>>
+  /** 获取云同步配置 */
+  getSyncConfig: () => Promise<Result<SyncConfig, AppError>>
+  /** 保存云同步配置 */
+  saveSyncConfig: (config: SyncConfig) => Promise<Result<void, AppError>>
+  /** 测试云端连接与目录权限 */
+  testSyncConnection: (config?: SyncConfig) => Promise<Result<TestConnectionResult, AppError>>
+  /** 立即执行一次双向同步 */
+  runSyncNow: () => Promise<Result<SyncExecuteResult, AppError>>
+  /** 获取当前同步状态 */
+  getSyncStatus: () => Promise<Result<SyncStatus, AppError>>
+  /** 监听同步状态变化推送；返回取消订阅函数 */
+  onSyncStatusChanged: (callback: (status: SyncStatus) => void) => () => void
+  /** 监听主进程下发的远端阅读进度合并数据；返回取消订阅函数 */
+  onApplyRemoteProgress: (callback: (progressJson: string) => void) => () => void
+  /** 保存渲染端阅读进度快照到本地主进程文件 */
+  saveLocalProgress: (progressJson: string) => Promise<Result<void, AppError>>
 }

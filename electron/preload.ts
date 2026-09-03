@@ -199,6 +199,31 @@ const electronAPI: ElectronAPI = {
   getAllQuizSessions: () => ipcRenderer.invoke(IPC.QUIZ_GET_ALL_SESSIONS),
   getQuizSessionsByFile: (filePath: string) =>
     ipcRenderer.invoke(IPC.QUIZ_GET_SESSIONS_BY_FILE, filePath),
+  getSyncConfig: () => ipcRenderer.invoke(IPC.SYNC_GET_CONFIG),
+  saveSyncConfig: (config) => ipcRenderer.invoke(IPC.SYNC_SAVE_CONFIG, config),
+  testSyncConnection: (config) => ipcRenderer.invoke(IPC.SYNC_TEST_CONNECTION, config),
+  runSyncNow: () => ipcRenderer.invoke(IPC.SYNC_RUN_NOW),
+  getSyncStatus: () => ipcRenderer.invoke(IPC.SYNC_GET_STATUS),
+  onSyncStatusChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]) => {
+      callback(status)
+    }
+    ipcRenderer.on(IPC.SYNC_STATUS_CHANGED, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.SYNC_STATUS_CHANGED, handler)
+    }
+  },
+  onApplyRemoteProgress: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, progressJson: string) => {
+      callback(progressJson)
+    }
+    ipcRenderer.on(IPC.SYNC_APPLY_REMOTE_PROGRESS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.SYNC_APPLY_REMOTE_PROGRESS, handler)
+    }
+  },
+  saveLocalProgress: (progressJson: string) =>
+    ipcRenderer.invoke(IPC.SYNC_SAVE_LOCAL_PROGRESS, progressJson),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
