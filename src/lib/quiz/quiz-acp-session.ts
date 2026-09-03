@@ -19,9 +19,9 @@ const sessionState: QuizSessionState = {
   promptCount: 0,
 }
 
-// 轮转配置：空闲超过 20 分钟，或完成 8 轮交互后，自动平滑轮转至新会话
-const MAX_IDLE_TIME_MS = 20 * 60 * 1000
-const MAX_PROMPT_COUNT = 8
+// 轮转配置：空闲超过 2 小时，或完成 20 轮交互后，自动平滑轮转至新会话
+const MAX_IDLE_TIME_MS = 2 * 60 * 60 * 1000
+const MAX_PROMPT_COUNT = 20
 
 // 当前流式回复累加器
 let currentReplyBuffer = ''

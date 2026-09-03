@@ -63,9 +63,11 @@ export function QuizHistoryDialog({
     }
   }, [open, filePath])
 
+  const [activeQuestionIdx, setActiveQuestionIdx] = useState<number>(0)
+
   const currentSession = sessions.find((s) => s.id === selectedId)
-  const firstQuestion = currentSession?.questions[0]
-  const submission = firstQuestion ? currentSession?.submissions[firstQuestion.id] : null
+  const activeQuestion = currentSession?.questions[activeQuestionIdx] || currentSession?.questions[0]
+  const submission = activeQuestion ? currentSession?.submissions[activeQuestion.id] : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,7 +120,10 @@ export function QuizHistoryDialog({
                 return (
                   <button
                     key={sess.id}
-                    onClick={() => setSelectedId(sess.id)}
+                    onClick={() => {
+                      setSelectedId(sess.id)
+                      setActiveQuestionIdx(0)
+                    }}
                     className={cn(
                       'w-full text-left p-2.5 rounded-lg border transition-all flex flex-col gap-1',
                       isSelected
@@ -128,7 +133,7 @@ export function QuizHistoryDialog({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-foreground truncate max-w-[120px]">
-                        {q?.title || '深度思考测验'}
+                        {sess.questions.length > 1 ? `试卷 (${sess.questions.length}题)` : q?.title || '深度思考测验'}
                       </span>
                       <span
                         className={cn(
@@ -153,35 +158,35 @@ export function QuizHistoryDialog({
 
             {/* 右侧测验详情完整回放 (Replay) */}
             <div className="md:col-span-2 overflow-y-auto pl-1 pr-1 space-y-3 text-xs">
-              {currentSession && firstQuestion && submission ? (
+              {currentSession && activeQuestion && submission ? (
                 <>
                   {/* 分数条 */}
                   <div className="p-3 rounded-xl border border-border/80 bg-muted/30 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="text-base font-bold text-foreground">
-                        得分：<span className="text-primary text-lg">{submission.score}</span> / 100
+                        整卷得分：<span className="text-primary text-lg">{currentSession.totalScore}</span> / 100
                       </div>
                       <span
                         className={cn(
                           'text-[11px] font-bold px-2 py-0.5 rounded-full',
-                          submission.grade === 'A' && 'bg-emerald-500/20 text-emerald-500',
-                          submission.grade === 'B' && 'bg-blue-500/20 text-blue-500',
-                          submission.grade === 'C' && 'bg-amber-500/20 text-amber-500',
-                          submission.grade === 'D' && 'bg-rose-500/20 text-rose-500',
+                          currentSession.grade === 'A' && 'bg-emerald-500/20 text-emerald-500',
+                          currentSession.grade === 'B' && 'bg-blue-500/20 text-blue-500',
+                          currentSession.grade === 'C' && 'bg-amber-500/20 text-amber-500',
+                          currentSession.grade === 'D' && 'bg-rose-500/20 text-rose-500',
                         )}
                       >
-                        等级 {submission.grade}
+                        等级 {currentSession.grade}
                       </span>
                     </div>
 
-                    {onNavigateToMark && firstQuestion.markId ? (
+                    {onNavigateToMark && activeQuestion.markId ? (
                       <Button
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs gap-1 text-primary border-primary/40"
                         onClick={() => {
                           onOpenChange(false)
-                          onNavigateToMark(firstQuestion.markId!)
+                          onNavigateToMark(activeQuestion.markId!)
                         }}
                       >
                         <BookOpen className="size-3" />
@@ -190,14 +195,46 @@ export function QuizHistoryDialog({
                     ) : null}
                   </div>
 
+                  {/* 多题题卡切换 */}
+                  {currentSession.questions.length > 1 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {currentSession.questions.map((q, idx) => {
+                        const sub = currentSession.submissions[q.id]
+                        return (
+                          <button
+                            key={q.id}
+                            type="button"
+                            onClick={() => setActiveQuestionIdx(idx)}
+                            className={cn(
+                              'px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors shrink-0 flex items-center gap-1',
+                              activeQuestionIdx === idx
+                                ? 'bg-primary/10 text-primary border-primary/40'
+                                : 'bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60',
+                            )}
+                          >
+                            <span>第 {idx + 1} 题</span>
+                            {sub ? <span className="font-mono font-bold">({sub.score}分)</span> : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
                   {/* 题目 */}
                   <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-1">
-                    <div className="font-semibold text-primary flex items-center gap-1.5">
-                      <Sparkles className="size-3.5" />
-                      考题：{firstQuestion.title}
+                    <div className="font-semibold text-primary flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="size-3.5" />
+                        <span>考题：{activeQuestion.title}</span>
+                      </div>
+                      {activeQuestion.tag ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                          {activeQuestion.tag}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="text-foreground/90 font-medium leading-relaxed">
-                      {firstQuestion.prompt}
+                      {activeQuestion.prompt}
                     </p>
                   </div>
 
@@ -247,9 +284,9 @@ export function QuizHistoryDialog({
                         onClick={() => {
                           onOpenChange(false)
                           onRetryQuestion(
-                            firstQuestion.sourceExcerpt,
-                            firstQuestion.chapterTitle,
-                            firstQuestion.markId,
+                            activeQuestion.sourceExcerpt,
+                            activeQuestion.chapterTitle,
+                            activeQuestion.markId,
                           )
                         }}
                       >

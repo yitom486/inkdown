@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bookmark, ChevronDown, ChevronRight, Download, Highlighter, History, MessageSquare, RotateCcw, Sparkles, Target, Trash2 } from 'lucide-react'
+import { Bookmark, BookOpen, ChevronDown, ChevronRight, Download, Highlighter, History, MessageSquare, RotateCcw, Sparkles, Target, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { resetQuizSession } from '@/lib/quiz/quiz-acp-session'
 import { toast } from 'sonner'
@@ -159,7 +159,7 @@ interface ReadingMarkPanelProps {
   onExportNotes?: (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => void
   onExportAnkiCards?: (scope: ReadingNotesScope) => void
   onReviewFlashcards?: (scope: ReadingNotesScope) => void
-  onOpenQuiz?: (mark?: ReadingMark) => void
+  onOpenQuiz?: (mark?: ReadingMark, scope?: 'mark' | 'chapter' | 'book') => void
   onOpenQuizHistory?: () => void
   onQuizMark?: (mark: ReadingMark) => void
   /** 按目录分组；不传则扁平列表 */
@@ -253,10 +253,17 @@ export function ReadingMarkPanel({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-xs gap-1.5"
-                  onClick={() => onOpenQuiz()}
+                  onClick={() => onOpenQuiz?.(undefined, 'mark')}
                 >
                   <Sparkles className="size-3.5 text-amber-500" />
-                  针对重点出题
+                  针对重点出卷 (3题)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs gap-1.5"
+                  onClick={() => onOpenQuiz?.(undefined, 'chapter')}
+                >
+                  <BookOpen className="size-3.5 text-blue-500" />
+                  本章重点综合卷 (3题)
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-xs gap-1.5"

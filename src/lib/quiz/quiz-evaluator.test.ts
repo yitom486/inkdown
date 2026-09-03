@@ -4,6 +4,9 @@ import {
   buildSingleQuestionPrompt,
   evaluateFallbackAnswer,
   generateFallbackQuestion,
+  generateFallbackQuestions,
+  parseBatchEvaluationResponse,
+  parseBatchQuestionsResponse,
   parseEvaluationResponse,
   parseQuestionResponse,
 } from './quiz-evaluator'
@@ -96,5 +99,99 @@ describe('quiz-evaluator', () => {
     expect(parsed?.title).toBe('多重视角下的中国农村研究')
     expect(parsed?.prompt).toContain('这四部著作分别从受苦者叙事')
     expect(parsed?.keyPoints).toHaveLength(3)
+  })
+
+  it('builds and parses multi-question batch responses with tags', () => {
+    const raw = `
+\`\`\`json
+{
+  "questions": [
+    {
+      "title": "农村微观经验认知",
+      "tag": "概念认知",
+      "prompt": "请概括作者所说的微观受苦者经验的核心意涵。",
+      "keyPoints": ["个体受苦叙事", "日常生活逻辑"]
+    },
+    {
+      "title": "次级制度逻辑推演",
+      "tag": "逻辑推导",
+      "prompt": "村庄制度与农民反行为之间存在怎样的互动逻辑？",
+      "keyPoints": ["反行为的诱因", "制度弹性的双向制约"]
+    },
+    {
+      "title": "跨学科视角反思",
+      "tag": "批判反思",
+      "prompt": "结合当代视角，过度强调微观叙事可能带来哪些认识局限？",
+      "keyPoints": ["宏观结构遮蔽", "主体主观化偏差"]
+    }
+  ]
+}
+\`\`\`
+`
+    const parsed = parseBatchQuestionsResponse(raw)
+    expect(parsed).not.toBeNull()
+    expect(parsed).toHaveLength(3)
+    expect(parsed![0].title).toBe('农村微观经验认知')
+    expect(parsed![0].tag).toBe('概念认知')
+    expect(parsed![1].tag).toBe('逻辑推导')
+    expect(parsed![2].tag).toBe('批判反思')
+  })
+
+  it('generates fallback questions with requested count', () => {
+    const questions = generateFallbackQuestions('书籍重点文字段落', 3, '第二章')
+    expect(questions).toHaveLength(3)
+    expect(questions[0].tag).toBe('概念理解')
+    expect(questions[1].tag).toBe('逻辑推导')
+    expect(questions[2].tag).toBe('批判延伸')
+  })
+
+  it('parses batch evaluation response across all questions', () => {
+    const q1: QuizQuestion = {
+      id: 'q-1',
+      title: '第1题',
+      prompt: '问题1',
+      keyPoints: ['要点1'],
+      sourceExcerpt: '摘录',
+    }
+    const q2: QuizQuestion = {
+      id: 'q-2',
+      title: '第2题',
+      prompt: '问题2',
+      keyPoints: ['要点2'],
+      sourceExcerpt: '摘录',
+    }
+    const raw = `
+\`\`\`json
+{
+  "totalScore": 88,
+  "overallFeedback": "整卷作答展现了深刻的逻辑见解。",
+  "evaluations": [
+    {
+      "questionId": "q-1",
+      "score": 90,
+      "hitKeyPoints": ["要点1"],
+      "missedKeyPoints": [],
+      "feedback": "第1题回答很棒。"
+    },
+    {
+      "questionId": "q-2",
+      "score": 86,
+      "hitKeyPoints": ["要点2"],
+      "missedKeyPoints": [],
+      "feedback": "第2题论证扎实。"
+    }
+  ]
+}
+\`\`\`
+`
+    const evaluated = parseBatchEvaluationResponse(raw, [q1, q2], {
+      'q-1': '我的答案1',
+      'q-2': '我的答案2',
+    })
+    expect(evaluated).not.toBeNull()
+    expect(evaluated?.totalScore).toBe(88)
+    expect(evaluated?.grade).toBe('B')
+    expect(evaluated?.submissions['q-1'].score).toBe(90)
+    expect(evaluated?.submissions['q-2'].score).toBe(86)
   })
 })

@@ -118,7 +118,32 @@ export function ReaderContentShell({
     }
   }
 
-  const handleOpenQuiz = (mark?: ReadingMark) => {
+  const handleOpenQuiz = (mark?: ReadingMark, scope?: 'mark' | 'chapter' | 'book') => {
+    if (scope === 'chapter') {
+      let chapterLabel = '当前章节'
+      const targetMarks = marks.filter((m) => {
+        if (passageExcerpt(m).trim().length === 0) return false
+        if (marksToc && marksResolveChapter && marksCurrentChapterKey) {
+          const ch = marksResolveChapter(m, marksToc)
+          return ch.key === marksCurrentChapterKey || ch.matchKey === marksCurrentChapterKey
+        }
+        return true
+      })
+      const combinedExcerpt = targetMarks.map((m) => passageExcerpt(m).trim()).join('\n\n')
+      if (!combinedExcerpt) {
+        toast.info('当前章节暂无重点划线')
+        return
+      }
+      if (marksToc && marksResolveChapter && targetMarks[0]) {
+        chapterLabel = marksResolveChapter(targetMarks[0], marksToc).label
+      }
+      setQuizPassage(combinedExcerpt)
+      setQuizChapterTitle(`${chapterLabel} · 本章重点综合测`)
+      setQuizMarkId(undefined)
+      setQuizOpen(true)
+      return
+    }
+
     const targetMark = mark ?? marks.find((m) => passageExcerpt(m).trim().length > 0)
     const excerpt = targetMark ? passageExcerpt(targetMark).trim() : ''
     if (!targetMark || !excerpt) {
