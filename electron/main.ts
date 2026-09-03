@@ -1,5 +1,6 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { createWindow } from './window/create-window'
+import { installAppMenu } from './window/app-menu'
 import { registerIpcHandlers } from './ipc/register-handlers'
 import { initAppUpdater } from './services/app-updater'
 import { disposeAllAcp } from './services/acp/acp-client'
@@ -7,7 +8,7 @@ import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
 import { shutdownOcrWorker } from './services/ocr/ocr-worker'
 
 app.whenReady().then(() => {
-  Menu.setApplicationMenu(null)
+  installAppMenu()
   registerIpcHandlers()
   initAppUpdater()
   createWindow()

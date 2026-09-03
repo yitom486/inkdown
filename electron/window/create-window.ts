@@ -61,7 +61,7 @@ export function createWindow(options: { fresh?: boolean } = {}): void {
   registerWindowSession(session)
 
   window.on('ready-to-show', () => {
-    window.setMenu(null)
+    // 保留 Application Menu 的 editMenu 角色（Ctrl+C/V）；仅隐藏菜单栏
     window.setMenuBarVisibility(false)
     window.show()
     if (options.fresh) {

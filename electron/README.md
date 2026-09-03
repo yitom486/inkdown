@@ -8,7 +8,7 @@
 | `main.ts` | 应用生命周期、注册 IPC、创建窗口、退出时释放 ACP / 工作区监听 |
 | `preload.ts` | `contextIsolation` 下暴露 `window.electronAPI` |
 | [`ipc/`](./ipc/) | `ipcMain` 处理器注册 |
-| [`window/`](./window/) | BrowserWindow 创建、关闭确认、标题 |
+| [`window/`](./window/) | BrowserWindow 创建、关闭确认、标题；`app-menu.ts` 安装 Edit 菜单角色（Ctrl+C/V） |
 | [`services/`](./services/) | 业务服务（文件、工作区、阅读标记、ACP、**在线文档 web-doc**、**OCR 目录**；含 `web-doc/adapters/`、`ocr/`） |
 | [`vite-plugins/`](./vite-plugins/) | 主进程构建用 Vite 插件 |
 

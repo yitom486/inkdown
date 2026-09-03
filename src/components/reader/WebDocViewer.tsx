@@ -591,6 +591,16 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       const onPointerDownCapture = (event: PointerEvent) => {
         if (event.button !== 0) return
 
+        if (event.target instanceof Element) {
+          const tab = event.target.closest<HTMLElement>('[data-web-doc-tab]')
+          if (tab) {
+            event.preventDefault()
+            event.stopPropagation()
+            activateWebDocCodeTab(tab)
+            return
+          }
+        }
+
         const href = resolveWebDocClickHref(event.target, pageUrlRef.current)
         if (!href) return
 
@@ -644,7 +654,6 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('scroll', onScroll, { passive: true })
-      doc.addEventListener('pointerdown', onPointerDownCapture, true)
       doc.addEventListener('mousemove', onMouseMove, { passive: true })
       restoreScrollProgress()
       syncActiveHeadingFromScroll()
@@ -655,7 +664,6 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
         doc.removeEventListener('scroll', onScroll)
-        doc.removeEventListener('pointerdown', onPointerDownCapture, true)
         doc.removeEventListener('mousemove', onMouseMove)
         onSelectionChange()
         if (hoverRaf !== 0) window.cancelAnimationFrame(hoverRaf)

@@ -4,6 +4,11 @@ import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
 import { buildWebDocCodeBlockCss, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
+import {
+  buildWebDocKatexStylesheetLink,
+  buildWebDocMathCss,
+  enhanceWebDocMath,
+} from '@/lib/reader/web-doc-math'
 import { neutralizeWebDocNavigationLinks } from '@/lib/reader/web-doc-link'
 import { ensureWebDocHeadingIds } from '@/lib/reader/web-doc-outline'
 import {
@@ -162,9 +167,10 @@ export function buildWebDocReaderDocument(
 ): string {
   const layoutCss = buildReaderLayoutCss(theme, typography)
   const codeBlockCss = buildWebDocCodeBlockCss(theme)
+  const mathCss = buildWebDocMathCss()
   const safeTitle = DOMPurify.sanitize(content.title)
   const body = neutralizeWebDocNavigationLinks(
-    enhanceWebDocCodeBlocks(content.bodyHtml),
+    enhanceWebDocCodeBlocks(enhanceWebDocMath(content.bodyHtml)),
     content.baseUrl,
   )
 
@@ -174,8 +180,10 @@ export function buildWebDocReaderDocument(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${safeTitle}</title>
+  ${buildWebDocKatexStylesheetLink()}
   <style>${layoutCss}</style>
   <style>${codeBlockCss}</style>
+  <style>${mathCss}</style>
   <style>
     body { margin: 0; padding: 1.25rem 1.5rem 2rem; }
     a { word-break: break-word; }

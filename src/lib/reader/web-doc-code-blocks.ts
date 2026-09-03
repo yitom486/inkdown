@@ -307,6 +307,9 @@ export function buildWebDocCodeBlockCss(mode: EpubThemeMode): string {
       font-family: ui-sans-serif, system-ui, sans-serif !important;
       line-height: 1.3 !important;
       cursor: pointer !important;
+      pointer-events: auto !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
     }
     .web-doc-tabs-tab[aria-selected="true"] {
       background: ${surface} !important;
