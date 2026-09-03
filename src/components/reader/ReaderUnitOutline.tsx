@@ -35,7 +35,10 @@ function OutlineTreeNode({
 
   return (
     <li>
-      <div className="flex items-center gap-0.5">
+      <div
+        className="flex items-center gap-0.5"
+        style={{ paddingLeft: `${depth * 12}px` }}
+      >
         {hasChildren ? (
           <button
             type="button"
@@ -51,10 +54,9 @@ function OutlineTreeNode({
         <button
           type="button"
           className={cn(
-            'min-w-0 flex-1 truncate rounded-md py-1 pr-2 text-left text-xs transition-colors hover:bg-accent/50 hover:text-foreground',
+            'min-w-0 flex-1 truncate rounded-md px-1 py-1 text-left text-xs transition-colors hover:bg-accent/50 hover:text-foreground',
             isActive ? 'bg-primary/15 text-primary' : 'text-muted-foreground',
           )}
-          style={{ paddingLeft: `${depth * 10 + 4}px` }}
           title={node.unit.label}
           onClick={() => onSelectUnit(node.unit)}
         >
