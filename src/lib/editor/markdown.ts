@@ -7,6 +7,8 @@ import { normalizeLatexDelimiters } from '@/lib/editor/latex-delimiters'
 import { slugifyHeading } from '@/lib/editor/markdown-headings'
 import { buildCodeBlockCopyButtonHtml, escapeCodeBlockLangLabel } from '@/lib/preview/code-block-chrome'
 
+import { markdownItWikilinks } from '@/lib/editor/markdown-it-wikilinks'
+
 // CJS 包在 Vite ESM 下可能导出为 { default: fn }，需兼容处理
 const markdownItKatex =
   typeof markdownItKatexImport === 'function'
@@ -20,6 +22,7 @@ export const markdownParser = new MarkdownIt({
 })
   .use(markdownItKatex, { throwOnError: false })
   .use(markdownItTaskLists, { enabled: true, label: true, labelAfter: true })
+  .use(markdownItWikilinks)
 
 export type MarkdownRenderEnv = { headingSlugCounts?: Map<string, number> }
 

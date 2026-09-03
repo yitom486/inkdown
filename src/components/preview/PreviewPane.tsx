@@ -20,19 +20,28 @@ interface PreviewPaneProps {
   theme?: AppTheme
   onScroll?: () => void
   onHeadingActivate?: (headingId: string) => void
+  onOpenWikilink?: (target: string) => void
+  onOpenDeepLink?: (url: string) => void
 }
 
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
-  function PreviewPane({ html, theme = 'dark', onScroll, onHeadingActivate }, ref) {
+  function PreviewPane(
+    { html, theme = 'dark', onScroll, onHeadingActivate, onOpenWikilink, onOpenDeepLink },
+    ref,
+  ) {
     const previewRef = useRef<HTMLDivElement>(null)
     const onScrollRef = useRef(onScroll)
     const onHeadingActivateRef = useRef(onHeadingActivate)
+    const onOpenWikilinkRef = useRef(onOpenWikilink)
+    const onOpenDeepLinkRef = useRef(onOpenDeepLink)
     const hasPreview = Boolean(html)
 
     useHighlightTheme(theme)
 
     onScrollRef.current = onScroll
     onHeadingActivateRef.current = onHeadingActivate
+    onOpenWikilinkRef.current = onOpenWikilink
+    onOpenDeepLinkRef.current = onOpenDeepLink
 
     const scrollToHeading = (id: string) => {
       const container = previewRef.current
@@ -101,6 +110,26 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(
 
         const copyButton = target.closest<HTMLButtonElement>('.code-block-copy')
         if (copyButton) return
+
+        const wikilinkAnchor = target.closest<HTMLAnchorElement>('a.inkdown-wikilink')
+        if (wikilinkAnchor) {
+          event.preventDefault()
+          const wikilinkTarget = wikilinkAnchor.getAttribute('data-wikilink-target')
+          if (wikilinkTarget) {
+            onOpenWikilinkRef.current?.(wikilinkTarget)
+          }
+          return
+        }
+
+        const deepLinkAnchor = target.closest<HTMLAnchorElement>('a[href^="inkdown://"]')
+        if (deepLinkAnchor) {
+          event.preventDefault()
+          const href = deepLinkAnchor.getAttribute('href')
+          if (href) {
+            onOpenDeepLinkRef.current?.(href)
+          }
+          return
+        }
 
         const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]')
         if (anchor) {

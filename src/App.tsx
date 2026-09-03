@@ -28,6 +28,8 @@ import { useAppMeta, useFileOperations } from '@/hooks/workspace/useFileOperatio
 import { pickLatestRecoverableDraft } from '@/lib/editor/draft-utils'
 import { resolveStartupRestoreTarget } from '@/lib/workspace/workspace-session'
 import { reportAppError, reportUnknownError } from '@/lib/workspace/report-error'
+import { resolveWikilinkTarget } from '@/lib/workspace/resolve-wikilink'
+import { parseDeepLinkUrl, isDeepLinkUrl } from '@/lib/editor/deep-link'
 import { appApi } from '@/api/app-api'
 import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
@@ -222,6 +224,72 @@ function App() {
     }
   }, [filePath, isMarkdownDocument])
 
+  const handleOpenDeepLink = useCallback(
+    async (url: string) => {
+      const parsed = parseDeepLinkUrl(url)
+      if (!parsed) {
+        toast.error('无效的深度回跳链接')
+        return
+      }
+
+      const res = resolveWikilinkTarget(parsed.file, fileTree, workspaceRoot)
+      if (res.status === 'found' && res.filePath) {
+        await openFileFromTree(res.filePath)
+        toast.success(parsed.page ? `已跳转至《${parsed.file}》第 ${parsed.page} 页` : `已打开关联文件`)
+      } else {
+        toast.error(`无法在工作区中找到对应文件: ${parsed.file}`)
+      }
+    },
+    [fileTree, openFileFromTree, workspaceRoot],
+  )
+
+  const handleOpenWikilink = useCallback(
+    async (target: string) => {
+      if (isDeepLinkUrl(target)) {
+        await handleOpenDeepLink(target)
+        return
+      }
+
+      const res = resolveWikilinkTarget(target, fileTree, workspaceRoot)
+      if (res.status === 'found' && res.filePath) {
+        await openFileFromTree(res.filePath)
+        if (res.anchor) {
+          toast.info(`已定位至目标文档（锚点：${res.anchor}）`)
+        }
+        return
+      }
+
+      if (res.status === 'missing-book') {
+        toast.error(`未在当前工作区找到书籍: ${res.targetName || target}`)
+        return
+      }
+
+      if (res.status === 'missing-note' && res.targetName) {
+        if (!workspaceRoot) {
+          toast.info(`请先打开工作区文件夹以自动创建关联笔记`)
+          return
+        }
+
+        const notePath = `${workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '')}/${res.targetName}`
+        const initialContent = `# ${res.targetName.replace(/\.md$/i, '')}\n\n`
+
+        const saveRes = await window.electronAPI?.saveFile({
+          filePath: notePath,
+          content: initialContent,
+        })
+
+        if (saveRes?.ok) {
+          toast.success(`已创建并打开关联笔记: ${res.targetName}`)
+          await rescanWorkspace()
+          await openFileFromTree(notePath)
+        } else {
+          toast.error(`创建笔记失败: ${saveRes?.error?.message || '未知错误'}`)
+        }
+      }
+    },
+    [fileTree, handleOpenDeepLink, openFileFromTree, rescanWorkspace, workspaceRoot],
+  )
+
   useEffect(() => {
     return window.electronAPI?.onGlobalAction?.((action) => {
       if (action === 'quick-open') {
@@ -230,9 +298,12 @@ function App() {
         handleOpenFind()
       } else if (action === 'replace') {
         handleOpenReplace()
+      } else if (action.startsWith('deep-link:')) {
+        const deepUrl = action.slice('deep-link:'.length)
+        void handleOpenDeepLink(deepUrl)
       }
     })
-  }, [handleOpenFind, handleOpenReplace, handleToggleQuickOpen])
+  }, [handleOpenDeepLink, handleOpenFind, handleOpenReplace, handleToggleQuickOpen])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -403,6 +474,9 @@ function App() {
             workspaceRoot={workspaceRoot}
             recentFiles={recentFiles}
             recentWebUrls={recentWebUrls}
+            fileTree={fileTree}
+            onOpenWikilink={(target) => void handleOpenWikilink(target)}
+            onOpenDeepLink={(url) => void handleOpenDeepLink(url)}
             onContentChange={setContent}
             onOpenFile={() => void openFile()}
             onOpenFolder={() => void openFolder()}

@@ -21,6 +21,7 @@ import {
 } from '@/lib/editor/codemirror-paste-image'
 import { markdownFormattingKeymap } from '@/lib/editor/markdown-editor-commands'
 import { markdownLintGutter, markdownSyntaxLinter } from '@/lib/editor/codemirror-syntax-linter'
+import { wikilinkAutocomplete, type WikilinkCandidate } from '@/lib/editor/wikilink-completion'
 import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 import { Compartment, EditorState, Transaction } from '@codemirror/state'
 import {
@@ -63,6 +64,7 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void
   onScroll?: () => void
   onPasteImage?: (blob: Blob, mimeType: string) => Promise<string | null>
+  getWikilinkCandidates?: () => WikilinkCandidate[]
 }
 
 const themeCompartment = new Compartment()
@@ -71,7 +73,17 @@ const indentUnitCompartment = new Compartment()
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
   function MarkdownEditor(
-    { value, filePath, theme = 'dark', tabSize = 2, fontSize = 15, onChange, onScroll, onPasteImage },
+    {
+      value,
+      filePath,
+      theme = 'dark',
+      tabSize = 2,
+      fontSize = 15,
+      onChange,
+      onScroll,
+      onPasteImage,
+      getWikilinkCandidates,
+    },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null)
@@ -79,10 +91,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const onChangeRef = useRef(onChange)
     const onScrollRef = useRef(onScroll)
     const onPasteImageRef = useRef(onPasteImage)
+    const getWikilinkCandidatesRef = useRef(getWikilinkCandidates)
 
     onChangeRef.current = onChange
     onScrollRef.current = onScroll
     onPasteImageRef.current = onPasteImage
+    getWikilinkCandidatesRef.current = getWikilinkCandidates
 
     useImperativeHandle(ref, () => ({
       getView: () => viewRef.current,
@@ -192,6 +206,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             ...defaultKeymap,
             ...historyKeymap,
           ]),
+          wikilinkAutocomplete(() => getWikilinkCandidatesRef.current?.() ?? []),
           placeholder('在此输入 Markdown 内容…'),
           updateListener,
           EditorView.lineWrapping,

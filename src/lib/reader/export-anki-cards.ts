@@ -14,6 +14,7 @@ import {
 import { fileApi } from '@/api/file-api'
 import { isOk } from '@shared/core/result'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { buildDeepLinkUrl } from '@/lib/editor/deep-link'
 import { toast } from 'sonner'
 
 export interface BuildAnkiCardsExportInput {
@@ -130,9 +131,18 @@ export function buildAnkiCardsExport(
     if (bookTag) tags.push(bookTag)
     if (chapterTag && chapterTag !== bookTag) tags.push(chapterTag)
 
+    const bookFile = input.marks[0]?.filePath ? input.marks[0].filePath.split(/[/\\]/).pop() ?? input.bookTitle : input.bookTitle
+    const deepLinkUrl = buildDeepLinkUrl({
+      file: bookFile,
+      page: mark.anchor?.format === 'pdf' ? mark.anchor.page : undefined,
+      cfi: mark.anchor?.format === 'epub' ? mark.anchor.cfi : undefined,
+      anchor: mark.id,
+    })
+    const linkHtml = ` <a href="${deepLinkUrl}" style="color:#10b981;text-decoration:none;margin-left:6px;">[📖 原书]</a>`
+
     const metaLine = `<div style="margin-top:8px;font-size:12px;color:#888;">—— 《${escapeAnkiHtml(
       input.bookTitle,
-    )}》· ${escapeAnkiHtml(chapterRef.label || '正文')}</div>`
+    )}》· ${escapeAnkiHtml(chapterRef.label || '正文')}${linkHtml}</div>`
 
     if (note) {
       // 问答卡（Basic）：批注为正面，原文为背面

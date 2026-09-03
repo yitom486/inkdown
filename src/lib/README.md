@@ -33,6 +33,9 @@
 | `code-highlight` / `code-block-lines` | 代码高亮与行号 |
 | `codemirror-theme` / `codemirror-syntax-linter` / `codemirror-paste-image` | CodeMirror 主题、语法 gutter、粘贴图 |
 | `export-document` / `export-document-styles` | 导出 HTML/PDF 的文档与样式 |
+| `deep-link` | 跨格式深度回跳协议解析与构建（`inkdown://open`） |
+| `markdown-it-wikilinks` | 双向链接 `[[target\|label]]` markdown-it 扩展 |
+| `wikilink-completion` | CodeMirror 6 `[[` 实时自动补全源 |
 | `draft-utils` | 草稿 key 与可恢复草稿挑选 |
 | `editor-focus` | 判断 Markdown 编辑器是否聚焦 |
 | `text-normalize` | 换行规范化 |
@@ -57,7 +60,7 @@
 | `epub-*` | EPUB 目录、主题、选区、批注 overlay、滚动定位 |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay |
 | `mobi-*` / `kindle-*` / `azw3-*` | MOBI/Kindle 初始化、章节 HTML、导航、选区、批注（含 `renderWebMarkOverlays`） |
-| `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` | 在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式 |
+| `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | 在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe（如 Python Tutor） |
 
 ## workspace/
 
@@ -65,6 +68,7 @@
 |------|------|
 | `file-tree-ops` | 文件树路径、剪贴板、粘贴目标 |
 | `quick-open` | 全局快速切换（扁平化文件树、模糊匹配与评分排序） |
+| `resolve-wikilink` | 工作区双链目标解析（相对路径/文件名/同名推断与缺省笔记创建） |
 | `dialog-default-path` | 打开/保存对话框默认目录 |
 | `workspace-session` | 启动时恢复上次文件 / 在线文档 |
 | `report-error` / `error-reporter` | AppError 与运行时错误上报 |

@@ -35,6 +35,9 @@ import {
 } from '@/lib/editor/markdown-headings'
 import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
+import type { FileTreeNode } from '@shared/types/file'
+import { flattenFileTree } from '@/lib/workspace/quick-open'
+import type { WikilinkCandidate } from '@/lib/editor/wikilink-completion'
 
 export interface EditorWorkspaceMainHandle {
   selectHeading: (heading: MarkdownHeading) => void
@@ -54,6 +57,9 @@ interface EditorWorkspaceMainProps {
   workspaceRoot?: string
   recentFiles: string[]
   recentWebUrls?: string[]
+  fileTree?: FileTreeNode[]
+  onOpenWikilink?: (target: string) => void
+  onOpenDeepLink?: (url: string) => void
   onContentChange: (value: string) => void
   onOpenFile: () => void
   onOpenFolder: () => void
@@ -73,6 +79,9 @@ export const EditorWorkspaceMain = forwardRef<
     workspaceRoot,
     recentFiles,
     recentWebUrls,
+    fileTree,
+    onOpenWikilink,
+    onOpenDeepLink,
     onContentChange,
     onOpenFile,
     onOpenFolder,
@@ -183,6 +192,16 @@ export const EditorWorkspaceMain = forwardRef<
     },
     [jumpToHeading],
   )
+
+  const getWikilinkCandidates = useCallback((): WikilinkCandidate[] => {
+    if (!fileTree || fileTree.length === 0) return []
+    const items = flattenFileTree(fileTree, workspaceRoot)
+    return items.map((item) => ({
+      name: item.name,
+      path: item.relativePath || item.name,
+      kind: item.documentKind,
+    }))
+  }, [fileTree, workspaceRoot])
 
   useImperativeHandle(
     ref,
@@ -309,6 +328,7 @@ export const EditorWorkspaceMain = forwardRef<
                       onChange={onContentChange}
                       onScroll={handleEditorScroll}
                       onPasteImage={handlePasteImage}
+                      getWikilinkCandidates={getWikilinkCandidates}
                     />
                   </PaneErrorBoundary>
                 </div>
@@ -326,6 +346,8 @@ export const EditorWorkspaceMain = forwardRef<
                       theme={theme}
                       onScroll={handlePreviewScroll}
                       onHeadingActivate={handlePreviewHeadingActivate}
+                      onOpenWikilink={onOpenWikilink}
+                      onOpenDeepLink={onOpenDeepLink}
                     />
                   </PaneErrorBoundary>
                 </ResizablePanel>
@@ -341,6 +363,8 @@ export const EditorWorkspaceMain = forwardRef<
                     theme={theme}
                     onScroll={handlePreviewScroll}
                     onHeadingActivate={handlePreviewHeadingActivate}
+                    onOpenWikilink={onOpenWikilink}
+                    onOpenDeepLink={onOpenDeepLink}
                   />
                 </PaneErrorBoundary>
               </ResizablePanel>
