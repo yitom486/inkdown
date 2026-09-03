@@ -56,7 +56,7 @@ describe('web-doc-html', () => {
       <p>Body</p>
     </article></body></html>`
 
-    const result = extractWebDocArticle(html, 'https://react.dev/learn', 'react-dev')
+    const result = extractWebDocArticle(html, 'https://react.dev/learn', 'generic-ssr')
     expect(result.bodyHtml).toContain('Quick Start')
     expect(result.bodyHtml).toContain('Body')
     expect(result.bodyHtml).not.toContain('Copy page')

@@ -1,12 +1,13 @@
 import type { WebDocSiteId } from '@shared/types/web-doc'
 import { isPeopleDailyPaperHost, resolvePeopleDailyEditionUrl } from '@shared/web-doc/people-daily'
 
+/**
+ * 仅人民日报纸媒保留站点 id（版面 DOM 特殊）。
+ * react.dev 等文档站走 generic-ssr。
+ */
 export function resolveWebDocSiteId(pageUrl: string): WebDocSiteId {
   try {
     const host = new URL(pageUrl).hostname.toLowerCase()
-    if (host === 'react.dev' || host.endsWith('.react.dev')) {
-      return 'react-dev'
-    }
     if (isPeopleDailyPaperHost(host)) {
       return 'people-daily-paper'
     }
@@ -48,20 +49,22 @@ export function formatWebDocPathLabel(pageUrl: string, pageTitle?: string): stri
   }
 }
 
+/**
+ * 目录发现入口（缓存键）：
+ * - 人民日报：同一「版」共享
+ * - 其它：同一路径首段共享（/learn/x → /learn/），避免各页 SSR 侧栏不一致
+ */
 export function resolveWebDocTocDiscoveryUrl(pageUrl: string, siteId: WebDocSiteId): string {
   try {
     const url = new URL(pageUrl)
-    if (siteId === 'react-dev') {
-      if (url.pathname.startsWith('/reference')) {
-        return `${url.origin}/reference`
-      }
-      return `${url.origin}/learn`
+    if (siteId === 'people-daily-paper') {
+      return resolvePeopleDailyEditionUrl(pageUrl) ?? url.toString()
     }
-    // generic：按站点 origin 缓存目录，避免各页 Mintlify 侧栏 SSR 不一致
-    if (siteId === 'generic-ssr') {
-      return `${url.origin}/`
+    const parts = url.pathname.split('/').filter(Boolean)
+    if (parts.length >= 1) {
+      return `${url.origin}/${parts[0]}/`
     }
-    return url.toString()
+    return `${url.origin}/`
   } catch {
     return pageUrl
   }

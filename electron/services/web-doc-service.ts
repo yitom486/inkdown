@@ -17,7 +17,6 @@ import {
   resolveLlmsTxtUrl,
 } from './web-doc/extract-llms-toc'
 import { tryFetchE2eWebDocFixture } from './web-doc/e2e-fixture'
-import { extractReactDevToc } from './web-doc/adapters/react-dev-toc'
 import { extractPeopleDailyToc } from './web-doc/adapters/people-daily-toc'
 import { resolveWebDocSiteId } from './web-doc/site-registry'
 import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy'
@@ -158,15 +157,10 @@ export async function discoverWebDocToc(
   try {
     const pageUrl = new URL(fetchResult.value.url)
     const siteId = resolveWebDocSiteId(pageUrl)
-    let entries =
-      siteId === 'react-dev'
-        ? extractReactDevToc(fetchResult.value.html, fetchResult.value.url)
-        : siteId === 'people-daily-paper'
-          ? extractPeopleDailyToc(fetchResult.value.html, fetchResult.value.url)
-          : extractGenericWebDocToc(fetchResult.value.html, fetchResult.value.url)
+    let entries = extractGenericWebDocToc(fetchResult.value.html, fetchResult.value.url)
 
-    // 站点级索引：凡页面声明 llms.txt / 典型 docs 侧栏，则拉索引统一目录（不绑定域名）
-    if (siteId === 'generic-ssr' && looksLikeDocsIndexCandidate(fetchResult.value.html)) {
+    // 站点级索引（llms.txt 等）：不绑域名，补全各页侧栏 SSR 缺失
+    if (looksLikeDocsIndexCandidate(fetchResult.value.html)) {
       const llmsUrl = resolveLlmsTxtUrl(fetchResult.value.url, fetchResult.value.html)
       if (llmsUrl) {
         const llmsResult = await fetchWebDocPlainText(llmsUrl)
@@ -177,6 +171,11 @@ export async function discoverWebDocToc(
           }
         }
       }
+    }
+
+    // 人民日报：通用密集列表若未命中，再回退纸媒版面列表（版面 DOM 特殊）
+    if (entries.length === 0 && siteId === 'people-daily-paper') {
+      entries = extractPeopleDailyToc(fetchResult.value.html, fetchResult.value.url)
     }
 
     const resolvedEntries =

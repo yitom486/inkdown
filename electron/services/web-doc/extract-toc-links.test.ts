@@ -97,4 +97,44 @@ describe('extractGenericWebDocToc', () => {
     expect(flat.map((e) => e.label)).toEqual(['Beta', 'Alpha'])
     expect(generic.map((e) => e.label)).toEqual(['Beta', 'Alpha'])
   })
+
+  it('react.dev 风格 nav[role=navigation] 走通用结构化提取', () => {
+    const html = `<!DOCTYPE html><html><body>
+<aside><nav role="navigation">
+<ul>
+<h3>GET STARTED</h3>
+<li><a title="Quick Start" href="/learn"><div>Quick Start</div></a>
+<ul>
+<li><a title="Tutorial: Tic-Tac-Toe" href="/learn/tutorial-tic-tac-toe"><div>Tutorial: Tic-Tac-Toe</div></a></li>
+<li><a title="Thinking in React" href="/learn/thinking-in-react"><div>Thinking in React</div></a></li>
+</ul>
+</li>
+<li><a title="Installation" href="/learn/installation"><div>Installation</div></a></li>
+</ul>
+</nav></aside>
+</body></html>`
+    const entries = extractGenericWebDocToc(html, 'https://react.dev/learn')
+    expect(entries.map((e) => `${e.level}:${e.label}`)).toEqual([
+      '0:GET STARTED',
+      '1:Quick Start',
+      '2:Tutorial: Tic-Tac-Toe',
+      '2:Thinking in React',
+      '1:Installation',
+    ])
+  })
+
+  it('密集新闻列表走通用提取（人民日报类版面）', () => {
+    const html = `<html><body>
+      <ul class="news-list">
+        <li><a href="content_30178364.html">习近平同吉尔吉斯斯坦总统扎帕罗夫会谈</a></li>
+        <li><a href="content_30178365.html">风雨同舟七十载</a></li>
+      </ul>
+      <a href="http://paper.people.com.cn/rmrb/paperindex.htm">首页</a>
+    </body></html>`
+    const base = 'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178364.html'
+    const entries = extractGenericWebDocToc(html, base)
+    expect(entries).toHaveLength(2)
+    expect(entries[1]?.label).toContain('风雨同舟')
+    expect(entries.every((e) => e.level === 0)).toBe(true)
+  })
 })

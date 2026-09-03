@@ -62,7 +62,7 @@ describe('web-doc-service', () => {
     const result = await discoverWebDocToc({ url: 'https://react.dev/learn' })
     expect(isOk(result)).toBe(true)
     if (!isOk(result)) return
-    expect(result.value.siteId).toBe('react-dev')
+    expect(result.value.siteId).toBe('generic-ssr')
     expect(result.value.entries.some((e) => e.href.includes('/learn/installation'))).toBe(true)
     expect(result.value.entries.every((e) => e.href.startsWith('https://react.dev'))).toBe(true)
   })

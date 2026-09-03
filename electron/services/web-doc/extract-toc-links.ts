@@ -106,8 +106,9 @@ export function extractStructuredNavToc(html: string, baseUrl: string): WebDocTo
   let pos = 0
   /** 已遇到分组标题，等待首个链接补全 href */
   let pendingGroup: { label: string; level: number } | null = null
-  /** 当前分组父级 level；子链接为 parentLevel + 1 */
+  /** 当前分组父级 level；子链接相对 groupBaseDepth 再缩进 */
   let activeGroupLevel: number | null = null
+  let groupBaseDepth = 0
 
   const push = (entry: WebDocTocEntry, asLeaf: boolean): boolean => {
     const label = entry.label.length > 80 ? `${entry.label.slice(0, 80)}…` : entry.label
@@ -145,8 +146,9 @@ export function extractStructuredNavToc(html: string, baseUrl: string): WebDocTo
 
     if (next === ulClose) {
       depth = Math.max(0, depth - 1)
-      if (activeGroupLevel !== null && depth <= activeGroupLevel) {
+      if (activeGroupLevel !== null && depth < groupBaseDepth) {
         activeGroupLevel = null
+        groupBaseDepth = 0
       }
       pos = ulClose + 5
       continue
@@ -159,8 +161,10 @@ export function extractStructuredNavToc(html: string, baseUrl: string): WebDocTo
       const label = stripTags(navHtml.slice(closeTag + 1, endHeading))
       pos = endHeading + 5
       if (label && label.length >= 2 && label.length <= 80) {
-        pendingGroup = { label, level: Math.max(0, depth) }
+        // 侧栏分组标题：若已在 ul 内，按「当前列表层 - 1」作为父级，避免比真实栏目深一层
+        pendingGroup = { label, level: Math.max(0, depth > 0 ? depth - 1 : 0) }
         activeGroupLevel = null
+        groupBaseDepth = 0
       }
       continue
     }
@@ -182,6 +186,7 @@ export function extractStructuredNavToc(html: string, baseUrl: string): WebDocTo
 
     if (pendingGroup) {
       activeGroupLevel = pendingGroup.level
+      groupBaseDepth = Math.max(1, depth)
       if (
         push(
           {
@@ -199,7 +204,7 @@ export function extractStructuredNavToc(html: string, baseUrl: string): WebDocTo
 
     const level =
       activeGroupLevel !== null
-        ? activeGroupLevel + 1
+        ? activeGroupLevel + 1 + Math.max(0, depth - groupBaseDepth)
         : Math.max(0, depth > 0 ? depth - 1 : 0)
 
     if (
@@ -252,9 +257,72 @@ export function extractSameOriginDocLinks(html: string, baseUrl: string): WebDoc
   return entries
 }
 
-/** generic-ssr：优先结构化侧栏，失败再扁平扫链 */
+/**
+ * 从「链接最密」的 ul/ol 提取目录（报纸版面、文章列表等，不绑 class/域名）。
+ * 对 class 含 list/news/toc/menu 的列表略加分，但仍是通用启发。
+ */
+export function extractDenseListToc(html: string, baseUrl: string): WebDocTocEntry[] {
+  const cleaned = stripScriptsAndStyles(html)
+  const base = new URL(baseUrl)
+  const listPattern = /<(ul|ol)\b([^>]*)>([\s\S]*?)<\/\1>/gi
+  let best: { score: number; inner: string } | null = null
+  let match: RegExpExecArray | null
+
+  while ((match = listPattern.exec(cleaned)) !== null) {
+    const attrs = match[2] ?? ''
+    const inner = match[3] ?? ''
+    const anchors = [...inner.matchAll(/<a\b[^>]*\bhref=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+    let sameOrigin = 0
+    for (const anchor of anchors) {
+      if (resolveSameOriginHref(anchor[1] ?? '', base)) sameOrigin += 1
+    }
+    if (sameOrigin < 2) continue
+
+    let score = sameOrigin
+    if (/\b(class|id)=["'][^"']*(news|list|toc|menu|article|catalog|contents)[^"']*["']/i.test(attrs)) {
+      score += 20
+    }
+    // 惩罚整页巨型 ul（更像站点地图噪音）
+    if (sameOrigin > 80) score -= 15
+
+    if (!best || score > best.score) {
+      best = { score, inner }
+    }
+  }
+
+  if (!best) return []
+
+  const seen = new Set<string>()
+  const entries: WebDocTocEntry[] = []
+  const anchorPattern = /<a\b[^>]*\bhref=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi
+  let anchorMatch: RegExpExecArray | null
+  while ((anchorMatch = anchorPattern.exec(best.inner)) !== null) {
+    const key = resolveSameOriginHref(anchorMatch[1] ?? '', base)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    const label = stripTags(anchorMatch[2] ?? '')
+    if (!label || label.length < 2 || label.length > 120) continue
+    entries.push({
+      href: key,
+      label: label.length > 80 ? `${label.slice(0, 80)}…` : label,
+      level: 0,
+    })
+    if (entries.length >= MAX_TOC_ENTRIES) break
+  }
+
+  return entries
+}
+
+/**
+ * 通用目录：结构化侧栏 → 密集列表 → 整页同站链接。
+ * 不绑定具体域名；与原页 DOM 结构对齐。
+ */
 export function extractGenericWebDocToc(html: string, baseUrl: string): WebDocTocEntry[] {
   const structured = extractStructuredNavToc(html, baseUrl)
   if (structured.length >= 3) return structured
+
+  const dense = extractDenseListToc(html, baseUrl)
+  if (dense.length >= 2) return dense
+
   return extractSameOriginDocLinks(html, baseUrl)
 }
