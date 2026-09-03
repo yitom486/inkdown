@@ -81,7 +81,8 @@
 |------|------|
 | `quiz-repository` | 统一测验仓储抽象契约（`IQuizRepository`） |
 | `quiz-storage-jsonl` | 基于 JSON Lines（`.jsonl`）的追加型流式存储实现 |
-| `quiz-evaluator` | AI 出题 Prompt 构造、解析、判卷打分与离线启发式考官 |
+| `quiz-evaluator` | AI 出题 Prompt 构造、解析、批量多题判卷打分与离线启发式考官 |
+| `quiz-acp-session` | 持续性考官独立副会话管理（2小时生命周期轮转、物理流式拦截与分流隔离） |
 
 ## agent/
 
