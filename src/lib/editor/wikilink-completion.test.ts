@@ -18,7 +18,7 @@ describe('wikilink-completion', () => {
     const res = source(context) as CompletionResult | null
 
     expect(res).not.toBeNull()
-    expect(res?.from).toBe(5) // position of first '['
+    expect(res?.from).toBe(7) // position right after `[[`
     expect(res?.options).toHaveLength(3)
   })
 
@@ -28,8 +28,20 @@ describe('wikilink-completion', () => {
     const res = source(context) as CompletionResult | null
 
     expect(res).not.toBeNull()
+    expect(res?.from).toBe(5) // position right after `[[`
     expect(res?.options).toHaveLength(1)
-    expect(res?.options?.[0]?.apply).toBe('[[Vue设计与实现.epub]]')
+    expect(res?.options?.[0]?.apply).toBe('Vue设计与实现.epub]]')
+  })
+
+  it('consumes auto-paired trailing brackets cleanly', () => {
+    // document has auto-closed brackets: `[[Vue|]]`
+    const state = EditorState.create({ doc: '参考 [[Vue]]' })
+    const context = new CompletionContext(state, 8, true) // cursor after 'Vue', before ']]'
+    const res = source(context) as CompletionResult | null
+
+    expect(res).not.toBeNull()
+    expect(res?.from).toBe(5) // right after `[[`
+    expect(res?.to).toBe(10) // after `]]`
   })
 
   it('does not trigger without [[', () => {

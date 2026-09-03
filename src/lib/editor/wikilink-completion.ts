@@ -26,6 +26,13 @@ export function createWikilinkCompletionSource(
       return null
     }
 
+    // 替换起点：精确在 `[[` 之后（保留已有左括号）
+    const from = match.from + 2
+
+    // 替换终点：如果光标后紧随 closeBrackets 自动插入的 ']]' 或 ']'，一并将其吞并替换
+    const afterCursor = context.state.sliceDoc(context.pos, context.pos + 2)
+    const to = context.pos + (afterCursor === ']]' ? 2 : afterCursor.startsWith(']') ? 1 : 0)
+
     const query = match.text.slice(2).trim().toLowerCase()
     const candidates = getCandidates()
 
@@ -39,18 +46,18 @@ export function createWikilinkCompletionSource(
       })
       .map((item) => {
         const isBook = ['pdf', 'epub', 'mobi', 'azw3'].includes(item.kind)
-        const icon = isBook ? '📖 ' : '📄 '
         return {
-          label: `${icon}${item.name}`,
+          label: item.name,
           detail: item.path !== item.name ? item.path : undefined,
-          apply: `[[${item.name}]]`,
-          type: isBook ? 'variable' : 'text',
+          apply: `${item.name}]]`,
+          type: isBook ? 'book' : 'note',
           boost: isBook ? 1 : 2,
         }
       })
 
     return {
-      from: match.from,
+      from,
+      to,
       options,
       filter: false,
     }
