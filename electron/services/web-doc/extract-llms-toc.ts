@@ -14,10 +14,14 @@ const SEGMENT_LABELS: Record<string, string> = {
   brand: 'Brand',
 }
 
+export function isVersionPathSegment(segment: string): boolean {
+  return /^v\d+$/i.test(segment)
+}
+
 export function humanizePathSegment(segment: string): string {
   const key = segment.toLowerCase()
   if (SEGMENT_LABELS[key]) return SEGMENT_LABELS[key]
-  if (/^v\d+/i.test(segment)) return segment
+  if (isVersionPathSegment(segment)) return segment
   return segment
     .split('-')
     .filter(Boolean)
@@ -43,21 +47,50 @@ export function normalizeLlmsDocHref(href: string, baseOrigin: string): string |
 }
 
 /**
+ * 路径段用于建树时：去掉版本号段（v1/v2）。
+ * 原站里版本是 Protocol 下的切换器，不是与章节平行的强制文件夹；
+ * 多版本同名页再用 (v2) 区分即可。
+ */
+export function structuralPathParts(parts: string[]): {
+  groupParts: string[]
+  leafPart: string | null
+  version: string | null
+} {
+  if (parts.length === 0) {
+    return { groupParts: [], leafPart: null, version: null }
+  }
+
+  const version = parts.find((part) => isVersionPathSegment(part)) ?? null
+  const withoutVersion = parts.filter((part) => !isVersionPathSegment(part))
+  if (withoutVersion.length === 0) {
+    return { groupParts: [], leafPart: null, version }
+  }
+
+  return {
+    groupParts: withoutVersion.slice(0, -1),
+    leafPart: withoutVersion[withoutVersion.length - 1]!,
+    version,
+  }
+}
+
+/**
  * 解析 llms.txt（Mintlify 等）：`- [Title](url): desc`
- * 按 URL 路径段生成分组层级（如 Protocol → v1 → Overview）。
+ * 按站点栏目建树（Get Started / Protocol / …），不把 URL 里的 v1 强行加成平行层级。
  */
 export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEntry[] {
   const entries: WebDocTocEntry[] = []
   const seenLeaves = new Set<string>()
   const emittedGroups = new Set<string>()
+  /** 同一父级下已出现的叶子标题 → 是否需版本后缀 */
+  const labelsUnderParent = new Map<string, Set<string>>()
 
   const linkPattern = /^\s*-\s*\[([^\]]+)\]\(([^)\s]+)\)/gm
   let match: RegExpExecArray | null
 
   while ((match = linkPattern.exec(text)) !== null) {
-    const label = match[1]?.trim()
+    const rawLabel = match[1]?.trim()
     const hrefRaw = match[2]?.trim()
-    if (!label || !hrefRaw) continue
+    if (!rawLabel || !hrefRaw) continue
 
     const href = normalizeLlmsDocHref(hrefRaw, baseOrigin)
     if (!href) continue
@@ -73,19 +106,21 @@ export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEn
     if (parts.length === 0) {
       if (seenLeaves.has(href)) continue
       seenLeaves.add(href)
-      entries.push({ href, label, level: 0 })
+      entries.push({ href, label: rawLabel, level: 0 })
       if (entries.length >= MAX_TOC_ENTRIES) break
       continue
     }
 
-    for (let i = 0; i < parts.length - 1; i++) {
-      const prefix = parts.slice(0, i + 1).join('/')
+    const { groupParts, version } = structuralPathParts(parts)
+
+    for (let i = 0; i < groupParts.length; i++) {
+      const prefix = groupParts.slice(0, i + 1).join('/')
       const groupKey = `${i}:${prefix}`
       if (emittedGroups.has(groupKey)) continue
       emittedGroups.add(groupKey)
       entries.push({
         href,
-        label: humanizePathSegment(parts[i]!),
+        label: humanizePathSegment(groupParts[i]!),
         level: i,
       })
       if (entries.length >= MAX_TOC_ENTRIES) return entries
@@ -93,10 +128,24 @@ export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEn
 
     if (seenLeaves.has(href)) continue
     seenLeaves.add(href)
+
+    const parentKey = groupParts.join('/') || '_'
+    const used = labelsUnderParent.get(parentKey) ?? new Set<string>()
+    let label = rawLabel
+    if (used.has(rawLabel) && version) {
+      label = `${rawLabel} (${version})`
+    } else if (used.has(rawLabel) && !version) {
+      label = `${rawLabel} (${parts[parts.length - 1]})`
+    }
+    used.add(rawLabel)
+    // 若已用过带版本的同名，也记下最终展示名避免重复
+    used.add(label)
+    labelsUnderParent.set(parentKey, used)
+
     entries.push({
       href,
       label,
-      level: Math.max(0, parts.length - 1),
+      level: groupParts.length,
     })
     if (entries.length >= MAX_TOC_ENTRIES) break
   }

@@ -3,6 +3,7 @@ import {
   extractLlmsTxtToc,
   humanizePathSegment,
   normalizeLlmsDocHref,
+  structuralPathParts,
 } from './extract-llms-toc'
 
 const LLMS_FIXTURE = `# Agent Client Protocol
@@ -17,30 +18,32 @@ const LLMS_FIXTURE = `# Agent Client Protocol
 `
 
 describe('extractLlmsTxtToc', () => {
-  it('按路径生成 Protocol → v1 → 页面 层级', () => {
+  it('不把 URL 中的 v1 加成强制中间层，页面直接挂在 Protocol 下', () => {
     const entries = extractLlmsTxtToc(LLMS_FIXTURE, 'https://agentclientprotocol.com')
     expect(entries.map((e) => `${e.level}:${e.label}`)).toEqual([
       '0:Get Started',
       '1:Introduction',
       '1:Architecture',
       '0:Protocol',
-      '1:v1',
-      '2:Overview',
-      '2:Initialization',
-      '1:v2',
-      '2:Overview',
+      '1:Overview',
+      '1:Initialization',
+      '1:Overview (v2)',
       '0:Libraries',
       '1:Kotlin',
       '0:Brand',
     ])
-    expect(entries.find((e) => e.label === 'v1')?.href).toContain('/protocol/v1/overview')
+    expect(entries.find((e) => e.label === 'Overview')?.href).toContain('/protocol/v1/overview')
     expect(normalizeLlmsDocHref('/protocol/v1/overview.md', 'https://agentclientprotocol.com')).toBe(
       'https://agentclientprotocol.com/protocol/v1/overview',
     )
   })
 
-  it('humanize 常见 docs 段名', () => {
+  it('structuralPathParts 剥离版本段', () => {
+    expect(structuralPathParts(['protocol', 'v1', 'overview'])).toEqual({
+      groupParts: ['protocol'],
+      leafPart: 'overview',
+      version: 'v1',
+    })
     expect(humanizePathSegment('get-started')).toBe('Get Started')
-    expect(humanizePathSegment('v1')).toBe('v1')
   })
 })
