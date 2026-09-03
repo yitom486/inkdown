@@ -1,4 +1,5 @@
 {
+  "https://e2e.inkdown.test/docs/": "start.html",
   "https://e2e.inkdown.test/docs/start": "start.html",
   "https://e2e.inkdown.test/docs/installation": "installation.html"
 }
