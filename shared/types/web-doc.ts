@@ -1,3 +1,8 @@
+/**
+ * 在线文档阅读 IPC DTO。
+ * 站点特化尽量少：generic-ssr 走通用抽取，people-daily-paper 才版面特化。
+ */
+
 /** 在线文档站点适配器 id（仅保留确需版面特化的站点） */
 export type WebDocSiteId = 'generic-ssr' | 'people-daily-paper'
 
@@ -5,7 +10,7 @@ export interface WebDocFetchPayload {
   url: string
 }
 
-/** 主进程 fetch 原始 HTML（未消毒） */
+/** 主进程 fetch 原始 HTML（未消毒；渲染端再 DOMPurify） */
 export interface WebDocFetchResult {
   /** 跟随重定向后的最终 URL */
   url: string
@@ -17,6 +22,7 @@ export interface WebDocDiscoverTocPayload {
   url: string
 }
 
+/** 目录一项；level 从 1 起，供侧栏缩进 */
 export interface WebDocTocEntry {
   href: string
   label: string

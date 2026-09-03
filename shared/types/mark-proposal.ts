@@ -1,4 +1,5 @@
 /** AI 提议的阅读标记（批注 / 高亮），须用户确认后才写入 marks 文件。 */
+
 export type ProposedMarkKind = 'highlight' | 'note'
 
 export type ProposedMarkSource = 'agent' | 'annotation'
@@ -14,6 +15,7 @@ export interface ProposedMark {
   excerpt: string
   note: string
   locationHint?: string
+  /** 所在章在扁平目录中的下标 */
   flatIndex?: number
   source: ProposedMarkSource
 }

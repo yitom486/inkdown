@@ -69,113 +69,193 @@ import type {
 import type { AppUpdateStatus } from '@shared/types/app-update'
 import type { BunRuntimeStatus } from '@shared/types/bun'
 
+/**
+ * preload `contextBridge` 暴露给渲染进程的 API（`window.electronAPI`）。
+ * 有返回值的调用均为 `Result`；用户取消为 `CANCELLED`。`on*` 的返回值是取消订阅函数。
+ */
 export interface ElectronAPI {
+  /** 当前操作系统：`win32` / `darwin` / `linux` */
   platform: string
   /** 通过「新建窗口」打开时为 true，不恢复工作区/上次文件 */
   isFreshWindow: boolean
+  /** 读取应用版本号 */
   getVersion: () => Promise<Result<string, AppError>>
+  /** 同步文档是否未保存（关窗确认用） */
   setDirty: (isDirty: boolean) => void
+  /** 回复主进程的关窗请求：继续关闭或取消 */
   confirmClose: (decision: 'proceed' | 'cancel') => void
+  /** 监听主进程「请关闭窗口」；返回取消订阅 */
   onRequestClose: (callback: () => void) => () => void
+  /** 打开文件对话框（文档） */
   openFile: (options?: OpenDialogOptions) => Promise<Result<OpenDocumentResult, AppError>>
+  /** 打开文件夹对话框（工作区根） */
   openFolder: (options?: OpenDialogOptions) => Promise<Result<OpenFolderResult, AppError>>
+  /** 扫描已有工作区路径，返回文件树 */
   scanWorkspace: (rootPath: string) => Promise<Result<OpenFolderResult, AppError>>
+  /** 开始监听工作区磁盘变化 */
   watchWorkspace: (rootPath: string) => void
+  /** 停止监听工作区 */
   unwatchWorkspace: () => void
+  /** 工作区文件变化时回调；返回取消订阅 */
   onWorkspaceChanged: (callback: (payload: { rootPath: string }) => void) => () => void
+  /** 按路径读文本文件 */
   readFile: (filePath: string) => Promise<Result<OpenFileResult, AppError>>
+  /** 按路径读二进制文件 */
   readBinaryFile: (filePath: string) => Promise<Result<ReadBinaryResult, AppError>>
+  /** 读图片并转 data URL */
   readImage: (filePath: string) => Promise<Result<ReadImageResult, AppError>>
+  /** 保存到当前路径 */
   saveFile: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>
+  /** 另存为 */
   saveFileAs: (payload: SaveFilePayload) => Promise<Result<SaveFileResult, AppError>>
+  /** 把粘贴的图片写入工作区并返回路径 */
   savePastedImage: (
     payload: SavePastedImagePayload,
   ) => Promise<Result<SavePastedImageResult, AppError>>
+  /** 在工作区新建文件 */
   createWorkspaceFile: (
     payload: WorkspaceFsCreateFilePayload,
   ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  /** 在工作区新建目录 */
   createWorkspaceDirectory: (
     payload: WorkspaceFsCreateDirPayload,
   ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  /** 重命名工作区路径 */
   renameWorkspacePath: (
     payload: WorkspaceFsRenamePayload,
   ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  /** 删除工作区路径 */
   deleteWorkspacePath: (payload: WorkspaceFsDeletePayload) => Promise<Result<void, AppError>>
+  /** 复制工作区路径 */
   copyWorkspacePath: (
     payload: WorkspaceFsCopyPayload,
   ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  /** 移动工作区路径 */
   moveWorkspacePath: (
     payload: WorkspaceFsMovePayload,
   ) => Promise<Result<WorkspaceFsPathResult, AppError>>
+  /** 导出 HTML */
   exportHtml: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
+  /** 导出 PDF */
   exportPdf: (payload: ExportDocumentPayload) => Promise<Result<ExportDocumentResult, AppError>>
+  /** 导出 Markdown */
   exportMarkdown: (payload: ExportMarkdownPayload) => Promise<Result<ExportDocumentResult, AppError>>
+  /** 根据路径/脏标记更新窗口标题 */
   updateTitle: (payload: { filePath?: string; isDirty: boolean }) => void
+  /** 退出应用 */
   quit: () => void
+  /** 再开一个主窗口（不恢复工作区） */
   newWindow: () => void
+  /** 用系统默认浏览器打开外链 */
   openExternal: (url: string) => Promise<Result<void, AppError>>
+  /** 探测本机 Bun 运行时是否可用 */
   getBunRuntimeStatus: () => Promise<Result<BunRuntimeStatus, AppError>>
+  /** 安装 / 确保 Bun 运行时 */
   installBunRuntime: () => Promise<Result<void, AppError>>
+  /** 切换开发者工具 */
   toggleDevTools: () => void
+  /** 把渲染进程错误写入日志；成功时返回日志路径 */
   logRendererError: (payload: RendererErrorPayload) => Promise<Result<string, AppError>>
+  /** 返回错误日志文件路径 */
   getErrorLogPath: () => Promise<Result<string, AppError>>
+  /** 开关主进程详细日志 */
   setVerboseLogs: (enabled: boolean) => void
+  /** 列出某文件的阅读书签/批注 */
   listReadingMarks: (filePath: string) => Promise<Result<ReadingMark[], AppError>>
+  /** 新建阅读书签/批注 */
   createReadingMark: (payload: CreateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
+  /** 更新阅读书签/批注 */
   updateReadingMark: (payload: UpdateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
+  /** 删除阅读书签/批注 */
   deleteReadingMark: (id: string) => Promise<Result<void, AppError>>
+  /** 列出可用 ACP Agent 运行时 */
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>
+  /** 连接前探测 Codex/ACP 认证是否已就绪 */
   acpAuthPreflight: () => Promise<Result<AcpAuthPreflightResult, AppError>>
+  /** 拉起 ACP 传输并连接 */
   acpConnect: (payload: AcpConnectPayload) => Promise<Result<AcpConnectResult, AppError>>
+  /** 走 ACP authMethods 完成认证 */
   acpAuthenticate: (
     payload: AcpAuthenticatePayload,
   ) => Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>>
+  /** 加载已有 ACP session（恢复历史） */
   acpLoadSession: (
     payload: AcpLoadSessionPayload,
   ) => Promise<Result<AcpSessionNewResult, AppError>>
+  /** 断开 ACP 并清理子进程 */
   acpDisconnect: () => Promise<Result<void, AppError>>
+  /** 新建 ACP session */
   acpSessionNew: (payload: AcpSessionNewPayload) => Promise<Result<AcpSessionNewResult, AppError>>
+  /** 向当前 session 发送 prompt */
   acpPrompt: (payload: AcpPromptPayload) => Promise<Result<AcpPromptResult, AppError>>
+  /** 取消正在进行的 prompt */
   acpCancel: (payload: AcpCancelPayload) => Promise<Result<void, AppError>>
+  /** 设置 ACP 会话配置项（模型等） */
   acpSetConfigOption: (
     payload: AcpSetConfigOptionPayload,
   ) => Promise<Result<AcpSetConfigOptionResult, AppError>>
+  /** 回复 Agent 的权限询问 */
   acpRespondPermission: (payload: AcpPermissionResponsePayload) => void
+  /** 回传编辑器/阅读器快照给 Agent */
   acpRespondSnapshot: (payload: AcpSnapshotResponsePayload) => void
+  /** ACP session/update 流式事件；返回取消订阅 */
   onAcpSessionUpdate: (callback: (event: AcpSessionUpdateEvent) => void) => () => void
+  /** ACP 连接/会话状态变化；返回取消订阅 */
   onAcpStatusChanged: (callback: (event: AcpStatusChangedEvent) => void) => () => void
+  /** Agent 请求工具权限；返回取消订阅 */
   onAcpPermissionRequest: (
     callback: (event: AcpPermissionRequestEvent & { summary?: string }) => void,
   ) => () => void
+  /** Agent 请求当前文档快照；返回取消订阅 */
   onAcpSnapshotRequest: (callback: (event: AcpSnapshotRequestEvent) => void) => () => void
+  /** 抓取在线文档一页 HTML */
   fetchWebDocPage: (payload: WebDocFetchPayload) => Promise<Result<WebDocFetchResult, AppError>>
+  /** 发现在线文档目录（TOC） */
   discoverWebDocToc: (
     payload: WebDocDiscoverTocPayload,
   ) => Promise<Result<WebDocDiscoverTocResult, AppError>>
+  /** 读取 PDF OCR 目录缓存 */
   getPdfOcrToc: (
     payload: GetPdfOcrTocPayload,
   ) => Promise<Result<PdfOcrTocCache, AppError>>
+  /** 对 PDF 目录页做 OCR 并缓存 */
   recognizePdfOcrToc: (
     payload: RecognizePdfTocPayload,
   ) => Promise<Result<PdfOcrTocCache, AppError>>
+  /** 删除某 PDF 的目录 OCR 缓存 */
   deletePdfOcrToc: (payload: GetPdfOcrTocPayload) => Promise<Result<void, AppError>>
+  /** 读取某页 PDF OCR 缓存 */
   getPdfOcrPage: (
     payload: GetPdfOcrPagePayload,
   ) => Promise<Result<PdfOcrPageCache, AppError>>
+  /** 对指定 PDF 页 OCR 并缓存 */
   recognizePdfOcrPage: (
     payload: RecognizePdfPagePayload,
   ) => Promise<Result<PdfOcrPageCache, AppError>>
+  /** 列出已缓存 OCR 的 PDF 页码 */
   listPdfOcrPages: (payload: ListPdfOcrPagesPayload) => Promise<Result<number[], AppError>>
+  /** 清除单个 PDF 的 OCR 缓存 */
   clearPdfOcrCache: (payload: GetPdfOcrTocPayload) => Promise<Result<void, AppError>>
+  /** 清除全部 PDF OCR 缓存 */
   clearAllPdfOcrCache: () => Promise<Result<void, AppError>>
+  /** 手动保存 PDF 目录 OCR 结果 */
   savePdfOcrToc: (payload: SavePdfOcrTocPayload) => Promise<Result<void, AppError>>
+  /** OCR 组件（语言包/引擎）是否就绪 */
   getOcrComponentStatus: () => Promise<Result<OcrComponentStatus, AppError>>
+  /** 下载并确保 OCR 组件可用 */
   ensureOcrComponent: () => Promise<Result<void, AppError>>
+  /** 取消 OCR 组件下载 */
   cancelOcrComponentDownload: () => Promise<Result<OcrComponentStatus, AppError>>
+  /** OCR 组件下载/就绪状态；返回取消订阅 */
   onOcrComponentStatus: (callback: (status: OcrComponentStatus) => void) => () => void
+  /** 检查应用更新 */
   checkAppUpdate: () => Promise<AppUpdateStatus>
+  /** 下载已发现的更新 */
   downloadAppUpdate: () => Promise<AppUpdateStatus>
+  /** 安装更新并重启 */
   installAppUpdate: () => Promise<Result<void, AppError>>
+  /** 读取当前更新状态快照 */
   getAppUpdateStatus: () => Promise<Result<AppUpdateStatus, AppError>>
+  /** 更新状态推送；返回取消订阅 */
   onAppUpdateStatus: (callback: (status: AppUpdateStatus) => void) => () => void
 }

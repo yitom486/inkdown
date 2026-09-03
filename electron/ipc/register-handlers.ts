@@ -117,6 +117,11 @@ import {
 } from '../services/acp/acp-client'
 import { pickAllowOptionId } from '../services/acp/client-handlers'
 
+/**
+ * 应用还在运行时，把同一条 IPC 推到每一扇还活着的窗。
+ * 用于 ACP 全局单例：连接状态、流式 session/update、权限框（各窗 UI 都要同步）。
+ * 不是退出时杀进程；已销毁的窗必须跳过，否则 send 会抛错。
+ */
 function broadcastToAllWindows(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
@@ -126,29 +131,36 @@ function broadcastToAllWindows(channel: string, payload: unknown): void {
 }
 
 /**
- * ACP 是全局单例，但快照必须来自「发起这轮对话的那个窗口」，
- * 否则多窗口同目录时会拿到别的窗口正在读的书。
+ * 最后一次 ACP connect / prompt 来自哪扇窗的 webContents.id。
+ * 快照（当前打开的书/编辑器正文）只存在于渲染进程，必须问对窗口。
  */
 let agentOwnerWebContentsId: number | null = null
 
+/** 把 IPC 的 event.sender 记为 Agent 归属窗（后写覆盖先写） */
 function rememberAgentOwner(sender: Electron.WebContents): void {
   agentOwnerWebContentsId = sender.id
 }
 
+/**
+ * 解析快照该发给谁。顺序：
+ * 1. 记下的 owner 还在 → 用它（正常路径）
+ * 2. 那扇窗已关 → 当前聚焦窗
+ * 3. 再没有 → 任意一扇还活着的窗（兜底，内容可能已不是当初那本书）
+ * 4. 一个窗都没有 → null，调用方应失败而不是空发
+ */
 function resolveAgentOwnerWebContents(): Electron.WebContents | null {
   const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed())
   const owner = windows.find((win) => win.webContents.id === agentOwnerWebContentsId)
   if (owner) return owner.webContents
-  // 发起窗口已关闭：退回聚焦窗口，再退回任意窗口
   const focused = BrowserWindow.getFocusedWindow()
   if (focused && !focused.isDestroyed()) return focused.webContents
   return windows[0]?.webContents ?? null
 }
 
-/** 快照来自渲染进程内存；可能触发 OCR 的资源用更长超时 */
-
 /** 集中注册 IPC；文件/书签等耗时操作均为 async，不阻塞主进程事件循环 */
 export function registerIpcHandlers(): void {
+  // --- ACP：权限/快照桥（须先于 handle，Agent 回调才能找到窗口） ---
+  // Agent 要跑工具时主进程拦下来，把选项交给 UI，等用户点允许/拒绝后再继续。
   setAcpPermissionBridge(async ({ requestId, sessionId, params }) => {
     const toolCall = params.toolCall
     const title =
@@ -163,6 +175,7 @@ export function registerIpcHandlers(): void {
       optionCount: Array.isArray(params.options) ? params.options.length : 0,
     })
 
+    // 单例 Agent：每扇窗都可能开着面板，权限框目前广播（任一窗用同一 requestId 回复即可）
     broadcastToAllWindows(IPC.ACP_PERMISSION_REQUEST, {
       requestId,
       sessionId,
@@ -176,6 +189,7 @@ export function registerIpcHandlers(): void {
     })
 
     return await new Promise((resolve) => {
+      // 无人点按钮时不能让 Agent 永远挂起；有默认允许项则选它，否则当取消
       const timer = setTimeout(() => {
         cleanup()
         const allowId = pickAllowOptionId(params)
@@ -206,6 +220,7 @@ export function registerIpcHandlers(): void {
     })
   })
 
+  // 正文/阅读进度在渲染进程；只问 owner，避免多窗同目录时拍到别的书
   setAcpSnapshotBridge(async ({ requestId, resource, args }) => {
     const target = resolveAgentOwnerWebContents()
     if (!target) {
@@ -214,6 +229,7 @@ export function registerIpcHandlers(): void {
     target.send(IPC.ACP_SNAPSHOT_REQUEST, { requestId, resource, args })
 
     return await new Promise<string>((resolve, reject) => {
+      // 快照来自渲染进程内存；可能触发 OCR 的资源用更长超时
       const timeoutMs = resolveSnapshotTimeoutMs(resource)
       const timer = setTimeout(() => {
         cleanup()
@@ -247,6 +263,7 @@ export function registerIpcHandlers(): void {
     })
   })
 
+  // 流式输出 / 连接状态：全局一份 Agent，各窗面板要同一份数据
   onAcpSessionUpdate((event) => {
     broadcastToAllWindows(IPC.ACP_SESSION_UPDATE, event)
   })
@@ -255,9 +272,11 @@ export function registerIpcHandlers(): void {
     broadcastToAllWindows(IPC.ACP_STATUS_CHANGED, event)
   })
 
+  // --- ACP：连接、认证、session、prompt ---
   ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
   ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, () => ok(probeCodexAuth()))
   ipcMain.handle(IPC.ACP_CONNECT, (event, payload: AcpConnectPayload) => {
+    // 这扇窗之后的快照都问它
     rememberAgentOwner(event.sender)
     return connectAcp(payload)
   })
@@ -276,6 +295,7 @@ export function registerIpcHandlers(): void {
     createAcpSession(payload?.cwd),
   )
   ipcMain.handle(IPC.ACP_PROMPT, (event, payload: AcpPromptPayload) => {
+    // 换窗接着聊时，归属改到新的发起窗
     rememberAgentOwner(event.sender)
     return promptAcp(payload)
   })
@@ -284,6 +304,7 @@ export function registerIpcHandlers(): void {
     setAcpConfigOption(payload),
   )
 
+  // --- 应用：版本与自动更新 ---
   ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())
   ipcMain.handle(IPC.APP_UPDATE_CHECK, () => checkAppUpdate())
   ipcMain.handle(IPC.APP_UPDATE_DOWNLOAD, () => downloadAppUpdate())
@@ -293,6 +314,7 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle(IPC.APP_UPDATE_GET_STATUS, () => ok(getAppUpdateStatus()))
 
+  // --- 窗口：脏标记与关窗确认 ---
   ipcMain.on(IPC.APP_SET_DIRTY, (event, isDirty: boolean) => {
     const session = getWindowSessionByWebContents(event.sender)
     if (session) session.documentDirty = isDirty
@@ -304,6 +326,7 @@ export function registerIpcHandlers(): void {
     )
   })
 
+  // --- 文件 / 工作区：打开、读写、树操作、导出、监听 ---
   ipcMain.handle(IPC.FILE_OPEN, (_event, options?: OpenDialogOptions) =>
     openDocumentDialog(options),
   )
@@ -362,6 +385,7 @@ export function registerIpcHandlers(): void {
     exportMarkdownDocument(payload),
   )
 
+  // --- 窗口 / 应用壳：标题、退出、新建窗、外链 ---
   ipcMain.on(IPC.FILE_UPDATE_TITLE, (event, payload: { filePath?: string; isDirty: boolean }) => {
     const targetWindow = BrowserWindow.fromWebContents(event.sender)
     if (targetWindow && !targetWindow.isDestroyed()) {
@@ -391,10 +415,12 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  // --- Bun 运行时（ACP 等子进程依赖） ---
   ipcMain.handle(IPC.BUN_GET_STATUS, async () => ok(await probeBunRuntime()))
 
   ipcMain.handle(IPC.BUN_INSTALL, async () => installBunRuntime())
 
+  // --- 窗口初始化、DevTools、渲染进程错误日志 ---
   /** preload 启动时同步读取，仅访问内存中的 session 映射 */
   ipcMain.on(IPC.APP_GET_WINDOW_INIT, (event) => {
     event.returnValue = getWindowInitByWebContents(event.sender)
@@ -421,6 +447,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.APP_GET_ERROR_LOG_PATH, () => ok(getErrorLogFilePath()))
 
+  // --- 阅读书签 / 批注 ---
   ipcMain.handle(IPC.MARKS_LIST, (_event, filePath: string) => listReadingMarks(filePath))
   ipcMain.handle(IPC.MARKS_CREATE, (_event, payload: CreateReadingMarkPayload) =>
     createReadingMark(payload),
@@ -430,6 +457,7 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.MARKS_DELETE, (_event, id: string) => deleteReadingMark(id))
 
+  // --- 在线文档 ---
   ipcMain.handle(IPC.WEB_DOC_FETCH_PAGE, async (_event, payload: WebDocFetchPayload) => {
     const urlResult = parseWebDocUrlInput(payload?.url)
     if (!urlResult.ok) return urlResult
@@ -442,6 +470,7 @@ export function registerIpcHandlers(): void {
     return discoverWebDocToc({ url: urlResult.value })
   })
 
+  // --- PDF OCR：缓存、识别、组件下载 ---
   ipcMain.handle(IPC.OCR_GET_PDF_TOC, async (_event, payload: GetPdfOcrTocPayload) => {
     const cache = await readPdfOcrTocCache(payload.fileFingerprint)
     return cache ? ok(cache) : err({ code: 'FILE_NOT_FOUND', message: '无 OCR 目录缓存' })

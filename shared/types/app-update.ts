@@ -1,3 +1,4 @@
+/** electron-updater 阶段；UI 用 phase 收窄，不要靠多个布尔 */
 export type AppUpdatePhase =
   | 'idle'
   | 'checking'

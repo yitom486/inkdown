@@ -1,10 +1,16 @@
+/**
+ * 文件 / 工作区 / 导出 IPC DTO。
+ * 打开结果用 kind 判别：Markdown 带正文，电子书只给路径（内容在阅读器里读）。
+ */
 import type { DocumentKind } from '@shared/types/document'
 
+/** 按路径读文本（已知是 Markdown/纯文本） */
 export interface OpenFileResult {
   filePath: string
   content: string
 }
 
+/** 打开对话框的结果：markdown 含 content；pdf/epub/mobi 不含，避免把二进制当字符串 */
 export type OpenDocumentResult =
   | { filePath: string; kind: 'markdown'; content: string }
   | { filePath: string; kind: 'pdf' | 'epub' | 'mobi' }
@@ -77,6 +83,7 @@ export interface ExportDocumentResult {
   filePath: string
 }
 
+/** 工作区树操作成功后的绝对路径 */
 export interface WorkspaceFsPathResult {
   path: string
 }

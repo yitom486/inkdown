@@ -1,3 +1,8 @@
+/**
+ * 阅读书签 / 高亮 / 批注。
+ * 锚点按 format 判别：PDF 有 V1 rect 与 V2 quad；不要把 CFI 塞进 PDF。
+ */
+
 export type ReadingMarkKind = 'bookmark' | 'highlight' | 'note'
 
 export type ReadingDocumentFormat = 'pdf' | 'epub' | 'mobi' | 'web'

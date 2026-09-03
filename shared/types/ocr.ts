@@ -1,3 +1,9 @@
+/**
+ * PDF OCR 缓存与组件状态。
+ * 用 fileFingerprint 当缓存键（文件内容变了旧缓存自动失效），不要只用路径。
+ */
+
+/** 阅读器侧栏目录项（OCR 结果会映射成这套，与 EPUB 等共用） */
 export interface ReaderTocUnit {
   label: string
   href: string
@@ -14,6 +20,7 @@ export const PDF_OCR_SCALE_OPTION_LABELS: Array<{ value: PdfOcrScale; label: str
   { value: 2.5, label: '清晰' },
 ]
 
+/** OCR 识别出的一条目录；printedPage 是印在纸上的页码 */
 export interface OcrTocEntry {
   title: string
   printedPage: number
@@ -23,6 +30,7 @@ export interface OcrTocEntry {
 export interface PdfOcrTocCache {
   fileFingerprint: string
   tocPageRange: [number, number]
+  /** 印刷页码与 PDF 页索引的差 */
   pageOffset: number
   entries: OcrTocEntry[]
   units: ReaderTocUnit[]
@@ -48,6 +56,7 @@ export interface SavePdfOcrTocPayload {
   cache: PdfOcrTocCache
 }
 
+/** 页内像素框；与 OCR 引擎坐标系一致，划词要对齐阅读器缩放 */
 export interface OcrPageBBox {
   x0: number
   y0: number
@@ -87,6 +96,7 @@ export interface ListPdfOcrPagesPayload {
   fileFingerprint: string
 }
 
+/** 语言包/引擎是否就绪；用 phase 收窄，不要只用 runtimeReady */
 export type OcrComponentPhase = 'not-ready' | 'downloading' | 'ready' | 'error'
 
 export interface OcrComponentStatus {
