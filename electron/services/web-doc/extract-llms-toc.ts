@@ -2,25 +2,12 @@ import type { WebDocTocEntry } from '@shared/types/web-doc'
 
 const MAX_TOC_ENTRIES = 240
 
-const SEGMENT_LABELS: Record<string, string> = {
-  'get-started': 'Get Started',
-  protocol: 'Protocol',
-  libraries: 'Libraries',
-  community: 'Community',
-  rfds: 'RFDs',
-  announcements: 'Announcements',
-  publications: 'Publications',
-  updates: 'Updates',
-  brand: 'Brand',
-}
-
 export function isVersionPathSegment(segment: string): boolean {
   return /^v\d+$/i.test(segment)
 }
 
+/** 通用路径段标题化：get-started → Get Started（无站点词表） */
 export function humanizePathSegment(segment: string): string {
-  const key = segment.toLowerCase()
-  if (SEGMENT_LABELS[key]) return SEGMENT_LABELS[key]
   if (isVersionPathSegment(segment)) return segment
   return segment
     .split('-')
@@ -29,7 +16,7 @@ export function humanizePathSegment(segment: string): string {
     .join(' ')
 }
 
-/** 将 Mintlify / docs 站的 `.md` 文档链转为可打开的 HTML 路径 */
+/** 将文档索引里的 `.md` 链转为可打开的 HTML 路径 */
 export function normalizeLlmsDocHref(href: string, baseOrigin: string): string | null {
   try {
     const absolute = new URL(href, baseOrigin)
@@ -74,8 +61,8 @@ export function structuralPathParts(parts: string[]): {
 }
 
 /**
- * 解析 llms.txt（Mintlify 等）：`- [Title](url): desc`
- * 按站点栏目建树（Get Started / Protocol / …），不把 URL 里的 v1 强行加成平行层级。
+ * 解析 llms.txt（文档站常见索引）：`- [Title](url): desc`
+ * 按路径栏目建树；版本号路径段（v1/v2）不强制加成中间层。
  */
 export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEntry[] {
   const entries: WebDocTocEntry[] = []
@@ -153,12 +140,23 @@ export function extractLlmsTxtToc(text: string, baseOrigin: string): WebDocTocEn
   return entries
 }
 
+/**
+ * 是否值得尝试站点级目录索引（llms.txt）。
+ * 以页面是否声明 /llms.txt 为主；sidebar 仅作弱启发（许多 docs 主题通用）。
+ * 不绑定具体域名。
+ */
+export function looksLikeDocsIndexCandidate(html: string): boolean {
+  if (/\bhref=["'][^"']*llms\.txt["']/i.test(html)) return true
+  if (/\/llms\.txt/i.test(html)) return true
+  // 常见文档侧栏容器（Mintlify / Docusaurus 等都会用，非某一站点）
+  if (/<nav\b[^>]*\bid=["']sidebar["']/i.test(html)) return true
+  if (/<nav\b[^>]*aria-label=["'][^"']*pages[^"']*["']/i.test(html)) return true
+  return false
+}
+
+/** @deprecated 使用 looksLikeDocsIndexCandidate */
 export function looksLikeMintlifyOrLlmsDocs(html: string): boolean {
-  return (
-    /\/llms\.txt/i.test(html) ||
-    /_mintlify|mintlify\.com|mintcdn\.com/i.test(html) ||
-    /id=["']sidebar["']/i.test(html)
-  )
+  return looksLikeDocsIndexCandidate(html)
 }
 
 export function resolveLlmsTxtUrl(pageUrl: string, html: string): string | null {

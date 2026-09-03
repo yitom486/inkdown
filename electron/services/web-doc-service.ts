@@ -13,7 +13,7 @@ import {
 } from './web-doc/extract-toc-links'
 import {
   extractLlmsTxtToc,
-  looksLikeMintlifyOrLlmsDocs,
+  looksLikeDocsIndexCandidate,
   resolveLlmsTxtUrl,
 } from './web-doc/extract-llms-toc'
 import { tryFetchE2eWebDocFixture } from './web-doc/e2e-fixture'
@@ -165,8 +165,8 @@ export async function discoverWebDocToc(
           ? extractPeopleDailyToc(fetchResult.value.html, fetchResult.value.url)
           : extractGenericWebDocToc(fetchResult.value.html, fetchResult.value.url)
 
-    // Mintlify 等：各页侧栏 SSR 不完整（未展开分组无子链）。优先用站点级 llms.txt 统一目录。
-    if (siteId === 'generic-ssr' && looksLikeMintlifyOrLlmsDocs(fetchResult.value.html)) {
+    // 站点级索引：凡页面声明 llms.txt / 典型 docs 侧栏，则拉索引统一目录（不绑定域名）
+    if (siteId === 'generic-ssr' && looksLikeDocsIndexCandidate(fetchResult.value.html)) {
       const llmsUrl = resolveLlmsTxtUrl(fetchResult.value.url, fetchResult.value.html)
       if (llmsUrl) {
         const llmsResult = await fetchWebDocPlainText(llmsUrl)
