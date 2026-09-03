@@ -164,6 +164,24 @@ function pickTocByMatchKey(
   return hits.reduce((best, item) => ((item.level ?? 0) >= (best.level ?? 0) ? item : best))
 }
 
+/**
+ * 按当前阅读位置在 TOC 中定位章节。
+ * `currentKey` 通常是 normalize 后的 href / chapterId / url（即 matchKey），
+ * 不是 TOC 条目的 `key`（`key` 形如 `0:href`）。
+ */
+export function findCurrentChapterRef(
+  toc: ReadingNotesChapterRef[],
+  currentKey: string | null | undefined,
+): ReadingNotesChapterRef | null {
+  const key = currentKey?.trim()
+  if (!key || toc.length === 0) return null
+  return (
+    pickTocByMatchKey(toc, key) ??
+    toc.find((entry) => entry.key === key) ??
+    null
+  )
+}
+
 export function resolveEpubChapter(
   mark: ReadingMark,
   toc: ReadingNotesChapterRef[],

@@ -5,6 +5,7 @@ import {
   buildReadingNotesExport,
   buildReadingNotesFileName,
   filterMarksForNotesExport,
+  findCurrentChapterRef,
   resolveEpubChapter,
   resolveMobiChapter,
   resolvePdfChapter,
@@ -31,6 +32,15 @@ describe('export-reading-notes', () => {
     { href: 'chap1.xhtml', label: '第一章' },
     { href: 'chap2.xhtml#frag', label: '第二章' },
   ])
+
+  it('findCurrentChapterRef 按 matchKey（阅读位置）定位，而非 TOC key', () => {
+    expect(toc[0]?.key).toBe('0:chap1.xhtml')
+    expect(toc[0]?.matchKey).toBe('chap1.xhtml')
+    // 阅读器传入的是 normalizeLoadKey(href)，不是 `0:href`
+    expect(findCurrentChapterRef(toc, 'chap1.xhtml')?.label).toBe('第一章')
+    expect(findCurrentChapterRef(toc, '0:chap1.xhtml')?.label).toBe('第一章')
+    expect(findCurrentChapterRef(toc, 'missing')).toBeNull()
+  })
 
   it('按内容类型过滤：批注 / 重点 / 综合', () => {
     const marks = [

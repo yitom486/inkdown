@@ -65,6 +65,7 @@ import {
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
 import {
+  findCurrentChapterRef,
   resolveEpubChapter,
   tocFromEpubUnits,
   type ReadingNotesContentKind,
@@ -993,11 +994,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => {
       const toc = tocFromEpubUnits(chapters)
       const currentKey = currentUnitId ? normalizeLoadKey(currentUnitId) : ''
-      const currentHits = toc.filter((entry) => entry.matchKey === currentKey)
-      const currentChapter =
-        currentHits.length > 0
-          ? currentHits.reduce((best, item) => (item.level >= best.level ? item : best))
-          : null
+      const currentChapter = findCurrentChapterRef(toc, currentKey)
       void saveReadingNotesExport({
         marks,
         toc,
@@ -1015,11 +1012,7 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
     (scope: ReadingNotesScope) => {
       const toc = tocFromEpubUnits(chapters)
       const currentKey = currentUnitId ? normalizeLoadKey(currentUnitId) : ''
-      const currentHits = toc.filter((entry) => entry.matchKey === currentKey)
-      const currentChapter =
-        currentHits.length > 0
-          ? currentHits.reduce((best, item) => (item.level >= best.level ? item : best))
-          : null
+      const currentChapter = findCurrentChapterRef(toc, currentKey)
       void saveAnkiCardsExport({
         marks,
         toc,

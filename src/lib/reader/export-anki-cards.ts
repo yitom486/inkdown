@@ -137,11 +137,12 @@ export function buildAnkiCardsExport(
     .sort((a, b) => highlightSortKey(a).localeCompare(highlightSortKey(b), 'en'))
 
   const filtered = passages.filter((mark) => {
-    if (input.scope === 'chapter' && input.currentChapter) {
-      const chap = input.resolveChapter(mark, input.toc)
-      return chap.key === input.currentChapter.key || chap.matchKey === input.currentChapter.matchKey
-    }
-    return true
+    if (input.scope !== 'chapter') return true
+    const current = input.currentChapter
+    if (!current?.key && !current?.matchKey) return false
+    const chap = input.resolveChapter(mark, input.toc)
+    const match = current.matchKey || current.key
+    return (chap.matchKey || chap.key) === match || chap.key === current.key
   })
 
   if (filtered.length === 0) {

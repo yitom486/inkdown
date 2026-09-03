@@ -9,6 +9,7 @@ import { buildAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import type { Flashcard } from '@shared/types/flashcard'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import {
+  findCurrentChapterRef,
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,
   type ReadingNotesScope,
@@ -82,8 +83,8 @@ export function ReaderContentShell({
     '当前书籍'
 
   const handleReviewFlashcards = (scope: ReadingNotesScope) => {
-    const currentChapter = marksToc?.find((c) => c.key === marksCurrentChapterKey)
     const toc = marksToc ?? []
+    const currentChapter = findCurrentChapterRef(toc, marksCurrentChapterKey)
     const resolveChapter =
       marksResolveChapter ??
       ((mark: ReadingMark): ReadingNotesChapterRef => ({
@@ -97,13 +98,17 @@ export function ReaderContentShell({
       marks,
       bookTitle: displayTitle,
       scope,
-      currentChapter,
+      currentChapter: scope === 'chapter' ? currentChapter : null,
       toc,
       resolveChapter,
     })
 
     if (!exportResult || exportResult.cards.length === 0) {
-      toast.info('当前选定范围内暂无重点划线或批注卡片')
+      toast.info(
+        scope === 'chapter'
+          ? '当前章节暂无重点划线或批注卡片'
+          : '当前选定范围内暂无重点划线或批注卡片',
+      )
       return
     }
 

@@ -7,6 +7,7 @@ import {
   sanitizeAnkiTag,
 } from './export-anki-cards'
 import {
+  findCurrentChapterRef,
   tocFromEpubUnits,
   resolveEpubChapter,
 } from './export-reading-notes'
@@ -93,7 +94,9 @@ describe('export-anki-cards', () => {
     })
 
     it('filters by current chapter when scope is chapter', () => {
-      const currentChapter = toc[0]!
+      // 与复习菜单一致：currentChapter 来自 matchKey 定位（findCurrentChapterRef）
+      const currentChapter = findCurrentChapterRef(toc, 'chap1.xhtml')
+      expect(currentChapter).not.toBeNull()
       const res = buildAnkiCardsExport({
         marks,
         toc,
@@ -106,6 +109,18 @@ describe('export-anki-cards', () => {
       expect(res).not.toBeNull()
       expect(res?.cardCount).toBe(1)
       expect(res?.cards[0]?.id).toBe('mark-hl')
+    })
+
+    it('returns null for chapter scope when current chapter cannot be resolved', () => {
+      const res = buildAnkiCardsExport({
+        marks,
+        toc,
+        scope: 'chapter',
+        currentChapter: null,
+        bookTitle: 'Vue.js设计与实现',
+        resolveChapter: resolveEpubChapter,
+      })
+      expect(res).toBeNull()
     })
 
     it('returns null when no eligible marks in scope', () => {

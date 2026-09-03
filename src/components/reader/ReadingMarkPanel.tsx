@@ -22,7 +22,7 @@ import {
   type ReadingNotesContentKind,
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
-import { passageExcerpt } from '@/lib/reader/reading-mark-passages'
+import { isHighlightPassage, passageExcerpt } from '@/lib/reader/reading-mark-passages'
 import { getReadingMarkDisplayKind, getReadingMarkLabel, getReadingMarkStatusLabel } from '@/lib/reader/reading-mark-labels'
 import { highlightSwatch } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarkKindFilters } from '@/stores/reading-mark-panel-store'
@@ -219,6 +219,21 @@ export function ReadingMarkPanel({
     setOpenKeys((prev) => (prev.size === 0 ? new Set([first]) : prev))
   }, [chapters, currentChapterKey])
 
+  const flashcardPassages = useMemo(
+    () => marks.filter(isHighlightPassage),
+    [marks],
+  )
+
+  const chapterFlashcardCount = useMemo(() => {
+    if (!currentChapterKey || !marksToc || !resolveChapter) return 0
+    return flashcardPassages.filter((mark) => {
+      const chap = resolveChapter(mark, marksToc)
+      return chap.key === currentChapterKey || chap.matchKey === currentChapterKey
+    }).length
+  }, [currentChapterKey, flashcardPassages, marksToc, resolveChapter])
+
+  const bookFlashcardCount = flashcardPassages.length
+
   const toggleChapter = (key: string) => {
     setOpenKeys((prev) => {
       const next = new Set(prev)
@@ -310,13 +325,13 @@ export function ReadingMarkPanel({
                   className="text-xs"
                   onClick={() => onReviewFlashcards('chapter')}
                 >
-                  本章闪卡
+                  本章闪卡 ({chapterFlashcardCount})
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-xs"
                   onClick={() => onReviewFlashcards('book')}
                 >
-                  全书闪卡 ({marks.length})
+                  全书闪卡 ({bookFlashcardCount})
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
