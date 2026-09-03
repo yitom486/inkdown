@@ -35,7 +35,7 @@ export interface BuildAnkiCardsExportResult {
   cardCount: number
 }
 
-function escapeAnkiHtml(text: string): string {
+export function escapeAnkiHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -90,13 +90,44 @@ export function buildAnkiExportFileName(
 }
 
 function cleanFieldForAnki(text: string): string {
-  return text
-    .replace(/\t/g, ' ')
-    .replace(/\r?\n/g, '<br>')
+  return text.replace(/\t/g, ' ').replace(/\r?\n/g, '<br>')
+}
+
+function buildAnkiMetaLine(card: Flashcard): string {
+  const linkHtml = card.deepLinkUrl
+    ? ` <a href="${escapeAnkiHtml(card.deepLinkUrl)}" style="color:#10b981;text-decoration:none;margin-left:6px;">[📖 原书]</a>`
+    : ''
+  return `<div style="margin-top:8px;font-size:12px;color:#888;">—— 《${escapeAnkiHtml(
+    card.sourceTitle,
+  )}》· ${escapeAnkiHtml(card.chapterName || '正文')}${linkHtml}</div>`
 }
 
 /**
- * 转换 ReadingMark 列表为 Anki 标准卡片列表与 TSV 文本内容。
+ * 将纯文本 Flashcard 转为 Anki `#html:true` 字段（仅导出用）。
+ */
+export function formatFlashcardForAnkiHtml(card: Flashcard): { front: string; back: string } {
+  const metaLine = buildAnkiMetaLine(card)
+
+  if (card.kind === 'basic') {
+    return {
+      front: `<div style="font-size:15px;font-weight:600;">${escapeAnkiHtml(card.front)}</div>`,
+      back: `<blockquote>${escapeAnkiHtml(card.back)}</blockquote>${metaLine}`,
+    }
+  }
+
+  // cloze：front 已是 {{c1::...}}；内容需 escape，但保留 cloze 标记本身
+  const front = card.front.replace(/\{\{c(\d+)::([\s\S]*?)\}\}/g, (_m, n: string, inner: string) => {
+    return `{{c${n}::${escapeAnkiHtml(inner)}}}`
+  })
+
+  return {
+    front,
+    back: metaLine,
+  }
+}
+
+/**
+ * 转换 ReadingMark 列表为纯文本闪卡 + Anki TSV。
  */
 export function buildAnkiCardsExport(
   input: BuildAnkiCardsExportInput,
@@ -131,40 +162,37 @@ export function buildAnkiCardsExport(
     if (bookTag) tags.push(bookTag)
     if (chapterTag && chapterTag !== bookTag) tags.push(chapterTag)
 
-    const bookFile = input.marks[0]?.filePath ? input.marks[0].filePath.split(/[/\\]/).pop() ?? input.bookTitle : input.bookTitle
+    const bookFile = input.marks[0]?.filePath
+      ? (input.marks[0].filePath.split(/[/\\]/).pop() ?? input.bookTitle)
+      : input.bookTitle
     const deepLinkUrl = buildDeepLinkUrl({
       file: bookFile,
       page: mark.anchor?.format === 'pdf' ? mark.anchor.page : undefined,
       cfi: mark.anchor?.format === 'epub' ? mark.anchor.cfi : undefined,
       anchor: mark.id,
     })
-    const linkHtml = ` <a href="${deepLinkUrl}" style="color:#10b981;text-decoration:none;margin-left:6px;">[📖 原书]</a>`
-
-    const metaLine = `<div style="margin-top:8px;font-size:12px;color:#888;">—— 《${escapeAnkiHtml(
-      input.bookTitle,
-    )}》· ${escapeAnkiHtml(chapterRef.label || '正文')}${linkHtml}</div>`
 
     if (note) {
-      // 问答卡（Basic）：批注为正面，原文为背面
       cards.push({
         id: mark.id,
         kind: 'basic',
-        front: `<div style="font-size:15px;font-weight:600;">${escapeAnkiHtml(note)}</div>`,
-        back: `<blockquote>${escapeAnkiHtml(excerpt)}</blockquote>${metaLine}`,
+        front: note,
+        back: excerpt,
         tags,
         chapterName: chapterRef.label,
         sourceTitle: input.bookTitle,
+        deepLinkUrl,
       })
     } else {
-      // 填空卡（Cloze）：原文为填空内容
       cards.push({
         id: mark.id,
         kind: 'cloze',
-        front: `{{c1::${escapeAnkiHtml(excerpt)}}}`,
-        back: metaLine,
+        front: `{{c1::${excerpt}}}`,
+        back: '',
         tags,
         chapterName: chapterRef.label,
         sourceTitle: input.bookTitle,
+        deepLinkUrl,
       })
     }
   }
@@ -173,18 +201,13 @@ export function buildAnkiCardsExport(
     return null
   }
 
-  // 构造标准 Anki TSV/TXT 导出文件头
-  const lines: string[] = [
-    '#separator:tab',
-    '#html:true',
-    '#tags column:3',
-  ]
+  const lines: string[] = ['#separator:tab', '#html:true', '#tags column:3']
 
   for (const card of cards) {
-    const front = cleanFieldForAnki(card.front)
-    const back = cleanFieldForAnki(card.back)
-    const tagsStr = card.tags.join(' ')
-    lines.push(`${front}\t${back}\t${tagsStr}`)
+    const html = formatFlashcardForAnkiHtml(card)
+    const front = cleanFieldForAnki(html.front)
+    const back = cleanFieldForAnki(html.back)
+    lines.push(`${front}\t${back}\t${card.tags.join(' ')}`)
   }
 
   const content = lines.join('\n')

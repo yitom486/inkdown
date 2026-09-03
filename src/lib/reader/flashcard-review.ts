@@ -1,5 +1,3 @@
-import type { Flashcard } from '@shared/types/flashcard'
-
 export type FlashcardReviewRating = 'again' | 'hard' | 'good'
 
 export interface FlashcardReviewStats {
@@ -13,16 +11,24 @@ export interface FlashcardReviewStats {
 }
 
 export interface ClozeParsedResult {
-  /** 正面呈现的挖空文本（包含交互遮罩） */
+  /** 正面呈现的挖空文本（纯文本遮罩） */
   frontText: string
   /** 挖空提取出的答案数组 */
   answers: string[]
-  /** 背面呈现的高亮完整文本 */
+  /** 背面呈现的高亮完整 HTML（答案与字面文本已 escape） */
   backHtml: string
   /** 是否整段全被挖空（无上下文语境） */
   isEntirelyMasked: boolean
   /** 记忆引导线索（前缀诱饵） */
   clue?: string
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 /**
@@ -32,7 +38,6 @@ export function parseClozeContent(text: string): ClozeParsedResult {
   const clozeRegex = /\{\{c\d+::([\s\S]*?)\}\}/g
   const answers: string[] = []
 
-  // 1. 提取所有答案
   let match: RegExpExecArray | null
   while ((match = clozeRegex.exec(text)) !== null) {
     if (match[1]) {
@@ -40,13 +45,11 @@ export function parseClozeContent(text: string): ClozeParsedResult {
     }
   }
 
-  // 2. 正面遮罩化
   const frontText = text.replace(
     /\{\{c\d+::([\s\S]*?)\}\}/g,
     ' [ ❓ 点击翻转查看答案 ] ',
   )
 
-  // 检查是否全文整段皆被 {{c1::...}} 包裹，没有任何前后上下文
   const strippedText = frontText.replace(/\[\s*❓\s*点击翻转查看答案\s*\]/g, '').trim()
   const isEntirelyMasked = strippedText.length === 0 && answers.length > 0
 
@@ -56,16 +59,30 @@ export function parseClozeContent(text: string): ClozeParsedResult {
     clue = firstAnswer.length > 40 ? `${firstAnswer.slice(0, 38)}……` : firstAnswer
   }
 
-  // 3. 背面高亮化
-  const backHtml = text.replace(
-    /\{\{c\d+::([\s\S]*?)\}\}/g,
-    '<mark class="bg-primary/20 text-primary font-semibold px-1.5 py-0.5 rounded border border-primary/30">$1</mark>',
-  )
+  // 先按段切分：字面 / cloze，再分别 escape 字面与答案
+  const parts: string[] = []
+  let lastIndex = 0
+  const highlightRegex = /\{\{c\d+::([\s\S]*?)\}\}/g
+  let highlightMatch: RegExpExecArray | null
+  while ((highlightMatch = highlightRegex.exec(text)) !== null) {
+    if (highlightMatch.index > lastIndex) {
+      parts.push(escapeHtml(text.slice(lastIndex, highlightMatch.index)))
+    }
+    parts.push(
+      `<mark class="bg-primary/20 text-primary font-semibold px-1.5 py-0.5 rounded border border-primary/30">${escapeHtml(
+        highlightMatch[1] ?? '',
+      )}</mark>`,
+    )
+    lastIndex = highlightMatch.index + highlightMatch[0].length
+  }
+  if (lastIndex < text.length) {
+    parts.push(escapeHtml(text.slice(lastIndex)))
+  }
 
   return {
     frontText,
     answers,
-    backHtml,
+    backHtml: parts.join(''),
     isEntirelyMasked,
     clue,
   }

@@ -35,6 +35,14 @@ describe('flashcard-review', () => {
     )
   })
 
+  it('escapes HTML in cloze answers when building backHtml', () => {
+    const raw = '注意 {{c1::<script>}} 注入'
+    const result = parseClozeContent(raw)
+    expect(result.backHtml).toContain('&lt;script&gt;')
+    expect(result.backHtml).not.toContain('<script>')
+    expect(result.answers).toEqual(['<script>'])
+  })
+
   it('calculates review statistics correctly', () => {
     const ratings = {
       card1: 'good' as const,

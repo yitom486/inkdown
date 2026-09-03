@@ -3,6 +3,7 @@ import type { ReadingMark } from '@shared/types/reading-mark'
 import {
   buildAnkiCardsExport,
   buildAnkiExportFileName,
+  formatFlashcardForAnkiHtml,
   sanitizeAnkiTag,
 } from './export-anki-cards'
 import {
@@ -71,16 +72,23 @@ describe('export-anki-cards', () => {
       const [clozeCard, basicCard] = res!.cards
       // Sort key order: chap1 comes before chap2
       expect(clozeCard?.kind).toBe('cloze')
-      expect(clozeCard?.front).toContain('{{c1::虚拟 DOM 的本质是用 JS 对象来描述真实的 DOM 结构。}}')
+      expect(clozeCard?.front).toBe('{{c1::虚拟 DOM 的本质是用 JS 对象来描述真实的 DOM 结构。}}')
+      expect(clozeCard?.front).not.toContain('<')
+      expect(clozeCard?.back).toBe('')
 
       expect(basicCard?.kind).toBe('basic')
-      expect(basicCard?.front).toContain('什么是响应式系统的核心？')
-      expect(basicCard?.back).toContain('响应式系统的核心就是拦截对象属性的读写。')
+      expect(basicCard?.front).toBe('什么是响应式系统的核心？')
+      expect(basicCard?.back).toBe('响应式系统的核心就是拦截对象属性的读写。')
+      expect(basicCard?.front).not.toContain('<div')
+      expect(basicCard?.back).not.toContain('<blockquote')
 
-      // Content format check
+      // Anki TSV 才含 HTML
       expect(res?.content).toContain('#separator:tab')
       expect(res?.content).toContain('#html:true')
       expect(res?.content).toContain('#tags column:3')
+      expect(res?.content).toContain('<div style="font-size:15px;font-weight:600;">什么是响应式系统的核心？</div>')
+      expect(res?.content).toContain('<blockquote>响应式系统的核心就是拦截对象属性的读写。</blockquote>')
+      expect(res?.content).toContain('[📖 原书]')
       expect(res?.content.split('\n')).toHaveLength(5) // header(3) + 2 cards
     })
 
@@ -116,6 +124,39 @@ describe('export-anki-cards', () => {
       })
 
       expect(res).toBeNull()
+    })
+  })
+
+  describe('formatFlashcardForAnkiHtml', () => {
+    it('wraps plain basic fields with Anki HTML and deep link', () => {
+      const html = formatFlashcardForAnkiHtml({
+        id: '1',
+        kind: 'basic',
+        front: '问题 <重点>',
+        back: '答案 & 原文',
+        tags: ['Inkdown'],
+        sourceTitle: '书名',
+        chapterName: '第一章',
+        deepLinkUrl: 'inkdown://open?file=a.epub&anchor=1',
+      })
+      expect(html.front).toContain('问题 &lt;重点&gt;')
+      expect(html.back).toContain('答案 &amp; 原文')
+      expect(html.back).toContain('inkdown://open?file=a.epub&amp;anchor=1')
+      expect(html.back).toContain('[📖 原书]')
+    })
+
+    it('escapes cloze inner text while keeping {{cN::}} markers', () => {
+      const html = formatFlashcardForAnkiHtml({
+        id: '2',
+        kind: 'cloze',
+        front: '{{c1::堆 <区>}}',
+        back: '',
+        tags: ['Inkdown'],
+        sourceTitle: 'JVM',
+        deepLinkUrl: 'inkdown://open?file=b.epub',
+      })
+      expect(html.front).toBe('{{c1::堆 &lt;区&gt;}}')
+      expect(html.back).toContain('[📖 原书]')
     })
   })
 
