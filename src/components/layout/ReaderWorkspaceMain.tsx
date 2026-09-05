@@ -14,6 +14,16 @@ const EpubViewer = lazy(() =>
 const MobiViewer = lazy(() =>
   import('@/components/reader/MobiViewer').then((m) => ({ default: m.MobiViewer })),
 )
+const FoliateReaderViewer = lazy(() =>
+  import('@/components/reader/FoliateReaderViewer').then((m) => ({ default: m.FoliateReaderViewer })),
+)
+
+/** E2E 门控：主进程经 window-init 下发，仅测试进程为 true */
+function useFoliateReader(): boolean {
+  return (
+    typeof window !== 'undefined' && window.electronAPI?.e2eFoliateReader === true
+  )
+}
 
 interface ReaderWorkspaceMainProps {
   filePath: string
@@ -26,6 +36,7 @@ export function ReaderWorkspaceMain({
   documentKind,
   theme,
 }: ReaderWorkspaceMainProps) {
+  const useFoliate = useFoliateReader()
   return (
     <div className="flex h-full min-h-0 flex-col">
       <FileBreadcrumb filePath={filePath} isDirty={false} />
@@ -38,7 +49,9 @@ export function ReaderWorkspaceMain({
             </div>
           }
         >
-          {documentKind === 'pdf' ? (
+          {useFoliate && (documentKind === 'epub' || documentKind === 'mobi') ? (
+            <FoliateReaderViewer filePath={filePath} documentKind={documentKind} theme={theme} />
+          ) : documentKind === 'pdf' ? (
             <PdfViewer filePath={filePath} theme={theme} />
           ) : documentKind === 'mobi' ? (
             <MobiViewer filePath={filePath} theme={theme} />

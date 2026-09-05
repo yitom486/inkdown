@@ -67,6 +67,9 @@ export interface MobiReadingAnchor {
   chapterId: string
   selectedText?: string
   rects?: PdfTextRect[]
+  /** foliate 统一后端的位置 CFI（点）与范围 CFI；旧 MOBI 阅读器写入的锚点无此字段 */
+  cfi?: string
+  cfiRange?: string
 }
 
 export interface WebReadingAnchor {

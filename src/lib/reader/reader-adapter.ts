@@ -14,6 +14,7 @@ export interface AdapterTocItem {
   href: string | null
   /** 归一化到的 spine 序号，无法定位时为 null */
   sectionIndex: number | null
+  level: number
   children: AdapterTocItem[]
 }
 
@@ -32,12 +33,16 @@ export interface AdapterLocation {
   cfi?: string
 }
 
+import type { FoliateBook } from '@foliate/view.js'
+
 export interface IReaderBookAdapter {
   readonly kind: AdapterBookKind
   readonly title: string
   readonly language?: string
   readonly toc: AdapterTocItem[]
   readonly sections: AdapterSectionInfo[]
+  /** 底层 foliate 书对象（仅供 foliate-view 挂载，勿直接操作） */
+  readonly engineBook: FoliateBook
 
   /** 章节纯文本（Agent 上下文 / 导出 / 组卷共用） */
   loadSectionText(index: number): Promise<string>

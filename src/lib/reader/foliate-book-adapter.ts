@@ -37,12 +37,14 @@ function findSectionIndex(sectionIds: string[], href: string): number | null {
 function mapTocItem(
   item: FoliateTocItem,
   sectionIds: string[],
+  level = 0,
 ): AdapterTocItem {
   return {
     label: item.label ?? '',
     href: item.href ?? null,
     sectionIndex: item.href ? findSectionIndex(sectionIds, item.href) : null,
-    children: (item.subitems ?? []).map((child) => mapTocItem(child, sectionIds)),
+    level,
+    children: (item.subitems ?? []).map((child) => mapTocItem(child, sectionIds, level + 1)),
   }
 }
 
@@ -56,21 +58,24 @@ export class FoliateBookAdapter implements IReaderBookAdapter {
   private constructor(
     private readonly book: FoliateBook,
     kind: AdapterBookKind,
-  ) {
-    this.kind = kind
+  ) {    this.kind = kind
     this.title = book.metadata?.title ?? ''
     this.language = book.metadata?.language
-    const sectionIds = book.sections.map((section) => section.id)
+    const sectionIds = book.sections.map((section) => String(section.id))
     this.toc = (book.toc ?? []).map((item) => mapTocItem(item, sectionIds))
     this.sections = book.sections.map((section, index) => ({
       index,
-      id: section.id,
+      id: String(section.id),
       linear: section.linear !== 'no',
     }))
     this.sectionIds = sectionIds
   }
 
   private readonly sectionIds: string[]
+
+  get engineBook(): FoliateBook {
+    return this.book
+  }
 
   static async open(data: Uint8Array, fileName: string): Promise<FoliateBookAdapter> {
     const { makeBook } = await import('@foliate/view.js')

@@ -16,6 +16,7 @@ bun run test:e2e:web-doc  # 仅在线文档 fixture 冒烟
 | `agent-panel.spec.ts` | Agent 面板壳 |
 | `export-pdf.spec.ts` | Markdown 导出 PDF（`E2E_AUTO_EXPORT_PATH`） |
 | `quick-open.spec.ts` | 打开文件夹（`E2E_AUTO_OPEN_PATH` 跳过原生对话框）→ Ctrl+P 搜索打开 |
+| `reader-foliate.spec.ts` | foliate 统一阅读器 parity（`E2E_FOLIATE_READER` 门控，分支验证用） |
 | `reader-smoke.spec.ts` | Markdown 预览（Mermaid/公式/高亮）+ PDF 画布文字层 + EPUB 章节（自研最小 fixture） |
 | `sync-webdav.spec.ts` | 本地内存 WebDAV stub → 设置页测试连接 + 一次同步落数 |
 | `web-doc-smoke.spec.ts` | 在线文档：打开、地址栏换页、目录跳转 |
