@@ -633,13 +633,15 @@ export function EpubViewer({ filePath, theme }: EpubViewerProps) {
         }
 
         contents.document.addEventListener('mousemove', onMouseMove, { passive: true })
-        contents.document.addEventListener('mouseleave', () => {
+        const onMouseLeave = () => {
           hoveredMarkIdRef.current = null
           markHoverHandlers().onLeave()
-        })
+        }
+        contents.document.addEventListener('mouseleave', onMouseLeave)
 
         markHoverCleanupRef.current = () => {
           contents.document.removeEventListener('mousemove', onMouseMove)
+          contents.document.removeEventListener('mouseleave', onMouseLeave)
           if (hoverRaf !== 0) {
             window.cancelAnimationFrame(hoverRaf)
             hoverRaf = 0
