@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
-import { useDeferredValue, useMemo } from 'react'
+import { useMemo } from 'react'
+import { useSmoothStreamingText, useThrottledValue } from '@/hooks/agent/useSmoothStreamingText'
 import {
   AgentChatItem,
   AgentChatItemBody,
@@ -16,7 +17,8 @@ import type { ResolveMarkProposal } from '@/components/agent/AgentBlockRenderer'
 import { dismissProposedMark } from '@/lib/agent/context/propose-mark'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
-import { renderAgentMarkdown } from '@/lib/agent/agent-markdown'
+import { renderAgentMarkdown, renderStreamingTail } from '@/lib/agent/agent-markdown'
+import { splitStableTail } from '@/lib/agent/streaming-split'
 import { cn } from '@/lib/utils'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import '@/styles/markdown-preview.css'
@@ -41,15 +43,32 @@ export function AgentMessageBubble({
   }
   const [thoughtOpen, setThoughtOpen] = useAgentChatOpen(Boolean(message.streaming))
 
-  // 流式时用 deferred 文本节流全量 Markdown 重解析，避免每个小 chunk 卡一次
-  const deferredText = useDeferredValue(message.text)
-  const renderText = message.streaming ? deferredText : message.text
+  // 流式：rAF 自适应揭示 + 32ms 可见更新 + 稳定区冻结复用（只重绘尾部）；
+  // active 区分接收结束与展示结束：排空完才切精确全文，避免尾部跳变
+  const streaming = Boolean(message.streaming)
+  const { text: displayed, active } = useSmoothStreamingText(message.text, streaming)
+  const throttled = useThrottledValue(displayed, 32, active)
+  const renderText = active ? throttled : message.text
+  const { stable, tail } = useMemo(
+    () => (active ? splitStableTail(renderText) : { stable: renderText, tail: '' }),
+    [renderText, active],
+  )
+  const stableHtml = useMemo(() => {
+    if (message.role !== 'agent') return null
+    if (!stable.trim() && active) return null
+    return renderAgentMarkdown(stable, { streaming: active })
+  }, [stable, message.role, active])
+  const tailHtml = useMemo(() => {
+    if (message.role !== 'agent' || !active) return null
+    if (!tail) return ''
+    return renderStreamingTail(renderText, tail)
+  }, [tail, renderText, message.role, active])
   const html = useMemo(() => {
     if (message.role !== 'agent') return null
-    if (!renderText.trim() && message.streaming) return null
-    // 流式与完成共用同一渲染管线，仅 streaming 时补全未闭合 fence
-    return renderAgentMarkdown(renderText, { streaming: Boolean(message.streaming) })
-  }, [renderText, message.role, message.streaming])
+    if (active) return null
+    if (!renderText.trim()) return null
+    return renderAgentMarkdown(renderText, { streaming: false })
+  }, [renderText, message.role, active])
 
   if (message.role === 'system') {
     return (
@@ -129,13 +148,15 @@ export function AgentMessageBubble({
 
   const isUser = message.role === 'user'
   const showEmptyStreaming = !isUser && message.streaming && !message.text.trim()
+  // 排空期间保持流式外衣，避免闪烁切换
+  const showStreaming = active && !isUser
 
   return (
     <AgentChatItem
       variant="bubble"
       tone={isUser ? 'user' : 'agent'}
       align={isUser ? 'end' : 'start'}
-      streaming={Boolean(message.streaming)}
+      streaming={isUser ? Boolean(message.streaming) : active}
       probe={isUser ? 'user' : 'agent'}
       messageId={message.id}
       role={message.role}
@@ -143,7 +164,7 @@ export function AgentMessageBubble({
       {!isUser ? (
         <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
           Agent
-          {message.streaming ? (
+          {showStreaming ? (
             <Loader2 className="size-3 animate-spin text-emerald-500" />
           ) : null}
         </div>
@@ -189,10 +210,35 @@ export function AgentMessageBubble({
           </span>
           正在生成
         </div>
+      ) : active && !isUser ? (
+        <>
+          {stableHtml ? (
+            <MarkdownContent
+              html={stableHtml}
+              deferMermaid
+              className={cn(
+                'markdown-preview agent-md min-w-0 max-w-full break-words text-[12px] [overflow-wrap:anywhere]',
+                '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+                '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
+              )}
+            />
+          ) : null}
+          {tailHtml ? (
+            <MarkdownContent
+              html={tailHtml}
+              deferMermaid
+              className={cn(
+                'markdown-preview agent-md min-w-0 max-w-full break-words text-[12px] [overflow-wrap:anywhere]',
+                '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+                '[&_.mermaid]:my-2 [&_.mermaid]:overflow-x-auto [&_.mermaid]:rounded-md [&_.mermaid]:bg-muted/40 [&_.mermaid]:p-2',
+              )}
+            />
+          ) : null}
+        </>
       ) : (
         <MarkdownContent
           html={html ?? ''}
-          deferMermaid={Boolean(message.streaming)}
+          deferMermaid={false}
           className={cn(
             'markdown-preview agent-md min-w-0 max-w-full break-words text-[12px] [overflow-wrap:anywhere]',
             '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
@@ -217,7 +263,7 @@ export function AgentMessageBubble({
           onSelectChapter={onChapterPlanSelect}
         />
       ) : null}
-      {message.streaming && !isUser && !showEmptyStreaming ? (
+      {showStreaming && !showEmptyStreaming ? (
         <span className="mt-0.5 inline-block h-3.5 w-0.5 animate-pulse rounded-sm bg-foreground/60 align-middle" />
       ) : null}
     </AgentChatItem>

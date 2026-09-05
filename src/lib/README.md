@@ -94,7 +94,10 @@
 | `acp-config-preferences` | Mode/Model 等配置记忆 |
 | `acp-session-restore` / `acp-thread-prune` / `acp-prune-agent-replies` | 会话恢复与线程修剪 |
 | `acp-dev-log` / `acp-layout-probe` | 开发日志与布局探测 |
-| `agent-markdown` | Agent 气泡 Markdown（与预览同源解析） |
+| `agent-markdown` | Agent 气泡 Markdown（与预览同源解析；流式尾部轻渲染跳过未闭合围栏高亮） |
+| `stream-coalescer` | 流式正文 chunk 缓冲合并（32ms 一刷，非文本事件立即冲刷） |
+| `streaming-split` | 流式稳定区/尾部分割（围栏外最后段落边界冻结复用） |
+| `throttled-storage` | persist 节流写入（1.5s 合并落盘） |
 | `annotation-note-prompts` | 批注 AI 意图/改写 chip 与草稿抽取 |
 | `enrich-tool-message` | tool 消息 enrich（提议卡 + 章级建议） |
 | `tool-failure-message` | 工具失败 → 聊天气泡内业务说明（折叠标题 + 展开正文） |

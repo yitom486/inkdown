@@ -1,6 +1,7 @@
 import DOMPurify, { type Config } from 'dompurify'
 import { patchStreamingMathDelimiters } from '@/lib/editor/latex-delimiters'
-import { renderMarkdown } from '@/lib/editor/markdown'
+import { markdownParser, renderMarkdown } from '@/lib/editor/markdown'
+import { isInsideFence } from '@/lib/agent/streaming-split'
 
 export type { AgentMarkdownPart, MarkdownPart } from '@/lib/editor/markdown-parts'
 export { splitAgentMarkdownParts, splitMarkdownParts } from '@/lib/editor/markdown-parts'
@@ -46,4 +47,24 @@ export function renderAgentMarkdown(
 /** @deprecated 使用 renderAgentMarkdown(text, { streaming: true }) */
 export function renderAgentMarkdownStreaming(text: string): string {
   return renderAgentMarkdown(text, { streaming: true })
+}
+
+/**
+ * 流式尾部轻量渲染：尾部落在未闭合围栏里时，代码部分跳过 highlight.js
+ * （逐帧全量高亮是长代码回复的核心卡点），只做转义直出；
+ * 围栏前的普通文本仍走正常管线。完成态不走这里。
+ */
+export function renderStreamingTail(stableAndTail: string, tail: string): string {
+  if (!tail) return ''
+  if (!isInsideFence(stableAndTail)) {
+    return renderAgentMarkdown(tail, { streaming: true })
+  }
+  const fenceStart = tail.lastIndexOf('```')
+  const head = fenceStart >= 0 ? tail.slice(0, fenceStart) : ''
+  const code = fenceStart >= 0 ? tail.slice(fenceStart).replace(/^```[^\n]*\n?/, '') : tail
+  const headHtml = head.trim() ? renderAgentMarkdown(head, { streaming: true }) : ''
+  const esc = markdownParser.utils.escapeHtml(code)
+  // 剥掉外层 <div> 包裹取内层，保持与 sanitizeAgentHtml 一致的清洗路径
+  const plain = sanitizeAgentHtml(`<pre><code>${esc}\n</code></pre>`)
+  return `${headHtml}${plain}`
 }

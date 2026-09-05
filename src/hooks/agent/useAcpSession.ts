@@ -76,26 +76,32 @@ export function useAcpSession(workspaceRoot?: string) {
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
 
+  // 接收缓冲提到 hook 级：结束/cancel/断开路径必须先冲刷再 finishStreaming，
+  // 否则尾部 chunk 可能丢失或错序
+  const chunkBufferRef = useRef<{ coalescer: StreamCoalescer; timer: ReturnType<typeof setTimeout> | null } | null>(null)
+  const flushBufferedChunks = useCallback(() => {
+    const buf = chunkBufferRef.current
+    if (!buf) return
+    if (buf.timer) {
+      clearTimeout(buf.timer)
+      buf.timer = null
+    }
+    const text = buf.coalescer.flush()
+    if (text) {
+      useAcpUiStore.getState().applySessionUpdate({
+        sessionUpdate: 'agent_message_chunk',
+        content: [{ type: 'text', text }],
+      })
+    }
+  }, [])
+
   useEffect(() => {
     // 正文 chunk 先缓冲、按帧合并提交；工具/权限/结束等保留顺序、立即冲刷
-    const coalescer = new StreamCoalescer()
-    let timer: ReturnType<typeof setTimeout> | null = null
-    const flushCoalesced = () => {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
-      const text = coalescer.flush()
-      if (text) {
-        applySessionUpdate({
-          sessionUpdate: 'agent_message_chunk',
-          content: [{ type: 'text', text }],
-        })
-      }
-    }
+    const buf = { coalescer: new StreamCoalescer(), timer: null as ReturnType<typeof setTimeout> | null }
+    chunkBufferRef.current = buf
     const scheduleFlush = () => {
-      if (timer) return
-      timer = setTimeout(flushCoalesced, STREAM_FLUSH_MS)
+      if (buf.timer) return
+      buf.timer = setTimeout(() => flushBufferedChunks(), STREAM_FLUSH_MS)
     }
     const offStatus = acpApi.onStatusChanged((event) => {
       setStatus(event.status, event.errorMessage)
@@ -103,6 +109,7 @@ export function useAcpSession(workspaceRoot?: string) {
       if (event.status === 'disconnected') {
         // 清「当前连接」；勿清 thread.agentSessionId（setSession(null) 已保留）
         setSession(null)
+        flushBufferedChunks()
         finishStreaming()
         setAuthOpen(false)
         setAuthMethods([])
@@ -129,19 +136,19 @@ export function useAcpSession(workspaceRoot?: string) {
       }
       const chunkText = isCoalescableAgentChunk(event.update)
       if (chunkText) {
-        coalescer.push(chunkText)
+        chunkBufferRef.current?.coalescer.push(chunkText)
         scheduleFlush()
         return
       }
-      flushCoalesced()
+      flushBufferedChunks()
       applySessionUpdate(event.update)
     })
     return () => {
-      flushCoalesced()
+      flushBufferedChunks()
       offStatus()
       offUpdate()
     }
-  }, [applySessionUpdate, finishStreaming, setSession, setStatus])
+  }, [applySessionUpdate, finishStreaming, flushBufferedChunks, setSession, setStatus])
 
   const finalizeConnected = useCallback(
     async (result: AcpConnectReadyResult, prefix: string) => {
@@ -263,10 +270,11 @@ export function useAcpSession(workspaceRoot?: string) {
     }
     setSession(null)
     setStatus('disconnected')
+    flushBufferedChunks()
     finishStreaming()
     setAuthOpen(false)
     appendSystemMessage('已断开连接（本对话会话 id 已保留，重连时可恢复）')
-  }, [appendSystemMessage, finishStreaming, setSession, setStatus])
+  }, [appendSystemMessage, finishStreaming, flushBufferedChunks, setSession, setStatus])
 
   /**
    * 对齐 Agent 到当前本地线程：离线会自动连接；已连接则按需重连并 resume。
@@ -335,6 +343,7 @@ export function useAcpSession(workspaceRoot?: string) {
         return false
       }
       setSession(null)
+      flushBufferedChunks()
       finishStreaming()
       setStatus('connecting')
     }
@@ -380,6 +389,7 @@ export function useAcpSession(workspaceRoot?: string) {
     appendSystemMessage,
     finalizeConnected,
     finishStreaming,
+    flushBufferedChunks,
     selectedRuntimeId,
     setSession,
     setStatus,
@@ -436,6 +446,7 @@ export function useAcpSession(workspaceRoot?: string) {
         sessionId: sid,
         prompt: [...prefix, ...payload.prompt],
       })
+      flushBufferedChunks()
       finishStreaming()
       if (!isOk(result)) {
         reportAppError(result.error)
@@ -453,6 +464,7 @@ export function useAcpSession(workspaceRoot?: string) {
       finishStreaming,
       setPrompting,
       syncAgentSessionToActiveThread,
+      flushBufferedChunks,
     ],
   )
 
@@ -471,8 +483,9 @@ export function useAcpSession(workspaceRoot?: string) {
       return
     }
     useAcpUiStore.getState().clearPendingPermission()
+    flushBufferedChunks()
     finishStreaming()
-  }, [finishStreaming])
+  }, [finishStreaming, flushBufferedChunks])
 
   const setModel = useCallback(
     async (configId: string, value: string) => {
