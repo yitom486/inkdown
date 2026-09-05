@@ -13,16 +13,18 @@
     "pack:win": "bun run build && electron-builder --win --publish never",
     "pack:mac": "bun run build && electron-builder --mac --publish never",
     "pack:linux": "bun run build && electron-builder --linux --publish never",
-    "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icon.ps1 && bun run scripts/generate-icon.ts",
+    "icons": "bun run scripts/generate-icon.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:web-doc": "playwright test e2e/web-doc-smoke.spec.ts",
     "test:all": "bun run typecheck && bun run test && bun run build && bun run test:e2e",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "lint:docs": "bun run scripts/lint-docs.ts",
+    "check:bundle": "bun run scripts/check-bundle.ts",
     "release": "bun run scripts/release.ts",
     "release:push": "bun run scripts/release.ts -- --push",
     "build:ocr-runtime": "bun run scripts/build-ocr-runtime.ts",
-    "postinstall": "node node_modules/electron/install.js"
+    "postinstall": "bun node_modules/electron/install.js"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

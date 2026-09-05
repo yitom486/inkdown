@@ -11,6 +11,7 @@
 | `workspace-fs.ts` | 工作区内新建/重命名/移动/复制/删除 |
 | `workspace-watcher.ts` | 监听工作区变更并通知渲染进程 |
 | `export-save-path.ts` | 导出 HTML/PDF/Markdown 的保存路径 |
+| `web-doc-service.ts` | 在线文档抓取与目录发现入口（含 SSRF 策略与重定向校验） |
 
 ## 阅读标记与测验
 
@@ -30,6 +31,8 @@
 | 文件 | 功能 |
 |------|------|
 | `app-service.ts` | 应用版本等 |
+| `app-updater.ts` | 应用内更新（electron-updater） |
+| `bun-runtime.ts` | Bun 运行时检测与安装 |
 | `app-paths.ts` | 图标等资源路径 |
 | `runtime-state.ts` | 进程内开关（如 verbose 渲染日志） |
 | `error-log-service.ts` | 渲染端上报错误写入日志文件 |

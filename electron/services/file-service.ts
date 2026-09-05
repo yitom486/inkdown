@@ -99,6 +99,12 @@ export async function openFolderDialog(
   options: OpenDialogOptions = {},
 ): Promise<Result<OpenFolderResult, AppError>> {
   try {
+    // E2E 测试时通过环境变量跳过原生对话框（先例见 export-save-path.ts）。
+    const e2ePath = process.env.E2E_AUTO_OPEN_PATH?.trim()
+    if (e2ePath) {
+      return scanWorkspaceFolder(e2ePath)
+    }
+
     const { canceled, filePaths } = await dialog.showOpenDialog({
       title: '打开文件夹',
       properties: ['openDirectory'],

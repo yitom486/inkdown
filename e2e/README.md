@@ -15,7 +15,10 @@ bun run test:e2e:web-doc  # 仅在线文档 fixture 冒烟
 | `app-smoke.spec.ts` | 启动、欢迎页、菜单 |
 | `agent-panel.spec.ts` | Agent 面板壳 |
 | `export-pdf.spec.ts` | Markdown 导出 PDF（`E2E_AUTO_EXPORT_PATH`） |
+| `quick-open.spec.ts` | 打开文件夹（`E2E_AUTO_OPEN_PATH` 跳过原生对话框）→ Ctrl+P 搜索打开 |
+| `sync-webdav.spec.ts` | 本地内存 WebDAV stub → 设置页测试连接 + 一次同步落数 |
 | `web-doc-smoke.spec.ts` | 在线文档：打开、地址栏换页、目录跳转 |
+| `web-doc-xss.spec.ts` | 在线文档 XSS 回归（真浏览器）：恶意载荷不执行、正文完好 |
 
 ## 在线文档 Fixture
 
@@ -26,6 +29,7 @@ e2e/fixtures/web-doc/
   manifest.json      # URL → 文件名映射
   start.html
   installation.html
+  xss.html           # XSS 回归载荷（script / javascript: / 事件处理器）
 ```
 
 实现：`electron/services/web-doc/e2e-fixture.ts`（由 `fetchWebDocPage` 优先读取）。

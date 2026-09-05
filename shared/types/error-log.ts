@@ -9,4 +9,8 @@ export interface RendererErrorPayload {
   /** React 组件栈，与 JS stack 分开 */
   componentStack?: string
   filePath?: string
+  /** 失败的操作（如 sync/upload/ocr/fetch），便于按操作聚合 */
+  op?: string
+  /** 结构化上下文（如 latencyMs、httpStatus、retryCount），JSON 可序列化 */
+  data?: Record<string, unknown>
 }

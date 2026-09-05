@@ -11,6 +11,10 @@ export interface RuntimeErrorContext {
   /** 仅写入日志，不弹 Toast（用于已展示 fallback UI 的边界） */
   silentToast?: boolean
   level?: RendererErrorPayload['level']
+  /** 失败的操作（透传进日志条目 op，便于聚合） */
+  op?: string
+  /** 结构化上下文（透传进日志条目 data，如 latencyMs） */
+  data?: Record<string, unknown>
 }
 
 let lastToastKey = ''
@@ -59,6 +63,8 @@ export function reportRuntimeError(reason: unknown, context: RuntimeErrorContext
     stack,
     componentStack: context.componentStack,
     filePath: context.filePath,
+    op: context.op,
+    data: context.data,
   }
 
   useErrorLogStore.getState().addEntry(entry)
@@ -76,10 +82,17 @@ export function reportRuntimeError(reason: unknown, context: RuntimeErrorContext
 
 export function formatErrorLogEntry(entry: RendererErrorPayload): string {
   const lines = [
-    `[${entry.timestamp}] ${entry.level.toUpperCase()} · ${entry.source}`,
+    `[${entry.timestamp}] ${entry.level.toUpperCase()} · ${entry.source}${entry.op ? ` · op=${entry.op}` : ''}`,
     entry.message,
   ]
   if (entry.filePath) lines.push(`file: ${entry.filePath}`)
+  if (entry.data && Object.keys(entry.data).length > 0) {
+    try {
+      lines.push(`data: ${JSON.stringify(entry.data)}`)
+    } catch {
+      lines.push('data: [unserializable]')
+    }
+  }
   if (entry.stack) lines.push(entry.stack)
   if (entry.componentStack) lines.push(entry.componentStack)
   return lines.join('\n')

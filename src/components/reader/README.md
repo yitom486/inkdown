@@ -10,6 +10,7 @@
 | `PdfOcrBanner` / `PdfOcrTocEditor` | 扫描版 OCR 提示与目录校正 |
 | `ReaderContentShell` / `ReaderToolbarShell` / `ReaderFooterNav` | 阅读区壳、工具栏、底栏翻页 |
 | `ReaderUnitOutline` / `EpubChapterOutline` | 目录大纲 |
+| `ReaderTypographyControls` | 阅读排版控件（字号 / 行距） |
 | `ReadingMarkPanel` / `ReadingMarkPopover` | 书签/批注列表（目录层级、类型筛选、当前章展开；含导出）与点击编辑浮层 |
 | `FlashcardReviewDialog` | 沉浸式 3D 闪卡复习弹窗（挖空遮罩、正反翻转、原书一键秒回与记忆打分） |
 | `SelectionToolbar` | 划选工具条（划重点、问 Agent、批注等） |
