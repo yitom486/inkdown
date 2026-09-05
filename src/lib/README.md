@@ -59,6 +59,7 @@
 | `reading-mark-*` / `reader-mark-*` | 高亮颜色、命中、标签、几何 |
 | `reading-mark-passages` / `export-reading-notes` / `export-anki-cards` / `flashcard-review` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、Anki 导出（纯文本 Flashcard → HTML）、闪卡复习纯函数、侧栏类型筛选 |
 | `epub-*` | EPUB 目录、主题、选区、批注 overlay、滚动定位、Rendition 生命周期队列清理 |
+| `reader-adapter` / `foliate-*` | 统一阅读后端契约与 foliate 实现（EPUB+MOBI/KF8，分支迁移中） |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay |
 | `mobi-*` / `kindle-*` / `azw3-*` | MOBI/Kindle 初始化、章节 HTML、导航、选区、批注（含 `renderWebMarkOverlays`） |
 | `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | 在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe（如 Python Tutor） |

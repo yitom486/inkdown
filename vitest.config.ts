@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@': resolve('src'),
       '@shared': resolve('shared'),
+      '@foliate': resolve('third-party/foliate-js'),
     },
   },
   test: {
