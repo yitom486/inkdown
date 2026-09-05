@@ -16,6 +16,7 @@ bun run test:e2e:web-doc  # 仅在线文档 fixture 冒烟
 | `agent-panel.spec.ts` | Agent 面板壳 |
 | `export-pdf.spec.ts` | Markdown 导出 PDF（`E2E_AUTO_EXPORT_PATH`） |
 | `quick-open.spec.ts` | 打开文件夹（`E2E_AUTO_OPEN_PATH` 跳过原生对话框）→ Ctrl+P 搜索打开 |
+| `reader-smoke.spec.ts` | Markdown 预览（Mermaid/公式/高亮）+ PDF 画布文字层 + EPUB 章节（自研最小 fixture） |
 | `sync-webdav.spec.ts` | 本地内存 WebDAV stub → 设置页测试连接 + 一次同步落数 |
 | `web-doc-smoke.spec.ts` | 在线文档：打开、地址栏换页、目录跳转 |
 | `web-doc-xss.spec.ts` | 在线文档 XSS 回归（真浏览器）：恶意载荷不执行、正文完好 |
@@ -40,3 +41,4 @@ e2e/fixtures/web-doc/
 |------|------|
 | `helpers/launch-app.ts` | 启动已构建应用 |
 | `helpers/web-doc-fixture.ts` | fixture 目录与测试 URL 常量 |
+| `helpers/ebook-fixture.ts` | 自研最小 PDF / EPUB / Markdown 生成器（无新依赖） |

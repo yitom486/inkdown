@@ -1,4 +1,5 @@
 import { resolve } from 'path'
+import { builtinModules } from 'node:module'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -40,6 +41,17 @@ export default defineConfig({
     build: {
       lib: {
         entry: resolve('electron/preload.ts'),
+        // 沙盒渲染器只能加载 CJS preload（ESM import 会报 Cannot use import statement）
+        formats: ['cjs'],
+      },
+      rollupOptions: {
+        // 沙盒 preload 只能 require 沙盒暴露的模块：electron 与 node 内建保持外部，
+        // 其余一律打进包（CJS 下 externalize 插件曾把 electron/index.js 内联进来，
+        // 导致 child_process 在沙盒里炸掉）。
+        external: ['electron', ...builtinModules, ...builtinModules.map((name) => `node:${name}`)],
+        output: {
+          entryFileNames: 'preload.cjs',
+        },
       },
     },
   },

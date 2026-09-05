@@ -266,8 +266,7 @@ export function activateWebDocCodeTab(tabButton: Element): boolean {
 }
 
 /** 写入阅读文档的可信脚本（非远端 HTML），不依赖宿主 React 事件绑定 */
-export function buildWebDocTabsRuntimeScript(): string {
-  return `<script>(function(){
+export function buildWebDocTabsRuntimeScript(): string {  return `<script>(function(){
   function activate(tab){
     var root=tab.closest('.web-doc-tabs');
     if(!root)return;
@@ -296,6 +295,13 @@ export function buildWebDocTabsRuntimeScript(): string {
   },true);
 })();</script>`
 }
+
+/**
+ * Tab 运行时内联脚本的 CSP hash（`src/index.html` script-src 放行）。
+ * 改脚本正文必须同步更新此值（有单测锁定），否则在线文档代码 Tab 失效。
+ */
+export const WEB_DOC_TABS_RUNTIME_SCRIPT_SHA256 =
+  'sha256-o5eUpYe6xVdLRtL5mmEZtzhPc0HijWnKllVh5rCb/60='
 
 /** 为在线文档正文中的 pre/code 注入与 Markdown 预览一致的复制工具栏 */
 export function enhanceWebDocCodeBlocks(html: string): string {

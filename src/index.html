@@ -3,6 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 本地 file:// 应用的内容安全策略：脚本仅允许同源包 + 在线文档 Tab 运行时
+         （hash 放行，见 WEB_DOC_TABS_RUNTIME_SCRIPT_SHA256，有单测锁定）；
+         样式需 unsafe-inline（Tailwind / Mermaid / KaTeX）；工作线程允许 blob
+         （pdf.js）。改动后必须跑全量 e2e 验证无黑屏。 -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'sha256-o5eUpYe6xVdLRtL5mmEZtzhPc0HijWnKllVh5rCb/60='; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' file: data: blob: https:; font-src 'self' file: data: https:; media-src 'self' file: data: blob: https:; connect-src 'self' ws: wss:; frame-src 'self' blob: data:; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
     <title>Inkdown</title>
     <link rel="icon" type="image/png" href="/icon.png" />
   </head>

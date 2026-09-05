@@ -62,10 +62,10 @@ UI：**壳自研、皮复用**（shadcn + 可选开源消息渲染）；认证�
 
 ```typescript
 webPreferences: {
-  preload: path.join(__dirname, '../preload/preload.mjs'),
+  preload: path.join(__dirname, '../preload/preload.cjs'),
   contextIsolation: true,
   nodeIntegration: false,
-  sandbox: false,
+  sandbox: true, // 沙盒开启；preload 须为 CJS（见 electron.vite.config.ts）
 }
 ```
 

@@ -42,10 +42,10 @@ export function createWindow(options: { fresh?: boolean } = {}): void {
     title: APP_TITLE,
     icon: windowIcon,
     webPreferences: {
-      preload: join(__dirname, '../preload/preload.mjs'),
+      preload: join(__dirname, '../preload/preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   })
 

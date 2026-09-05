@@ -118,4 +118,14 @@ describe('buildWebDocReaderDocument', () => {
     expect(doc).toContain('echo hi')
     expect(doc).toContain('web-doc-tabs-tab')
   })
+
+  it('Tab 运行时脚本哈希与 CSP 放行值一致（改脚本须同步更新）', async () => {
+    const { createHash } = await import('node:crypto')
+    const { buildWebDocTabsRuntimeScript, WEB_DOC_TABS_RUNTIME_SCRIPT_SHA256 } =
+      await import('./web-doc-code-blocks')
+    const output = buildWebDocTabsRuntimeScript()
+    const inner = output.replace(/^<script>/, '').replace(/<\/script>$/, '')
+    const digest = createHash('sha256').update(inner, 'utf-8').digest('base64')
+    expect(`sha256-${digest}`).toBe(WEB_DOC_TABS_RUNTIME_SCRIPT_SHA256)
+  })
 })
