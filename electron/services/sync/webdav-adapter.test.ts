@@ -136,8 +136,7 @@ describe('WebDavStorageAdapter', () => {
     expect(capturedBody).toBe('{"test":123}')
   })
 
-  it('statFile 正确解析 207 Multi-Status 中的 getlastmodified 时间戳', async () => {
-    const xml = `<?xml version="1.0" encoding="utf-8"?>
+  it('statFile 正确解析 207 Multi-Status 中的 getlastmodified 时间戳', async () => {    const xml = `<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
   <d:response>
     <d:href>/dav/InkdownSync/data.json</d:href>
@@ -166,5 +165,94 @@ describe('WebDavStorageAdapter', () => {
       expect(res.value.exists).toBe(true)
       expect(res.value.mtime).toBe(Date.parse('Wed, 03 Sep 2026 12:00:00 GMT'))
     }
+  })
+
+  it('遇到 500 会重试，恢复后成功', async () => {
+    let calls = 0
+    globalThis.fetch = vi.fn(async () => {
+      calls++
+      if (calls === 1) {
+        return new Response('', { status: 500 })
+      }
+      return new Response('', { status: 200 })
+    }) as unknown as typeof fetch
+
+    const adapter = new WebDavStorageAdapter({
+      serverUrl: 'https://dav.example.com/dav/',
+      username: 'user',
+      password: 'pwd',
+      retryBaseDelayMs: 1,
+    })
+
+    const res = await adapter.testConnection()
+    expect(res.ok).toBe(true)
+    expect(calls).toBe(2)
+  })
+
+  it('401 不重试，直接返回 UNAUTHORIZED', async () => {
+    let calls = 0
+    globalThis.fetch = vi.fn(async () => {
+      calls++
+      return new Response('', { status: 401, statusText: 'Unauthorized' })
+    }) as unknown as typeof fetch
+
+    const adapter = new WebDavStorageAdapter({
+      serverUrl: 'https://dav.example.com/dav/',
+      username: 'user',
+      password: 'pwd',
+      retryBaseDelayMs: 1,
+    })
+
+    const res = await adapter.testConnection()
+    expect(res.ok).toBe(false)
+    expect(calls).toBe(1)
+  })
+
+  it('网络异常耗尽重试后返回错误（1 + 2 次调用）', async () => {
+    let calls = 0
+    globalThis.fetch = vi.fn(async () => {
+      calls++
+      throw new TypeError('fetch failed')
+    }) as unknown as typeof fetch
+
+    const adapter = new WebDavStorageAdapter({
+      serverUrl: 'https://dav.example.com/dav/',
+      username: 'user',
+      password: 'pwd',
+      retryBaseDelayMs: 1,
+    })
+
+    const res = await adapter.downloadFile('/InkdownSync/data.json')
+    expect(res.ok).toBe(false)
+    expect(calls).toBe(3)
+  })
+
+  it('黑洞网络触发单次超时并包装中文错误', async () => {
+    let calls = 0
+    globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      calls++
+      await new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'))
+        })
+      })
+      return new Response('', { status: 200 })
+    }) as unknown as typeof fetch
+
+    const adapter = new WebDavStorageAdapter({
+      serverUrl: 'https://dav.example.com/dav/',
+      username: 'user',
+      password: 'pwd',
+      timeoutMs: 50,
+      maxRetries: 1,
+      retryBaseDelayMs: 1,
+    })
+
+    const res = await adapter.testConnection()
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.message).toContain('超时')
+    }
+    expect(calls).toBe(2)
   })
 })

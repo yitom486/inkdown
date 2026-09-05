@@ -86,4 +86,47 @@ describe('marks-merger', () => {
     expect(result.merged.marks[0]?.id).toBe('mark-1')
     expect(result.merged.tombstones?.['mark-1']).toBeUndefined()
   })
+
+  it('GC 回收过期且两端均无活标记的墓碑', () => {
+    const now = 200_000_000_000
+    const local: SyncMarksPayload = {
+      marks: [],
+      tombstones: { 'mark-gone': now - 91 * 24 * 3600 * 1000 },
+    }
+    const remote: SyncMarksPayload = { marks: [] }
+
+    const result = mergeReadingMarks(local, remote, { now })
+    expect(result.merged.tombstones?.['mark-gone']).toBeUndefined()
+    expect(result.tombstonesPrunedCount).toBe(1)
+  })
+
+  it('GC 保留未过期的孤墓碑', () => {
+    const now = 200_000_000_000
+    const local: SyncMarksPayload = {
+      marks: [],
+      tombstones: { 'mark-gone': now - 10 * 24 * 3600 * 1000 },
+    }
+    const remote: SyncMarksPayload = { marks: [] }
+
+    const result = mergeReadingMarks(local, remote, { now })
+    expect(result.merged.tombstones?.['mark-gone']).toBe(now - 10 * 24 * 3600 * 1000)
+    expect(result.tombstonesPrunedCount).toBe(0)
+  })
+
+  it('GC 不回收对端仍持有活标记的过期墓碑（复活可见优于静默丢数）', () => {
+    const now = 200_000_000_000
+    const local: SyncMarksPayload = {
+      marks: [],
+      tombstones: { 'mark-1': now - 91 * 24 * 3600 * 1000 },
+    }
+    const remote: SyncMarksPayload = {
+      marks: [markA], // updatedAt: 1000，远早于墓碑，仍被压制
+    }
+
+    const result = mergeReadingMarks(local, remote, { now })
+    expect(result.merged.marks).toHaveLength(0)
+    expect(result.deletedCount).toBe(1)
+    expect(result.merged.tombstones?.['mark-1']).toBe(now - 91 * 24 * 3600 * 1000)
+    expect(result.tombstonesPrunedCount).toBe(0)
+  })
 })

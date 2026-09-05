@@ -10,6 +10,18 @@ export interface MarksMergeResult {
   addedCount: number
   updatedCount: number
   deletedCount: number
+  /** 本轮被 TTL 回收的墓碑数（两端均无活标记且过期） */
+  tombstonesPrunedCount: number
+}
+
+/** 墓碑默认 TTL：90 天。过期且两端均无活标记的墓碑可安全回收，避免索引无限膨胀。 */
+export const DEFAULT_TOMBSTONE_TTL_MS = 90 * 24 * 3600 * 1000
+
+export interface MarksMergeOptions {
+  /** 当前时间戳（毫秒），默认 Date.now；单测可注入 */
+  now?: number
+  /** 墓碑 TTL（毫秒），默认 90 天 */
+  tombstoneTtlMs?: number
 }
 
 /**
@@ -18,6 +30,7 @@ export interface MarksMergeResult {
 export function mergeReadingMarks(
   local: SyncMarksPayload,
   remote: SyncMarksPayload,
+  options?: MarksMergeOptions,
 ): MarksMergeResult {
   // 1. 合并双方删除墓碑（保留最新的删除时间戳）
   const mergedTombstones: Record<string, number> = {
@@ -90,6 +103,18 @@ export function mergeReadingMarks(
     resultMap.set(id, winner)
   }
 
+  // 墓碑 GC：仅回收「过期且两端均无活标记」的墓碑。对端仍持有活标记时即使过期
+  // 也保留——下次该标记复活为用户可见（可再删），优于静默丢数据。
+  const now = options?.now ?? Date.now()
+  const ttl = options?.tombstoneTtlMs ?? DEFAULT_TOMBSTONE_TTL_MS
+  let tombstonesPrunedCount = 0
+  for (const [id, deletedAt] of Object.entries(mergedTombstones)) {
+    if (!allIds.has(id) && now - deletedAt > ttl) {
+      delete mergedTombstones[id]
+      tombstonesPrunedCount += 1
+    }
+  }
+
   return {
     merged: {
       marks: Array.from(resultMap.values()),
@@ -98,5 +123,6 @@ export function mergeReadingMarks(
     addedCount,
     updatedCount,
     deletedCount,
+    tombstonesPrunedCount,
   }
 }

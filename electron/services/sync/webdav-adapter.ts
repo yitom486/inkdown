@@ -7,6 +7,25 @@ export interface WebDavAdapterOptions {
   username: string
   password: string
   ignoreTlsErrors?: boolean
+  /** 单次请求超时毫秒，默认 15000（黑洞网络不再无限挂起） */
+  timeoutMs?: number
+  /** 失败重试次数（不含首次），默认 2；仅重试网络异常与 408/429/5xx */
+  maxRetries?: number
+  /** 重试基础延迟毫秒（指数退避：base * 2^attempt），默认 500 */
+  retryBaseDelayMs?: number
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** 幂等重试白名单：本适配器所有写操作均为全量覆盖（PUT/MKCOL），可安全重试 */
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || (status >= 500 && status < 600)
+}
+
+function isTimeoutCause(cause: unknown): boolean {
+  return cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')
 }
 
 export class WebDavStorageAdapter implements ISyncStorageAdapter {
@@ -16,6 +35,9 @@ export class WebDavStorageAdapter implements ISyncStorageAdapter {
   private readonly baseUrl: string
   private readonly authHeader: string
   private readonly ignoreTlsErrors: boolean
+  private readonly timeoutMs: number
+  private readonly maxRetries: number
+  private readonly retryBaseDelayMs: number
 
   constructor(options: WebDavAdapterOptions) {
     let url = options.serverUrl.trim()
@@ -25,6 +47,9 @@ export class WebDavStorageAdapter implements ISyncStorageAdapter {
     this.baseUrl = url
     this.authHeader = `Basic ${Buffer.from(`${options.username}:${options.password}`).toString('base64')}`
     this.ignoreTlsErrors = Boolean(options.ignoreTlsErrors)
+    this.timeoutMs = options.timeoutMs ?? 15000
+    this.maxRetries = options.maxRetries ?? 2
+    this.retryBaseDelayMs = options.retryBaseDelayMs ?? 500
   }
 
   private resolveUrl(pathOrUrl: string): string {
@@ -44,23 +69,42 @@ export class WebDavStorageAdapter implements ISyncStorageAdapter {
     const headers = new Headers(init.headers)
     headers.set('Authorization', this.authHeader)
 
-    // 若需要忽略自签名证书
-    const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED
-    if (this.ignoreTlsErrors) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+    let lastCause: unknown = null
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      // 若需要忽略自签名证书（逐次恢复，避免污染后续请求）
+      const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+      if (this.ignoreTlsErrors) {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+      }
+
+      try {
+        const response = await fetch(targetUrl, {
+          ...init,
+          headers,
+          signal: AbortSignal.timeout(this.timeoutMs),
+        })
+        if (attempt < this.maxRetries && isRetryableStatus(response.status)) {
+          lastCause = new Error(`WebDAV 临时失败（HTTP ${response.status}），正在重试`)
+          await response.arrayBuffer().catch(() => undefined)
+        } else {
+          return response
+        }
+      } catch (cause) {
+        lastCause = cause
+        if (attempt >= this.maxRetries) break
+      } finally {
+        if (this.ignoreTlsErrors) {
+          process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls ?? '1'
+        }
+      }
+
+      await sleep(this.retryBaseDelayMs * 2 ** attempt)
     }
 
-    try {
-      const response = await fetch(targetUrl, {
-        ...init,
-        headers,
-      })
-      return response
-    } finally {
-      if (this.ignoreTlsErrors) {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls ?? '1'
-      }
+    if (isTimeoutCause(lastCause)) {
+      throw new Error(`WebDAV 请求超时（单次 ${this.timeoutMs}ms，已重试 ${this.maxRetries} 次），请检查网络后重试`)
     }
+    throw lastCause
   }
 
   async testConnection(): Promise<Result<{ latencyMs: number }, AppError>> {
@@ -79,9 +123,6 @@ export class WebDavStorageAdapter implements ISyncStorageAdapter {
         return err({ code: 'FORBIDDEN', message: 'WebDAV 访问被拒绝（403），若使用坚果云请确保使用专用应用密码' })
       }
       if (res.status >= 200 && res.status < 300) {
-        return ok({ latencyMs: Date.now() - start })
-      }
-      if (res.status === 207) {
         return ok({ latencyMs: Date.now() - start })
       }
 
