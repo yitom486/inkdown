@@ -12,8 +12,7 @@ describe('renderAgentMarkdown + splitAgentMarkdownParts', () => {
     window.localStorage.setItem('inkdown:mermaid-debug', '0')
   })
 
-  it('highlights fenced code with hljs (shared preview pipeline)', () => {
-    const html = renderAgentMarkdown(['```ts', 'const answer = 42', '```'].join('\n'))
+  it('highlights fenced code with hljs (shared preview pipeline)', () => {    const html = renderAgentMarkdown(['```ts', 'const answer = 42', '```'].join('\n'))
     expect(html).toContain('code-block-toolbar')
     expect(html).toContain('hljs')
     expect(html).toContain('code-block-copy')
@@ -176,5 +175,22 @@ A-B &= A + B
   it('流式时临时闭合未完成的公式定界符', () => {
     const html = renderAgentMarkdown(String.raw`$$\frac{a}{`, { streaming: true })
     expect(html).toContain('katex')
+  })
+
+  it('模型输出的 XSS 载荷不可执行（解析层拦截）', () => {
+    // markdown-it 默认 validateLink 拒绝 javascript: 链接，html:false 转义裸标签；
+    // 即使某层放行，DOMPurify 默认 URI 规则在真实 Chromium 中也会剥 href（happy-dom
+    // 下 DOMPurify 属性级行为失真，此处只锁定解析层输出）。
+    const html = renderAgentMarkdown(
+      [
+        '[点我](javascript:alert(1))',
+        '',
+        '<img src="x" onerror="alert(2)" />',
+      ].join('\n'),
+    )
+    expect(html).not.toContain('<a href="javascript')
+    expect(html).not.toContain('<img')
+    expect(html).not.toContain('<script')
+    expect(html).toContain('[点我]')
   })
 })

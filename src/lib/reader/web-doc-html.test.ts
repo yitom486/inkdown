@@ -37,6 +37,19 @@ describe('web-doc-html', () => {
     expect(sanitized).not.toContain('script')
   })
 
+  it('剥离表单与插件标签（我方门控逻辑，与 DOM 无关）', () => {
+    // 说明：happy-dom 下 DOMPurify 属性级行为失真（连正常 https 链接都会被整标签剥离），
+    // 属性级 javascript:/on* 断言只在真实 Chromium（e2e）中有效；此处锁定标签级门控。
+    const sanitized = sanitizeWebDocBodyHtml(
+      '<form action="https://evil.example/submit"><input type="text" /></form>' +
+        '<object data="evil.swf"></object><embed src="evil.swf" /><p>正文</p>',
+    )
+    expect(sanitized).not.toContain('<form')
+    expect(sanitized).not.toContain('<object')
+    expect(sanitized).not.toContain('<embed')
+    expect(sanitized).toContain('正文')
+  })
+
   it('rewriteRelativeUrls 保留 hash 链接', () => {
     const root = document.createElement('div')
     root.innerHTML = '<a href="#intro">intro</a>'

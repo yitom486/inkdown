@@ -53,8 +53,12 @@ export function parseDeepLinkUrl(rawUrl: string): DeepLinkTarget | null {
   }
 
   try {
-    // 使用假协议头让 WHATWG URL 解析 query 参数
+    // 使用假协议头让 WHATWG URL 解析 query 参数；同时校验 path 必须为 /open，
+    // 避免 inkdown://任意路径 被当作回跳链接处理（main 侧原样转发）。
     const parsed = new URL(trimmed.replace(/^inkdown:\/\//, 'http://localhost/'))
+    if (parsed.pathname !== '/open') {
+      return null
+    }
     const file = parsed.searchParams.get('file')
     if (!file) {
       return null

@@ -70,4 +70,52 @@ describe('web-doc-service', () => {
   it('parseWebDocUrlInput 校验空字符串', () => {
     expect(parseWebDocUrlInput('  ').ok).toBe(false)
   })
+
+  describe('重定向链 SSRF 防护', () => {
+    beforeEach(() => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string) => {
+          const u = String(input)
+          if (u === 'https://start.example/go') {
+            return new Response('', { status: 302, headers: { location: 'https://final.example/page' } })
+          }
+          if (u === 'https://final.example/page') {
+            return new Response('<article><h1>Final</h1></article>', {
+              status: 200,
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            })
+          }
+          if (u === 'https://start.example/evil') {
+            return new Response('', { status: 302, headers: { location: 'http://127.0.0.1/secret' } })
+          }
+          if (u === 'https://loop.example/') {
+            return new Response('', { status: 302, headers: { location: 'https://loop.example/' } })
+          }
+          return new Response('not found', { status: 404 })
+        }),
+      )
+    })
+
+    it('跟随站外 302 并返回终点 HTML', async () => {
+      const result = await fetchWebDocPage({ url: 'https://start.example/go' })
+      expect(isOk(result)).toBe(true)
+      if (!isOk(result)) return
+      expect(result.value.html).toContain('Final')
+    })
+
+    it('302 跳内网地址被拦截', async () => {
+      const result = await fetchWebDocPage({ url: 'https://start.example/evil' })
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.error.message).toContain('内网')
+    })
+
+    it('重定向循环超过上限后失败', async () => {
+      const result = await fetchWebDocPage({ url: 'https://loop.example/' })
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.error.message).toContain('重定向')
+    })
+  })
 })

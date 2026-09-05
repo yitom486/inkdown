@@ -23,6 +23,8 @@ import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy
 
 const WEB_DOC_MAX_BYTES = 5 * 1024 * 1024
 const WEB_DOC_FETCH_TIMEOUT_MS = 30_000
+/** 手动跟随重定向上限（逐跳重验 URL 策略，防 302 跳内网） */
+const WEB_DOC_MAX_REDIRECTS = 5
 
 /**
  * 使用接近 Chromium 的 UA。部分 CDN（如 Vercel）会对自定义 bot UA 直接 429。
@@ -61,6 +63,46 @@ function toFetchError(message: string): Result<never, AppError> {
   return err({ code: 'FILE_READ_ERROR', message })
 }
 
+/**
+ * 带 SSRF 防护的抓取：redirect 手动跟随，每跳 Location 都经 normalizeWebDocUrl
+ * 重验协议与主机（初始 URL 由调用方先验）。最终 response.url 同样可信。
+ */
+async function fetchWebDocResponse(
+  initialUrl: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  let current = initialUrl
+  for (let hop = 0; hop <= WEB_DOC_MAX_REDIRECTS; hop++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), WEB_DOC_FETCH_TIMEOUT_MS)
+
+    let response: Response
+    try {
+      response = await fetch(current, {
+        signal: controller.signal,
+        redirect: 'manual',
+        headers,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
+
+    const isRedirect = response.status >= 300 && response.status < 400
+    if (!isRedirect) return response
+    if (hop === WEB_DOC_MAX_REDIRECTS) {
+      await response.arrayBuffer().catch(() => undefined)
+      throw new Error('重定向次数过多，请检查目标链接')
+    }
+
+    const location = response.headers.get('location')
+    await response.arrayBuffer().catch(() => undefined)
+    if (!location) return response
+    // 相对 Location 按当前跳解析；非法/内网目标直接抛给调用方转业务错误
+    current = normalizeWebDocUrl(new URL(location, current).toString())
+  }
+  throw new Error('重定向处理异常')
+}
+
 async function readResponseTextLimited(response: Response): Promise<string> {
   const lengthHeader = response.headers.get('content-length')
   if (lengthHeader) {
@@ -86,19 +128,7 @@ export async function fetchWebDocPage(
     if (fixtureResult) return fixtureResult
 
     const normalized = normalizeWebDocUrl(payload.url)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), WEB_DOC_FETCH_TIMEOUT_MS)
-
-    let response: Response
-    try {
-      response = await fetch(normalized, {
-        signal: controller.signal,
-        redirect: 'follow',
-        headers: webDocHtmlHeaders(),
-      })
-    } finally {
-      clearTimeout(timer)
-    }
+    const response = await fetchWebDocResponse(normalized, webDocHtmlHeaders())
 
     if (!response.ok) {
       return toFetchError(httpStatusErrorMessage(response.status))
@@ -135,19 +165,7 @@ async function fetchWebDocPlainText(
 ): Promise<Result<{ url: string; text: string }, AppError>> {
   try {
     const normalized = normalizeWebDocUrl(url)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), WEB_DOC_FETCH_TIMEOUT_MS)
-
-    let response: Response
-    try {
-      response = await fetch(normalized, {
-        signal: controller.signal,
-        redirect: 'follow',
-        headers: webDocPlainTextHeaders(),
-      })
-    } finally {
-      clearTimeout(timer)
-    }
+    const response = await fetchWebDocResponse(normalized, webDocPlainTextHeaders())
 
     if (!response.ok) {
       return toFetchError(httpStatusErrorMessage(response.status))

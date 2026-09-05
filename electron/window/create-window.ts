@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, nativeImage } from 'electron'
+import { BrowserWindow, dialog, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { IPC } from '@shared/ipc/channels'
 import { APP_TITLE } from '@shared/constants/app'
@@ -155,6 +155,30 @@ export function createWindow(options: { fresh?: boolean } = {}): void {
 
   window.webContents.on('preload-error', (_event, preloadPath, error) => {
     console.error('[preload-error]', preloadPath, error)
+  })
+
+  // 导航兜底：渲染器内非应用 origin 的跳转一律转系统浏览器，禁止远端内容
+  // 占用应用窗口（preload 桥接只应服务本地 file:// 页面）。window.open 同理。
+  const isAppNavigation = (target: string): boolean => {
+    if (target.startsWith('file://') || target.startsWith('devtools://')) return true
+    const devUrl = process.env['ELECTRON_RENDERER_URL']
+    if (devUrl && target.startsWith(new URL(devUrl).origin)) return true
+    return false
+  }
+  window.webContents.on('will-navigate', (event, url) => {
+    if (isAppNavigation(url)) return
+    event.preventDefault()
+    void shell.openExternal(url).catch((cause) => {
+      console.error('[open-external-failed]', url, cause)
+    })
+  })
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (!isAppNavigation(url)) {
+      void shell.openExternal(url).catch((cause) => {
+        console.error('[open-external-failed]', url, cause)
+      })
+    }
+    return { action: 'deny' }
   })
 
   window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {

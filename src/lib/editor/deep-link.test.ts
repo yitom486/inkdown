@@ -30,6 +30,12 @@ describe('deep-link', () => {
     expect(parseDeepLinkUrl('')).toBeNull()
   })
 
+  it('rejects non-/open paths and missing file param', () => {
+    expect(parseDeepLinkUrl('inkdown://evil?file=a.pdf')).toBeNull()
+    expect(parseDeepLinkUrl('inkdown://open?file=a.pdf')).not.toBeNull()
+    expect(parseDeepLinkUrl('inkdown://open?page=3')).toBeNull()
+  })
+
   it('isDeepLinkUrl correctly checks protocol', () => {
     expect(isDeepLinkUrl('inkdown://open?file=a.pdf')).toBe(true)
     expect(isDeepLinkUrl('http://inkdown://')).toBe(false)
