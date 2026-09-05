@@ -31,6 +31,8 @@ import {
 } from '@/lib/agent/acp-permission'
 import { enrichAcpToolMessage } from '@/lib/agent/enrich-tool-message'
 import { acpDevLog } from '@/lib/agent/acp-dev-log'
+import { createJSONStorage } from 'zustand/middleware'
+import { createThrottledStorage } from '@/lib/agent/throttled-storage'
 import {
   promoteChapterMarkPlansToLastAgent,
   selectChapterMarkPlanOnMessages,
@@ -942,6 +944,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
     }),
     {
       name: 'inkdown-acp-ui',
+      storage: createJSONStorage(() => createThrottledStorage(localStorage, 1500)),
       partialize: (state) => ({
         // 重启 / 更新后恢复 Agent 面板展开状态（聊天记录本身另存）
         panelOpen: state.panelOpen,

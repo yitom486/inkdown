@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
-import { useMemo } from 'react'
+import { useDeferredValue, useMemo } from 'react'
 import {
   AgentChatItem,
   AgentChatItemBody,
@@ -41,12 +41,15 @@ export function AgentMessageBubble({
   }
   const [thoughtOpen, setThoughtOpen] = useAgentChatOpen(Boolean(message.streaming))
 
+  // 流式时用 deferred 文本节流全量 Markdown 重解析，避免每个小 chunk 卡一次
+  const deferredText = useDeferredValue(message.text)
+  const renderText = message.streaming ? deferredText : message.text
   const html = useMemo(() => {
     if (message.role !== 'agent') return null
-    if (!message.text.trim() && message.streaming) return null
+    if (!renderText.trim() && message.streaming) return null
     // 流式与完成共用同一渲染管线，仅 streaming 时补全未闭合 fence
-    return renderAgentMarkdown(message.text, { streaming: Boolean(message.streaming) })
-  }, [message.text, message.role, message.streaming])
+    return renderAgentMarkdown(renderText, { streaming: Boolean(message.streaming) })
+  }, [renderText, message.role, message.streaming])
 
   if (message.role === 'system') {
     return (

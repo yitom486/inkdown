@@ -12,6 +12,7 @@ import { buildInkdownPromptPrefix } from '@/lib/agent/context/build-prompt-prefi
 import { resetTurnContextTracker } from '@/lib/agent/context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
+import { STREAM_FLUSH_MS, StreamCoalescer, isCoalescableAgentChunk } from '@/lib/agent/stream-coalescer'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
@@ -76,6 +77,26 @@ export function useAcpSession(workspaceRoot?: string) {
   const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
+    // 正文 chunk 先缓冲、按帧合并提交；工具/权限/结束等保留顺序、立即冲刷
+    const coalescer = new StreamCoalescer()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const flushCoalesced = () => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      const text = coalescer.flush()
+      if (text) {
+        applySessionUpdate({
+          sessionUpdate: 'agent_message_chunk',
+          content: [{ type: 'text', text }],
+        })
+      }
+    }
+    const scheduleFlush = () => {
+      if (timer) return
+      timer = setTimeout(flushCoalesced, STREAM_FLUSH_MS)
+    }
     const offStatus = acpApi.onStatusChanged((event) => {
       setStatus(event.status, event.errorMessage)
       if (event.sessionId) setSession(event.sessionId)
@@ -106,9 +127,17 @@ export function useAcpSession(workspaceRoot?: string) {
         accumulateQuizSessionUpdate(event.sessionId, event.update)
         return
       }
+      const chunkText = isCoalescableAgentChunk(event.update)
+      if (chunkText) {
+        coalescer.push(chunkText)
+        scheduleFlush()
+        return
+      }
+      flushCoalesced()
       applySessionUpdate(event.update)
     })
     return () => {
+      flushCoalesced()
       offStatus()
       offUpdate()
     }
