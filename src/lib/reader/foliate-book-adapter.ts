@@ -5,7 +5,7 @@
  *   且避免首屏 chunk 被拖入 foliate。
  * - 需要 DOM 全局（浏览器 / happy-dom 单测）；bun 纯脚本环境不可用。
  */
-import { parse as parseCfi, toRange as cfiToRange, isCFI as isCfiPattern } from '@foliate/epubcfi.js'
+import { parse as parseCfi, isCFI as isCfiPattern } from '@foliate/epubcfi.js'
 import type { FoliateBook, FoliateTocItem } from '@foliate/view.js'
 import {
   detectAdapterBookKind,
@@ -32,6 +32,21 @@ function findSectionIndex(sectionIds: string[], href: string): number | null {
     return idBase !== '' && idBase === base
   })
   return byBase >= 0 ? byBase : null
+}
+
+/**
+ * CFI 包级路径首段（如 /6/4）→ spine 序号。IDPF 约定偶数步进：第 i 节 ⇔ 步进 (i+1)*2。
+ * 越界/畸形返回 null；range 精度由 view.resolveCFI 在 live 文档上保证，此处只定章节。
+ */
+function spineIndexFromCfiParts(parts: unknown): number | null {
+  const top: unknown = Array.isArray(parts)
+    ? parts[0]
+    : (parts as { parent?: unknown[] } | null)?.parent?.[0]
+  const steps = Array.isArray(top) ? (top as Array<{ index?: unknown }>) : null
+  const spineStep = steps && steps.length >= 2 ? steps[1] : null
+  if (!spineStep || typeof spineStep.index !== 'number') return null
+  const index = spineStep.index / 2 - 1
+  return Number.isInteger(index) && index >= 0 ? index : null
 }
 
 function mapTocItem(
@@ -98,25 +113,15 @@ export class FoliateBookAdapter implements IReaderBookAdapter {
   async resolveLegacyEpubCfi(cfi: string): Promise<AdapterLocation | null> {
     const normalized = cfi.trim()
     if (!isCfiPattern.test(normalized)) return null
-    let parts: unknown
+    let index: number | null = null
     try {
-      parts = parseCfi(normalized)
+      index = spineIndexFromCfiParts(parseCfi(normalized))
     } catch {
       return null
     }
-    // 章节级定位：对每节文档试解，首个成功者即归属（range 精度 viewer 阶段补）。
-    for (let index = 0; index < this.book.sections.length; index++) {
-      const section = this.book.sections[index]
-      if (!section?.createDocument) continue
-      try {
-        const doc = await section.createDocument()
-        cfiToRange(doc, parts)
-        return { sectionIndex: index, cfi: normalized }
-      } catch {
-        continue
-      }
-    }
-    return null
+    // 包级 spine 步进精确定位（试解因宽容语义不可靠，已移除）；range 精度由 view.resolveCFI 保证
+    if (index === null || index >= this.book.sections.length) return null
+    return { sectionIndex: index, cfi: normalized }
   }
 
   toLegacyEpubCfi(location: AdapterLocation): string | null {

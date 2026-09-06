@@ -1,8 +1,7 @@
 /**
  * 统一阅读后端接口（EPUB / MOBI / KF8）。
- * 现状：EpubViewer 走 epubjs，MobiViewer 走 @lingo-reader/mobi-parser，两套语义各异。
- * 目标：`foliate-book-adapter` 一套实现同时服务两种 Viewer，本文件只定契约、
- * 不引任何解析库（viewer 重写阶段逐步把旧调用迁过来）。
+ * foliate `makeBook` 按魔数识别容器，一套实现同时服务两种 Viewer；
+ * 旧 EpubViewer（epubjs）/ MobiViewer（mobi-parser）已删除。
  */
 
 /** 容器格式（按文件扩展名判定，KF8 含 .azw3/.azw） */
@@ -49,8 +48,8 @@ export interface IReaderBookAdapter {
   /** 目录 href → spine 序号（含碎片归一），找不到返回 null */
   resolveHref(href: string): number | null
   /**
-   * 旧 epubjs CFI → 本后端位置。两边同为 IDPF CFI 字符串，逐 spine 文档试解。
-   * range 级精度需要渲染后文档，viewer 阶段再补；此处保证章节级可用。
+   * 旧 epubjs CFI → 本后端位置。两边同为 IDPF CFI 字符串，按包级 spine 步进
+   * 精确定位章节（越界拒绝）；range 精度由 view.resolveCFI 在 live 文档上保证。
    */
   resolveLegacyEpubCfi(cfi: string): Promise<AdapterLocation | null>
   /** 位置 → 旧 epubjs CFI（章节基线；range 级 viewer 阶段补） */

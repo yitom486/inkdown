@@ -42,7 +42,7 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out
 }
 
-/** 最小 stored（不压缩）zip，jszip/epubjs 可读 */
+/** 最小 stored（不压缩）zip，foliate / jszip 可读 */
 function buildStoredZip(entries: Array<{ name: string; data: Uint8Array }>): Uint8Array {
   const chunks: Uint8Array[] = []
   const central: Uint8Array[] = []

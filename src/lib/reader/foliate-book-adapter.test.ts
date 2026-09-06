@@ -73,6 +73,40 @@ function buildSmokeEpub(): Uint8Array {
   })
 }
 
+const OPF_TWO = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Two Sections</dc:title><dc:identifier id="bookid">two</dc:identifier><dc:language>en</dc:language></metadata>
+<manifest>
+<item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+<item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+</manifest>
+<spine toc="ncx"><itemref idref="ch1"/><itemref idref="ch2"/></spine>
+</package>`
+
+const NCX_TWO = `<?xml version="1.0" encoding="utf-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+<head><meta name="dtb:uid" content="two"/></head>
+<docTitle><text>Two Sections</text></docTitle>
+<navMap>
+<navPoint id="ch1" playOrder="1"><navLabel><text>First</text></navLabel><content src="ch1.xhtml"/></navPoint>
+<navPoint id="ch2" playOrder="2"><navLabel><text>Second</text></navLabel><content src="ch2.xhtml"/></navPoint>
+</navMap></ncx>`
+
+const CHAPTER_TWO =
+  '<?xml version="1.0" encoding="utf-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch2</title></head><body><h1>Second Section</h1><p>Second section text.</p></body></html>'
+
+function buildTwoSectionEpub(): Uint8Array {
+  return zipSync({
+    mimetype: [strToU8('application/epub+zip'), { level: 0 }],
+    'META-INF/container.xml': strToU8(CONTAINER),
+    'OEBPS/content.opf': strToU8(OPF_TWO),
+    'OEBPS/toc.ncx': strToU8(NCX_TWO),
+    'OEBPS/ch1.xhtml': strToU8(CHAPTER),
+    'OEBPS/ch2.xhtml': strToU8(CHAPTER_TWO),
+  })
+}
+
 describe('detectAdapterBookKind', () => {
   it('按扩展名判定容器（含 kf8 变体）', () => {
     expect(detectAdapterBookKind('a.epub')).toBe('epub')
@@ -133,15 +167,34 @@ describe('FoliateBookAdapter', () => {
     }
   })
 
-  it('CFI 解析走宽容语义：格式正确即定位章节， malformed 才拒绝', async () => {
+  it('CFI 按包级 spine 步进归属，越界拒绝', async () => {
     const adapter = await openFoliateBook(buildSmokeEpub(), 'smoke.epub')
     try {
       // 非 CFI 直接拒绝
       expect(await adapter.resolveLegacyEpubCfi('not-a-cfi')).toBeNull()
-      // foliate toRange 为宽容语义（不断言严格越界），保证章节级可用即可
-      const lenient = await adapter.resolveLegacyEpubCfi('epubcfi(/6/4[wrong-id]!/4/2/2)')
-      expect(lenient?.sectionIndex).toBe(0)
+      // 单节书：第 0 节命中，第 1 节步进越界拒绝（不再宽容误归首节）
+      expect(await adapter.resolveLegacyEpubCfi('epubcfi(/6/2!/4/2)')).toMatchObject({
+        sectionIndex: 0,
+      })
+      expect(await adapter.resolveLegacyEpubCfi('epubcfi(/6/4!/4/2/2)')).toBeNull()
       expect(adapter.toLegacyEpubCfi({ sectionIndex: 0, cfi: 'epubcfi(/6/4)' })).toBe('epubcfi(/6/4)')
+    } finally {
+      adapter.destroy()
+    }
+  })
+
+  it('旧链 CFI 按包级 spine 步进精确定位章节（多章节书）', async () => {
+    const adapter = await openFoliateBook(buildTwoSectionEpub(), 'two.epub')
+    try {
+      expect(adapter.sections).toHaveLength(2)
+      expect(await adapter.resolveLegacyEpubCfi('epubcfi(/6/2!/4/2)')).toMatchObject({
+        sectionIndex: 0,
+      })
+      expect(await adapter.resolveLegacyEpubCfi('epubcfi(/6/4!/4/2/2)')).toMatchObject({
+        sectionIndex: 1,
+      })
+      // 越界 spine 步进拒绝，不误归属首节
+      expect(await adapter.resolveLegacyEpubCfi('epubcfi(/6/8!/4/2)')).toBeNull()
     } finally {
       adapter.destroy()
     }
