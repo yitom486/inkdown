@@ -13,12 +13,13 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
+import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { extractDocumentText, extractViewportText } from '@/lib/agent/context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -48,7 +49,6 @@ import {
 import { getEpubThemeRules, applyEpubReadingLayout } from '@/lib/reader/epub-themes'
 import {
   buildEpubSnapshotFromRange,
-  copyTextToClipboard,
   readEpubSelection,
 } from '@/lib/reader/epub-selection'
 import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
@@ -526,6 +526,19 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       updateMark,
     ],
   )
+
+  const selectionActions = useReaderSelectionActions({
+    snapshotText: selectionSnapshot?.text,
+    dimTextSelection,
+    clearTextSelection,
+    openAnnotateDialog: () => {
+      setEditingNoteMark(null)
+      setNoteDialogOpen(true)
+      setSelectionToolbarPos(null)
+    },
+    showPendingHighlight: showPendingAnnotateHighlight,
+    saveHighlight: handleSaveAnnotation,
+  })
 
   const getRenderedDocs = useCallback((): Array<{ doc: Document; index: number }> => {
     try {
@@ -1347,30 +1360,12 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           x={selectionToolbarPos.x}
           y={selectionToolbarPos.y}
           readOnly
-          onCopy={() => {
-            void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
-              if (ok) toast.success('已复制')
-            })
-            dimTextSelection()
-          }}
-          onAnnotate={() => {
-            setEditingNoteMark(null)
-            setNoteDialogOpen(true)
-            setSelectionToolbarPos(null)
-            showPendingAnnotateHighlight()
-          }}
-          onHighlight={(color) => {
-            void handleSaveAnnotation('', color)
-          }}
-          onAddToChat={() => {
-            addSelectionMarkerToComposer()
-            dimTextSelection()
-          }}
-          onAskAgent={() => {
-            openAgentComposerToAskSelection()
-            dimTextSelection()
-          }}
-          onDismiss={clearTextSelection}
+          onCopy={selectionActions.handleCopy}
+          onAnnotate={selectionActions.handleAnnotate}
+          onHighlight={selectionActions.handleHighlight}
+          onAddToChat={selectionActions.handleAddToChat}
+          onAskAgent={selectionActions.handleAskAgent}
+          onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
 

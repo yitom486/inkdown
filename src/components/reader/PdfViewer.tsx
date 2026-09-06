@@ -13,10 +13,10 @@ import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
+import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
-import { openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { loadPdfOutlineInfo, formatPdfOutlineNotice, type PdfOutlineSource } from '@/lib/reader/pdf-outline'
@@ -66,7 +66,6 @@ import { shouldRenderPdfPage } from '@/lib/reader/pdf-render'
 import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import {
-  copyTextToClipboard,
   getSelectionToolbarPosition,
   readPdfSelection,
   buildPdfSnapshotFromRange,
@@ -1108,6 +1107,27 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     [clearTextSelection, createMark, fileFingerprint, filePath, marks, updateMark],
   )
 
+  const selectionActions = useReaderSelectionActions({
+    snapshotText: selectionSnapshot?.text,
+    dimTextSelection,
+    clearTextSelection,
+    openAnnotateDialog: () => {
+      setEditingNoteMark(null)
+      setNoteDialogOpen(true)
+      setSelectionToolbarPos(null)
+    },
+    hasSelection: () => selectionTransactionRef.current !== null || selectionSnapshot !== null,
+    retainSelection: () => {
+      if (selectionSnapshot) {
+        selectionTransactionRef.current = selectionSnapshot
+      }
+    },
+    saveHighlight: handleSaveAnnotation,
+    onHighlightError: (cause) => {
+      toast.error(cause instanceof Error ? cause.message : '添加高亮失败')
+    },
+  })
+
   const handleCreateMarkAt = useCallback(
     async ({ excerpt, note, flatIndex }: CreateMarkAtParams) => {
       if (typeof flatIndex === 'number' && flatIndex >= 0) {
@@ -1529,41 +1549,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           x={selectionToolbarPos.x}
           y={selectionToolbarPos.y}
           readOnly
-          onCopy={() => {
-            void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
-              if (ok) toast.success('已复制')
-            })
-            dimTextSelection()
-          }}
-          onAnnotate={() => {
-            if (!selectionTransactionRef.current && !selectionSnapshot) {
-              toast.error('当前没有可用选区，请先划选文本')
-              return
-            }
-            if (selectionSnapshot) {
-              selectionTransactionRef.current = selectionSnapshot
-            }
-            setEditingNoteMark(null)
-            setNoteDialogOpen(true)
-            setSelectionToolbarPos(null)
-          }}
-          onHighlight={(color) => {
-            if (selectionSnapshot) {
-              selectionTransactionRef.current = selectionSnapshot
-            }
-            void handleSaveAnnotation('', color).catch((cause) => {
-              toast.error(cause instanceof Error ? cause.message : '添加高亮失败')
-            })
-          }}
-          onAddToChat={() => {
-            addSelectionMarkerToComposer()
-            dimTextSelection()
-          }}
-          onAskAgent={() => {
-            openAgentComposerToAskSelection()
-            dimTextSelection()
-          }}
-          onDismiss={clearTextSelection}
+          onCopy={selectionActions.handleCopy}
+          onAnnotate={selectionActions.handleAnnotate}
+          onHighlight={selectionActions.handleHighlight}
+          onAddToChat={selectionActions.handleAddToChat}
+          onAskAgent={selectionActions.handleAskAgent}
+          onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
 

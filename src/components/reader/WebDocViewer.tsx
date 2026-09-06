@@ -23,12 +23,13 @@ import { useWebDocPage } from '@/hooks/reader/useWebDocPage'
 import { useWebDocToc } from '@/hooks/reader/useWebDocToc'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
+import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
 import { appApi } from '@/api/app-api'
 import { queryKeys } from '@/api/query-keys'
 import { extractDocumentText, extractViewportText } from '@/lib/agent/context/extract-dom-text'
-import { focusAgentComposerOnReaderSelection, openAgentComposerToAskSelection, addSelectionMarkerToComposer } from '@/lib/agent/context/focus-agent-composer'
+import { focusAgentComposerOnReaderSelection } from '@/lib/agent/context/focus-agent-composer'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
@@ -435,6 +436,19 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     },
     [clearTextSelection, createMark, documentId, fileFingerprint, marks, normalizedPageUrl, pageUrl, syncWebMarkOverlays, updateMark],
   )
+
+  const selectionActions = useReaderSelectionActions({
+    snapshotText: selectionSnapshot?.text,
+    dimTextSelection,
+    clearTextSelection,
+    openAnnotateDialog: () => {
+      setEditingNoteMark(null)
+      setNoteDialogOpen(true)
+      setSelectionToolbarPos(null)
+    },
+    showPendingHighlight: showPendingSelectionHighlight,
+    saveHighlight: handleSaveAnnotation,
+  })
 
   const handleCreateMarkAt = useCallback(
     async ({ excerpt, note, flatIndex }: CreateMarkAtParams) => {
@@ -997,30 +1011,12 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           x={selectionToolbarPos.x}
           y={selectionToolbarPos.y}
           readOnly
-          onCopy={() => {
-            void copyTextToClipboard(selectionSnapshot.text).then((ok) => {
-              if (ok) toast.success('已复制')
-            })
-            dimTextSelection()
-          }}
-          onAnnotate={() => {
-            setEditingNoteMark(null)
-            setNoteDialogOpen(true)
-            setSelectionToolbarPos(null)
-            showPendingSelectionHighlight()
-          }}
-          onHighlight={(color) => {
-            void handleSaveAnnotation('', color)
-          }}
-          onAddToChat={() => {
-            addSelectionMarkerToComposer()
-            dimTextSelection()
-          }}
-          onAskAgent={() => {
-            openAgentComposerToAskSelection()
-            dimTextSelection()
-          }}
-          onDismiss={clearTextSelection}
+          onCopy={selectionActions.handleCopy}
+          onAnnotate={selectionActions.handleAnnotate}
+          onHighlight={selectionActions.handleHighlight}
+          onAddToChat={selectionActions.handleAddToChat}
+          onAskAgent={selectionActions.handleAskAgent}
+          onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
 

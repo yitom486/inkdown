@@ -42,6 +42,7 @@
 | `useDeferredReaderLayout` | 等待 iframe 排版稳定后合并执行标记几何重算 |
 | `useReadingMarkInspector` | 点击高亮后的浮层：命中栈、当前标记、位置 |
 | `useReaderSidePanels` | 目录侧栏与标记侧栏互斥开关 |
+| `useReaderSelectionActions` | 三阅读器划选工具条共享动作：复制/批注/高亮/加入对话/问 Agent |
 | `useReaderWheelNavigation` | 滚轮到顶/底翻页。逻辑已抽出，Viewer 里仍有内联调用，此 Hook **暂无引用** |
 | `useSyncProgressBridge` | 阅读进度 Store 与主进程云同步双向桥接 |
 
