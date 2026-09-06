@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: 安装 Bun
         uses: oven-sh/setup-bun@v2
@@ -37,6 +39,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: 安装 Bun
         uses: oven-sh/setup-bun@v2

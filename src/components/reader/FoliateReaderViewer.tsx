@@ -170,12 +170,14 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
 
   const isEpub = documentKind === 'epub'
 
+  // 统一后端下 EPUB/MOBI 均用 EpubChapter[] 单元，导航会话一律走 epub 分支
+  //（store 的 mobi 分支已随旧双 Viewer 删除）。
   useEffect(() => {
-    useReaderNavigationStore.getState().beginSession(filePath, documentKind as 'epub' | 'mobi')
+    useReaderNavigationStore.getState().beginSession(filePath, 'epub')
     return () => {
-      useReaderNavigationStore.getState().beginSession('', documentKind as 'epub' | 'mobi')
+      useReaderNavigationStore.getState().beginSession('', 'epub')
     }
-  }, [filePath, documentKind])
+  }, [filePath])
 
   const clearTextSelection = useCallback(() => {
     setSelectionSnapshot(null)

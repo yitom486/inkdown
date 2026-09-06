@@ -66,19 +66,3 @@ export function bindOutsideReaderPointerDismiss(
   document.addEventListener('pointerdown', onPointerDown, true)
   return () => document.removeEventListener('pointerdown', onPointerDown, true)
 }
-
-interface EpubRenditionContents {
-  window?: Window
-}
-
-export function clearEpubRenditionSelections(
-  rendition: { getContents: () => unknown } | null | undefined,
-): void {
-  if (!rendition) return
-
-  const raw = rendition.getContents()
-  const contentsList = (Array.isArray(raw) ? raw : raw ? [raw] : []) as EpubRenditionContents[]
-  for (const contents of contentsList) {
-    clearWindowSelection(contents.window)
-  }
-}
