@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.2.9] - 2026-09-06
+
 ### 工程优化（体积 · 性能 · 安全 · 可维护）
 
 - **首屏体积 -77%**：PDF / EPUB / MOBI / 在线文档阅读器改为按需加载，主包 `index-*.js` 由 5.6MB 降至 1.31MB；Mermaid / KaTeX 确认早已独立分包
@@ -50,8 +54,6 @@
 
 - **数据目录与并发沙箱**：主进程优先遵循命令行传入的 `--user-data-dir` 独立目录，彻底解决多端并发、E2E 测试与开发/生产版本同时运行时的 Chromium 缓存与单实例互斥锁冲突。
 
----
-
 ### 阅读器拆分（无行为变化）
 
 - **划选工具条共享**：三阅读器复制 / 批注 / 高亮 / 加入对话 / 问 Agent 收敛为 `useReaderSelectionActions`
@@ -63,6 +65,8 @@
 ### 发布流水线修复
 
 - **Release 检出补 submodule**：`release.yml` 质量与打包两处 checkout 加 `submodules: recursive`，否则 foliate 子模块为空导致单测挂、打包与 Release 跳过
+
+---
 
 ---
 
@@ -227,7 +231,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.8...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/yitom486/inkdown/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/yitom486/inkdown/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/yitom486/inkdown/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/yitom486/inkdown/compare/v0.2.5...v0.2.6
