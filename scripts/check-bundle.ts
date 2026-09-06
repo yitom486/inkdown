@@ -18,8 +18,10 @@ const outDir = join(root, 'out')
 const assetsDir = join(outDir, 'renderer', 'assets')
 
 const INDEX_BUDGET_BYTES = Math.floor(1.8 * 1024 * 1024)
-const OUT_TOTAL_BUDGET_BYTES = 25 * 1024 * 1024
-const REQUIRED_LAZY_CHUNKS = ['PdfViewer-', 'WebDocViewer-', 'FoliateReaderViewer-']
+// 25MB → 30MB：PDF 结构化解析 WASM（pdf_inspector_wasm_bg*.wasm 约 5MB，
+// 懒加载、仅 Agent 正文/导出使用）是有意引入的体积，需同步放宽总量门禁
+const OUT_TOTAL_BUDGET_BYTES = 30 * 1024 * 1024
+const REQUIRED_LAZY_CHUNKS = ['PdfViewer-', 'WebDocViewer-', 'FoliateReaderViewer-', 'pdf-structure.worker-']
 
 let failures = 0
 

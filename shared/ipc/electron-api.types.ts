@@ -87,6 +87,8 @@ export interface ElectronAPI {
   isFreshWindow: boolean
   /** E2E 门控：foliate 统一阅读器（仅测试进程注入） */
   e2eFoliateReader: boolean
+  /** E2E 门控：PDF 结构化解析 WASM 钩子（仅测试进程注入） */
+  e2ePdfStructure: boolean
   /** 读取应用版本号 */
   getVersion: () => Promise<Result<string, AppError>>
   /** 同步文档是否未保存（关窗确认用） */

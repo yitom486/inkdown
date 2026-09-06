@@ -6,7 +6,7 @@
 |------|------|
 | `WebDocViewer` | 在线文档阅读（iframe 阅读模式、划词批注、标记侧栏与导出、本页标题大纲） |
 | `FoliateReaderViewer` | EPUB / MOBI / AZW3 统一阅读（foliate 后端：章节导航、划词批注、标记侧栏与导出） |
-| `PdfViewer` | PDF 主 Viewer |
+| `PdfViewer` | PDF 主 Viewer（Agent 正文走 WASM 结构化阅读顺序，失败回退 pdf.js；UI/选区坐标系不动） |
 | `PdfPageView` | PDF 单页（渲染 + text layer + 批注 overlay） |
 | `PdfOcrBanner` / `PdfOcrTocEditor` | 扫描版 OCR 提示与目录校正 |
 | `ReaderContentShell` / `ReaderToolbarShell` / `ReaderFooterNav` | 阅读区壳、工具栏、底栏翻页 |

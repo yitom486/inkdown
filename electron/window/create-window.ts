@@ -201,10 +201,12 @@ export function createWindow(options: { fresh?: boolean } = {}): void {
 export function getWindowInitByWebContents(sender: Electron.WebContents): {
   isFreshWindow: boolean
   e2eFoliateReader: boolean
+  e2ePdfStructure: boolean
 } {
   const session = getWindowSessionByWebContents(sender)
   return {
     isFreshWindow: session?.isFresh ?? false,
     e2eFoliateReader: process.env['E2E_FOLIATE_READER'] === '1',
+    e2ePdfStructure: process.env['E2E_PDF_STRUCTURE'] === '1',
   }
 }

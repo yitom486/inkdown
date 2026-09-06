@@ -38,6 +38,18 @@ import {
   formatPdfPageTextForAgent,
   assertOcrCachePage,
 } from '@/lib/reader/pdf-page-text'
+import { isStructuredPageTextUsable } from '@/lib/reader/pdf-structure'
+import { pdfStructureClient } from '@/lib/reader/pdf-structure-client'
+
+declare global {
+  interface Window {
+    /** E2E 专用钩子（仅 E2E_PDF_STRUCTURE 门控开启时挂载） */
+    __inkdownE2ePdfStructure?: {
+      readCurrentPage: () => Promise<{ source: string; prefix: string }>
+      status: () => { status: string; reason: string }
+    }
+  }
+}
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import { PdfOcrTocEditor } from '@/components/reader/PdfOcrTocEditor'
 import type { OcrTocEntry, PdfOcrPageCache } from '@shared/types/ocr'
@@ -116,6 +128,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [outlineSource, setOutlineSource] = useState<PdfOutlineSource | 'ocr'>('page-fallback')
   const [outlineNotice, setOutlineNotice] = useState<string | undefined>()
   const [isScannedPdf, setIsScannedPdf] = useState(false)
+  /** 混合文档：部分抽样页无文字层；仅放行单页自动 OCR，不触发扫描横幅与后台预识别 */
+  const [isMixedPdf, setIsMixedPdf] = useState(false)
   const [ocrBannerDismissed, setOcrBannerDismissed] = useState(false)
   const [ocrTocEditorOpen, setOcrTocEditorOpen] = useState(false)
   const [ocrTocEditMode, setOcrTocEditMode] = useState(false)
@@ -208,6 +222,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [error])
 
   useEffect(() => {
+    // 文档切换即释放结构化 Worker 与整档缓存（大文档内存不跨文档驻留）
+    pdfStructureClient.dispose()
     if (!data) return
 
     let cancelled = false
@@ -220,6 +236,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOutlineSource('page-fallback')
     setOutlineNotice(undefined)
     setIsScannedPdf(false)
+    setIsMixedPdf(false)
     setOcrBannerDismissed(false)
     setOcrTocEditorOpen(false)
     setOcrTocEditMode(false)
@@ -268,6 +285,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         const profile = await detectPdfDocumentProfile(pdf)
         if (!cancelled) {
           setIsScannedPdf(profile.isScanned)
+          setIsMixedPdf(profile.mixed)
         }
 
         let nextUnits = units.units
@@ -320,6 +338,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
     return () => {
       cancelled = true
+      pdfStructureClient.dispose()
       if (pageNumRef.current >= 1) {
         useReadingProgressStore.getState().savePdfProgress(filePath, {
           pageNum: pageNumRef.current,
@@ -547,7 +566,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       const native = await readPdfPageNativeText(pdf, page)
       if (!pdfPageNeedsOcr(native)) return native
 
-      if (!isScannedPdf || !fileFingerprint) return native
+      if ((!isScannedPdf && !isMixedPdf) || !fileFingerprint) return native
 
       if (!allowAutoOcr) {
         throw new Error(
@@ -557,20 +576,39 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
       return runPageOcr(page)
     },
-    [fileFingerprint, isScannedPdf, ocrPageCaches, runPageOcr],
+    [fileFingerprint, isMixedPdf, isScannedPdf, ocrPageCaches, runPageOcr],
   )
 
-  const readAgentPageText = useCallback(
-    async (page: number): Promise<string> => {
+  const readAgentPageTextWithSource = useCallback(
+    async (page: number): Promise<{ text: string; source: 'structured' | 'legacy' }> => {
       if (!Number.isFinite(page) || page < 1) {
         throw new Error(`无效的 PDF 页码：${page}`)
       }
+      // Agent 正文：WASM 阅读顺序版优先；任何失败静默回退，UI/搜索/选区仍走 pdf.js
+      const total = numPages || pdfDocRef.current?.numPages || 0
+      const docKey = fileFingerprint || filePath
+      let structured: string | null = pdfStructureClient.getCachedPageText(docKey, page)
+      if (structured === null && data && !pdfStructureClient.isUnavailable()) {
+        const parsed = await pdfStructureClient.parseDocument(docKey, data.data.slice(0))
+        if (parsed) structured = pdfStructureClient.getCachedPageText(docKey, page)
+      }
+      if (structured !== null && isStructuredPageTextUsable(structured)) {
+        return { text: formatPdfPageTextForAgent(page, total, structured), source: 'structured' }
+      }
       const allowAutoOcr = useAppSettingsStore.getState().pdfOcrAgentAutoOcr
       const text = await readPageText(page, { allowAutoOcr })
-      const total = numPages || pdfDocRef.current?.numPages || 0
-      return formatPdfPageTextForAgent(page, total, text)
+      return { text: formatPdfPageTextForAgent(page, total, text), source: 'legacy' }
     },
-    [numPages, readPageText],
+    [data, fileFingerprint, filePath, numPages, readPageText],
+  )
+
+  const readAgentPageTextWithSourceRef = useRef(readAgentPageTextWithSource)
+  readAgentPageTextWithSourceRef.current = readAgentPageTextWithSource
+
+  const readAgentPageText = useCallback(
+    (page: number): Promise<string> =>
+      readAgentPageTextWithSource(page).then((result) => result.text),
+    [readAgentPageTextWithSource],
   )
 
   useEffect(() => {
@@ -663,6 +701,20 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       },
     })
   }, [filePath, isScannedPdf, readAgentPageText, readPageText])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.electronAPI?.e2ePdfStructure !== true) return
+    window.__inkdownE2ePdfStructure = {
+      readCurrentPage: async () => {
+        const result = await readAgentPageTextWithSourceRef.current(pageNumRef.current)
+        return { source: result.source, prefix: result.text.slice(0, 200) }
+      },
+      status: () => pdfStructureClient.getState(),
+    }
+    return () => {
+      delete window.__inkdownE2ePdfStructure
+    }
+  }, [filePath])
 
   useEffect(() => {
     return registerSelectionProvider({

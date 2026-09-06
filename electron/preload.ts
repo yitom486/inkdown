@@ -11,11 +11,13 @@ import type { QuizSessionRecord } from '@shared/types/quiz'
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
 const isFreshWindow = windowInit?.isFreshWindow ?? false
 const e2eFoliateReader = windowInit?.e2eFoliateReader ?? false
+const e2ePdfStructure = windowInit?.e2ePdfStructure ?? false
 
 const electronAPI: ElectronAPI = {
   platform: process.platform,
   isFreshWindow,
   e2eFoliateReader,
+  e2ePdfStructure,
   getVersion: () => ipcRenderer.invoke(IPC.APP_GET_VERSION),
   setDirty: (isDirty: boolean) => {
     ipcRenderer.send(IPC.APP_SET_DIRTY, isDirty)
