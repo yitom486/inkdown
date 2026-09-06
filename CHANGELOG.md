@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.3.2] - 2026-09-06
+
 ### 发布流水线修复
 
 - **Release 检出补 submodule**：`release.yml` 质量与打包两处 checkout 加 `submodules: recursive`，否则 foliate 子模块为空导致单测挂、打包与 Release 跳过（v0.3.0 / v0.3.1 均因此未产出安装包）
@@ -231,7 +235,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.1...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/yitom486/inkdown/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/yitom486/inkdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yitom486/inkdown/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/yitom486/inkdown/compare/v0.2.7...v0.2.8
