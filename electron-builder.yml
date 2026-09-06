@@ -39,6 +39,10 @@ win:
 
 # 默认 oneClick 会一键装进 %LOCALAPPDATA%，没有选目录页
 nsis:
+  # 产物名禁空格：electron-builder 写 latest.yml 时把空格转连字符，
+  # 而 GitHub Release 资产名把空格转点，两边对不上导致自动更新 404。
+  # 此处直接用连字符命名，三处（构建产物/latest.yml/Release 资产）永远一致。
+  artifactName: ${productName}-Setup-${version}.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   # 默认按当前用户安装（不强制管理员）；选 Program Files 等系统目录时仍会提权
