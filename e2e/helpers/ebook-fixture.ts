@@ -42,7 +42,7 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out
 }
 
-/** 最小 stored（不压缩）zip，jszip/epubjs 可读 */
+/** 最小 stored（不压缩）zip，foliate / jszip 可读 */
 function buildStoredZip(entries: Array<{ name: string; data: Uint8Array }>): Uint8Array {
   const chunks: Uint8Array[] = []
   const central: Uint8Array[] = []
@@ -133,7 +133,82 @@ export async function writeMinimalEpub(filePath: string): Promise<void> {
   await writeFile(filePath, zip)
 }
 
-/** 单页文字 PDF（xref 偏移与流长度程序化计算，pdf.js 可渲染） */
+/** 最小 MOBI6（PalmDOC compression=1 无压缩，单文本记录，双 pagebreak 章节） */
+export async function writeMinimalMobi(filePath: string): Promise<void> {
+  const enc = new TextEncoder()
+  const be16 = (value: number): Uint8Array => {
+    const buffer = new ArrayBuffer(2)
+    new DataView(buffer).setUint16(0, value)
+    return new Uint8Array(buffer)
+  }
+  const be32 = (value: number): Uint8Array => {
+    const buffer = new ArrayBuffer(4)
+    new DataView(buffer).setUint32(0, value)
+    return new Uint8Array(buffer)
+  }
+  const concatParts = (...parts: Uint8Array[]): Uint8Array => {
+    const total = parts.reduce((sum, part) => sum + part.length, 0)
+    const out = new Uint8Array(total)
+    let offset = 0
+    for (const part of parts) {
+      out.set(part, offset)
+      offset += part.length
+    }
+    return out
+  }
+  const pad = (data: Uint8Array, size: number): Uint8Array => {
+    const out = new Uint8Array(size)
+    out.set(data.subarray(0, size))
+    return out
+  }
+
+  const title = enc.encode('Smoke Mobi')
+  const text = enc.encode(
+    '<h1>Smoke Mobi Chapter</h1><p>Inkdown E2E minimal MOBI paragraph.</p>' +
+      '<mbp:pagebreak/><h1>Second Mobi Chapter</h1><p>Second mobi paragraph.</p>',
+  )
+
+  // record0：PalmDOC 头（16B）+ MOBI 头（232B）+ 标题
+  const palmdoc = concatParts(
+    be16(1), // compression = 1（无压缩）
+    new Uint8Array(6),
+    be16(1), // numTextRecords
+    be16(4096), // recordSize
+    be16(0), // encryption
+    new Uint8Array(2),
+  )
+  const mobiHead = new Uint8Array(232)
+  const mobiView = new DataView(mobiHead.buffer)
+  const writeAscii = (offset: number, value: string): void => {
+    mobiHead.set(enc.encode(value), offset)
+  }
+  writeAscii(0, 'MOBI')
+  mobiView.setUint32(4, 232) // length
+  mobiView.setUint32(8, 2) // type = book
+  mobiView.setUint32(12, 65001) // encoding = utf-8
+  mobiView.setUint32(16, 1) // uid
+  mobiView.setUint32(20, 6) // version = MOBI6
+  mobiView.setUint32(68, 248) // titleOffset（record0 内偏移）
+  mobiView.setUint32(72, title.length) // titleLength
+  mobiHead[78] = 1 // localeRegion
+  mobiHead[79] = 9 // localeLanguage
+  mobiView.setUint32(92, 2) // resourceStart（越过末记录，永不访问）
+  mobiView.setUint32(128 - 16, 0) // exthFlag = 0（无 EXTH）
+  mobiView.setUint32(240 - 16, 0) // trailingFlags = 0
+  mobiView.setUint32(244 - 16, 0xffffffff) // indx = none
+  const rec0 = concatParts(palmdoc, mobiHead, title)
+
+  // PDB 头（78B）+ 记录表
+  const rec0Offset = 78 + 2 * 8
+  const rec1Offset = rec0Offset + rec0.length
+  const pdbHead = new Uint8Array(78)
+  pdbHead.set(enc.encode('SmokeMobi'), 0)
+  pdbHead.set(enc.encode('BOOKMOBI'), 60)
+  new DataView(pdbHead.buffer).setUint16(76, 2) // numRecords
+  const table = concatParts(be32(rec0Offset), new Uint8Array(4), be32(rec1Offset), new Uint8Array(4))
+
+  await writeFile(filePath, concatParts(pdbHead, table, rec0, text))
+}
 export async function writeMinimalPdf(filePath: string): Promise<void> {
   const enc = new TextEncoder()
   const streamText = 'BT /F1 24 Tf 72 720 Td (Inkdown E2E minimal PDF paragraph.) Tj ET\n'

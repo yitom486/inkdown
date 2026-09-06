@@ -5,3 +5,4 @@
 | 文件 | 功能 |
 |------|------|
 | `markdown-it-task-lists.d.ts` | `markdown-it-task-lists` 模块声明 |
+| `foliate-js.d.ts` | foliate-js 子模块（书/目录/CFI 最小面）声明 |

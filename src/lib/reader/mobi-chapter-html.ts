@@ -1,5 +1,9 @@
 import DOMPurify from 'dompurify'
-import type { MobiProcessedChapter } from '@lingo-reader/mobi-parser'
+/** MOBI 章节原文（旧 mobi-parser 类型已随依赖删除，此处仅需 html/css 形态） */
+export interface MobiProcessedChapter {
+  html: string
+  css: Array<{ href: string }>
+}
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
 

@@ -5,7 +5,8 @@
 | 文件 | 功能 |
 |------|------|
 | `WebDocViewer` | 在线文档阅读（iframe 阅读模式、划词批注、标记侧栏与导出、本页标题大纲） |
-| `EpubViewer` / `PdfViewer` / `MobiViewer` | 各格式主 Viewer |
+| `FoliateReaderViewer` | EPUB / MOBI / AZW3 统一阅读（foliate 后端：章节导航、划词批注、标记侧栏与导出） |
+| `PdfViewer` | PDF 主 Viewer |
 | `PdfPageView` | PDF 单页（渲染 + text layer + 批注 overlay） |
 | `PdfOcrBanner` / `PdfOcrTocEditor` | 扫描版 OCR 提示与目录校正 |
 | `ReaderContentShell` / `ReaderToolbarShell` / `ReaderFooterNav` | 阅读区壳、工具栏、底栏翻页 |

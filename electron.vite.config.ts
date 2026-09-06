@@ -10,6 +10,10 @@ const sharedAlias = {
   '@shared': resolve('shared'),
 }
 
+const foliateAlias = {
+  '@foliate': resolve('third-party/foliate-js'),
+}
+
 /** file:// 协议下 crossorigin 会导致 JS/CSS 静默加载失败（生产黑屏） */
 function removeCrossOriginPlugin(): Plugin {
   return {
@@ -68,6 +72,7 @@ export default defineConfig({
       alias: {
         '@': resolve('src'),
         ...sharedAlias,
+        ...foliateAlias,
       },
     },
     plugins: [react(), tailwindcss(), removeCrossOriginPlugin(), copyPdfjsAssetsPlugin()],

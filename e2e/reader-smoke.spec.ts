@@ -72,31 +72,6 @@ test.describe('阅读器冒烟（自研最小 fixture）', () => {
     }
   })
 
-  test('EPUB 章节正文可读', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'inkdown-e2e-reader-'))
-    const { epubName } = await writeReaderSmokeWorkspace(workspace)
-    const app = await launchBuiltApp({ E2E_AUTO_OPEN_PATH: workspace })
-
-    try {
-      const window = await app.firstWindow()
-      await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
-        timeout: 15_000,
-      })
-      await window.getByRole('button', { name: '文件', exact: true }).click()
-      await window.getByRole('menuitem', { name: /打开文件夹/ }).click()
-      await expect(window.getByText(epubName).first()).toBeVisible({ timeout: 15_000 })
-
-      await openViaQuickOpen(window, epubName, 'smoke-sample.epub')
-
-      // epub.js 章节渲染在 iframe 内
-      const frame = window.locator('#main').frameLocator('iframe')
-      await expect(frame.getByText('Smoke Chapter').first()).toBeVisible({ timeout: 20_000 })
-      await expect(frame.getByText('Inkdown E2E minimal EPUB paragraph.').first()).toBeVisible({
-        timeout: 10_000,
-      })
-    } finally {
-      await app.close()
-    }
-  })
+  // 注：EPUB/MOBI 改走 foliate 统一链路（closed shadow DOM），正文断言见
+  // reader-foliate.spec.ts；此处保留 Markdown 与 PDF 覆盖。
 })

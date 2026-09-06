@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["./shared/*"]
+      "@shared/*": ["./shared/*"],
+      "@foliate/*": ["./third-party/foliate-js/*"]
     },
     "types": ["vite/client"]
   },

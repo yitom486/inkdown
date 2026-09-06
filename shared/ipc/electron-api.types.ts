@@ -85,6 +85,8 @@ export interface ElectronAPI {
   platform: string
   /** 通过「新建窗口」打开时为 true，不恢复工作区/上次文件 */
   isFreshWindow: boolean
+  /** E2E 门控：foliate 统一阅读器（仅测试进程注入） */
+  e2eFoliateReader: boolean
   /** 读取应用版本号 */
   getVersion: () => Promise<Result<string, AppError>>
   /** 同步文档是否未保存（关窗确认用） */
