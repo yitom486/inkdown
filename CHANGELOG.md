@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+### 发布流水线修复
+
+- **Release 检出补 submodule**：`release.yml` 质量与打包两处 checkout 加 `submodules: recursive`，否则 foliate 子模块为空导致单测挂、打包与 Release 跳过（v0.3.0 / v0.3.1 均因此未产出安装包）
+
 ---
 
 ## [0.3.1] - 2026-09-06
