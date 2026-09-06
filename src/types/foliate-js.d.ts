@@ -79,6 +79,10 @@ declare module '@foliate/view.js' {
   export interface FoliateContentsItem {
     doc: Document
     index: number
+    overlayer?: {
+      hitTest: (point: { x: number; y: number }) => [] | [unknown, Range]
+      redraw?: () => void
+    }
   }
 
   /** `<foliate-view>` 自定义元素（命令式创建，见 FoliateReaderViewer）。
@@ -100,6 +104,8 @@ declare module '@foliate/view.js' {
     prev(distance?: number): Promise<void>
     next(distance?: number): Promise<void>
     getCFI(index: number, range?: Range | null): string
+    /** CFI → {index, anchor}（与 getCFI 配对的官方逆过程；anchor 需 live 文档调用） */
+    resolveCFI(cfi: string): { index: number; anchor: (doc: Document) => Range }
     /** 各节起始全局进度（末尾隐含 1），配合 relocate fraction 算全书进度 */
     getSectionFractions(): number[]
     addAnnotation(annotation: { value: string }, remove?: boolean): Promise<unknown>

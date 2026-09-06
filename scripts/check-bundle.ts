@@ -19,7 +19,7 @@ const assetsDir = join(outDir, 'renderer', 'assets')
 
 const INDEX_BUDGET_BYTES = Math.floor(1.8 * 1024 * 1024)
 const OUT_TOTAL_BUDGET_BYTES = 25 * 1024 * 1024
-const REQUIRED_LAZY_CHUNKS = ['PdfViewer-', 'EpubViewer-', 'MobiViewer-', 'WebDocViewer-']
+const REQUIRED_LAZY_CHUNKS = ['PdfViewer-', 'EpubViewer-', 'MobiViewer-', 'WebDocViewer-', 'FoliateReaderViewer-']
 
 let failures = 0
 

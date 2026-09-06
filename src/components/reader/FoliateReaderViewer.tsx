@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
+import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
@@ -30,6 +31,7 @@ import { isOk } from '@shared/core/result'
 import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/foliate-book-adapter'
+import { parse as parseFoliateCfi, toRange as foliateCfiToRange } from '@foliate/epubcfi.js'
 import type { FoliateViewElement } from '@foliate/view.js'
 import type { OverlayerDrawFn } from '@foliate/overlayer.js'
 import {
@@ -63,6 +65,17 @@ import {
 import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
 import { saveAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import { reportAppError } from '@/lib/workspace/report-error'
+
+declare global {
+  interface Window {
+    /** E2E 专用钩子（仅 E2E_FOLIATE_READER 门控开启时挂载） */
+    __inkdownE2eReader?: {
+      selectText: (excerpt: string) => Promise<boolean>
+      clickMark: (markId: string) => Promise<boolean>
+      listMarks: () => Array<{ id: string; excerpt?: string }>
+    }
+  }
+}
 
 interface FoliateReaderViewerProps {
   filePath: string
@@ -119,6 +132,9 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   )
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [editingNoteMark, setEditingNoteMark] = useState<ReadingMark | null>(null)
+  const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
+  const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const hoveredMarkIdRef = useRef<string | null>(null)
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   const selectionSnapshotRef = useRef<typeof selectionSnapshot>(null)
   selectionSnapshotRef.current = selectionSnapshot
@@ -429,10 +445,45 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
 
   const getRenderedDocs = useCallback((): Array<{ doc: Document; index: number }> => {
     try {
-      return viewRef.current?.renderer?.getContents() ?? []
+      const renderer = viewRef.current?.renderer as unknown as {
+        getContents: () => Array<{ doc: Document; index: number }>
+      } | null
+      return renderer?.getContents() ?? []
     } catch {
       return []
     }
+  }, [])
+
+  const markHoverHandlers = useCallback(
+    () => ({
+      onEnter: (mark: ReadingMark, anchor: { left: number; top: number; width: number }) => {
+        setHoveredMark(mark)
+        setMarkTooltipPos({
+          x: anchor.left + anchor.width / 2,
+          y: anchor.top,
+        })
+      },
+      onLeave: () => {
+        setHoveredMark(null)
+        setMarkTooltipPos(null)
+      },
+    }),
+    [],
+  )
+
+  /** 同一 range 的检查器开启逻辑（overlay 点击与测试钩子共用） */
+  const openInspectorAtRange = useCallback((mark: ReadingMark, range: Range) => {
+    const doc = range.startContainer.ownerDocument
+    if (!doc) return false
+    const frame = doc.defaultView?.frameElement as HTMLElement | null
+    const frameRect = frame?.getBoundingClientRect()
+    const rect = range.getBoundingClientRect()
+    inspectorRef.current.openAt(
+      [mark],
+      (frameRect?.left ?? 0) + rect.left + rect.width / 2,
+      (frameRect?.top ?? 0) + rect.top,
+    )
+    return true
   }, [])
 
   const handleCreateMarkAt = useCallback(
@@ -486,29 +537,41 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       const onMouseDown = (event: MouseEvent) => {
         pointerOriginRef.current = { x: event.clientX, y: event.clientY }
       }
-      const onMouseUp = (event: MouseEvent) => {
-        window.setTimeout(() => {
-          const frame = doc.defaultView?.frameElement as HTMLElement | null
-          const frameRect = frame?.getBoundingClientRect()
-          const view = viewRef.current
-          if (!view) return
-          const contents = { window: doc.defaultView as Window, cfiFromRange: (range: Range) => view.getCFI(index, range) }
-          const snapshot = readEpubSelection(contents)
-          if (!snapshot) {
-            if (isClickNotDrag(pointerOriginRef.current, event)) {
-              inspectorRef.current.close()
-            }
-            return
+      const handleDocPointerUp = (isClick: boolean): void => {
+        const frame = doc.defaultView?.frameElement as HTMLElement | null
+        const frameRect = frame?.getBoundingClientRect()
+        const view = viewRef.current
+        if (!view) return
+        const contents = {
+          window: doc.defaultView as Window,
+          cfiFromRange: (range: Range) => view.getCFI(index, range),
+        }
+        const snapshot = readEpubSelection(contents)
+        if (!snapshot) {
+          if (isClick) {
+            inspectorRef.current.close()
           }
-          inspectorRef.current.close()
-          setSelectionSnapshot(snapshot)
-          selectionSnapshotRef.current = snapshot
-          commitReaderSelection(filePathRef.current, snapshot.text)
-          focusAgentComposerOnReaderSelection()
-          setSelectionToolbarPos({
-            x: (frameRect?.left ?? 0) + snapshot.rect.left + snapshot.rect.width / 2,
-            y: (frameRect?.top ?? 0) + snapshot.rect.top,
-          })
+          return
+        }
+        inspectorRef.current.close()
+        setSelectionSnapshot(snapshot)
+        selectionSnapshotRef.current = snapshot
+        commitReaderSelection(filePathRef.current, snapshot.text)
+        focusAgentComposerOnReaderSelection()
+        setSelectionToolbarPos({
+          x: (frameRect?.left ?? 0) + snapshot.rect.left + snapshot.rect.width / 2,
+          y: (frameRect?.top ?? 0) + snapshot.rect.top,
+        })
+        void origin
+      }
+      const onMouseUp = (event: MouseEvent) => {
+        const origin = pointerOriginRef.current
+        const isClick = isClickNotDrag(origin, {
+          clientX: event.clientX,
+          clientY: event.clientY,
+        } as MouseEvent)
+        window.setTimeout(() => {
+          handleDocPointerUp(isClick)
         }, 10)
       }
       doc.addEventListener('mousedown', onMouseDown)
@@ -521,6 +584,53 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         doc.removeEventListener('mouseup', onMouseUp)
         unbindCollapse()
       })
+
+      // 批注 hover：经本节 overlayer 命中，仅有正文的批注才浮层
+      let hoverRaf = 0
+      const onMouseMove = (event: MouseEvent) => {
+        if (hoverRaf !== 0) return
+        hoverRaf = window.requestAnimationFrame(() => {
+          hoverRaf = 0
+          const overlayer = viewRef.current?.renderer
+            ?.getContents()
+            .find((item) => item.doc === doc)?.overlayer
+          if (!overlayer) return
+          const [key] = overlayer.hitTest({ x: event.clientX, y: event.clientY })
+          const mark =
+            typeof key === 'string' ? findMarkByOverlayerKey(marksRef.current, key) : undefined
+          if (!mark?.note?.trim()) {
+            if (hoveredMarkIdRef.current !== null) {
+              hoveredMarkIdRef.current = null
+              markHoverHandlers().onLeave()
+            }
+            return
+          }
+          if (hoveredMarkIdRef.current === mark.id) return
+          hoveredMarkIdRef.current = mark.id
+          const frame = doc.defaultView?.frameElement as HTMLElement | null
+          const frameRect = frame?.getBoundingClientRect()
+          // 以事件点为锚显示浮层（overlay 内坐标即 iframe 视口坐标）
+          markHoverHandlers().onEnter(mark, {
+            left: (frameRect?.left ?? 0) + event.clientX,
+            top: (frameRect?.top ?? 0) + event.clientY,
+            width: 0,
+          })
+        })
+      }
+      const onMouseLeave = () => {
+        hoveredMarkIdRef.current = null
+        markHoverHandlers().onLeave()
+      }
+      doc.addEventListener('mousemove', onMouseMove, { passive: true })
+      doc.addEventListener('mouseleave', onMouseLeave)
+      cleanupFns.push(() => {
+        doc.removeEventListener('mousemove', onMouseMove)
+        doc.removeEventListener('mouseleave', onMouseLeave)
+        if (hoverRaf !== 0) {
+          window.cancelAnimationFrame(hoverRaf)
+          hoverRaf = 0
+        }
+      })
       return () => {
         cleanupFns.forEach((fn) => {
           try {
@@ -531,7 +641,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         })
       }
     },
-    [],
+    [markHoverHandlers],
   )
 
   useEffect(() => {
@@ -643,15 +753,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       if (cancelled) return
       const mark = findMarkByOverlayerKey(marksRef.current, detail.value)
       if (!mark) return
-      const doc = detail.range.startContainer.ownerDocument
-      const frame = doc?.defaultView?.frameElement as HTMLElement | null
-      const frameRect = frame?.getBoundingClientRect()
-      const rect = detail.range.getBoundingClientRect()
-      inspectorRef.current.openAt(
-        [mark],
-        (frameRect?.left ?? 0) + rect.left + rect.width / 2,
-        (frameRect?.top ?? 0) + rect.top,
-      )
+      openInspectorAtRange(mark, detail.range)
     }
 
     const onDrawAnnotation = (event: CustomEvent) => {
@@ -906,6 +1008,86 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     })
   }, [addBookmarkAtCurrent, filePath, goToChapter, handleCreateMarkAt, handleSaveAnnotation])
 
+  // E2E 专用：closed shadow DOM 无法做 DOM 级选区/点击，钩子走同一管线
+  //（findTextRangeInRoot → snapshot → toolbar；toRange → inspector）。
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.electronAPI?.e2eFoliateReader !== true) return
+    window.__inkdownE2eReader = {
+      listMarks: () =>
+        marksRef.current.map((mark) => ({ id: mark.id, excerpt: mark.excerpt })),
+      selectText: async (excerpt: string) => {
+        const view = viewRef.current
+        if (!view) return false
+        // 章节文档异步渲染，最长等 ~6s（与 handleCreateMarkAt 同策略）
+        const found = await waitForDom(() => {
+          for (const { doc, index } of getRenderedDocs()) {
+            const body = doc.body
+            if (!body) continue
+            const range = findTextRangeInRoot(body, excerpt)
+            if (range) return { doc, index, range }
+          }
+          return null
+        }, { attempts: 120, delayMs: 50 })
+        if (!found) return false
+        const { doc, index, range } = found
+        const selection = doc.defaultView?.getSelection()
+        if (!selection) return false
+        selection.removeAllRanges()
+        try {
+          selection.addRange(range.cloneRange())
+        } catch {
+          return false
+        }
+          const snapshot = buildEpubSnapshotFromRange(
+            {
+              window: doc.defaultView as Window,
+              cfiFromRange: (target) => view.getCFI(index, target),
+            },
+            range,
+            range.toString(),
+          )
+          if (!snapshot) return false
+          inspectorRef.current.close()
+          setSelectionSnapshot(snapshot)
+          selectionSnapshotRef.current = snapshot
+          commitReaderSelection(filePathRef.current, snapshot.text)
+          const frame = doc.defaultView?.frameElement as HTMLElement | null
+          const frameRect = frame?.getBoundingClientRect()
+          const rect = range.getBoundingClientRect()
+          setSelectionToolbarPos({
+            x: (frameRect?.left ?? 0) + rect.left + rect.width / 2,
+            y: (frameRect?.top ?? 0) + rect.top,
+          })
+          return true
+        },
+      clickMark: async (markId: string) => {
+        const mark = marksRef.current.find((item) => item.id === markId)
+        const key = mark ? overlayerKeyForMark(mark) : null
+        const view = viewRef.current
+        if (!mark || !key || !view) return false
+        // 经 view 自身逆过程定位（与 getCFI 配对；直接 toRange 会误解 spine 前缀）
+        let resolved: { index: number; anchor: (doc: Document) => Range }
+        try {
+          resolved = view.resolveCFI(key)
+        } catch {
+          return false
+        }
+        const target = getRenderedDocs().find((item) => item.index === resolved.index)
+        if (!target) return false
+        let range: Range
+        try {
+          range = resolved.anchor(target.doc)
+        } catch {
+          return false
+        }
+        return openInspectorAtRange(mark, range)
+      },
+    }
+    return () => {
+      delete window.__inkdownE2eReader
+    }
+  }, [filePath, getRenderedDocs, openInspectorAtRange])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!ready) return
@@ -1032,6 +1214,10 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         onPrevious={() => goToChapter(nav.previous, nav.previousIndex)}
         onNext={() => goToChapter(nav.next, nav.nextIndex)}
       />
+
+      {markTooltipPos && hoveredMark && !inspector.active ? (
+        <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
+      ) : null}
 
       {inspector.pos && inspector.active ? (
         <ReadingMarkPopover
