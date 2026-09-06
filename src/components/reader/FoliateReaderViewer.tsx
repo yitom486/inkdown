@@ -14,6 +14,7 @@ import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
+import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { extractDocumentText, extractViewportText } from '@/lib/agent/context/extract-dom-text'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
@@ -64,11 +65,7 @@ import {
   resolveEpubChapter,
   resolveMobiChapter,
   tocFromEpubUnits,
-  type ReadingNotesContentKind,
-  type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
-import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
-import { saveAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import { reportAppError } from '@/lib/workspace/report-error'
 
 declare global {
@@ -1226,40 +1223,14 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   const { currentUnitId } = useReaderNavTitles()
   const resolveChapter = kindRef.current === 'epub' ? resolveEpubChapter : resolveMobiChapter
 
-  const handleExportNotes = useCallback(
-    (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => {
-      const toc = tocFromEpubUnits(chapters)
-      const currentKey = currentUnitId ? normalizeLoadKey(currentUnitId) : ''
-      const currentChapter = findCurrentChapterRef(toc, currentKey)
-      void saveReadingNotesExport({
-        marks,
-        toc,
-        contentKind,
-        scope,
-        currentChapter: scope === 'chapter' ? currentChapter : null,
-        filePath,
-        resolveChapter,
-      })
-    },
-    [chapters, currentUnitId, filePath, marks, resolveChapter],
-  )
-
-  const handleExportAnkiCards = useCallback(
-    (scope: ReadingNotesScope) => {
-      const toc = tocFromEpubUnits(chapters)
-      const currentKey = currentUnitId ? normalizeLoadKey(currentUnitId) : ''
-      const currentChapter = findCurrentChapterRef(toc, currentKey)
-      void saveAnkiCardsExport({
-        marks,
-        toc,
-        scope,
-        currentChapter: scope === 'chapter' ? currentChapter : null,
-        filePath,
-        resolveChapter,
-      })
-    },
-    [chapters, currentUnitId, filePath, marks, resolveChapter],
-  )
+  const { handleExportNotes, handleExportAnkiCards } = useReaderExportMenu({
+    marks,
+    filePath,
+    getToc: () => tocFromEpubUnits(chapters),
+    getCurrentChapter: (toc) =>
+      findCurrentChapterRef(toc, currentUnitId ? normalizeLoadKey(currentUnitId) : ''),
+    resolveChapter,
+  })
 
   return (
     <div className="flex h-full min-h-0 flex-col">

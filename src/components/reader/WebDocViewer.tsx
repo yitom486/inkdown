@@ -24,6 +24,7 @@ import { useWebDocToc } from '@/hooks/reader/useWebDocToc'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
+import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
 import { appApi } from '@/api/app-api'
@@ -81,11 +82,7 @@ import { activateWebDocCodeTab } from '@/lib/reader/web-doc-code-blocks'
 import {
   resolveWebChapter,
   tocFromWebUnits,
-  type ReadingNotesContentKind,
-  type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
-import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
-import { saveAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -856,46 +853,19 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     [deleteMark],
   )
 
-  const handleExportNotes = useCallback(
-    (contentKind: ReadingNotesContentKind, scope: ReadingNotesScope) => {
-      const toc = tocFromWebUnits(units)
+  const { handleExportNotes, handleExportAnkiCards } = useReaderExportMenu({
+    marks,
+    filePath: documentId,
+    getToc: () => tocFromWebUnits(units),
+    getCurrentChapter: (toc) => {
       const currentHits = toc.filter((item) => item.matchKey === normalizedPageUrl)
-      const currentChapter =
-        scope === 'chapter'
-          ? currentHits.reduce((best, item) => ((item.level ?? 0) >= (best.level ?? 0) ? item : best), currentHits[0] ?? null)
-          : null
-      void saveReadingNotesExport({
-        marks,
-        toc,
-        contentKind,
-        scope,
-        currentChapter: scope === 'chapter' ? currentChapter : null,
-        filePath: documentId,
-        resolveChapter: resolveWebChapter,
-      })
+      return currentHits.reduce(
+        (best, item) => ((item.level ?? 0) >= (best.level ?? 0) ? item : best),
+        currentHits[0] ?? null,
+      )
     },
-    [documentId, marks, normalizedPageUrl, units],
-  )
-
-  const handleExportAnkiCards = useCallback(
-    (scope: ReadingNotesScope) => {
-      const toc = tocFromWebUnits(units)
-      const currentHits = toc.filter((item) => item.matchKey === normalizedPageUrl)
-      const currentChapter =
-        scope === 'chapter'
-          ? currentHits.reduce((best, item) => ((item.level ?? 0) >= (best.level ?? 0) ? item : best), currentHits[0] ?? null)
-          : null
-      void saveAnkiCardsExport({
-        marks,
-        toc,
-        scope,
-        currentChapter: scope === 'chapter' ? currentChapter : null,
-        filePath: documentId,
-        resolveChapter: resolveWebChapter,
-      })
-    },
-    [documentId, marks, normalizedPageUrl, units],
-  )
+    resolveChapter: resolveWebChapter,
+  })
 
   const currentUnitId = useMemo(() => {
     const flatIndex = findWebDocFlatIndex(units, pageUrl)
