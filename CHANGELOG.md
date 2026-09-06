@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.3.0] - 2026-09-06
+
 ### 工程优化（体积 · 性能 · 安全 · 可维护）
 
 - **首屏体积 -77%**：PDF / EPUB / MOBI / 在线文档阅读器改为按需加载，主包 `index-*.js` 由 5.6MB 降至 1.31MB；Mermaid / KaTeX 确认早已独立分包
@@ -213,7 +217,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.8...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/yitom486/inkdown/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/yitom486/inkdown/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/yitom486/inkdown/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/yitom486/inkdown/compare/v0.2.5...v0.2.6
