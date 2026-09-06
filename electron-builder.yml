@@ -61,13 +61,13 @@ mac:
   hardenedRuntime: false
   gatekeeperAssess: false
   target:
+    # 仅 Apple Silicon：上游 Rust 解析器（pdf-inspector）无 mac x64 预编译，
+    # 且 Intel Mac 已无实测环境；如需恢复 x64，加回 arch 并验证 OCR/WASM 链路
     - target: dmg
       arch:
-        - x64
         - arm64
     - target: zip
       arch:
-        - x64
         - arm64
 
 linux:

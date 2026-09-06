@@ -135,7 +135,7 @@ Inkdown 为不同格式的文献与书籍提供了针对性的深度渲染与排
 
 ## 📦 下载与安装
 
-- 编译完成的各平台正式安装包均发布于 **[GitHub Releases](https://github.com/yitom486/inkdown/releases)**（支持 Windows `.exe` / macOS `.dmg` / Linux `.AppImage`）。
+- 编译完成的各平台正式安装包均发布于 **[GitHub Releases](https://github.com/yitom486/inkdown/releases)**（支持 Windows `.exe` / macOS `.dmg`（Apple Silicon） / Linux `.AppImage`）。
 - **应用内静默更新**：v0.2.3 及以上版本内置自动检查更新功能，启动时会自动检测新版本；也可随时在「关于」或「设置 → 应用」中手动检查并一键更新。
 
 ---

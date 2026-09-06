@@ -60,7 +60,7 @@
 | `reading-mark-passages` / `export-reading-notes` / `export-anki-cards` / `flashcard-review` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、Anki 导出（纯文本 Flashcard → HTML）、闪卡复习纯函数、侧栏类型筛选 |
 | `epub-*` | EPUB 目录导航、主题样式、选区快照（渲染内核已迁 foliate 统一后端） |
 | `reader-adapter` / `foliate-*` | 统一阅读后端契约与 foliate 实现（EPUB+MOBI/KF8，MOBI 旧链已删） |
-| `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay |
+| `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js） |
 | `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | 在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe（如 Python Tutor） |
 
 ## workspace/

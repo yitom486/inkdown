@@ -4,4 +4,6 @@ export interface WindowInit {
   isFreshWindow: boolean
   /** E2E 门控：foliate 统一阅读器（仅测试进程注入，正常启动恒为 false） */
   e2eFoliateReader?: boolean
+  /** E2E 门控：PDF 结构化解析 WASM 钩子（仅测试进程注入，正常启动恒为 false） */
+  e2ePdfStructure?: boolean
 }
