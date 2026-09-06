@@ -14,6 +14,7 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
+import { usePdfPageOcr } from '@/hooks/reader/usePdfPageOcr'
 import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
@@ -26,18 +27,13 @@ import {
   clearPdfOcrCache,
   getPdfOcrPage,
   listPdfOcrPages,
-  recognizePdfOcrPage,
   recognizePdfOcrToc,
   getPdfOcrToc,
   savePdfOcrToc,
 } from '@/api/ocr-api'
 import { buildPdfOcrTocCache, readerUnitsToOcrEntries } from '@/lib/reader/pdf-ocr-toc-cache'
 import {
-  pdfPageNeedsOcr,
-  readPdfPageNativeText,
-  textFromOcrPageCache,
   formatPdfPageTextForAgent,
-  assertOcrCachePage,
 } from '@/lib/reader/pdf-page-text'
 import { isStructuredPageTextUsable } from '@/lib/reader/pdf-structure'
 import { pdfStructureClient } from '@/lib/reader/pdf-structure-client'
@@ -53,7 +49,7 @@ declare global {
 }
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import { PdfOcrTocEditor } from '@/components/reader/PdfOcrTocEditor'
-import type { OcrTocEntry, PdfOcrPageCache } from '@shared/types/ocr'
+import type { OcrTocEntry } from '@shared/types/ocr'
 import {
   PDF_JUMP_SYNC_HOLD_MS,
   PDF_PAGE_GAP_PX,
@@ -135,9 +131,6 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [tocPageFrom, setTocPageFrom] = useState(8)
   const [tocPageTo, setTocPageTo] = useState(12)
   const [tocPageOffset, setTocPageOffset] = useState(12)
-  const [ocrPageCaches, setOcrPageCaches] = useState<Record<number, PdfOcrPageCache>>({})
-  const [ocrPageRecognizing, setOcrPageRecognizing] = useState<number | null>(null)
-  const [ocrPagesInFlight, setOcrPagesInFlight] = useState<ReadonlySet<number>>(() => new Set())
   const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
   const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
     null,
@@ -181,6 +174,28 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const fileFingerprint = data
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
+
+  const {
+    ocrPageCaches,
+    ocrPageCachesRef,
+    ocrPageRecognizing,
+    currentPageOcrReady,
+    currentPageOcrBusy,
+    ocrRecognizedCount,
+    runPageOcr,
+    readPageText,
+    handleRecognizePage,
+    hasPendingPageOcr,
+    hydratePageCaches,
+    resetPageOcr,
+  } = usePdfPageOcr({
+    filePath,
+    fileFingerprint,
+    pageNum,
+    pdfDocRef,
+    isScannedPdf,
+    isMixedPdf,
+  })
 
   const ready = numPages > 0 && pdfDoc !== null
 
@@ -239,8 +254,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrTocEntries([])
     setOcrTocSaving(false)
     setOcrRecognizing(false)
-    setOcrPageCaches({})
-    setOcrPageRecognizing(null)
+    resetPageOcr()
     setTocOpen(false)
     pageAnchorRefs.current.clear()
 
@@ -318,7 +332,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               }),
             )
             if (!cancelled) {
-              setOcrPageCaches(Object.fromEntries(entries.filter((item) => item !== null)))
+              hydratePageCaches(Object.fromEntries(entries.filter((item) => item !== null)))
             }
           }
         }
@@ -435,22 +449,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     ocrRecognizing ||
     (isScannedPdf && ocrTocEditorOpen)
 
-  const currentPageOcrReady = Boolean(ocrPageCaches[pageNum]?.words.length)
-  const currentPageOcrBusy =
-    ocrPageRecognizing === pageNum || ocrPagesInFlight.has(pageNum)
-
-  const ocrPagePendingRef = useRef<Map<number, Promise<string>>>(new Map())
-  const ocrPageCachesRef = useRef(ocrPageCaches)
   const pdfOcrBackgroundPrefetch = useAppSettingsStore((state) => state.pdfOcrBackgroundPrefetch)
-
-  useEffect(() => {
-    ocrPageCachesRef.current = ocrPageCaches
-  }, [ocrPageCaches])
-
-  const ocrRecognizedCount = useMemo(
-    () => Object.values(ocrPageCaches).filter((cache) => cache.words.length > 0).length,
-    [ocrPageCaches],
-  )
 
   const handleClearOcrCache = useCallback(async () => {
     if (!fileFingerprint) return
@@ -462,9 +461,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       return
     }
 
-    setOcrPageCaches({})
-    ocrPagePendingRef.current.clear()
-    setOcrPagesInFlight(new Set())
+    resetPageOcr()
 
     if (outlineSource === 'ocr' && pdfDocRef.current) {
       const units = await loadPdfOutlineInfo(pdfDocRef.current)
@@ -478,102 +475,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrTocEditorOpen(true)
     setOcrBannerDismissed(false)
     toast.success('已清除本书 OCR 缓存')
-  }, [fileFingerprint, outlineSource, isScannedPdf])
-
-  const runPageOcr = useCallback(
-    async (page: number): Promise<string> => {
-      if (!fileFingerprint) {
-        throw new Error(`第 ${page} 页 OCR 失败：文档指纹未就绪`)
-      }
-
-      const pending = ocrPagePendingRef.current.get(page)
-      if (pending) return pending
-
-      const task = (async () => {
-        setOcrPagesInFlight((prev) => new Set(prev).add(page))
-        try {
-          const result = await recognizePdfOcrPage({
-            filePath,
-            fileFingerprint,
-            page,
-            scale: pdfOcrScale,
-          })
-          if (result.ok) {
-            if (result.value.page !== page) {
-              throw new Error(`OCR 结果页码不一致：请求第 ${page} 页，返回第 ${result.value.page} 页`)
-            }
-            setOcrPageCaches((prev) => ({ ...prev, [page]: result.value }))
-            return textFromOcrPageCache(result.value)
-          }
-          throw new Error(`第 ${page} 页 OCR 失败：${result.error.message}`)
-        } finally {
-          setOcrPagesInFlight((prev) => {
-            const next = new Set(prev)
-            next.delete(page)
-            return next
-          })
-        }
-      })().finally(() => {
-        ocrPagePendingRef.current.delete(page)
-      })
-
-      ocrPagePendingRef.current.set(page, task)
-      return task
-    },
-    [fileFingerprint, filePath, pdfOcrScale],
-  )
-
-  const handleRecognizePage = useCallback(async () => {
-    if (!fileFingerprint || ocrPageRecognizing !== null) return
-    setOcrPageRecognizing(pageNum)
-    try {
-      await runPageOcr(pageNum)
-      toast.success(`第 ${pageNum} 页已识别，可划词划重点`)
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : '本页识别失败或无文字'
-      toast.error(message)
-    } finally {
-      setOcrPageRecognizing(null)
-    }
-  }, [fileFingerprint, ocrPageRecognizing, pageNum, runPageOcr])
+  }, [fileFingerprint, outlineSource, isScannedPdf, resetPageOcr])
 
   useEffect(() => {
     pageNumRef.current = pageNum
   }, [pageNum])
-
-  /**
-   * 统一正文读取：嵌入文字层 → OCR 缓存 → 扫描版按需 OCR。
-   * Agent（inkdown_read 等）与 UI 共用此路径，MCP 工具接口不变。
-   */
-  const readPageText = useCallback(
-    async (page: number, options?: { allowAutoOcr?: boolean }): Promise<string> => {
-      const allowAutoOcr = options?.allowAutoOcr ?? true
-      const cached = ocrPageCaches[page]
-      if (cached?.words.length) {
-        assertOcrCachePage(cached, page)
-        return textFromOcrPageCache(cached)
-      }
-
-      const pdf = pdfDocRef.current
-      if (!pdf) {
-        throw new Error(`第 ${page} 页无法读取：PDF 尚未加载完成`)
-      }
-
-      const native = await readPdfPageNativeText(pdf, page)
-      if (!pdfPageNeedsOcr(native)) return native
-
-      if ((!isScannedPdf && !isMixedPdf) || !fileFingerprint) return native
-
-      if (!allowAutoOcr) {
-        throw new Error(
-          `第 ${page} 页尚未识别，且已关闭 Agent 自动 OCR。请手动点击工具栏「识别本页」。`,
-        )
-      }
-
-      return runPageOcr(page)
-    },
-    [fileFingerprint, isMixedPdf, isScannedPdf, ocrPageCaches, runPageOcr],
-  )
 
   const readAgentPageTextWithSource = useCallback(
     async (page: number): Promise<{ text: string; source: 'structured' | 'legacy' }> => {
@@ -628,7 +534,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       for (const page of pages) {
         if (cancelled) return
         if (ocrPageCachesRef.current[page]?.words.length) continue
-        if (ocrPagePendingRef.current.has(page)) continue
+        if (hasPendingPageOcr(page)) continue
         if (ocrPageRecognizing === page) continue
         try {
           await runPageOcr(page)
