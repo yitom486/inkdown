@@ -13,7 +13,7 @@
 - **同步与供应链更稳**：WebDAV 单次 15s 超时 + 指数退避重试；OCR 运行时下载验 SHA256（缺 manifest 的老 Release 放行告警）；划线墓碑 90 天 TTL 自动回收
 - **安全收口**：在线文档抓取拦截内网 / 保留地址（含各类 IP 变体）与重定向跳板；`inkdown://` 深度链接仅接受 `/open`；渲染器内非应用 origin 跳转一律转系统浏览器；新增 CSP 强制策略（脚本同源 + Tab 运行时 hash 放行，hash 有单测锁定）
 - **工程门禁**：新增 `bun run lint:docs`（子目录 README 与文件清单一致性）与 `bun run check:bundle`（体积预算 + 主进程打包白名单），均接入 CI；图标生成改纯 Bun/Node 跨平台实现；postinstall 兼容无 Node 纯 Bun 环境
-- **测试**：单测 719 通过；e2e 新增 QuickOpen、WebDAV 本地同步、XSS 真浏览器回归、阅读器冒烟（自研最小 PDF / EPUB / Mermaid / 公式 fixture），12 条全绿
+- **测试**：单测 676 通过（144 文件）；e2e 新增 QuickOpen、WebDAV 本地同步、XSS 真浏览器回归、阅读器冒烟（自研最小 PDF / EPUB / Mermaid / 公式 fixture），12 条全绿
 - **纵深安全**：渲染进程开启沙盒（`sandbox: true`，preload 改 CJS 打包并显式 external），全量 e2e 验证通过
 - **Agent 读 PDF 更准**：新增 pdf-inspector WASM 结构化解析（专用 Worker，阅读顺序 + 紧凑 Markdown），Agent 当前页/整书正文优先使用，任何失败静默回退 pdf.js；渲染/选区/批注/OCR 链路不动；CSP 增 `wasm-unsafe-eval`（仅自带 WASM）；`out/` 总量门禁同步放宽至 30MB
 - **混合 PDF 识别**：扫描判断抽样由前 3 页扩展为前 3 + 中间 + 末尾，混合文档自动放行单页 OCR（扫描横幅与后台预识别仍只跟纯扫描）

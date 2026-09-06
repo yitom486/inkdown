@@ -10,7 +10,7 @@
 [![Release](https://img.shields.io/github/v/release/yitom486/inkdown?color=3b82f6&label=Release)](https://github.com/yitom486/inkdown/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/yitom486/inkdown/releases)
 [![Package Manager](https://img.shields.io/badge/Bun-1.x-black?logo=bun)](https://bun.sh)
-[![Tests](https://img.shields.io/badge/Tests-608%20passed-success)](./vitest.config.ts)
+[![Tests](https://img.shields.io/badge/Tests-676%20passed-success)](./vitest.config.ts)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?logo=typescript)](./tsconfig.json)
 
 [下载安装](#-下载与安装) • [核心特性](#-核心特性) • [基本使用](#-基本使用) • [Agent 伴读](#-agent-伴读可选) • [快捷键](#️-常用快捷键) • [更新日志](./CHANGELOG.md)
@@ -128,7 +128,7 @@ Inkdown 为不同格式的文献与书籍提供了针对性的深度渲染与排
 - **Agent 数据流向**：仅在主动使用 Agent 对话时，读者发送的问题、当前视口文本及必要上下文才会发送给用户自主配置的 Agent 运行时处理。
 - **格式说明**：
   - 不支持附带商业 DRM 加密的各类电子书格式；
-  - 无文本层的扫描版 PDF 仅支持纯页面图像查看与缩放，暂无法进行文字层选区和基于文本坐标的高亮划线；
+  - 无文本层的扫描版 PDF 支持单页 OCR 识别与缓存（含目录 OCR、划词划重点、Agent 读页），首次使用需从 GitHub Release 下载 OCR 运行时与语言包；
   - 部分排版非常规或未声明目录结构的极早期 MOBI 电子书，应用将尽可能依据正文层级构建基础导航。
 
 ---
