@@ -22,11 +22,16 @@ interface PendingRequest {
   timer: ReturnType<typeof setTimeout>
 }
 
+/** 最多驻留文档数：PdfViewer 切文档即 dispose（一主一备足矣），3 为防 Agent 批量预读无界增长 */
+const MAX_CACHED_DOCS = 3
+
 class PdfStructureClient {
   private worker: Worker | null = null
   private nextId = 1
   private pending = new Map<number, PendingRequest>()
   private markdownByDoc = new Map<string, string>()
+  /** 按文档缓存的分页面正文：避免每次读页全量正则切分（全书遍历时 O(N²)） */
+  private pagesByDoc = new Map<string, Map<number, string>>()
   private status: PdfStructureStatus = 'idle'
   private reason = ''
 
@@ -44,9 +49,14 @@ class PdfStructureClient {
 
   /** 已缓存文档的单页正文；未缓存返回 null（不触发解析，调用方决定是否 parse） */
   getCachedPageText(docKey: string, page: number): string | null {
+    const cached = this.pagesByDoc.get(docKey)
+    if (cached) return cached.get(page) ?? null
+    // 兼容：仅 markdown 命中而分页面缺失时懒构建一次（正常路径 parseDocument 已预建）
     const markdown = this.markdownByDoc.get(docKey)
     if (markdown === undefined) return null
-    return splitMarkdownByPageMarkers(markdown, page).get(page) ?? null
+    const pages = splitMarkdownByPageMarkers(markdown, 1)
+    this.pagesByDoc.set(docKey, pages)
+    return pages.get(page) ?? null
   }
 
   /**
@@ -69,6 +79,16 @@ class PdfStructureClient {
         return false
       }
       this.markdownByDoc.set(docKey, response.markdown)
+      this.pagesByDoc.set(docKey, splitMarkdownByPageMarkers(response.markdown, 1))
+      // 有界驱逐：Map 按插入序淘汰最旧文档（markdown 与分页面同删）
+      while (this.markdownByDoc.size > MAX_CACHED_DOCS) {
+        const oldest = this.markdownByDoc.keys().next().value
+        if (oldest === undefined) break
+        // 刚写入的 docKey 永远保留：只淘汰更早的键
+        if (oldest === docKey) break
+        this.markdownByDoc.delete(oldest)
+        this.pagesByDoc.delete(oldest)
+      }
       this.status = 'ready'
       this.reason = ''
       return true
@@ -84,6 +104,7 @@ class PdfStructureClient {
     }
     this.pending.clear()
     this.markdownByDoc.clear()
+    this.pagesByDoc.clear()
     if (this.worker) {
       this.worker.terminate()
       this.worker = null
