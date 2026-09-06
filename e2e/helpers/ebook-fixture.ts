@@ -133,7 +133,59 @@ export async function writeMinimalEpub(filePath: string): Promise<void> {
   await writeFile(filePath, zip)
 }
 
-/** 最小 MOBI6（PalmDOC compression=1 无压缩，单文本记录，双 pagebreak 章节） */
+/** 多章节 EPUB：2 个 spine，每部下挂分片目录（复刻 z-library 大部头结构） */
+export async function writeFoliateSectionsWorkspace(dir: string): Promise<{ epubName: string }> {
+  await mkdir(dir, { recursive: true })
+  const epubName = 'sections-book.epub'
+  const filler = (text: string): string =>
+    Array.from({ length: 30 }, (_, i) => `<p>${text} - filler paragraph ${i + 1}.</p>`).join('\n')
+  const opf = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Sections Book</dc:title><dc:identifier id="bookid">sections</dc:identifier><dc:language>en</dc:language></metadata>
+<manifest>
+<item id="part1" href="part1.xhtml" media-type="application/xhtml+xml"/>
+<item id="part2" href="part2.xhtml" media-type="application/xhtml+xml"/>
+<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+</manifest>
+<spine toc="ncx"><itemref idref="part1"/><itemref idref="part2"/></spine>
+</package>`
+  const ncx = `<?xml version="1.0" encoding="utf-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+<head><meta name="dtb:uid" content="sections"/></head>
+<docTitle><text>Sections Book</text></docTitle>
+<navMap>
+<navPoint id="p1" playOrder="1"><navLabel><text>Part One</text></navLabel><content src="part1.xhtml"/>
+<navPoint id="c1" playOrder="2"><navLabel><text>Chapter 1</text></navLabel><content src="part1.xhtml#chap1"/></navPoint>
+<navPoint id="c2" playOrder="3"><navLabel><text>Chapter 2</text></navLabel><content src="part1.xhtml#chap2"/></navPoint>
+</navPoint>
+<navPoint id="p2" playOrder="4"><navLabel><text>Part Two</text></navLabel><content src="part2.xhtml"/>
+<navPoint id="c3" playOrder="5"><navLabel><text>Chapter 3</text></navLabel><content src="part2.xhtml#chap3"/></navPoint>
+</navPoint>
+</navMap></ncx>`
+  const part1 = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Part One</title></head><body>
+<h1 id="top1">Part One</h1>${filler('Part one intro')}
+<h2 id="chap1">Chapter 1</h2>${filler('Chapter one body')}
+<h2 id="chap2">Chapter 2</h2>${filler('Chapter two body')}
+</body></html>`
+  const part2 = `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Part Two</title></head><body>
+<h1 id="top2">Part Two</h1>${filler('Part two intro')}
+<h2 id="chap3">Chapter 3</h2>${filler('Chapter three body')}
+</body></html>`
+  const container =
+    '<?xml version="1.0" encoding="utf-8"?>\n<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>\n</container>'
+  const zip = buildStoredZip([
+    { name: 'mimetype', data: encodeUtf8('application/epub+zip') },
+    { name: 'META-INF/container.xml', data: encodeUtf8(container) },
+    { name: 'OEBPS/content.opf', data: encodeUtf8(opf) },
+    { name: 'OEBPS/toc.ncx', data: encodeUtf8(ncx) },
+    { name: 'OEBPS/part1.xhtml', data: encodeUtf8(part1) },
+    { name: 'OEBPS/part2.xhtml', data: encodeUtf8(part2) },
+  ])
+  await writeFile(join(dir, epubName), zip)
+  return { epubName }
+}
 export async function writeMinimalMobi(filePath: string): Promise<void> {
   const enc = new TextEncoder()
   const be16 = (value: number): Uint8Array => {

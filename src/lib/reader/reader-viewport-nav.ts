@@ -19,7 +19,7 @@ export function normalizeLoadKey(key: string | null | undefined): string {
 }
 
 /** iframe 中的 HTMLElement 属于 iframe 自己的 Window，不能用父窗口构造器判断。 */
-function isDocumentHtmlElement(node: Element | null): node is HTMLElement {
+export function isDocumentHtmlElement(node: Element | null): node is HTMLElement {
   if (!node) return false
   const HTMLElementConstructor = node.ownerDocument.defaultView?.HTMLElement
   if (HTMLElementConstructor) return node instanceof HTMLElementConstructor

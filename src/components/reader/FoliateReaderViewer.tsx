@@ -40,6 +40,11 @@ import {
   type EpubChapter,
 } from '@/lib/reader/epub-navigation'
 import { normalizeLoadKey } from '@/lib/reader/reader-viewport-nav'
+import {
+  isSameSpineBase,
+  scrollFoliateSectionToFragment,
+  splitChapterFragment,
+} from '@/lib/reader/foliate-section-nav'
 import { getEpubThemeRules, applyEpubReadingLayout } from '@/lib/reader/epub-themes'
 import {
   buildEpubSnapshotFromRange,
@@ -244,17 +249,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   const syncChapterNav = useCallback((sectionIndex: number, cfi?: string) => {
     const units = chaptersRef.current
     if (units.length === 0) return
+    // 用户显式导航（点目录/底栏）后短暂锁内不降级为章节首条目，
+    // 否则分片跳转会被随后到达的 section 级 relocate 覆盖回“第一部”
     if (isNavIntentLocked(useReaderNavigationStore.getState().navIntent)) return
     const href = adapterRef.current?.sections[sectionIndex]?.id
-    const flatIndex = units.findIndex((unit) =>
-      href ? normalizeLoadKey(unit.href) === normalizeLoadKey(href) : false,
-    )
-    if (flatIndex >= 0) {
-      useReaderNavigationStore.getState().syncFlatIndex(flatIndex)
-    } else {
-      useReaderNavigationStore.getState().syncEpub(units, { href, cfi })
-    }
-    // E2E 可观测性：门控开启时把当前节纯文本挂到容器，供真机断言穿透 closed shadow DOM
+    // E2E 可观测性先行：门控开启时把当前节纯文本挂到容器（独立于下方同步决策）
     if (
       typeof window !== 'undefined' &&
       window.electronAPI?.e2eFoliateReader === true &&
@@ -267,6 +266,22 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           host.dataset.e2eSectionText = text.slice(0, 500)
         })
         .catch(() => undefined)
+    }
+    const flatIndex = units.findIndex((unit) =>
+      href ? isSameSpineBase(unit.href, href, normalizeLoadKey) : false,
+    )
+    if (flatIndex >= 0) {
+      // 该 spine 挂了多个带分片目录项时不做章节级同步（无法判定小节），
+      // 交给滚动驱动的节内细化；单一条目、或尚未选中任何章节时才同步
+      const ambiguous =
+        units.filter((unit) => href && isSameSpineBase(unit.href, href, normalizeLoadKey)).length >
+        1
+      if (!ambiguous || useReaderNavigationStore.getState().nav.flatIndex < 0) {
+        useReaderNavigationStore.getState().syncFlatIndex(flatIndex)
+        return
+      }
+    } else {
+      useReaderNavigationStore.getState().syncEpub(units, { href, cfi })
     }
   }, [])
 
@@ -281,12 +296,43 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       sectionIndex = adapterRef.current?.resolveHref(chapter.href) ?? null
     }
     if (sectionIndex === null || sectionIndex < 0) return
-    useReaderNavigationStore.getState().syncFlatIndex(
+    const targetSection = sectionIndex
+    const resolvedFlat =
       typeof flatIndex === 'number' && flatIndex >= 0
         ? flatIndex
-        : chaptersRef.current.findIndex((item) => item.href === chapter.href),
-    )
-    void view.goTo(sectionIndex).catch(() => undefined)
+        : chaptersRef.current.findIndex((item) => item.href === chapter.href)
+    useReaderNavigationStore.getState().syncFlatIndex(resolvedFlat)
+    // 分片优先：完整 href（含 #分片 / filepos:）让 foliate 内部定位锚点；
+    // 纯数字 MOBI spine id 直接按序号跳，避免 resolveHref 抛错刷屏。
+    const { fragment } = splitChapterFragment(chapter.href)
+    const needsFullHref =
+      fragment !== null ||
+      chapter.href.includes('filepos:') ||
+      kindRef.current === 'epub'
+    void (async () => {
+      if (needsFullHref) {
+        try {
+          await view.goTo(chapter.href)
+        } catch {
+          // 继续走下面的单次兜底
+        }
+      } else {
+        try {
+          await view.goTo(targetSection)
+        } catch {
+          return
+        }
+      }
+      if (!fragment) return
+      // 单次兜底：只滚动一次（轮询反复滚会与内部滚动打架导致永不定居）。
+      // 等一帧让 foliate 先落位，仍偏离才手动纠正一次。
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+      const target = viewRef.current?.renderer
+        ?.getContents()
+        .find((item) => item.index === targetSection)
+      if (!target) return
+      scrollFoliateSectionToFragment(target.doc, fragment)
+    })().catch(() => undefined)
   }, [])
 
   const applyDocTheme = useCallback((doc: Document) => {
@@ -741,6 +787,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         section?: { current?: number }
         fraction?: number
         cfi?: string
+        tocItem?: { label?: string; href?: string } | null
       }
       if (cancelled) return
       const sectionIndex = detail.section?.current ?? 0
@@ -753,6 +800,23 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       setGlobalProgress(resolveGlobalProgress(fraction))
       syncChapterNav(sectionIndex, detail.cfi)
       schedulePersistReadingProgress(sectionIndex, fraction, detail.cfi)
+      // 节内分片细化：用 foliate 自带的可见 TOC 项（与其渲染一致），而非自测矩形
+      const tocHref = detail.tocItem?.href
+      if (tocHref) {
+        const flat = chaptersRef.current.findIndex(
+          (unit) => unit.href.toLowerCase() === tocHref.toLowerCase(),
+        )
+        if (
+          typeof window !== 'undefined' &&
+          window.electronAPI?.e2eFoliateReader === true &&
+          containerRef.current
+        ) {
+          containerRef.current.dataset.e2eFlatIndex = String(flat)
+        }
+        if (flat >= 0 && !isNavIntentLocked(useReaderNavigationStore.getState().navIntent)) {
+          useReaderNavigationStore.getState().syncFlatIndex(flat)
+        }
+      }
     }
 
     const onLoad = (event: CustomEvent) => {

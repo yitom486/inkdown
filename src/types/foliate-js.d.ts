@@ -46,7 +46,7 @@ declare module '@foliate/view.js' {
     /** 全书进度 0–1（已按节大小加权） */
     fraction: number
     section?: { current?: number; total?: number }
-    tocItem?: { label?: string } | null
+    tocItem?: { label?: string; href?: string } | null
     pageItem?: { label?: string } | null
     cfi?: string
     range?: Range | null
