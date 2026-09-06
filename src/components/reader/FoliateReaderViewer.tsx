@@ -72,7 +72,7 @@ declare global {
     __inkdownE2eReader?: {
       selectText: (excerpt: string) => Promise<boolean>
       clickMark: (markId: string) => Promise<boolean>
-      listMarks: () => Array<{ id: string; excerpt?: string }>
+      listMarks: () => Array<{ id: string; kind: string; excerpt?: string }>
     }
   }
 }
@@ -135,6 +135,8 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   const [hoveredMark, setHoveredMark] = useState<ReadingMark | null>(null)
   const [markTooltipPos, setMarkTooltipPos] = useState<{ x: number; y: number } | null>(null)
   const hoveredMarkIdRef = useRef<string | null>(null)
+  /** 写批注时的临时高亮键（即选区 CFI），对话框关闭即撤 */
+  const pendingAnnotateKeyRef = useRef<string | null>(null)
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   const selectionSnapshotRef = useRef<typeof selectionSnapshot>(null)
   selectionSnapshotRef.current = selectionSnapshot
@@ -313,6 +315,29 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     }
   }, [])
 
+  const removePendingAnnotateHighlight = useCallback(() => {
+    const key = pendingAnnotateKeyRef.current
+    pendingAnnotateKeyRef.current = null
+    if (!key) return
+    void viewRef.current?.deleteAnnotation({ value: key }).catch(() => undefined)
+  }, [])
+
+  /** 写批注时把选区按高亮色重绘（旧链路 showPendingSelectionHighlight 对等行为） */
+  const showPendingAnnotateHighlight = useCallback(() => {
+    const snapshot = selectionSnapshotRef.current
+    const view = viewRef.current
+    if (!snapshot?.cfiRange || !view || editingNoteMark) return
+    const existing = findMarkForSelection(marksRef.current, {
+      format: kindRef.current,
+      text: snapshot.text,
+      cfiRange: snapshot.cfiRange,
+    })
+    // 已有标记：真身绘制已存在，不加临时层，避免取消时误删
+    if (existing) return
+    pendingAnnotateKeyRef.current = snapshot.cfiRange
+    void view.addAnnotation({ value: snapshot.cfiRange }).catch(() => undefined)
+  }, [editingNoteMark])
+
   const handleSelectMark = useCallback((mark: ReadingMark) => {
     const view = viewRef.current
     if (!view) return
@@ -419,6 +444,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
         }
+        removePendingAnnotateHighlight()
         syncVisualMarks()
         toast.success(trimmed ? '已保存批注' : '已更新高亮')
         clearTextSelection()
@@ -437,12 +463,22 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       if (!isOk(result)) {
         throw new Error(result.error.message || '创建批注失败')
       }
+      removePendingAnnotateHighlight()
       syncVisualMarks()
       toast.success(note ? '已保存批注' : '已添加高亮')
       clearTextSelection()
       return result.value
     },
-    [clearTextSelection, createMark, fileFingerprint, filePath, marks, syncVisualMarks, updateMark],
+    [
+      clearTextSelection,
+      createMark,
+      fileFingerprint,
+      filePath,
+      marks,
+      removePendingAnnotateHighlight,
+      syncVisualMarks,
+      updateMark,
+    ],
   )
 
   const getRenderedDocs = useCallback((): Array<{ doc: Document; index: number }> => {
@@ -1016,7 +1052,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     if (typeof window === 'undefined' || window.electronAPI?.e2eFoliateReader !== true) return
     window.__inkdownE2eReader = {
       listMarks: () =>
-        marksRef.current.map((mark) => ({ id: mark.id, excerpt: mark.excerpt })),
+        marksRef.current.map((mark) => ({ id: mark.id, kind: mark.kind, excerpt: mark.excerpt })),
       selectText: async (excerpt: string) => {
         const view = viewRef.current
         if (!view) return false
@@ -1257,6 +1293,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
             setEditingNoteMark(null)
             setNoteDialogOpen(true)
             setSelectionToolbarPos(null)
+            showPendingAnnotateHighlight()
           }}
           onHighlight={(color) => {
             void handleSaveAnnotation('', color)
@@ -1286,6 +1323,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           if (!open) {
             const wasEditing = Boolean(editingNoteMark)
             setEditingNoteMark(null)
+            removePendingAnnotateHighlight()
             if (!wasEditing) clearTextSelection()
           }
         }}

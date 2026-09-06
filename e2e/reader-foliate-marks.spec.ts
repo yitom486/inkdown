@@ -33,7 +33,9 @@ async function e2eSelectText(window: Page, excerpt: string): Promise<void> {
   expect(ok).toBe(true)
 }
 
-async function e2eListMarks(window: Page): Promise<Array<{ id: string; excerpt?: string }>> {
+async function e2eListMarks(
+  window: Page,
+): Promise<Array<{ id: string; kind: string; excerpt?: string }>> {
   return window.evaluate(() => window.__inkdownE2eReader?.listMarks() ?? [])
 }
 
@@ -121,6 +123,39 @@ test.describe('foliate 标注链路', () => {
 
       const marks = await e2eListMarks(window)
       expect(marks).toHaveLength(1)
+    } finally {
+      await app.close()
+    }
+  })
+
+  test('EPUB 添加书签落盘', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'inkdown-e2e-foliate-marks-'))
+    const { epubName } = await writeReaderSmokeWorkspace(workspace)
+    const app = await launchBuiltApp({
+      E2E_AUTO_OPEN_PATH: workspace,
+      E2E_FOLIATE_READER: '1',
+    })
+
+    try {
+      const window = await app.firstWindow()
+      await window.waitForLoadState('domcontentloaded')
+      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+        timeout: 15_000,
+      })
+      await openWorkspaceFile(window, epubName, 'smoke-sample.epub')
+      await expect(window.locator('#main').locator('foliate-view').first()).toBeAttached({
+        timeout: 20_000,
+      })
+
+      await window.getByRole('button', { name: '添加书签' }).click()
+      await expect(window.getByText('已添加书签')).toBeVisible({ timeout: 10_000 })
+
+      const marks = await e2eListMarks(window)
+      expect(marks).toHaveLength(1)
+      expect(marks[0]?.kind).toBe('bookmark')
+
+      await window.getByRole('button', { name: '书签与批注' }).click()
+      await expect(window.getByText('第 1 节').first()).toBeVisible({ timeout: 10_000 })
     } finally {
       await app.close()
     }
