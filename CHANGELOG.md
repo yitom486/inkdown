@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.3.1] - 2026-09-06
+
 ### 阅读器拆分（无行为变化）
 
 - **划选工具条共享**：三阅读器复制 / 批注 / 高亮 / 加入对话 / 问 Agent 收敛为 `useReaderSelectionActions`
@@ -223,7 +227,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.0...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/yitom486/inkdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yitom486/inkdown/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/yitom486/inkdown/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/yitom486/inkdown/compare/v0.2.6...v0.2.7
