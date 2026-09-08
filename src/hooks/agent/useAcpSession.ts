@@ -18,6 +18,7 @@ import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useAnnotationAgentStore, annotationOwnsSessionId } from '@/stores/annotation-agent-store'
 import { quizOwnsSessionId, accumulateQuizSessionUpdate, isQuizPrompting } from '@/lib/quiz/quiz-acp-session'
+import { tocOwnsSessionId, accumulateTocSessionUpdate, isTocPrompting } from '@/lib/agent/toc-ai-session'
 
 function activeThreadAgentSessionId(): string | undefined {
   const s = useAcpUiStore.getState()
@@ -132,6 +133,11 @@ export function useAcpSession(workspaceRoot?: string) {
       // 按 sessionId 分流：考官副会话或出题判卷期间绝不进右侧时间线
       if (quizOwnsSessionId(event.sessionId) || isQuizPrompting()) {
         accumulateQuizSessionUpdate(event.sessionId, event.update)
+        return
+      }
+      // 按 sessionId 分流：目录 AI 整理副会话绝不进右侧时间线
+      if (tocOwnsSessionId(event.sessionId) || isTocPrompting()) {
+        accumulateTocSessionUpdate(event.sessionId, event.update)
         return
       }
       const chunkText = isCoalescableAgentChunk(event.update)

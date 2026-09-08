@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown, ListTree, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { OcrTocEntry } from '@shared/types/ocr'
@@ -10,6 +10,8 @@ interface PdfOcrTocEditorProps {
   onToggle: () => void
   onSave: (entries: OcrTocEntry[]) => void
   onCancel: () => void
+  /** AI 整理控件（调用方传入，已含会话与模型选择逻辑） */
+  aiControl?: ReactNode
 }
 
 function cloneEntries(entries: OcrTocEntry[]): OcrTocEntry[] {
@@ -23,6 +25,7 @@ export function PdfOcrTocEditor({
   onToggle,
   onSave,
   onCancel,
+  aiControl,
 }: PdfOcrTocEditorProps) {
   const [draft, setDraft] = useState(() => cloneEntries(entries))
 
@@ -67,6 +70,7 @@ export function PdfOcrTocEditor({
         <p className="mb-2 px-1 text-[11px] leading-relaxed text-muted-foreground">
           修改标题或印刷页码；PDF 页 = 印刷页 + {pageOffset}。
         </p>
+        {aiControl ? <div className="mb-2 px-1">{aiControl}</div> : null}
         <ul className="space-y-2">
           {draft.map((entry, index) => (
             <li

@@ -49,6 +49,7 @@ declare global {
 }
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import { PdfOcrTocEditor } from '@/components/reader/PdfOcrTocEditor'
+import { TocAiPolishControl } from '@/components/reader/TocAiPolishControl'
 import type { OcrTocEntry } from '@shared/types/ocr'
 import {
   PDF_JUMP_SYNC_HOLD_MS,
@@ -84,6 +85,7 @@ import {
   tocFromPdfUnits,
 } from '@/lib/reader/export-reading-notes'
 import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr-prefetch'
+import { suggestTocPageOffset } from '@/lib/reader/toc-offset'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
@@ -421,6 +423,70 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     },
     [fileFingerprint, tocPageFrom, tocPageTo, tocPageOffset],
   )
+
+  const [suggestingOffset, setSuggestingOffset] = useState(false)
+
+  /** AI 整理用：目录范围页正文（允许按需 OCR，顺带预热页缓存） */
+  const getTocOcrText = useCallback(async (): Promise<string | null> => {
+    const from = Math.min(tocPageFrom, tocPageTo)
+    const to = Math.max(tocPageFrom, tocPageTo)
+    const parts: string[] = []
+    for (let page = from; page <= to; page += 1) {
+      try {
+        const text = await readPageText(page)
+        if (text.trim()) parts.push(`--- PDF 第 ${page} 页 ---\n${text}`)
+      } catch {
+        // 单页失败跳过，不阻断整理
+      }
+    }
+    const joined = parts.join('\n').trim()
+    return joined || null
+  }, [tocPageFrom, tocPageTo, readPageText])
+
+  /**
+   * 自动推算偏移：目录前若干标题去正文页原生文字层找锚点，多标题共识。
+   * 只读原生层（allowAutoOcr: false）：扫描正文页无文字层时匹配不上，
+   * 此时提示手填——预期行为。
+   */
+  const handleSuggestOffset = useCallback(async () => {
+    if (suggestingOffset) return
+    if (ocrTocEntries.length === 0) {
+      toast.error('请先识别目录')
+      return
+    }
+    setSuggestingOffset(true)
+    try {
+      const from = Math.min(tocPageFrom, tocPageTo)
+      const to = Math.max(tocPageFrom, tocPageTo)
+      const skip: number[] = []
+      for (let page = from; page <= to; page += 1) skip.push(page)
+      const result = await suggestTocPageOffset(
+        ocrTocEntries,
+        async (pdfPage) => {
+          try {
+            return await readPageText(pdfPage, { allowAutoOcr: false })
+          } catch {
+            return null
+          }
+        },
+        { pageCount: numPages, skipPdfPages: skip },
+      )
+      if (!result) {
+        toast.error('正文页无文字层，无法自动推算，请手填偏移')
+        return
+      }
+      setTocPageOffset(result.offset)
+      if (result.agree < result.total) {
+        toast.message(
+          `已按 ${result.agree}/${result.total} 个标题对齐：偏移=${result.offset}，其余未对齐，请核对`,
+        )
+      } else {
+        toast.success(`已按 ${result.total} 个标题对齐：偏移=${result.offset}`)
+      }
+    } finally {
+      setSuggestingOffset(false)
+    }
+  }, [suggestingOffset, ocrTocEntries, tocPageFrom, tocPageTo, numPages, readPageText])
 
   const handleOpenOcrTocEditor = useCallback(() => {
     setOcrTocEntries((prev) => {
@@ -1184,6 +1250,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           onTocPageFromChange={setTocPageFrom}
           onTocPageToChange={setTocPageTo}
           onTocPageOffsetChange={setTocPageOffset}
+          onSuggestOffset={() => void handleSuggestOffset()}
+          suggestingOffset={suggestingOffset}
           onRecognize={() => void handleRecognizeToc()}
           onDismiss={() => {
             setOcrTocEditorOpen(false)
@@ -1325,6 +1393,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               onToggle={() => setTocOpen(false)}
               onSave={(entries) => void handleSaveOcrToc(entries)}
               onCancel={() => setOcrTocEditMode(false)}
+              aiControl={
+                <TocAiPolishControl
+                  getOcrText={getTocOcrText}
+                  onApply={(entries) => setOcrTocEntries(entries)}
+                />
+              }
             />
           ) : undefined
         }

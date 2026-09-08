@@ -1,5 +1,6 @@
 import { Loader2, ScanText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import type { ReactNode } from 'react'
 
 export type PdfOcrBannerMode =
   | 'scanned-no-outline'
@@ -17,6 +18,10 @@ interface PdfOcrBannerProps {
   onRecognize: () => void
   onDismiss: () => void
   entryCount?: number
+  /** 自动推算偏移（调用方做标题锚定共识）；不传则不显示按钮 */
+  onSuggestOffset?: () => void
+  suggestingOffset?: boolean
+  extraActions?: ReactNode
 }
 
 export function PdfOcrBanner({
@@ -30,6 +35,9 @@ export function PdfOcrBanner({
   onRecognize,
   onDismiss,
   entryCount,
+  onSuggestOffset,
+  suggestingOffset = false,
+  extraActions,
 }: PdfOcrBannerProps) {
   const recognizeLabel = mode === 're-recognize-toc' ? '重新识别' : '识别目录'
 
@@ -94,6 +102,20 @@ export function PdfOcrBanner({
               title="印刷页码 + 偏移 = PDF 页码"
             />
           </label>
+          {onSuggestOffset ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+              disabled={suggestingOffset}
+              title="用目录标题去正文页找锚点，自动推算偏移"
+              onClick={onSuggestOffset}
+            >
+              {suggestingOffset ? '推算中…' : '自动推算'}
+            </Button>
+          ) : null}
+          {extraActions}
           <Button type="button" size="sm" variant="secondary" onClick={onRecognize}>
             {recognizeLabel}
           </Button>

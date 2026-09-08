@@ -61,6 +61,7 @@
 | `epub-*` | EPUB 目录导航、主题样式、选区快照（渲染内核已迁 foliate 统一后端） |
 | `reader-adapter` / `foliate-*` | 统一阅读后端契约与 foliate 实现（EPUB+MOBI/KF8，MOBI 旧链已删） |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js） |
+| `toc-ai` / `toc-offset` | 目录 AI 整理 Prompt 构造与 JSON 校验；目录偏移多标题锚定共识 |
 | `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | 在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe（如 Python Tutor） |
 
 ## workspace/
@@ -99,6 +100,7 @@
 | `streaming-split` | 流式稳定区/尾部分割（围栏外最后段落边界冻结复用） |
 | `throttled-storage` | persist 节流写入（1.5s 合并落盘） |
 | `annotation-note-prompts` | 批注 AI 意图/改写 chip 与草稿抽取 |
+| `toc-ai-session` | 目录 AI 整理专用副会话（每次新建防跨书串扰、无头累积、不进时间线） |
 | `enrich-tool-message` | tool 消息 enrich（提议卡 + 章级建议） |
 | `tool-failure-message` | 工具失败 → 聊天气泡内业务说明（折叠标题 + 展开正文） |
 | `parse-chapter-mark-plan` / `promote-chapter-mark-plans` | 章级划重点 tool 解析与 promote |
