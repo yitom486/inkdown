@@ -1,0 +1,40 @@
+# 一次性：macOS arm64 OCR 冒烟（验证 pdf-inspector OCR 链在非 Linux 平台可用）。
+# 手动触发，变绿后删除本文件（常驻 mac runner 太贵；回归时再临时加回）。
+# fixture：e2e/fixtures/ocr/scanned-hello.pdf（无文字层单页，中英文本均可，只验链路不验精度）。
+
+name: OCR macOS smoke (one-shot)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ocr-smoke-mac:
+    name: OCR 冒烟 (macOS arm64)
+    runs-on: macos-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 下载 OCR 外部运行时
+        run: |
+          mkdir -p ocr-rt && cd ocr-rt
+          curl -fsSL -o pdfium.tgz https://github.com/firecrawl/pdfium-rs/releases/download/native-v7988/firecrawl-pdfium-mac-arm64.tgz
+          curl -fsSL -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.27.0/onnxruntime-osx-arm64-1.27.0.tgz
+          tar -xzf pdfium.tgz
+          tar -xzf ort.tgz
+          echo "PDFIUM_LIB_PATH=$(find $PWD -name 'libpdfium.dylib' | head -n 1)" >> $GITHUB_ENV
+          echo "ORT_DYLIB_PATH=$(find $PWD -name 'libonnxruntime.dylib' | head -n 1)" >> $GITHUB_ENV
+          echo "PDF_INSPECTOR_MODEL_CACHE=$PWD/models" >> $GITHUB_ENV
+
+      - name: OCR 冒烟
+        run: bun scripts/ocr-macos-smoke.tmp.ts

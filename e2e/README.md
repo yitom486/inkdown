@@ -38,6 +38,13 @@ e2e/fixtures/web-doc/
 
 实现：`electron/services/web-doc/e2e-fixture.ts`（由 `fetchWebDocPage` 优先读取）。
 
+## OCR Fixture
+
+```
+e2e/fixtures/ocr/
+  scanned-hello.pdf  # 无文字层单页（Hello Inkdown OCR），供 OCR 链冒烟只验链路不验精度
+```
+
 ## 辅助
 
 | 文件 | 说明 |
