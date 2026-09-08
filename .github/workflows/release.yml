@@ -127,6 +127,13 @@ jobs:
       - name: 从 CHANGELOG.md 生成 Release Notes
         run: bun run scripts/release-notes.ts "$RELEASE_TAG" release-notes.md
 
+      - name: 构建 OCR 运行时并随包发布
+        run: |
+          bun install --frozen-lockfile
+          bun run build:ocr-runtime
+          mkdir -p artifacts
+          cp release/ocr-runtime-*.tar.gz release/ocr-runtime-*.manifest.json artifacts/
+
       - name: 下载全部安装包
         uses: actions/download-artifact@v4
         with:
