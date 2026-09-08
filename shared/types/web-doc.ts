@@ -1,10 +1,10 @@
 /**
  * 在线文档阅读 IPC DTO。
- * 站点特化尽量少：generic-ssr 走通用抽取，people-daily-paper 才版面特化。
+ * 站点特化尽量少：generic-ssr 走通用抽取，people-daily-paper / hrtt-news 才版面特化。
  */
 
 /** 在线文档站点适配器 id（仅保留确需版面特化的站点） */
-export type WebDocSiteId = 'generic-ssr' | 'people-daily-paper'
+export type WebDocSiteId = 'generic-ssr' | 'people-daily-paper' | 'hrtt-news'
 
 export interface WebDocFetchPayload {
   url: string

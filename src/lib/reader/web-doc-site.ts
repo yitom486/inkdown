@@ -1,8 +1,9 @@
 import type { WebDocSiteId } from '@shared/types/web-doc'
+import { isHrttNewsHost } from '@shared/web-doc/hrtt'
 import { isPeopleDailyPaperHost, resolvePeopleDailyEditionUrl } from '@shared/web-doc/people-daily'
 
 /**
- * 仅人民日报纸媒保留站点 id（版面 DOM 特殊）。
+ * 仅人民日报纸媒与华人头条保留站点 id（版面 DOM 特殊）。
  * react.dev 等文档站走 generic-ssr。
  */
 export function resolveWebDocSiteId(pageUrl: string): WebDocSiteId {
@@ -10,6 +11,9 @@ export function resolveWebDocSiteId(pageUrl: string): WebDocSiteId {
     const host = new URL(pageUrl).hostname.toLowerCase()
     if (isPeopleDailyPaperHost(host)) {
       return 'people-daily-paper'
+    }
+    if (isHrttNewsHost(host)) {
+      return 'hrtt-news'
     }
   } catch {
     // ignore

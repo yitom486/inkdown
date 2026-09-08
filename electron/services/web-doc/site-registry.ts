@@ -1,4 +1,5 @@
 import type { WebDocSiteId } from '@shared/types/web-doc'
+import { isHrttNewsHost } from '@shared/web-doc/hrtt'
 import { isPeopleDailyPaperHost } from '@shared/web-doc/people-daily'
 
 /**
@@ -9,6 +10,9 @@ export function resolveWebDocSiteId(url: URL): WebDocSiteId {
   const host = url.hostname.toLowerCase()
   if (isPeopleDailyPaperHost(host)) {
     return 'people-daily-paper'
+  }
+  if (isHrttNewsHost(host)) {
+    return 'hrtt-news'
   }
   return 'generic-ssr'
 }

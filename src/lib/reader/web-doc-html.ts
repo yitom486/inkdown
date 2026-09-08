@@ -20,6 +20,7 @@ import {
   extractPeopleDailyTitle,
   pickPeopleDailyArticleRoot,
 } from '@/lib/reader/web-doc/people-daily-extract'
+import { pickHrttArticleRoot } from '@/lib/reader/web-doc/hrtt-extract'
 
 const GENERIC_ARTICLE_SELECTORS = [
   'article.md-content__inner',
@@ -46,6 +47,9 @@ export function pickArticleRoot(
 ): HTMLElement {
   if (siteId === 'people-daily-paper' && pageUrl) {
     return pickPeopleDailyArticleRoot(doc, pageUrl)
+  }
+  if (siteId === 'hrtt-news') {
+    return pickHrttArticleRoot(doc)
   }
 
   const selectors = SITE_ARTICLE_SELECTORS[siteId] ?? GENERIC_ARTICLE_SELECTORS

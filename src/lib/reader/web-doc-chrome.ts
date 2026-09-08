@@ -1,5 +1,6 @@
 import type { WebDocSiteId } from '@shared/types/web-doc'
 import { stripDisallowedWebDocEmbeds } from '@/lib/reader/web-doc-embeds'
+import { stripHrttChrome } from '@/lib/reader/web-doc/hrtt-extract'
 
 const EDIT_PAGE_LABEL =
   /编辑此页|编辑本页|在\s*github\s*上编辑|edit this page|edit this file|edit on github|improve this page/i
@@ -60,5 +61,8 @@ export function stripWebDocChrome(root: HTMLElement, siteId: WebDocSiteId): void
 
   if (siteId === 'people-daily-paper') {
     stripPeopleDailyChrome(root)
+  }
+  if (siteId === 'hrtt-news') {
+    stripHrttChrome(root)
   }
 }
