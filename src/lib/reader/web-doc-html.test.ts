@@ -103,8 +103,7 @@ describe('web-doc-html', () => {
     expect(result.bodyHtml).not.toContain('aria-label="Link for this heading"')
   })
 
-  it('人民日报电子版仅提取 .article 正文', () => {
-    const html = `<!DOCTYPE html><html><head><title> 测试标题 </title></head><body>
+  it('人民日报电子版仅提取 .article 正文', () => {    const html = `<!DOCTYPE html><html><head><title> 测试标题 </title></head><body>
       <div class="main w1000">
         <div class="paper-box">
           <img usemap="#PagePicMap" src="paper.jpg" />
@@ -125,5 +124,49 @@ describe('web-doc-html', () => {
     expect(result.bodyHtml).not.toContain('paper-box')
     expect(result.bodyHtml).not.toContain('news-list')
     expect(result.bodyHtml).not.toContain('<area')
+  })
+
+  it('导航碎片截胡时密度兜底选中正文块', () => {
+    const longParagraph = '正文段落内容。'.repeat(400)
+    const html = `<!DOCTYPE html><html><head><title>News</title></head><body>
+      <div class="content">登录更多 关于我们联系方式下载App</div>
+      <header>站点头部导航链接</header>
+      <div class="news_section">
+        <h1>文章标题</h1>
+        <div class="news-content"><section><p>${longParagraph}</p></section></div>
+      </div>
+      <div class="comment">请登录后评论</div>
+    </body></html>`
+
+    const result = extractWebDocArticle(html, 'https://example.com/news/1', 'generic-ssr')
+    expect(result.title).toBe('文章标题')
+    expect(result.bodyHtml).toContain('正文段落内容')
+    expect(result.bodyHtml).not.toContain('关于我们联系方式')
+    expect(result.bodyHtml).not.toContain('请登录后评论')
+  })
+
+  it('短页面不受密度兜底影响（保持原赢家）', () => {
+    const html = `<!DOCTYPE html><html><head><title>Short</title></head><body>
+      <article><h1>短文</h1><p>只有一百来字的内容。</p></article>
+    </body></html>`
+
+    const result = extractWebDocArticle(html, 'https://example.com/s', 'generic-ssr')
+    expect(result.bodyHtml).toContain('只有一百来字的内容')
+  })
+
+  it('无选择器命中时链接农场不敌正文块', () => {
+    const farmLinks = Array.from(
+      { length: 80 },
+      (_, i) => `<a href="/n${i}">推荐阅读标题条目${i}</a>`,
+    ).join('')
+    const prose = '正经文章段落。'.repeat(200)
+    const html = `<!DOCTYPE html><html><head><title>Mix</title></head><body>
+      <div class="sidebar">${farmLinks}</div>
+      <div class="story"><p>${prose}</p></div>
+    </body></html>`
+
+    const result = extractWebDocArticle(html, 'https://example.com/mix', 'generic-ssr')
+    expect(result.bodyHtml).toContain('正经文章段落')
+    expect(result.bodyHtml).not.toContain('推荐阅读标题条目')
   })
 })

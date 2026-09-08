@@ -40,6 +40,100 @@ const GENERIC_ARTICLE_SELECTORS = [
 
 const SITE_ARTICLE_SELECTORS: Partial<Record<WebDocSiteId, string[]>> = {}
 
+/** 选择器赢家小于此字符数、且 body 远大于此 → 视为被导航碎片截胡，进密度兜底 */
+const TINY_WINNER_TEXT = 500
+const DENSE_BODY_TEXT = 2000
+
+/** 计分时直接丢弃的子树：脚本样式与站点头尾导航（正文不可能住里面） */
+const NON_CONTENT_TAGS = new Set([
+  'SCRIPT',
+  'STYLE',
+  'NOSCRIPT',
+  'TEMPLATE',
+  'HEADER',
+  'FOOTER',
+  'NAV',
+  'ASIDE',
+  'FORM',
+])
+const NON_CONTENT_ROLES = new Set([
+  'navigation',
+  'banner',
+  'contentinfo',
+  'complementary',
+  'search',
+])
+
+function isNonContentElement(el: Element): boolean {
+  if (NON_CONTENT_TAGS.has(el.tagName)) return true
+  const role = el.getAttribute('role')?.toLowerCase()
+  return role ? NON_CONTENT_ROLES.has(role) : false
+}
+
+/**
+ * 密度兜底：在 body 内单遍统计每块的可见文本量与其中链接文本量，
+ * 取"非链接文本最多"的 div/section/article/main。
+ * body 本人不参选（它是"放弃治疗"选项，由调用方在无块可选时再退）；
+ * 调用方可把原选择器赢家也送进来（不过滤长度下限，避免短正文被链接农场反超）。
+ * 只解决"赢家是导航碎片"类问题；短页面不进此路径（见 pickArticleRoot）。
+ */
+function pickDensestContentRoot(
+  body: HTMLElement,
+  keepWinner?: HTMLElement | null,
+): HTMLElement | null {
+  const totals = new Map<Element, number>()
+  const linkText = new Map<Element, number>()
+  const bump = (map: Map<Element, number>, el: Element, n: number): void => {
+    map.set(el, (map.get(el) ?? 0) + n)
+  }
+
+  const walker = body.ownerDocument.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+  let node: Node | null
+  while ((node = walker.nextNode())) {
+    const text = node.textContent ?? ''
+    if (!text.trim()) continue
+    const chain: Element[] = []
+    let el: Element | null = node.parentElement
+    let blocked = false
+    let inLink = false
+    while (el) {
+      if (isNonContentElement(el)) {
+        blocked = true
+        break
+      }
+      chain.push(el)
+      if (el.tagName === 'A') inLink = true
+      if (el === body) break
+      el = el.parentElement
+    }
+    if (blocked) continue
+    for (const ancestor of chain) {
+      bump(totals, ancestor, text.length)
+      if (inLink) bump(linkText, ancestor, text.length)
+    }
+  }
+
+  let best: HTMLElement | null = null
+  let bestScore = 0
+  let bestText = 0
+  const consider = (el: HTMLElement, ignoreFloor = false): void => {
+    if (isNonContentElement(el)) return
+    const text = totals.get(el) ?? 0
+    if (!ignoreFloor && text < TINY_WINNER_TEXT) return
+    const score = text - (linkText.get(el) ?? 0)
+    if (score > bestScore || (score === bestScore && text > bestText)) {
+      best = el
+      bestScore = score
+      bestText = text
+    }
+  }
+  body.querySelectorAll('div, section, article, main').forEach((el) => {
+    if (el instanceof HTMLElement) consider(el)
+  })
+  if (keepWinner) consider(keepWinner, true)
+  return best
+}
+
 export function pickArticleRoot(
   doc: Document,
   siteId: WebDocSiteId = 'generic-ssr',
@@ -53,15 +147,29 @@ export function pickArticleRoot(
   }
 
   const selectors = SITE_ARTICLE_SELECTORS[siteId] ?? GENERIC_ARTICLE_SELECTORS
+  let winner: HTMLElement | null = null
   for (const selector of selectors) {
     const node = doc.querySelector(selector)
     if (node instanceof HTMLElement && node.textContent?.trim()) {
-      return node
+      winner = node
+      break
     }
   }
 
   const body = doc.body
-  if (body instanceof HTMLElement && body.textContent?.trim()) {
+  const bodyText = body?.textContent?.trim() ?? ''
+  // 仅当赢家缺失或过小（如 37 字导航碎片）且页面文本很长时进密度兜底；
+  // 正常命中的大正文块原样返回，零回归面。短页面保持原行为。
+  if (bodyText.length >= DENSE_BODY_TEXT && body instanceof HTMLElement) {
+    const winnerTiny = !winner || (winner.textContent?.trim().length ?? 0) < TINY_WINNER_TEXT
+    if (winnerTiny) {
+      // 无块可选再退整 body（下游 chrome 清洗），也好过碎片
+      return pickDensestContentRoot(body, winner) ?? body
+    }
+  }
+  if (winner) return winner
+
+  if (body instanceof HTMLElement && bodyText) {
     return body
   }
 
