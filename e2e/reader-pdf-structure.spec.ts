@@ -6,10 +6,10 @@ import { launchBuiltApp } from './helpers/launch-app'
 import { writeReaderSmokeWorkspace } from './helpers/ebook-fixture'
 
 /**
- * PDF 结构化解析（pdf-inspector WASM）回归（E2E_PDF_STRUCTURE 门控）：
- * 1. 生产包 file:// 下 WASM 真实加载（status ready，而非静默回退）；
- * 2. Agent 当前页正文走结构化路径且内容正确（页码头 + fixture 正文）。
- * 失败自动回退 pdf.js 的逻辑由 Vitest 覆盖，此处只验真实链路。
+ * PDF Agent 正文回归（E2E_PDF_STRUCTURE 门控）：
+ * 1. 主进程 inspector 整档解析真实链路（status ready，source inspector）；
+ * 2. Agent 当前页正文内容正确（页码头 + fixture 正文）。
+ * WASM 静默回退逻辑由单测与代码审查覆盖，此处锁定主链路。
  */
 
 async function openViaQuickOpen(window: Page, fileName: string, query: string): Promise<void> {
@@ -22,8 +22,8 @@ async function openViaQuickOpen(window: Page, fileName: string, query: string): 
   await expect(dialog).toBeHidden({ timeout: 10_000 })
 }
 
-test.describe('PDF 结构化解析 WASM', () => {
-  test('生产包加载 WASM 且 Agent 正文走结构化路径', async () => {
+test.describe('PDF Agent 正文（主进程 inspector）', () => {
+  test('生产包解析整档且 Agent 正文走 inspector 路径', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'inkdown-e2e-pdf-structure-'))
     const { pdfName } = await writeReaderSmokeWorkspace(workspace)
     const app = await launchBuiltApp({
@@ -52,13 +52,13 @@ test.describe('PDF 结构化解析 WASM', () => {
         if (!hook) return null
         return {
           read: await hook.readCurrentPage(),
-          status: hook.status(),
+          status: hook.inspectorStatus(),
         }
       })
 
       expect(result, 'E2E 钩子未挂载（门控未生效？）').not.toBeNull()
       expect(result!.status.status).toBe('ready')
-      expect(result!.read.source).toBe('structured')
+      expect(result!.read.source).toBe('inspector')
       expect(result!.read.prefix).toContain('【PDF 第 1/1 页】')
       expect(result!.read.prefix).toContain('Inkdown E2E minimal PDF paragraph.')
     } finally {

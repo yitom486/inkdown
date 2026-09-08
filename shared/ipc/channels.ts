@@ -155,6 +155,10 @@ export const IPC = {
   OCR_ENSURE_COMPONENT: 'ocr:ensure-component',
   /** invoke：取消 OCR 组件下载 */
   OCR_CANCEL_COMPONENT_DOWNLOAD: 'ocr:cancel-component-download',
+  /** invoke：pdf-inspector 分类（类型/页数/待 OCR 页） */
+  PDF_INSPECT_CLASSIFY: 'pdf-inspect:classify',
+  /** invoke：pdf-inspector 整档 Markdown（原生文字层） */
+  PDF_INSPECT_BOOK_MARKDOWN: 'pdf-inspect:book-markdown',
   /** main→renderer：OCR 组件下载/就绪状态推送 */
   OCR_COMPONENT_STATUS: 'ocr:component-status',
   /** invoke：追加保存测验记录到 JSONL */

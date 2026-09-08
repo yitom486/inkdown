@@ -6,6 +6,7 @@ import type { WindowInit } from '@shared/types/window'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import type { GetPdfOcrTocPayload, GetPdfOcrPagePayload, ListPdfOcrPagesPayload, RecognizePdfPagePayload, RecognizePdfTocPayload, SavePdfOcrTocPayload } from '@shared/types/ocr'
+import type { ClassifyPdfDocumentPayload, ExtractPdfBookMarkdownPayload } from '@shared/types/pdf-inspect'
 import type { QuizSessionRecord } from '@shared/types/quiz'
 
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
@@ -176,6 +177,10 @@ const electronAPI: ElectronAPI = {
   getOcrComponentStatus: () => ipcRenderer.invoke(IPC.OCR_GET_COMPONENT_STATUS),
   ensureOcrComponent: () => ipcRenderer.invoke(IPC.OCR_ENSURE_COMPONENT),
   cancelOcrComponentDownload: () => ipcRenderer.invoke(IPC.OCR_CANCEL_COMPONENT_DOWNLOAD),
+  classifyPdfDocument: (payload: ClassifyPdfDocumentPayload) =>
+    ipcRenderer.invoke(IPC.PDF_INSPECT_CLASSIFY, payload),
+  extractPdfBookMarkdown: (payload: ExtractPdfBookMarkdownPayload) =>
+    ipcRenderer.invoke(IPC.PDF_INSPECT_BOOK_MARKDOWN, payload),
   onOcrComponentStatus: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) => {
       callback(payload)

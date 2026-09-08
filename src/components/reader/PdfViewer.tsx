@@ -37,6 +37,7 @@ import {
 } from '@/lib/reader/pdf-page-text'
 import { isStructuredPageTextUsable } from '@/lib/reader/pdf-structure'
 import { pdfStructureClient } from '@/lib/reader/pdf-structure-client'
+import { pdfInspectorClient } from '@/lib/reader/pdf-inspector-client'
 
 declare global {
   interface Window {
@@ -44,6 +45,7 @@ declare global {
     __inkdownE2ePdfStructure?: {
       readCurrentPage: () => Promise<{ source: string; prefix: string }>
       status: () => { status: string; reason: string }
+      inspectorStatus: () => { status: string; reason: string }
     }
   }
 }
@@ -237,6 +239,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   useEffect(() => {
     // 文档切换即释放结构化 Worker 与整档缓存（大文档内存不跨文档驻留）
     pdfStructureClient.dispose()
+    pdfInspectorClient.dispose()
     if (!data) return
 
     let cancelled = false
@@ -548,13 +551,22 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [pageNum])
 
   const readAgentPageTextWithSource = useCallback(
-    async (page: number): Promise<{ text: string; source: 'structured' | 'legacy' }> => {
+    async (page: number): Promise<{ text: string; source: 'inspector' | 'structured' | 'legacy' }> => {
       if (!Number.isFinite(page) || page < 1) {
         throw new Error(`无效的 PDF 页码：${page}`)
       }
-      // Agent 正文：WASM 阅读顺序版优先；任何失败静默回退，UI/搜索/选区仍走 pdf.js
+      // Agent 正文：主进程 inspector（表格/标题更优）→ WASM 阅读顺序版；
+      // 任何失败静默回退，UI/搜索/选区仍走 pdf.js
       const total = numPages || pdfDocRef.current?.numPages || 0
       const docKey = fileFingerprint || filePath
+      let inspected: string | null = pdfInspectorClient.getCachedPageText(docKey, page)
+      if (inspected === null && !pdfInspectorClient.isUnavailable()) {
+        const parsed = await pdfInspectorClient.parseDocument(docKey, filePath)
+        if (parsed) inspected = pdfInspectorClient.getCachedPageText(docKey, page)
+      }
+      if (inspected !== null && isStructuredPageTextUsable(inspected)) {
+        return { text: formatPdfPageTextForAgent(page, total, inspected), source: 'inspector' }
+      }
       let structured: string | null = pdfStructureClient.getCachedPageText(docKey, page)
       if (structured === null && data && !pdfStructureClient.isUnavailable()) {
         const parsed = await pdfStructureClient.parseDocument(docKey, data.data.slice(0))
@@ -678,6 +690,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         return { source: result.source, prefix: result.text.slice(0, 200) }
       },
       status: () => pdfStructureClient.getState(),
+      inspectorStatus: () => pdfInspectorClient.getState(),
     }
     return () => {
       delete window.__inkdownE2ePdfStructure

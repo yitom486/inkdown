@@ -15,6 +15,8 @@
 | `web-doc-api.ts` | 在线文档：抓取页面、发现目录 |
 | `bun-api.ts` | Bun 运行时状态查询与一键安装 |
 | `ocr-api.ts` | OCR 组件状态、单页识别与目录识别 |
+| `pdf-inspect-api.ts` | pdf-inspector 主进程分类与整档 Markdown |
+| `query-keys.ts` | TanStack Query key 工厂 |
 | `query-keys.ts` | TanStack Query key 工厂 |
 
 新增能力顺序（见 AGENTS.md）：`shared` → `electron/services` → IPC 注册 → preload → **本目录** → hooks。

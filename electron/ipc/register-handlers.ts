@@ -39,6 +39,14 @@ import type {
   RecognizePdfTocPayload,
   SavePdfOcrTocPayload,
 } from '@shared/types/ocr'
+import type {
+  ClassifyPdfDocumentPayload,
+  ExtractPdfBookMarkdownPayload,
+} from '@shared/types/pdf-inspect'
+import {
+  classifyPdfDocument,
+  extractPdfBookMarkdown,
+} from '../services/pdf-inspector-service'
 import { ok, err } from '@shared/core/result'
 import type { SyncConfig } from '@shared/types/sync'
 import { syncManager } from '../services/sync/sync-manager'
@@ -544,6 +552,19 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.OCR_CANCEL_COMPONENT_DOWNLOAD, async () =>
     ok(await cancelOcrComponentDownload()),
+  )
+
+  // --- PDF 解析（pdf-inspector 主进程分类/抽取）---
+  ipcMain.handle(
+    IPC.PDF_INSPECT_CLASSIFY,
+    async (_event, payload: ClassifyPdfDocumentPayload) =>
+      classifyPdfDocument(payload.filePath),
+  )
+
+  ipcMain.handle(
+    IPC.PDF_INSPECT_BOOK_MARKDOWN,
+    async (_event, payload: ExtractPdfBookMarkdownPayload) =>
+      extractPdfBookMarkdown(payload.filePath),
   )
 
   // --- 云端同步 (WebDAV) ---

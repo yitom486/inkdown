@@ -67,6 +67,12 @@ import type {
   RecognizePdfTocPayload,
   SavePdfOcrTocPayload,
 } from '@shared/types/ocr'
+import type {
+  ClassifyPdfDocumentPayload,
+  ExtractPdfBookMarkdownPayload,
+  InspectorBookMarkdown,
+  InspectorPdfClassification,
+} from '@shared/types/pdf-inspect'
 import type { AppUpdateStatus } from '@shared/types/app-update'
 import type { BunRuntimeStatus } from '@shared/types/bun'
 import type {
@@ -259,6 +265,14 @@ export interface ElectronAPI {
   ensureOcrComponent: () => Promise<Result<void, AppError>>
   /** 取消 OCR 组件下载 */
   cancelOcrComponentDownload: () => Promise<Result<OcrComponentStatus, AppError>>
+  /** pdf-inspector 分类（类型/页数/待 OCR 页） */
+  classifyPdfDocument: (
+    payload: ClassifyPdfDocumentPayload,
+  ) => Promise<Result<InspectorPdfClassification, AppError>>
+  /** pdf-inspector 整档 Markdown（原生文字层） */
+  extractPdfBookMarkdown: (
+    payload: ExtractPdfBookMarkdownPayload,
+  ) => Promise<Result<InspectorBookMarkdown, AppError>>
   /** OCR 组件下载/就绪状态；返回取消订阅 */
   onOcrComponentStatus: (callback: (status: OcrComponentStatus) => void) => () => void
   /** 检查应用更新 */

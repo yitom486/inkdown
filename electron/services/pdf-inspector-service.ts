@@ -1,6 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { err, ok, type Result } from '@shared/core/result'
 import { toAppError, type AppError } from '@shared/core/errors'
+import type {
+  InspectorBookMarkdown,
+  InspectorPdfClassification,
+} from '@shared/types/pdf-inspect'
 
 /**
  * pdf-inspector 主进程封装（分类 + 原生抽取；_loading 纯抽取，不碰 OCR 运行时）。
@@ -13,14 +17,6 @@ async function loadPdfInspector() {
 }
 
 export type InspectorPdfType = 'TextBased' | 'Scanned' | 'ImageBased' | 'Mixed'
-
-export interface InspectorPdfClassification {
-  pdfType: InspectorPdfType
-  pageCount: number
-  /** 1-indexed（上游 0-indexed，此处已归一） */
-  pagesNeedingOcr: number[]
-  confidence: number
-}
 
 export interface InspectorPageMarkdown {
   /** 1-indexed */
@@ -102,5 +98,37 @@ export async function extractPdfPagesMarkdown(
     })
   } catch (cause) {
     return toServiceError(cause, 'PDF 正文抽取失败')
+  }
+}
+
+/**
+ * 整档 Markdown（原生文字层；扫描页为空，由调用方决定是否走 OCR）。
+ * 按 `<!-- Page N -->` 标记拼接，与 WASM 输出同格式，渲染端复用切分。
+ */
+export async function extractPdfBookMarkdown(
+  filePath: string,
+): Promise<Result<InspectorBookMarkdown, AppError>> {
+  try {
+    const data = await readFile(filePath)
+    const mod = await loadPdfInspector()
+    const result = await mod.extractPagesMarkdownAsync(data)
+    const ordered = [...result.pages].sort((a, b) => a.page - b.page)
+    const parts: string[] = []
+    for (const page of ordered) {
+      const pageNum = Math.floor(page.page) + 1
+      const body = page.markdown ?? ''
+      if (parts.length === 0) {
+        parts.push(body)
+      } else {
+        parts.push(`<!-- Page ${pageNum} -->\n${body}`)
+      }
+    }
+    return ok({
+      markdown: parts.join('\n'),
+      pageCount: ordered.length,
+      pagesWithTables: result.pagesWithTables,
+    })
+  } catch (cause) {
+    return toServiceError(cause, 'PDF 整档解析失败')
   }
 }
