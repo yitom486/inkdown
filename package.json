@@ -5,6 +5,12 @@
   "main": "out/main/main.js",
   "type": "module",
   "private": true,
+  "overrides": {
+    "@firecrawl/pdf-inspector": "https://github.com/yitom486/pdf-inspector/releases/download/inkdown-napi-v1.18.0/firecrawl-pdf-inspector-1.18.0.tgz",
+    "@firecrawl/pdf-inspector-win32-x64-msvc": "https://github.com/yitom486/pdf-inspector/releases/download/inkdown-napi-v1.18.0/firecrawl-pdf-inspector-win32-x64-msvc-1.18.0.tgz",
+    "@firecrawl/pdf-inspector-darwin-arm64": "https://github.com/yitom486/pdf-inspector/releases/download/inkdown-napi-v1.18.0/firecrawl-pdf-inspector-darwin-arm64-1.18.0.tgz",
+    "@firecrawl/pdf-inspector-linux-x64-gnu": "https://github.com/yitom486/pdf-inspector/releases/download/inkdown-napi-v1.18.0/firecrawl-pdf-inspector-linux-x64-gnu-1.18.0.tgz"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
