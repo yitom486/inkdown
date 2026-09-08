@@ -13,6 +13,12 @@
 | `export-save-path.ts` | 导出 HTML/PDF/Markdown 的保存路径 |
 | `web-doc-service.ts` | 在线文档抓取与目录发现入口（含 SSRF 策略与重定向校验） |
 
+## PDF 解析（pdf-inspector）
+
+| 文件 | 功能 |
+|------|------|
+| `pdf-inspector-service.ts` | 主进程 PDF 分类与按页 Markdown 抽取（Node 绑定，页码对外 1-indexed；OCR 运行时另起任务） |
+
 ## 阅读标记与测验
 
 | 文件 | 功能 |
