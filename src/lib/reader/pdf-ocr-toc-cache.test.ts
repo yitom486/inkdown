@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPdfOcrTocCache } from './pdf-ocr-toc-cache'
+import { buildPdfOcrTocCache, resolveOcrTocEditorEntries } from './pdf-ocr-toc-cache'
 
 describe('buildPdfOcrTocCache', () => {
   it('用户保存标 reviewed 并保留条目 source（合并裁决用）', () => {
@@ -17,6 +17,30 @@ describe('buildPdfOcrTocCache', () => {
     expect(cache.entries.map((entry) => entry.source)).toEqual(['geo', 'manual', undefined])
     expect(cache.units).toHaveLength(3)
     expect(cache.units[0]).toEqual({ label: '3.5.4替换算法', href: '126', level: 2 })
+  })
+
+  it('打开校正目录：保留现有 entries（状态条按钮与铅笔入口同一转换）', () => {
+    const kept = [{ title: '3.5.4替换算法', printedPage: 114, level: 2, source: 'geo' as const }]
+    expect(
+      resolveOcrTocEditorEntries({
+        ocrTocEntries: kept,
+        outlineUnits: [{ label: '其它', href: '99', level: 1 }],
+        pageOffset: 12,
+      }),
+    ).toBe(kept)
+  })
+
+  it('打开校正目录：entries 为空才从侧栏 units 回填（可编辑/AI/保存立即可见）', () => {
+    expect(
+      resolveOcrTocEditorEntries({
+        ocrTocEntries: [],
+        outlineUnits: [{ label: '3.5.4替换算法', href: '126', level: 2 }],
+        pageOffset: 12,
+      }),
+    ).toEqual([{ title: '3.5.4替换算法', printedPage: 114, level: 2 }])
+    expect(
+      resolveOcrTocEditorEntries({ ocrTocEntries: [], outlineUnits: [], pageOffset: 12 }),
+    ).toEqual([])
   })
 
   it('空标题与非法页码照旧过滤', () => {

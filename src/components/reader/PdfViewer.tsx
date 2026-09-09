@@ -48,7 +48,7 @@ import {
   getPdfOcrToc,
   savePdfOcrToc,
 } from '@/api/ocr-api'
-import { buildPdfOcrTocCache, readerUnitsToOcrEntries } from '@/lib/reader/pdf-ocr-toc-cache'
+import { buildPdfOcrTocCache, resolveOcrTocEditorEntries } from '@/lib/reader/pdf-ocr-toc-cache'
 import {
   formatPdfPageTextForAgent,
 } from '@/lib/reader/pdf-page-text'
@@ -653,18 +653,20 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [suggestingOffset, ocrTocEntries, tocPageFrom, tocPageTo, numPages, readPageText])
 
   const handleOpenOcrTocEditor = useCallback(() => {
-    setOcrTocEntries((prev) => {
-      if (prev.length > 0) return prev
-      if (outlineUnits.length === 0) return prev
-      return readerUnitsToOcrEntries(
-        outlineUnits.map((unit) => ({
-          label: unit.label,
-          href: unit.href,
-          level: unit.level,
-        })),
-        tocPageOffset,
-      )
-    })
+    const fallbackUnits = outlineUnits.map((unit) => ({
+      label: unit.label,
+      href: unit.href,
+      level: unit.level,
+    }))
+    // 真正进入编辑模式（可编辑目录 + AI 核对入口 + 保存按钮），不发起 OCR；
+    // 条目决议走纯函数（状态条“校正目录”按钮复用同一转换，见 resolveOcrTocEditorEntries 单测）
+    setOcrTocEntries((prev) =>
+      resolveOcrTocEditorEntries({
+        ocrTocEntries: prev,
+        outlineUnits: fallbackUnits,
+        pageOffset: tocPageOffset,
+      }),
+    )
     setOcrTocEditMode(true)
     setTocOpen(true)
   }, [outlineUnits, tocPageOffset])
@@ -1576,7 +1578,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             size="sm"
             variant="ghost"
             className="h-6 text-xs"
-            onClick={() => setOcrTocEditorOpen(true)}
+            onClick={() => handleOpenOcrTocEditor()}
           >
             校正目录
           </Button>

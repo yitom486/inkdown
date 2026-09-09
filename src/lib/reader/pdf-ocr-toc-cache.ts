@@ -32,6 +32,21 @@ export function buildPdfOcrTocCache(params: {
   }
 }
 
+/**
+ * 打开校正目录时的条目决议（纯函数，被 PdfViewer 的 handleOpenOcrTocEditor
+ * 与状态条“校正目录”按钮实际调用）：保留现有 entries；为空才从侧栏 units
+ * 回填；两者皆空保持为空。不发起任何 OCR。
+ */
+export function resolveOcrTocEditorEntries(params: {
+  ocrTocEntries: OcrTocEntry[]
+  outlineUnits: ReaderTocUnit[]
+  pageOffset: number
+}): OcrTocEntry[] {
+  if (params.ocrTocEntries.length > 0) return params.ocrTocEntries
+  if (params.outlineUnits.length === 0) return params.ocrTocEntries
+  return readerUnitsToOcrEntries(params.outlineUnits, params.pageOffset)
+}
+
 export function readerUnitsToOcrEntries(
   units: ReaderTocUnit[],
   pageOffset: number,

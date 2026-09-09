@@ -160,9 +160,6 @@ describe('assessPdfOcrTocCache', () => {
     ['units 非数组', { units: 'x' }],
     ['units 含 null', { units: [null] }],
     ['unit 字段缺失', { units: [{ label: 'a' }] }],
-    ['origin 垃圾值', { origin: 42 }],
-    ['stats 垃圾值', { stats: 'x' }],
-    ['stats 数字垃圾', { stats: { acceptedEntries: '多' } }],
   ])('损坏数据不抛异常 → invalid 或安全修复：%s', (_name, overrides) => {
     const base = makeCache(overrides as Partial<PdfOcrTocCache>)
     let result: { status: string } | undefined
@@ -183,6 +180,54 @@ describe('assessPdfOcrTocCache', () => {
       expect(result.repairedUnits).toEqual([
         { label: '2.2运算方法和运算电路', href: '44', level: 1 },
       ])
+    }
+  })
+
+  it('origin 缺失或非法 → 精确 legacy（不看 stats 与版本）', () => {
+    for (const origin of [undefined, null, 42, 'x', {}, 'AUTO']) {
+      const result = assessPdfOcrTocCache(
+        makeCache({ origin: origin as never, stats: { requestedPages: 5, processedPages: 5, acceptedEntries: 2 } }),
+        { pageCount: PAGE_COUNT },
+      )
+      expect(result.status).toBe('legacy')
+      expect(result.reasons[0]).toBe('旧版缓存缺少来源记录，建议打开校正目录核对后保存确认')
+    }
+  })
+
+  it('origin=auto 且 stats 缺失/损坏 → 精确 suspect，不编造数字', () => {
+    const missing = assessPdfOcrTocCache(makeCache({ stats: undefined }), {
+      pageCount: PAGE_COUNT,
+    })
+    expect(missing.status).toBe('suspect')
+    expect(missing.reasons).toEqual(['自动识别结果未经人工确认（共 2 条）'])
+
+    for (const stats of ['x', 42, null, { acceptedEntries: '多', droppedPool: 'x' }, {}]) {
+      const result = assessPdfOcrTocCache(
+        makeCache({ stats: stats as never }),
+        { pageCount: PAGE_COUNT },
+      )
+      expect(result.status).toBe('suspect')
+      expect(result.reasons).toEqual(['自动识别结果未经人工确认（共 2 条）'])
+    }
+  })
+
+  it('origin=auto 且 stats 完好 → suspect 文案带过滤数', () => {
+    const result = assessPdfOcrTocCache(
+      makeCache({ stats: { requestedPages: 5, processedPages: 5, acceptedEntries: 2, droppedPool: 3, droppedLines: 4 } }),
+      { pageCount: PAGE_COUNT },
+    )
+    expect(result.status).toBe('suspect')
+    expect(result.reasons).toEqual(['自动识别结果未经人工确认（共 2 条，过滤 7 处）'])
+  })
+
+  it('origin=reviewed 且 stats 缺失/损坏 → 精确 usable', () => {
+    for (const stats of [undefined, 'x', null, { acceptedEntries: '多' }]) {
+      const result = assessPdfOcrTocCache(
+        makeCache({ origin: 'reviewed', stats: stats as never }),
+        { pageCount: PAGE_COUNT },
+      )
+      expect(result.status).toBe('usable')
+      expect(result.reasons).toEqual([])
     }
   })
 

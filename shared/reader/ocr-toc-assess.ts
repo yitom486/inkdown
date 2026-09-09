@@ -121,17 +121,27 @@ function assessInner(
     repairedUnits = expectedUnits
   }
 
-  // 来源判定：无来源记录（旧版）→ legacy；自动识别 → suspect；用户确认 → usable。
+  // 来源判定（精确三态）：
+  // - origin 缺失或不是 auto/reviewed → legacy（旧版，不自动删除）；
+  // - origin=reviewed → usable（即使用户短目录、stats 缺失/损坏）；
+  // - origin=auto → suspect。
   // 条数、缺章、编号跳跃永不参与判定（短目录/跳号/人工修订皆可合法）。
   const origin: unknown = cache.origin
   const stats: unknown = cache.stats
-  const hasProvenance = origin !== undefined || stats !== undefined
   const versionMismatch =
     cache.extractorVersion !== undefined && cache.extractorVersion !== PDF_OCR_TOC_CACHE_VERSION
-  if (!hasProvenance || versionMismatch) {
+  if (origin !== 'reviewed' && origin !== 'auto') {
     const assessment: OcrTocCacheAssessment = {
       status: 'legacy',
       reasons: ['旧版缓存缺少来源记录，建议打开校正目录核对后保存确认'],
+    }
+    if (repairedUnits) assessment.repairedUnits = repairedUnits
+    return assessment
+  }
+  if (versionMismatch) {
+    const assessment: OcrTocCacheAssessment = {
+      status: 'legacy',
+      reasons: ['旧版提取器缓存，建议打开校正目录核对后保存确认'],
     }
     if (repairedUnits) assessment.repairedUnits = repairedUnits
     return assessment
@@ -141,6 +151,8 @@ function assessInner(
     if (repairedUnits) assessment.repairedUnits = repairedUnits
     return assessment
   }
+  // stats 缺失/损坏不伪造数字：接受数回退为实际条目数（事实），
+  // 过滤数只采有效整数（否则按 0，不编造）
   const statsRecord = isRecord(stats) ? stats : null
   const accepted =
     statsRecord && Number.isInteger(statsRecord.acceptedEntries)
