@@ -1,3 +1,3 @@
 # ocr
 
-PDF OCR（按需）：`ocr-component-manager.ts` 管理运行时与语言包下载；`ocr-runtime.ts` 从 Release 安装 tesseract（打包版）；`inspector-ocr-runtime.ts` 分发 pdf-inspector OCR 外部运行时（PDFium/ORT/模型，按平台按需下载验签）；`pdf-ocr-toc-service.ts` / `pdf-page-ocr-service.ts` 识别（主路径 inspector，tesseract 回退）；缓存 `userData/ocr-cache/`；语言包 `userData/ocr-tessdata/`。页级缓存 `ocr-page-cache.ts`、目录缓存 `ocr-toc-cache.ts`、worker 生命周期 `ocr-worker.ts`、图片识别 `recognize-image.ts`、tesseract 配置 `tesseract-config.ts` 与词级结果归一 `tesseract-words.ts`。发版前执行 `bun run build:ocr-runtime` 并附带 `ocr-runtime-*.tar.gz`。
+PDF OCR（按需）：`inspector-ocr-runtime.ts` 分发识别引擎（PDFium + ONNX Runtime + PP-OCRv6 Small 模型，按平台按需下载验签，离线模式运行）；`ocr-component-manager.ts` 管理引擎状态（下载进度/取消，与设置页同构）；`pdf-ocr-toc-service.ts` / `pdf-page-ocr-service.ts` 识别（整范围/单页选择性 OCR，文本进启发式目录解析、几何进页缓存）；缓存 `userData/ocr-cache/`。页级缓存 `ocr-page-cache.ts`、目录缓存 `ocr-toc-cache.ts`。中英文字库内置于识别模型，无语言包。

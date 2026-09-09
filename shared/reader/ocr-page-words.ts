@@ -1,14 +1,6 @@
 import type { TextContent, TextItem } from 'pdfjs-dist/types/src/display/api'
 import type { OcrPageWord, PdfOcrPageCache } from '@shared/types/ocr'
 
-export interface TesseractWordLike {
-  text: string
-  confidence: number
-  bbox: { x0: number; y0: number; x1: number; y1: number }
-}
-
-const MIN_CONFIDENCE = 25
-
 /** inspector 行框置信度门限（0–1；与 napi minimum_confidence 对齐） */
 const INSPECTOR_MIN_CONFIDENCE = 0.3
 
@@ -100,32 +92,6 @@ export function normalizeInspectorSpans(
     })
   }
   return words
-}
-
-/** 将 tesseract 词块转为 0–1 归一化 bbox */
-export function normalizeOcrWords(
-  words: TesseractWordLike[],
-  imageWidth: number,
-  imageHeight: number,
-): OcrPageWord[] {
-  if (imageWidth <= 0 || imageHeight <= 0) return []
-
-  return words
-    .filter((word) => word.confidence >= MIN_CONFIDENCE)
-    .map((word) => ({
-      text: word.text.replace(/\s+/g, '').trim(),
-      bbox: word.bbox,
-    }))
-    .filter((item) => item.text.length > 0)
-    .map((item) => ({
-      text: item.text,
-      bbox: {
-        x0: item.bbox.x0 / imageWidth,
-        y0: item.bbox.y0 / imageHeight,
-        x1: item.bbox.x1 / imageWidth,
-        y1: item.bbox.y1 / imageHeight,
-      },
-    }))
 }
 
 export function ocrPageCacheToTextContent(cache: PdfOcrPageCache): TextContent {

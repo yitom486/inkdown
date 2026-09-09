@@ -7,7 +7,6 @@ import { registerIpcHandlers } from './ipc/register-handlers'
 import { initAppUpdater } from './services/app-updater'
 import { disposeAllAcp } from './services/acp/acp-client'
 import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
-import { shutdownOcrWorker } from './services/ocr/ocr-worker'
 import { syncManager } from './services/sync/sync-manager'
 
 // 注册应用自定义深度协议 inkdown://
@@ -73,7 +72,6 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   disposeAllAcp()
-  void shutdownOcrWorker()
 })
 
 app.on('window-all-closed', () => {

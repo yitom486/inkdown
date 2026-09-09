@@ -25,9 +25,8 @@ files:
   - node_modules/universalify/**/*
   - node_modules/argparse/**/*
   - node_modules/sax/**/*
-  - node_modules/pdf-to-img/**/*
   - node_modules/pdfjs-dist/**/*
-  # pdf-inspector Node 绑定（主进程分类/抽取）与其平台二进制包
+  # pdf-inspector Node 绑定（主进程分类/抽取/OCR）与其平台二进制包
   - node_modules/@firecrawl/pdf-inspector/**/*
   - node_modules/@firecrawl/pdf-inspector-*/**/*
   - '!node_modules/{@codemirror,codemirror,@tanstack,@vscode,dompurify,highlight.js,katex,markdown-it,markdown-it-task-lists,mermaid,next-themes,radix-ui,react,react-dom,react-resizable-panels,sonner,zustand,d3,d3-*,cytoscape*,dagre*,cose-base,layout-base,khroma,stylus,pug,coffeescript}/**'

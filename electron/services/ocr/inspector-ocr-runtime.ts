@@ -82,12 +82,18 @@ async function downloadToFile(
   expectedSha256: string,
   expectedSize?: number,
   timeoutMs = 180000,
+  signal?: AbortSignal,
 ): Promise<void> {
   const maxAttempts = 3
   let lastCause: unknown = null
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (signal?.aborted) {
+      throw new Error('已取消下载')
+    }
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+      const timeout = AbortSignal.timeout(timeoutMs)
+      const combined = signal ? AbortSignal.any([timeout, signal]) : timeout
+      const response = await fetch(url, { signal: combined })
       if (!response.ok) {
         if (response.status >= 400 && response.status < 500) {
           throw new Error(`资源不存在（HTTP ${response.status}）：${url}`)
@@ -106,6 +112,10 @@ async function downloadToFile(
       return
     } catch (cause) {
       lastCause = cause
+      // 用户取消不重试，直接失败
+      if (signal?.aborted) {
+        throw new Error('已取消下载')
+      }
       if (attempt < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)))
       }
@@ -120,13 +130,14 @@ async function installNativeLib(
   lib: InspectorNativeLib,
   destDir: string,
   onProgress?: (message: string, progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const tempDir = join(app.getPath('temp'), 'inkdown-inspector-ocr')
   await mkdir(tempDir, { recursive: true })
   const archiveExt = lib.url.endsWith('.zip') ? '.zip' : '.tgz'
   const archivePath = join(tempDir, `lib${archiveExt}`)
   onProgress?.(`正在下载识别引擎组件…`, 5)
-  await downloadToFile(lib.url, archivePath, lib.sha256)
+  await downloadToFile(lib.url, archivePath, lib.sha256, undefined, 180000, signal)
   const staging = join(tempDir, 'staging')
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
@@ -189,11 +200,21 @@ let ensurePromise: Promise<Result<InspectorOcrPaths, AppError>> | null = null
  */
 export async function ensureInspectorOcrRuntime(
   onProgress?: (message: string, progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<Result<InspectorOcrPaths, AppError>> {
   const overridePdfium = process.env.PDFIUM_LIB_PATH
   const overrideOrt = process.env.ORT_DYLIB_PATH
   const overrideModels = process.env.PDF_INSPECTOR_MODEL_CACHE
   if (overridePdfium && overrideOrt && overrideModels) {
+    // 开发/测试直连：校验模型目录形状（oar 要求三个文件平铺），配错直接报错不静默
+    for (const file of INSPECTOR_MODELS.map((model) => model.file)) {
+      if (!(await pathExists(join(overrideModels, file)))) {
+        return err({
+          code: 'INVALID_ARGUMENT',
+          message: `PDF_INSPECTOR_MODEL_CACHE 下缺少 ${file}（应为模型文件平铺目录）`,
+        })
+      }
+    }
     return ok({ pdfiumLib: overridePdfium, ortLib: overrideOrt, modelDir: overrideModels })
   }
 
@@ -223,6 +244,7 @@ export async function ensureInspectorOcrRuntime(
         INSPECTOR_PDFIUM[platform],
         join(root, 'pdfium'),
         onProgress,
+        signal,
       )
       // ORT 目录整体保留（同目录 providers*.dll 按需加载）
       const ortStaging = join(root, 'ort')
@@ -231,7 +253,7 @@ export async function ensureInspectorOcrRuntime(
       const ortEntry = INSPECTOR_ORT[platform]
       const ortArchive = join(tempDir, `ort${ortEntry.url.endsWith('.zip') ? '.zip' : '.tgz'}`)
       onProgress?.('正在下载推理库…', 30)
-      await downloadToFile(ortEntry.url, ortArchive, ortEntry.sha256)
+      await downloadToFile(ortEntry.url, ortArchive, ortEntry.sha256, undefined, 180000, signal)
       const ortExtract = join(tempDir, 'ort-staging')
       await rm(ortExtract, { recursive: true, force: true })
       await mkdir(ortExtract, { recursive: true })
@@ -261,6 +283,8 @@ export async function ensureInspectorOcrRuntime(
           join(modelDir, model.file),
           model.sha256,
           model.size,
+          180000,
+          signal,
         )
       }
 
@@ -283,6 +307,9 @@ export async function ensureInspectorOcrRuntime(
       onProgress?.('识别引擎已就绪', 100)
       return ok(paths)
     } catch (cause) {
+      if (signal?.aborted) {
+        return err({ code: 'CANCELLED', message: '已取消下载' })
+      }
       return err({
         code: 'OCR_FAILED',
         message: cause instanceof Error ? cause.message : '识别引擎安装失败',

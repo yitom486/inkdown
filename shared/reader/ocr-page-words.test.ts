@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   normalizeInspectorSpans,
-  normalizeOcrWords,
   ocrPageCacheToTextContent,
   pageHasNativeText,
   splitCjkUnits,
@@ -12,26 +11,6 @@ describe('ocr-page-words', () => {
   it('pageHasNativeText 阈值', () => {
     expect(pageHasNativeText(0)).toBe(false)
     expect(pageHasNativeText(20)).toBe(true)
-  })
-
-  it('normalizeOcrWords 归一化 bbox', () => {
-    const words = normalizeOcrWords(
-      [
-        {
-          text: '计 算 机',
-          confidence: 90,
-          bbox: { x0: 10, y0: 20, x1: 110, y1: 40 },
-        },
-      ],
-      200,
-      400,
-    )
-    expect(words).toEqual([
-      {
-        text: '计算机',
-        bbox: { x0: 0.05, y0: 0.05, x1: 0.55, y1: 0.1 },
-      },
-    ])
   })
 
   it('ocrPageCacheToTextContent 生成 TextItem', () => {    const cache: PdfOcrPageCache = {

@@ -177,7 +177,7 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
   const handleClearAllOcrCache = async () => {
     if (
       !window.confirm(
-        '将清除所有 PDF 的正文页与目录 OCR 缓存（不含语言包）。已打开的文件需重新识别，是否继续？',
+        '将清除所有 PDF 的正文页与目录 OCR 缓存。已打开的文件需重新识别，是否继续？',
       )
     ) {
       return
@@ -286,7 +286,7 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
               description={
                 ocrComponentStatus.message ??
                 (ocrComponentStatus.phase === 'ready'
-                  ? '运行时与语言包已就绪，可离线识别扫描版 PDF。'
+                  ? '识别引擎已就绪（PP-OCR 内置中英文字库，可离线识别）。'
                   : '首次识别前需下载（不会自动开始）。')
               }
             >
@@ -295,10 +295,7 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
                   {ocrComponentPhaseLabel}
                   {!ocrComponentStatus.runtimeReady && ocrComponentStatus.phase !== 'ready'
                     ? ' · 缺运行时'
-                    : ocrComponentStatus.missingLanguages.length > 0 &&
-                        ocrComponentStatus.phase !== 'ready'
-                      ? ' · 缺语言包'
-                      : ''}
+                    : ''}
                 </span>
                 {ocrComponentStatus.phase === 'downloading' ? (
                   <Button
@@ -362,7 +359,7 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
             </SettingRow>
             <SettingRow
               title="清除 OCR 缓存"
-              description="删除所有已保存的 PDF 正文页与目录识别结果；语言包仍保留在本地。"
+              description="删除所有已保存的 PDF 正文页与目录识别结果；识别引擎保留在本地。"
             >
               <Button
                 type="button"
