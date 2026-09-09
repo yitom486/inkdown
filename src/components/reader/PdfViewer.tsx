@@ -18,6 +18,7 @@ import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
 import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
+import { assessPdfOcrTocCache } from '@shared/reader/ocr-toc-assess'
 import { reassembleDirectoryText } from '@shared/reader/directory-reassemble'
 import { ACP_MAX_IMAGE_BYTES, blobToBase64 } from '@/lib/agent/acp-composer'
 import type { TocPromptImage } from '@/lib/agent/toc-ai-session'
@@ -397,14 +398,33 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           })
         ) {
           const cacheResult = await getPdfOcrToc({ fileFingerprint })
-          if (cacheResult.ok && cacheResult.value.units.length > 0) {
-            nextUnits = cacheResult.value.units
-            nextSource = 'ocr'
-            setTocPageFrom(cacheResult.value.tocPageRange[0])
-            setTocPageTo(cacheResult.value.tocPageRange[1])
-            setTocPageOffset(cacheResult.value.pageOffset)
-            setOcrTocEntries(cacheResult.value.entries)
-            nextNotice = undefined
+          if (cacheResult.ok) {
+            // 分级恢复：usable 照常；invalid 不进侧栏、留识别入口 + 短原因；
+            // suspect/legacy 照常供阅读，但必须给出可操作的核对提示。从不自动删除。
+            const assessment = assessPdfOcrTocCache(cacheResult.value, {
+              pageCount: pdf.numPages,
+            })
+            console.info(
+              `[ocr-toc] restore status=${assessment.status} reasons=${JSON.stringify(assessment.reasons)}`,
+            )
+            if (assessment.status === 'invalid') {
+              nextNotice = `已存目录缓存不可用（${assessment.reasons[0] ?? '结构错误'}），请重新识别`
+            } else {
+              const cache = cacheResult.value
+              nextUnits = assessment.repairedUnits ?? cache.units
+              nextSource = 'ocr'
+              setTocPageFrom(cache.tocPageRange[0])
+              setTocPageTo(cache.tocPageRange[1])
+              setTocPageOffset(cache.pageOffset)
+              setOcrTocEntries(cache.entries)
+              if (assessment.status === 'usable') {
+                nextNotice = undefined
+              } else if (assessment.status === 'legacy') {
+                nextNotice = `目录缓存为旧版（${assessment.reasons[0] ?? '缺少来源记录'}），可继续阅读，建议打开校正目录核对后保存确认`
+              } else {
+                nextNotice = `目录可能不完整（${assessment.reasons[0] ?? '未经人工确认'}），建议重新识别或打开校正目录核对`
+              }
+            }
           }
         }
 

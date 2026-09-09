@@ -47,16 +47,27 @@ describe('ocr-toc-cache', () => {
     expect(cached?.entries).toHaveLength(1)
   })
 
-  it('旧版本与缺失文件一律视为过期', async () => {
-    // 绕开 service 直写 v1 缓存，模拟 extractor 升级前的脏数据
+  it('旧版本不断然丢弃（交评估分 legacy），缺失文件才无缓存', async () => {
+    // 绕开 service 直写 v1 缓存，模拟 extractor 升级前的脏数据；文件保留可读
     const hash = createHash('sha256').update('fp-toc-1').digest('hex').slice(0, 16)
     await mkdir(join(tempUserData, 'ocr-cache'), { recursive: true })
     await writeFile(
       join(tempUserData, 'ocr-cache', `${hash}.json`),
       JSON.stringify({ ...makeCache(), extractorVersion: 1 }),
     )
-    expect(await readPdfOcrTocCache('fp-toc-1')).toBeNull()
+    expect((await readPdfOcrTocCache('fp-toc-1'))?.entries).toHaveLength(1)
     expect(await readPdfOcrTocCache('no-such-book')).toBeNull()
+  })
+
+  it('条目 source 随写读不丢失', async () => {
+    await writePdfOcrTocCache({
+      ...makeCache(),
+      entries: [{ title: '第1章', printedPage: 1, level: 0, source: 'manual' }],
+      origin: 'reviewed',
+    })
+    const cached = await readPdfOcrTocCache('fp-toc-1')
+    expect(cached?.entries[0]).toMatchObject({ title: '第1章', source: 'manual' })
+    expect(cached?.origin).toBe('reviewed')
   })
 
   it('删除后读不到', async () => {

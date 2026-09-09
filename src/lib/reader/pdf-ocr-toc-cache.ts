@@ -12,6 +12,8 @@ export function buildPdfOcrTocCache(params: {
       title: entry.title.trim(),
       printedPage: entry.printedPage,
       level: entry.level,
+      // 证据来源随条目持久化（pipe/geo/ai/manual，合并裁决用）；用户修订不带旧摘要
+      source: entry.source,
     }))
     .filter((entry) => entry.title.length > 0 && entry.printedPage > 0)
 
@@ -25,6 +27,8 @@ export function buildPdfOcrTocCache(params: {
       params.pageOffset,
     ),
     createdAt: new Date().toISOString(),
+    // 用户点保存（含 AI 核对后保存）即视为已确认：短目录也不被完整性规则隐藏
+    origin: 'reviewed',
   }
 }
 

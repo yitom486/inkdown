@@ -1,24 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { buildPdfOcrTocCache, readerUnitsToOcrEntries } from '@/lib/reader/pdf-ocr-toc-cache'
+import { buildPdfOcrTocCache } from './pdf-ocr-toc-cache'
 
-describe('pdf-ocr-toc-cache', () => {
-  it('buildPdfOcrTocCache 按偏移生成 units', () => {
+describe('buildPdfOcrTocCache', () => {
+  it('用户保存标 reviewed 并保留条目 source（合并裁决用）', () => {
     const cache = buildPdfOcrTocCache({
-      fileFingerprint: 'fp',
+      fileFingerprint: 'fp-1',
       tocPageRange: [8, 12],
       pageOffset: 12,
-      entries: [{ title: '第1章 概述', printedPage: 1, level: 0 }],
+      entries: [
+        { title: '3.5.4替换算法', printedPage: 114, level: 2, source: 'geo' },
+        { title: '1.1.1硬件', printedPage: 2, level: 2, source: 'manual' },
+        { title: '3.1父项', printedPage: 77, level: 1 },
+      ],
     })
-
-    expect(cache.units).toEqual([{ label: '第1章 概述', href: '13', level: 0 }])
+    expect(cache.origin).toBe('reviewed')
+    expect(cache.entries.map((entry) => entry.source)).toEqual(['geo', 'manual', undefined])
+    expect(cache.units).toHaveLength(3)
+    expect(cache.units[0]).toEqual({ label: '3.5.4替换算法', href: '126', level: 2 })
   })
 
-  it('readerUnitsToOcrEntries 可从 units 反推印刷页', () => {
-    const entries = readerUnitsToOcrEntries(
-      [{ label: '2.1 运算器', href: '25', level: 1 }],
-      12,
-    )
-
-    expect(entries).toEqual([{ title: '2.1 运算器', printedPage: 13, level: 1 }])
+  it('空标题与非法页码照旧过滤', () => {
+    const cache = buildPdfOcrTocCache({
+      fileFingerprint: 'fp-1',
+      tocPageRange: [8, 12],
+      pageOffset: 12,
+      entries: [
+        { title: '   ', printedPage: 5, level: 1 },
+        { title: '有效', printedPage: 0, level: 1 },
+        { title: '保留', printedPage: 3, level: 1, source: 'ai' },
+      ],
+    })
+    expect(cache.entries.map((entry) => entry.title)).toEqual(['保留'])
   })
 })

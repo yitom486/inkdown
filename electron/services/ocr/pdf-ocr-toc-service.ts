@@ -104,11 +104,28 @@ async function recognizePdfTocWithInspector(
         geometryPages = undefined
       }
     }
+    // 识别摘要只存计数（审计口径，不存原文）；source 随条目持久化（合并裁决用）
+    const diagnostics: {
+      stats?: {
+        pipeRows?: number
+        geoPaired?: number
+        paired?: number
+        droppedPool?: number
+        droppedLines?: number
+      }
+    } = {}
     const entries = extractOcrTocFromText(
       textParts.join('\n'),
       pageCount === undefined
         ? undefined
-        : { pageCount, pageOffset: resolvedOffset, geometryPages },
+        : {
+            pageCount,
+            pageOffset: resolvedOffset,
+            geometryPages,
+            onDiagnostics: (stats) => {
+              diagnostics.stats = stats
+            },
+          },
     )
     if (entries.length === 0) {
       return err({
@@ -123,9 +140,26 @@ async function recognizePdfTocWithInspector(
       fileFingerprint,
       tocPageRange,
       pageOffset: resolvedOffset,
-      entries: entries.map(({ title, printedPage, level }) => ({ title, printedPage, level })),
+      entries: entries.map(({ title, printedPage, level, source }) => ({
+        title,
+        printedPage,
+        level,
+        source,
+      })),
       units,
       createdAt: new Date().toISOString(),
+      origin: 'auto',
+      stats: {
+        requestedPages: pageNumbers.length,
+        processedPages: ordered.length,
+        acceptedEntries: entries.length,
+        pipeRows: diagnostics.stats?.pipeRows,
+        geoPaired: diagnostics.stats?.geoPaired,
+        soupPaired: diagnostics.stats?.paired,
+        droppedPool: diagnostics.stats?.droppedPool,
+        droppedLines: diagnostics.stats?.droppedLines,
+        watermarkRemovedLines: cleaned.removedLines,
+      },
     }
 
     await writePdfOcrTocCache(cache)

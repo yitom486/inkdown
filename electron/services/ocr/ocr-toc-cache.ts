@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
+import { PDF_OCR_TOC_CACHE_VERSION } from '@shared/types/ocr'
 import type { PdfOcrTocCache } from '@shared/types/ocr'
+
+export { PDF_OCR_TOC_CACHE_VERSION }
 
 function ocrCacheRoot(): string {
   return join(app.getPath('userData'), 'ocr-cache')
@@ -13,17 +16,15 @@ function cacheFilePath(fileFingerprint: string): string {
   return join(ocrCacheRoot(), `${hash}.json`)
 }
 
-/** 目录缓存版本；提取规则/识别清晰度变更时 +1，旧缓存自动失效（v7：AI 层级归一 0-based + 证据来源） */
-export const PDF_OCR_TOC_CACHE_VERSION = 7
-
 export async function readPdfOcrTocCache(
   fileFingerprint: string,
 ): Promise<PdfOcrTocCache | null> {
   try {
     const raw = await readFile(cacheFilePath(fileFingerprint), 'utf8')
     const parsed = JSON.parse(raw) as PdfOcrTocCache
-    // 版本不符（旧提取器的水印条目等）视为过期，调用方走重新识别
-    if (parsed.extractorVersion !== PDF_OCR_TOC_CACHE_VERSION) {
+    // 版本容忍：旧版不断然丢弃，交由评估分为 legacy/suspect；
+    // 缺文件/解析失败才视为无缓存。绝不在此自动删除。
+    if (!parsed || typeof parsed !== 'object') {
       return null
     }
     return parsed

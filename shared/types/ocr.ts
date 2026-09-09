@@ -43,6 +43,29 @@ export interface OcrTocEntry {
   source?: OcrTocEntrySource
 }
 
+/** 目录缓存版本；只用于标记新旧，不再作为丢弃依据（旧版走 legacy 评估） */
+export const PDF_OCR_TOC_CACHE_VERSION = 7
+
+/** 目录缓存来源：自动识别 vs 用户保存确认（含 AI 核对后保存） */
+export type PdfOcrTocOrigin = 'auto' | 'reviewed'
+
+/**
+ * 识别摘要（只存计数，不存整页 OCR 原文）。
+ * droppedPool=数字汤数量门丢弃，droppedLines=噪音/水印/正文丢弃，
+ * watermarkRemovedLines=水印清洗删除行；三者皆为“过滤了什么”的审计口径。
+ */
+export interface PdfOcrTocStats {
+  requestedPages: number
+  processedPages: number
+  acceptedEntries: number
+  pipeRows?: number
+  geoPaired?: number
+  soupPaired?: number
+  droppedPool?: number
+  droppedLines?: number
+  watermarkRemovedLines?: number
+}
+
 export interface PdfOcrTocCache {
   fileFingerprint: string
   tocPageRange: [number, number]
@@ -51,8 +74,12 @@ export interface PdfOcrTocCache {
   entries: OcrTocEntry[]
   units: ReaderTocUnit[]
   createdAt: string
-  /** 提取器版本；读取时版本不符视为过期（旧水印条目等不再复活） */
+  /** 提取器版本；仅用于新旧标记，读取容忍旧版（见评估 legacy） */
   extractorVersion?: number
+  /** 缺失表示旧版缓存（评估为 legacy，不自动删除） */
+  origin?: PdfOcrTocOrigin
+  /** 缺失表示旧版缓存或用户修订版（修订版以 origin 为准） */
+  stats?: PdfOcrTocStats
 }
 
 export interface RecognizePdfTocPayload {

@@ -4,7 +4,11 @@
  * 注意与那边互引：双方只在函数体内使用对方绑定，无顶层求值循环。
  */
 
-import { compareSectionStrings, reassembleDirectoryText } from './directory-reassemble'
+import {
+  compareSectionStrings,
+  reassembleDirectoryText,
+  type DirectoryReassembleStats,
+} from './directory-reassemble'
 import type { OcrTocEntrySource } from '@shared/types/ocr'
 
 export interface OcrTocEntry {
@@ -131,6 +135,8 @@ export interface ExtractOcrTocOptions {
   pageOffset?: number
   /** 几何配对表（章节号 → 印刷页，见 toc-geometry），直透重组 */
   geometryPages?: ReadonlyMap<string, number>
+  /** 重组统计回传（调用方拼识别摘要用；legacy 无参数路径不调用） */
+  onDiagnostics?: (stats: DirectoryReassembleStats) => void
 }
 
 export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptions): OcrTocEntry[] {
@@ -143,6 +149,9 @@ export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptio
         geometryPages: options?.geometryPages,
       })
     : null
+  if (reassembled) {
+    options?.onDiagnostics?.(reassembled.stats)
+  }
   const source = reassembled?.text ?? text
   const pinned = reassembled?.pinned ?? new Map<string, { page: number; kind: 'pipe' | 'geo' }>()
   const entries: OcrTocEntry[] = []
