@@ -23,10 +23,16 @@ export interface PdfPageOcrOptions {
   pdfDocRef: { current: PDFDocumentProxy | null }
   isScannedPdf: boolean
   isMixedPdf: boolean
+  /**
+   * 调用方视口的 PDF 点尺寸（inspector 几何归一化用，与覆盖层同族）。
+   * 缺失时单页识别降级报错（调用方须从 pdfjs viewport 提供）。
+   */
+  getPageSizePt?: (page: number) => Promise<{ width: number; height: number } | null>
 }
 
 export function usePdfPageOcr(options: PdfPageOcrOptions) {
-  const { filePath, fileFingerprint, pageNum, pdfDocRef, isScannedPdf, isMixedPdf } = options
+  const { filePath, fileFingerprint, pageNum, pdfDocRef, isScannedPdf, isMixedPdf, getPageSizePt } =
+    options
   const pdfOcrScale = useAppSettingsStore((state) => state.pdfOcrScale)
 
   const [ocrPageCaches, setOcrPageCaches] = useState<Record<number, PdfOcrPageCache>>({})
@@ -74,11 +80,17 @@ export function usePdfPageOcr(options: PdfPageOcrOptions) {
       const task = (async () => {
         setOcrPagesInFlight((prev) => new Set(prev).add(page))
         try {
+          const size = await getPageSizePt?.(page)
+          if (!size || !(size.width > 0) || !(size.height > 0)) {
+            throw new Error(`第 ${page} 页 OCR 失败：页面尺寸未就绪`)
+          }
           const result = await recognizePdfOcrPage({
             filePath,
             fileFingerprint,
             page,
             scale: pdfOcrScale,
+            pageWidthPt: size.width,
+            pageHeightPt: size.height,
           })
           if (result.ok) {
             if (result.value.page !== page) {
@@ -102,7 +114,7 @@ export function usePdfPageOcr(options: PdfPageOcrOptions) {
       ocrPagePendingRef.current.set(page, task)
       return task
     },
-    [fileFingerprint, filePath, pdfOcrScale],
+    [fileFingerprint, filePath, pdfOcrScale, getPageSizePt],
   )
 
   const handleRecognizePage = useCallback(async () => {

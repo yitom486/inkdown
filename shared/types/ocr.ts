@@ -85,6 +85,12 @@ export interface RecognizePdfPagePayload {
   fileFingerprint: string
   page: number
   scale?: PdfOcrScale
+  /**
+   * 调用方视口的 PDF 点尺寸（inspector 几何归一化用，与覆盖层同族）。
+   * 缺失时主进程拒绝（INVALID_ARGUMENT），调用方须从 pdfjs viewport 提供。
+   */
+  pageWidthPt: number
+  pageHeightPt: number
 }
 
 export interface GetPdfOcrPagePayload {

@@ -199,6 +199,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     pdfDocRef,
     isScannedPdf,
     isMixedPdf,
+    // 与覆盖层同族：pdfjs scale:1 视口即 PDF 点尺寸（含旋转）
+    getPageSizePt: useCallback(async (page: number) => {
+      const pdf = pdfDocRef.current
+      if (!pdf) return null
+      try {
+        const proxy = await pdf.getPage(page)
+        const viewport = proxy.getViewport({ scale: 1 })
+        if (!(viewport.width > 0) || !(viewport.height > 0)) return null
+        return { width: viewport.width, height: viewport.height }
+      } catch {
+        return null
+      }
+    }, []),
   })
 
   const ready = numPages > 0 && pdfDoc !== null
