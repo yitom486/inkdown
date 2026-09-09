@@ -140,4 +140,56 @@ describe('assessPdfOcrTocCache', () => {
     expect(result.status).toBe('usable')
     expect(result.repairedUnits).toBeUndefined()
   })
+
+  it.each([
+    ['范围非数组', { tocPageRange: '8-12' }],
+    ['范围数字', { tocPageRange: 8 }],
+    ['范围 null', { tocPageRange: null }],
+    ['范围长度 1', { tocPageRange: [8] }],
+    ['范围长度 3', { tocPageRange: [8, 12, 15] }],
+    ['范围含小数', { tocPageRange: [8, 12.5] }],
+    ['负偏移', { pageOffset: -1 }],
+    ['小数偏移', { pageOffset: 1.5 }],
+    ['NaN 偏移', { pageOffset: NaN }],
+    ['字符串偏移', { pageOffset: '12' }],
+    ['null 条目', { entries: [null] }],
+    ['数字条目', { entries: [42] }],
+    ['字符串条目', { entries: ['x'] }],
+    ['条目缺标题', { entries: [{ printedPage: 5, level: 1 }] }],
+    ['条目缺页码', { entries: [{ title: 'x', level: 1 }] }],
+    ['units 非数组', { units: 'x' }],
+    ['units 含 null', { units: [null] }],
+    ['unit 字段缺失', { units: [{ label: 'a' }] }],
+    ['origin 垃圾值', { origin: 42 }],
+    ['stats 垃圾值', { stats: 'x' }],
+    ['stats 数字垃圾', { stats: { acceptedEntries: '多' } }],
+  ])('损坏数据不抛异常 → invalid 或安全修复：%s', (_name, overrides) => {
+    const base = makeCache(overrides as Partial<PdfOcrTocCache>)
+    let result: { status: string } | undefined
+    expect(() => {
+      result = assessPdfOcrTocCache(base, { pageCount: PAGE_COUNT })
+    }).not.toThrow()
+    expect(['invalid', 'legacy', 'suspect', 'usable']).toContain(result?.status)
+  })
+
+  it('损坏 units + 有效 entries → 修复而非 invalid', () => {
+    const entries = [entry('2.2运算方法和运算电路', 32, 1, 'pipe')]
+    for (const units of [[null], 'x', [{ label: 'a' }]]) {
+      const result = assessPdfOcrTocCache(
+        makeCache({ entries, units: units as never, origin: 'reviewed', stats: undefined }),
+        { pageCount: PAGE_COUNT },
+      )
+      expect(result.status).toBe('usable')
+      expect(result.repairedUnits).toEqual([
+        { label: '2.2运算方法和运算电路', href: '44', level: 1 },
+      ])
+    }
+  })
+
+  it('顶层非对象 → invalid 不抛异常', () => {
+    for (const bad of [42, 'x', [], true]) {
+      expect(() => assessPdfOcrTocCache(bad as never, { pageCount: PAGE_COUNT })).not.toThrow()
+      expect(assessPdfOcrTocCache(bad as never, { pageCount: PAGE_COUNT }).status).toBe('invalid')
+    }
+  })
 })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight, Database, Loader2, Minus, Plus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Database, Loader2, Minus, Plus, ScanText, X } from 'lucide-react'
 import type { PDFDocumentProxy, PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
@@ -18,6 +18,12 @@ import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
 import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
+import {
+  noticeForFreshRecognize,
+  noticeForRestoredCache,
+  placeOcrTocNotice,
+  type OcrTocNotice,
+} from '@/lib/reader/ocr-toc-notice'
 import { assessPdfOcrTocCache } from '@shared/reader/ocr-toc-assess'
 import { reassembleDirectoryText } from '@shared/reader/directory-reassemble'
 import { ACP_MAX_IMAGE_BYTES, blobToBase64 } from '@/lib/agent/acp-composer'
@@ -139,6 +145,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [isMixedPdf, setIsMixedPdf] = useState(false)
   const [ocrBannerDismissed, setOcrBannerDismissed] = useState(false)
   const [ocrTocEditorOpen, setOcrTocEditorOpen] = useState(false)
+  /** OCR 目录缓存状态的独立提示（不复用 outlineNotice：后者在 OCR 侧栏下被抹掉） */
+  const [ocrTocNotice, setOcrTocNotice] = useState<OcrTocNotice | null>(null)
   const [ocrTocEditMode, setOcrTocEditMode] = useState(false)
   const [ocrTocEntries, setOcrTocEntries] = useState<OcrTocEntry[]>([])
   const [ocrTocSaving, setOcrTocSaving] = useState(false)
@@ -341,6 +349,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrTocEntries([])
     setOcrTocSaving(false)
     setOcrRecognizing(false)
+    setOcrTocNotice(null)
     resetPageOcr()
     setTocOpen(false)
     pageAnchorRefs.current.clear()
@@ -399,16 +408,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         ) {
           const cacheResult = await getPdfOcrToc({ fileFingerprint })
           if (cacheResult.ok) {
-            // 分级恢复：usable 照常；invalid 不进侧栏、留识别入口 + 短原因；
-            // suspect/legacy 照常供阅读，但必须给出可操作的核对提示。从不自动删除。
+            // 分级恢复：usable 照常；invalid 不进侧栏（原因进横幅附加行）；
+            // suspect/legacy 照常供阅读，提示走独立 ocrTocNotice（不再写
+            // outlineNotice：它在 OCR 侧栏下被抹掉，不打开侧栏不可见）。
+            // 从不自动删除任何缓存。
             const assessment = assessPdfOcrTocCache(cacheResult.value, {
               pageCount: pdf.numPages,
             })
             console.info(
               `[ocr-toc] restore status=${assessment.status} reasons=${JSON.stringify(assessment.reasons)}`,
             )
+            const notice = noticeForRestoredCache(assessment)
             if (assessment.status === 'invalid') {
-              nextNotice = `已存目录缓存不可用（${assessment.reasons[0] ?? '结构错误'}），请重新识别`
+              if (!cancelled) setOcrTocNotice(notice)
             } else {
               const cache = cacheResult.value
               nextUnits = assessment.repairedUnits ?? cache.units
@@ -417,13 +429,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               setTocPageTo(cache.tocPageRange[1])
               setTocPageOffset(cache.pageOffset)
               setOcrTocEntries(cache.entries)
-              if (assessment.status === 'usable') {
-                nextNotice = undefined
-              } else if (assessment.status === 'legacy') {
-                nextNotice = `目录缓存为旧版（${assessment.reasons[0] ?? '缺少来源记录'}），可继续阅读，建议打开校正目录核对后保存确认`
-              } else {
-                nextNotice = `目录可能不完整（${assessment.reasons[0] ?? '未经人工确认'}），建议重新识别或打开校正目录核对`
-              }
+              nextNotice = undefined
+              if (!cancelled) setOcrTocNotice(notice)
             }
           }
         }
@@ -500,6 +507,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         setOcrTocEntries(result.value.entries)
         setTocOpen(true)
         setOcrTocEditorOpen(false)
+        // 自动识别当次即视为 suspect：可继续阅读，当场给出核对入口（非阻塞）
+        setOcrTocNotice(noticeForFreshRecognize(result.value.units.length))
         toast.success(`已识别 ${result.value.units.length} 条目录`)
       } else {
         toast.error(result.error.message)
@@ -532,6 +541,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         setOcrTocEntries(cache.entries)
         setOutlineUnits(cache.units)
         setOcrTocEditMode(false)
+        // 用户保存确认（reviewed）：提示立即消失
+        setOcrTocNotice(null)
         toast.success('目录已保存')
       } finally {
         setOcrTocSaving(false)
@@ -671,6 +682,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     ocrRecognizing ||
     (ocrTocAvailable && ocrTocEditorOpen)
 
+  /** 独立缓存状态提示的落点：invalid 跟横幅（即识别入口），其余走状态条（不依赖侧栏） */
+  const placedOcrTocNotice = placeOcrTocNotice(ocrTocNotice, outlineSource)
+
   const pdfOcrBackgroundPrefetch = useAppSettingsStore((state) => state.pdfOcrBackgroundPrefetch)
 
   const handleClearOcrCache = useCallback(async () => {
@@ -696,6 +710,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrTocEditMode(false)
     setOcrTocEditorOpen(true)
     setOcrBannerDismissed(false)
+    setOcrTocNotice(null)
     toast.success('已清除本书 OCR 缓存')
   }, [fileFingerprint, outlineSource, isScannedPdf, resetPageOcr])
 
@@ -1543,7 +1558,49 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             setOcrBannerDismissed(true)
           }}
           entryCount={outlineSource === 'ocr' ? outlineUnits.length : undefined}
+          extraActions={
+            placedOcrTocNotice.bannerExtra ? (
+              <span className="text-xs text-amber-900/80 dark:text-amber-100/80">
+                {placedOcrTocNotice.bannerExtra}
+              </span>
+            ) : undefined
+          }
         />
+      ) : null}
+      {placedOcrTocNotice.statusBar ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-950 dark:text-amber-100">
+          <ScanText className="size-3.5 shrink-0 opacity-80" aria-hidden />
+          <span className="min-w-0 flex-1">{placedOcrTocNotice.statusBar.message}</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 text-xs"
+            onClick={() => setOcrTocEditorOpen(true)}
+          >
+            校正目录
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 text-xs"
+            disabled={ocrRecognizing}
+            onClick={() => void handleRecognizeToc()}
+          >
+            重新识别
+          </Button>
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            className="shrink-0"
+            aria-label="关闭提示"
+            onClick={() => setOcrTocNotice(null)}
+          >
+            <X />
+          </Button>
+        </div>
       ) : null}
       <ReaderToolbarShell
         ready={ready}
