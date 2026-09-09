@@ -1,0 +1,59 @@
+import type { AppError } from '@shared/core/errors'
+import { err, type Result } from '@shared/core/result'
+import type {
+  RosettaActiveImport,
+  RosettaBookInfo,
+  RosettaImportPayload,
+  RosettaImportStats,
+  RosettaImportStatus,
+  RosettaQuery,
+  RosettaQueryResult,
+} from '@shared/types/rosetta'
+
+function getElectronAPI() {
+  return typeof window !== 'undefined' ? window.electronAPI : undefined
+}
+
+export const rosettaApi = {
+  /** 扫描书一键导入罗盘索引（长任务；进度走 onRosettaImportStatus） */
+  async importBook(payload: RosettaImportPayload): Promise<Result<RosettaImportStats, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.importBookToRosetta) {
+      return err({ code: 'API_UNAVAILABLE', message: '罗盘导入 API 不可用' })
+    }
+    return api.importBookToRosetta(payload)
+  },
+
+  cancelImport(): void {
+    getElectronAPI()?.cancelRosettaImport()
+  },
+
+  onImportStatus(callback: (status: RosettaImportStatus) => void): (() => void) | undefined {
+    return getElectronAPI()?.onRosettaImportStatus(callback)
+  },
+
+  async getBookInfo(fingerprint: string): Promise<Result<RosettaBookInfo | null, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.getRosettaBookInfo) {
+      return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
+    }
+    return api.getRosettaBookInfo(fingerprint)
+  },
+
+  /** 查询当前导入快照（窗口重载后恢复进度显示），无则返回 null */
+  async getActiveImport(): Promise<Result<RosettaActiveImport | null, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.getActiveRosettaImport) {
+      return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
+    }
+    return api.getActiveRosettaImport()
+  },
+
+  async queryBook(query: RosettaQuery): Promise<Result<RosettaQueryResult, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.queryRosettaBook) {
+      return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
+    }
+    return api.queryRosettaBook(query)
+  },
+}

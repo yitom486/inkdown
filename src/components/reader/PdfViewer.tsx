@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Minus, Plus } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { ChevronLeft, ChevronRight, Database, Loader2, Minus, Plus, X } from 'lucide-react'
 import type { PDFDocumentProxy, PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
@@ -14,6 +14,12 @@ import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
+import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
+import { rosettaApi } from '@/api/rosetta-api'
+import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
+import { reassembleDirectoryText } from '@shared/reader/directory-reassemble'
+import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta-agent-text'
+import type { RosettaBookInfo, RosettaImportState } from '@shared/types/rosetta'
 import { usePdfPageOcr } from '@/hooks/reader/usePdfPageOcr'
 import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
@@ -216,6 +222,64 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const ready = numPages > 0 && pdfDoc !== null
 
+  const rosettaImport = useRosettaImport(fileFingerprint)
+  const rosettaInfoRef = useRef<RosettaBookInfo | null>(null)
+  useEffect(() => {
+    rosettaInfoRef.current = rosettaImport.info
+  }, [rosettaImport.info])
+  const rosettaImportStateRef = useRef<RosettaImportState>('idle')
+  useEffect(() => {
+    rosettaImportStateRef.current = rosettaImport.state
+  }, [rosettaImport.state])
+
+  /** 罗盘走库读页：命中即返回结构化文本，未命中回 null 走旧链路（永不抛错） */
+  const readRosettaPageText = useCallback(
+    async (page: number): Promise<string | null> => {
+      if (!fileFingerprint || !rosettaInfoRef.current) return null
+      try {
+        const result = await rosettaApi.queryBook({ kind: 'page', fingerprint: fileFingerprint, page })
+        if (!isOk(result) || result.value.kind !== 'page' || result.value.blocks.length === 0) {
+          return null
+        }
+        return formatRosettaBlocksForAgent(result.value.blocks)
+      } catch {
+        return null
+      }
+    },
+    [fileFingerprint],
+  )
+
+  /** 罗盘走库读单元：目录单元所在章整章文本，未命中回 null */
+  const readRosettaUnitText = useCallback(
+    async (unit: ReaderUnit): Promise<{ label: string; text: string } | null> => {
+      if (!fileFingerprint || !rosettaInfoRef.current) return null
+      const page = Number.parseInt('href' in unit ? unit.href : '', 10)
+      if (!Number.isFinite(page) || page < 1) return null
+      try {
+        const chaptersResult = await rosettaApi.queryBook({ kind: 'chapters', fingerprint: fileFingerprint })
+        if (!isOk(chaptersResult) || chaptersResult.value.kind !== 'chapters') return null
+        let current: { index: number; title: string } | null = null
+        for (const chapter of chaptersResult.value.chapters) {
+          if (chapter.startPage <= page) current = chapter
+          else break
+        }
+        if (!current) return null
+        const blocksResult = await rosettaApi.queryBook({
+          kind: 'chapter',
+          fingerprint: fileFingerprint,
+          chapterIndex: current.index,
+        })
+        if (!isOk(blocksResult) || blocksResult.value.kind !== 'chapter' || blocksResult.value.blocks.length === 0) {
+          return null
+        }
+        return { label: current.title, text: formatRosettaBlocksForAgent(blocksResult.value.blocks) }
+      } catch {
+        return null
+      }
+    },
+    [fileFingerprint],
+  )
+
   const nav = useReaderNavigationStore((state) => state.nav)
   const { currentUnitId } = useReaderNavTitles()
 
@@ -384,6 +448,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const handleRecognizeToc = useCallback(async () => {
     if (!fileFingerprint || ocrRecognizing) return
+    if (!Number.isInteger(numPages) || numPages < 1) {
+      toast.error('PDF 尚未加载完成，请稍后再试')
+      return
+    }
     setOcrRecognizing(true)
     try {
       const result = await recognizePdfOcrToc({
@@ -393,6 +461,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         toPage: Math.max(tocPageFrom, tocPageTo),
         pageOffset: tocPageOffset,
         scale: pdfOcrScale,
+        pageCount: numPages,
       })
       if (result.ok) {
         setOutlineUnits(result.value.units)
@@ -407,7 +476,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     } finally {
       setOcrRecognizing(false)
     }
-  }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale])
+  }, [fileFingerprint, filePath, ocrRecognizing, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale, numPages])
 
   const handleSaveOcrToc = useCallback(
     async (entries: OcrTocEntry[]) => {
@@ -456,8 +525,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       }
     }
     const joined = parts.join('\n').trim()
-    return joined || null
-  }, [tocPageFrom, tocPageTo, readPageText])
+    if (!joined) return null
+    // 先重组再给模型：竖线拆分/数字汤配对/范围门，与启发式同一套
+    const { text, stats } = reassembleDirectoryText(joined, {
+      pageCount: numPages,
+      pageOffset: tocPageOffset,
+    })
+    console.info(
+      `[toc-ai] reassemble pipe=${stats.pipeRows} paired=${stats.paired} ` +
+        `pool=${stats.poolNumbers} droppedPool=${stats.droppedPool} ` +
+        `bare=${stats.bareEmitted} dropped=${stats.droppedLines}`,
+    )
+    return text.trim() || null
+  }, [tocPageFrom, tocPageTo, readPageText, numPages, tocPageOffset])
 
   /**
    * 自动推算偏移：目录前若干标题去正文页原生文字层找锚点，多标题共识。
@@ -564,16 +644,26 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [pageNum])
 
   const readAgentPageTextWithSource = useCallback(
-    async (page: number): Promise<{ text: string; source: 'inspector' | 'structured' | 'legacy' }> => {
+    async (page: number): Promise<{ text: string; source: 'inspector' | 'structured' | 'legacy' | 'rosetta' }> => {
       if (!Number.isFinite(page) || page < 1) {
         throw new Error(`无效的 PDF 页码：${page}`)
       }
+      const total = numPages || pdfDocRef.current?.numPages || 0
+      // 罗盘优先：已索引的书直接读库（结构化分页文本，零 OCR 开销）；
+      // 未命中/异常一律静默回退旧链路，Agent 永不断粮
+      const rosettaText = await readRosettaPageText(page)
+      if (rosettaText !== null) {
+        return { text: formatPdfPageTextForAgent(page, total, rosettaText), source: 'rosetta' }
+      }
       // Agent 正文：主进程 inspector（表格/标题更优）→ WASM 阅读顺序版；
       // 任何失败静默回退，UI/搜索/选区仍走 pdf.js
-      const total = numPages || pdfDocRef.current?.numPages || 0
       const docKey = fileFingerprint || filePath
+      // 导入期禁全量解析：罗盘整书 OCR 独占主进程堆时，Agent 再触发一次
+      // 全文档解析会堆叠压垮（Rust 分配失败直接 abort 主进程）。缓存照读、
+      // 单页 OCR 照走（有界），只禁整文档解析。
+      const importRunning = rosettaImportStateRef.current === 'running'
       let inspected: string | null = pdfInspectorClient.getCachedPageText(docKey, page)
-      if (inspected === null && !pdfInspectorClient.isUnavailable()) {
+      if (inspected === null && !importRunning && !pdfInspectorClient.isUnavailable()) {
         const parsed = await pdfInspectorClient.parseDocument(docKey, filePath)
         if (parsed) inspected = pdfInspectorClient.getCachedPageText(docKey, page)
       }
@@ -581,7 +671,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         return { text: formatPdfPageTextForAgent(page, total, inspected), source: 'inspector' }
       }
       let structured: string | null = pdfStructureClient.getCachedPageText(docKey, page)
-      if (structured === null && data && !pdfStructureClient.isUnavailable()) {
+      if (structured === null && !importRunning && data && !pdfStructureClient.isUnavailable()) {
         const parsed = await pdfStructureClient.parseDocument(docKey, data.data.slice(0))
         if (parsed) structured = pdfStructureClient.getCachedPageText(docKey, page)
       }
@@ -592,7 +682,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       const text = await readPageText(page, { allowAutoOcr })
       return { text: formatPdfPageTextForAgent(page, total, text), source: 'legacy' }
     },
-    [data, fileFingerprint, filePath, numPages, readPageText],
+    [data, fileFingerprint, filePath, numPages, readPageText, readRosettaPageText],
   )
 
   const readAgentPageTextWithSourceRef = useRef(readAgentPageTextWithSource)
@@ -660,6 +750,33 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       getViewportText: () => readAgentPageText(pageNumRef.current),
       iterateUnits: async function* () {
         const total = pdfDocRef.current?.numPages ?? 0
+        // 罗盘优先：按章整章产出，AI 全书检索不再逐页现场 OCR
+        if (fileFingerprint && rosettaInfoRef.current) {
+          try {
+            const chaptersResult = await rosettaApi.queryBook({ kind: 'chapters', fingerprint: fileFingerprint })
+            if (isOk(chaptersResult) && chaptersResult.value.kind === 'chapters' && chaptersResult.value.chapters.length > 0) {
+              let yielded = 0
+              for (const chapter of chaptersResult.value.chapters) {
+                const blocksResult = await rosettaApi.queryBook({
+                  kind: 'chapter',
+                  fingerprint: fileFingerprint,
+                  chapterIndex: chapter.index,
+                })
+                if (!isOk(blocksResult) || blocksResult.value.kind !== 'chapter' || blocksResult.value.blocks.length === 0) {
+                  continue
+                }
+                yielded += 1
+                yield {
+                  label: chapter.title,
+                  text: `【${chapter.title} · 第 ${chapter.startPage}-${chapter.endPage} 页】\n${formatRosettaBlocksForAgent(blocksResult.value.blocks)}`,
+                }
+              }
+              if (yielded > 0) return
+            }
+          } catch {
+            // 回退逐页旧链路
+          }
+        }
         for (let page = 1; page <= total; page += 1) {
           try {
             const allowAutoOcr = agentAutoOcr()
@@ -682,8 +799,15 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           return null
         }
         try {
-          const raw = await readPageText(page, { allowAutoOcr: agentAutoOcr() })
+          const rosettaUnit = await readRosettaUnitText(unit)
           const total = pdfDocRef.current?.numPages ?? numPages
+          if (rosettaUnit) {
+            return {
+              label: rosettaUnit.label,
+              text: formatPdfPageTextForAgent(page, total, rosettaUnit.text),
+            }
+          }
+          const raw = await readPageText(page, { allowAutoOcr: agentAutoOcr() })
           return {
             label: unit.label || `第 ${page} 页`,
             text: formatPdfPageTextForAgent(page, total, raw),
@@ -693,7 +817,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         }
       },
     })
-  }, [filePath, isScannedPdf, readAgentPageText, readPageText])
+  }, [filePath, isScannedPdf, readAgentPageText, readPageText, readRosettaUnitText])
 
   useEffect(() => {
     if (typeof window === 'undefined' || window.electronAPI?.e2ePdfStructure !== true) return
@@ -1259,6 +1383,79 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const estimatedPageHeight = Math.max(120, scaledPageSize.height)
   const estimatedPageWidth = Math.max(120, scaledPageSize.width)
 
+  const handleRosettaImport = useCallback(() => {
+    if (!Number.isInteger(numPages) || numPages < 1) return
+    const toc = resolveRosettaTocEntries({
+      outlineUnits,
+      ocrEntries: ocrTocEntries,
+      pageOffset: tocPageOffset,
+      pageCount: numPages,
+    })
+    rosettaImport.startImport({
+      filePath,
+      title: filePath.split(/[/\\]/).pop() || filePath,
+      format: 'pdf',
+      scale: pdfOcrScale,
+      pageCount: numPages,
+      toc,
+    })
+  }, [filePath, numPages, ocrTocEntries, outlineUnits, pdfOcrScale, rosettaImport, tocPageOffset])
+
+  let rosettaExtraAction: ReactNode | null = null
+  if (fileFingerprint) {
+    if (rosettaImport.state === 'running') {
+      const phaseLabel =
+        rosettaImport.phase === 'import'
+          ? '正在入库'
+          : rosettaImport.totalPages > 0
+            ? `全书识别中 ${rosettaImport.donePages}/${rosettaImport.totalPages}`
+            : '准备中'
+      rosettaExtraAction = (
+        <span
+          className="flex items-center gap-1 text-xs text-muted-foreground"
+          title={`罗盘导入·${phaseLabel}（约数分钟；取消在阶段边界生效）`}
+        >
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          {phaseLabel}
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            title="取消导入（阶段边界生效）"
+            aria-label="取消罗盘导入"
+            onClick={() => rosettaImport.cancelImport()}
+          >
+            <X />
+          </Button>
+        </span>
+      )
+    } else if (rosettaImport.info) {
+      rosettaExtraAction = (
+        <span
+          className="flex items-center gap-1 text-xs text-muted-foreground"
+          title={`罗盘索引：${rosettaImport.info.chapters} 章 / ${rosettaImport.info.blocks} 块，AI 直接读库`}
+        >
+          <Database className="size-3.5" aria-hidden />
+          ✓
+        </span>
+      )
+    } else {
+      rosettaExtraAction = (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1 text-xs text-muted-foreground"
+          title="全书解析后建章节块索引并落盘（原生页直提、扫描页识别），之后 AI 直接读库不再现场识别"
+          onClick={() => void handleRosettaImport()}
+        >
+          <Database className="size-3.5" aria-hidden />
+          罗盘
+        </Button>
+      )
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {showOcrBanner ? (
@@ -1289,8 +1486,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       <ReaderToolbarShell
         ready={ready}
         tocDisabled={!hasChapterToc}
-        onTocToggle={() => {
-          setMarksOpen(false)
+        onTocToggle={() => {          setMarksOpen(false)
           setTocOpen((value) => !value)
         }}
         onMarksToggle={() => {
@@ -1374,7 +1570,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           </>
         }
         trailing={
-          isLoading ? (
+          <>
+          {rosettaExtraAction}
+          {isLoading ? (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           ) : isScannedPdf ? (
             <span className="text-xs text-muted-foreground">
@@ -1385,6 +1583,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                   : `本页未识别 · ${ocrRecognizedCount}/${numPages}`}
             </span>
           ) : null
+          }
+          </>
         }
       />
 
@@ -1422,6 +1622,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               aiControl={
                 <TocAiPolishControl
                   getOcrText={getTocOcrText}
+                  fileFingerprint={fileFingerprint}
                   onApply={(entries) => setOcrTocEntries(entries)}
                 />
               }

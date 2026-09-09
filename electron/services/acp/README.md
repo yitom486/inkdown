@@ -14,4 +14,4 @@ ACP Agent 主进程侧：拉起 `codex-acp`、JSON-RPC、权限、会话、进�
 | IO | `acp-fs.ts` / `acp-terminal.ts` / `terminal-output-buffer.ts` | 虚拟/真实读文件、终端 |
 | MCP | `mcp/` | 进程内 HTTP MCP（`inkdown_*` 工具）；随连接起停 |
 
-`mcp/` 为传输与工具表实现，不必再单独维护一份长 README；工具列表以 `mcp/inkdown-mcp-tools.ts` 与 Skill 为准。
+`mcp/` 为传输与工具表实现，不必再单独维护一份长 README；工具列表以 `mcp/inkdown-mcp-tools.ts` 与 Skill 为准；目录副会话专用表见 `mcp/inkdown-mcp-toc-tools.ts`（`toc_*`，独立端点，仅 `toolScope: 'toc'` 的会话挂载）。

@@ -88,6 +88,7 @@ function App() {
     rescanWorkspace,
     openFileFromTree,
     openRecentFile,
+    openExternalFilePath,
     saveFile,
     saveFileAs,
     restoreDraft,
@@ -177,29 +178,65 @@ function App() {
     }
   }, [appMeta?.error])
 
+  /**
+   * 取走主进程队列里的外部打开文件并逐个打开（工作区切到文件所在目录）。
+   * 返回消费数量；挂载时与窗口聚焦时各调用一次，覆盖冷启动与运行中双击两种情形。
+   */
+  const drainPendingExternalFiles = useCallback(async () => {
+    let consumed = 0
+    for (;;) {
+      let pending: string | null = null
+      try {
+        pending = await appApi.takePendingExternalFile()
+      } catch {
+        return consumed
+      }
+      if (!pending) return consumed
+      consumed += 1
+      openExternalFilePath(pending)
+    }
+  }, [openExternalFilePath])
+
+  useEffect(() => {
+    const onFocus = (): void => {
+      void drainPendingExternalFiles()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [drainPendingExternalFiles])
+
   useEffect(() => {
     if (window.electronAPI?.isFreshWindow) return
     if (startupRestoreDoneRef.current) return
     startupRestoreDoneRef.current = true
 
-    const hadRecoverableDraft =
-      pickLatestRecoverableDraft(useDraftStore.getState().drafts) !== null
-    if (hadRecoverableDraft) return
+    void (async () => {
+      // 外部打开（资源管理器双击/打开方式）优先于上次状态恢复
+      const externalCount = await drainPendingExternalFiles()
+      if (externalCount > 0) return
 
-    const target = resolveStartupRestoreTarget({
-      restoreOnStartup: restoreLastFileOnStartup,
-      activeSurface: lastActiveSurface,
-      lastOpenedFilePath,
-      lastWebDocUrl,
-    })
-    if (!target) return
+      const hadRecoverableDraft =
+        pickLatestRecoverableDraft(useDraftStore.getState().drafts) !== null
+      if (hadRecoverableDraft) return
 
-    if (target.kind === 'web-doc') {
-      openWebDocument(target.path)
-      return
-    }
-    void openRecentFile(target.path)
+      const target = resolveStartupRestoreTarget({
+        restoreOnStartup: restoreLastFileOnStartup,
+        activeSurface: lastActiveSurface,
+        lastOpenedFilePath,
+        lastWebDocUrl,
+      })
+      if (!target) return
+
+      if (target.kind === 'web-doc') {
+        openWebDocument(target.path)
+        return
+      }
+      void openRecentFile(target.path)
+    })()
   }, [
+    drainPendingExternalFiles,
     lastActiveSurface,
     lastOpenedFilePath,
     lastWebDocUrl,

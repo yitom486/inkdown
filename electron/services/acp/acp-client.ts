@@ -37,6 +37,7 @@ import {
 } from './session-capabilities'
 import {
   startInkdownMcpServer,
+  startTocMcpServer,
   stopInkdownMcpServer,
   type InkdownMcpServerHandle,
 } from './mcp/inkdown-mcp-server'
@@ -87,6 +88,26 @@ let permissionBridge: AcpPermissionBridge | null = null
 let snapshotBridge: AcpSnapshotBridge | null = null
 let snapshotRequestSeq = 0
 let inkdownMcp: InkdownMcpServerHandle | null = null
+/** 目录副会话专用端点句柄（懒启动，随 disconnect 关闭） */
+let tocMcp: InkdownMcpServerHandle | null = null
+
+function mcpServerEntry(handle: InkdownMcpServerHandle, name: string): unknown[] {
+  return [
+    {
+      type: 'http',
+      name,
+      url: handle.url,
+      headers: [{ name: 'Authorization', value: `Bearer ${handle.authToken}` }],
+    },
+  ]
+}
+
+async function ensureTocMcpServer(): Promise<InkdownMcpServerHandle> {
+  if (!tocMcp) {
+    tocMcp = await startTocMcpServer({ readSnapshot: handleSnapshotRequest })
+  }
+  return tocMcp
+}
 
 const pendingPermissions = new Map<number, { resolve: (value: PermissionDecision) => void }>()
 const sessionUpdateListeners = new Set<AcpSessionUpdateListener>()
@@ -616,6 +637,7 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
 
   await stopInkdownMcpServer()
   inkdownMcp = null
+  tocMcp = null
 
   sessionId = null
   runtimeId = null
@@ -635,9 +657,11 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
  * 在已连接的 Agent 进程上再建一条 session（如批注助手）。
  * **不**覆盖主面板的 sessionId，避免副会话抢走主会话身份。
  * cwd 可省略：沿用 connect 时记下的 workspaceRoot。
+ * toolScope='toc' 时只挂目录工具表（目录副会话专用，主会话看不到）。
  */
 export async function createAcpSession(
   cwd?: string,
+  toolScope: 'full' | 'toc' = 'full',
 ): Promise<Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>> {
   const t = requireTransport()
   if (!t.ok) return t
@@ -645,18 +669,15 @@ export async function createAcpSession(
   const resolvedCwd = resolveAgentCwd(cwd || workspaceRoot).cwd
 
   try {
+    const mcpServers =
+      toolScope === 'toc'
+        ? mcpServerEntry(await ensureTocMcpServer(), 'inkdown-toc')
+        : inkdownMcp
+          ? mcpServerEntry(inkdownMcp, 'inkdown')
+          : []
     const result = (await t.value.request('session/new', {
       cwd: resolvedCwd,
-      mcpServers: inkdownMcp
-        ? [
-            {
-              type: 'http',
-              name: 'inkdown',
-              url: inkdownMcp.url,
-              headers: [{ name: 'Authorization', value: `Bearer ${inkdownMcp.authToken}` }],
-            },
-          ]
-        : [],
+      mcpServers,
     })) as Record<string, unknown>
     const id = typeof result.sessionId === 'string' ? result.sessionId : null
     if (!id) {

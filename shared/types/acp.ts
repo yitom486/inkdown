@@ -187,6 +187,11 @@ export interface AcpSetConfigOptionResult {
 export interface AcpSessionNewPayload {
   /** 缺省时用当前已连接 Agent 的工作区 */
   cwd?: string
+  /**
+   * 挂载的 MCP 工具域：full=全部 Inkdown 工具（默认），toc=仅目录工具。
+   * 目录副会话传 toc，主会话与其他副会话看不到目录写工具。
+   */
+  toolScope?: 'full' | 'toc'
 }
 
 export interface AcpSessionNewResult {

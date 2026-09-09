@@ -13,12 +13,20 @@ function cacheFilePath(fileFingerprint: string): string {
   return join(ocrCacheRoot(), `${hash}.json`)
 }
 
+/** 目录缓存版本；提取规则变更（水印条目过滤、无页码回填语义、目录重组等）时 +1，旧缓存自动失效 */
+export const PDF_OCR_TOC_CACHE_VERSION = 4
+
 export async function readPdfOcrTocCache(
   fileFingerprint: string,
 ): Promise<PdfOcrTocCache | null> {
   try {
     const raw = await readFile(cacheFilePath(fileFingerprint), 'utf8')
-    return JSON.parse(raw) as PdfOcrTocCache
+    const parsed = JSON.parse(raw) as PdfOcrTocCache
+    // 版本不符（旧提取器的水印条目等）视为过期，调用方走重新识别
+    if (parsed.extractorVersion !== PDF_OCR_TOC_CACHE_VERSION) {
+      return null
+    }
+    return parsed
   } catch {
     return null
   }
@@ -26,7 +34,8 @@ export async function readPdfOcrTocCache(
 
 export async function writePdfOcrTocCache(cache: PdfOcrTocCache): Promise<void> {
   await mkdir(ocrCacheRoot(), { recursive: true })
-  await writeFile(cacheFilePath(cache.fileFingerprint), JSON.stringify(cache, null, 2), 'utf8')
+  const stamped: PdfOcrTocCache = { ...cache, extractorVersion: PDF_OCR_TOC_CACHE_VERSION }
+  await writeFile(cacheFilePath(cache.fileFingerprint), JSON.stringify(stamped, null, 2), 'utf8')
 }
 
 export async function deletePdfOcrTocCache(fileFingerprint: string): Promise<void> {

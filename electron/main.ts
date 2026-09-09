@@ -1,11 +1,14 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
+import { existsSync, statSync } from 'node:fs'
 import { IPC } from '../shared/ipc/channels'
 import { createWindow } from './window/create-window'
+import { extractExternalFilePaths, pendingExternalFiles } from './window/external-file'
 import { installAppMenu } from './window/app-menu'
 import { registerIpcHandlers } from './ipc/register-handlers'
 import { initAppUpdater } from './services/app-updater'
 import { disposeAllAcp } from './services/acp/acp-client'
+import { closeAllBookDbs } from './services/book-db/open-book-db'
 import { disposeAllWorkspaceWatches } from './services/workspace-watcher'
 import { syncManager } from './services/sync/sync-manager'
 
@@ -44,9 +47,33 @@ if (!gotSingleInstanceLock) {
       if (deepLink) {
         win.webContents.send(IPC.APP_GLOBAL_ACTION, `deep-link:${deepLink}`)
       }
+      // 资源管理器“打开方式”的文件路径只入队，由渲染进程取走打开；
+      // 此前这里直接丢弃，是外部双击永远落回主页的原因
+      queueExternalFiles(commandLine)
     }
   })
 }
+
+/** 命令行文件参数入队；不存在或非普通文件一律忽略 */
+function queueExternalFiles(commandLine: readonly string[]): void {
+  for (const filePath of extractExternalFilePaths(commandLine, isRegularFile)) {
+    pendingExternalFiles.push(filePath)
+  }
+}
+
+function isRegularFile(filePath: string): boolean {
+  try {
+    return existsSync(filePath) && statSync(filePath).isFile()
+  } catch {
+    return false
+  }
+}
+
+// macOS：Dock/访达 open-file（可能早于 whenReady，先入队）
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  pendingExternalFiles.push(filePath)
+})
 
 app.on('open-url', (event, url) => {
   event.preventDefault()
@@ -61,6 +88,8 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   initAppUpdater()
   createWindow()
+  // 冷启动同样可能带文件参数（应用未运行时双击文件）
+  queueExternalFiles(process.argv)
   syncManager.initAutoSync()
 
   app.on('activate', () => {
@@ -71,6 +100,7 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  closeAllBookDbs()
   disposeAllAcp()
 })
 

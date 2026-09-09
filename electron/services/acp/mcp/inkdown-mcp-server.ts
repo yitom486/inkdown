@@ -1,7 +1,15 @@
 import { randomBytes } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import { handleInkdownMcpRpc, type McpRpcMessage } from './inkdown-mcp-rpc'
-import type { InkdownMcpToolContext } from './inkdown-mcp-tools'
+import type {
+  InkdownMcpToolContext,
+  InkdownMcpToolDefinition,
+} from './inkdown-mcp-tools'
+import { callInkdownMcpTool, INKDOWN_MCP_TOOLS } from './inkdown-mcp-tools'
+import {
+  callInkdownTocTool,
+  INKDOWN_TOC_MCP_TOOLS,
+} from './inkdown-mcp-toc-tools'
 
 const MCP_ENDPOINT_PATH = '/mcp'
 const MAX_BODY_BYTES = 256 * 1024
@@ -13,6 +21,8 @@ export interface InkdownMcpServerHandle {
 }
 
 let handle: InkdownMcpServerHandle | null = null
+/** 目录副会话专用端点（只挂目录工具，主会话看不到） */
+let tocHandle: InkdownMcpServerHandle | null = null
 
 function readBody(
   request: NodeJS.ReadableStream & { destroy: () => void },
@@ -54,7 +64,28 @@ export async function startInkdownMcpServer(
   context: InkdownMcpToolContext,
 ): Promise<InkdownMcpServerHandle> {
   if (handle) return handle
+  handle = await serveMcpServer(context, INKDOWN_MCP_TOOLS, callInkdownMcpTool, 'inkdown')
+  return handle
+}
 
+/**
+ * 目录副会话专用端点：同一份传输/鉴权逻辑，只挂目录工具表。
+ * 主会话的表一个字不动，目录 agent 也看不到主表。
+ */
+export async function startTocMcpServer(
+  context: InkdownMcpToolContext,
+): Promise<InkdownMcpServerHandle> {
+  if (tocHandle) return tocHandle
+  tocHandle = await serveMcpServer(context, INKDOWN_TOC_MCP_TOOLS, callInkdownTocTool, 'inkdown-toc')
+  return tocHandle
+}
+
+async function serveMcpServer(
+  context: InkdownMcpToolContext,
+  tools: readonly InkdownMcpToolDefinition[],
+  call: typeof callInkdownMcpTool,
+  label: string,
+): Promise<InkdownMcpServerHandle> {
   const authToken = randomBytes(24).toString('hex')
 
   const server = createServer((request, response) => {
@@ -83,12 +114,13 @@ export async function startInkdownMcpServer(
       }
 
       try {
-        const rpcResponse = await handleInkdownMcpRpc(message, context)
+        const rpcResponse = await handleInkdownMcpRpc(message, context, tools, call)
         if (!rpcResponse) {
           response.writeHead(202).end()
           return
         }
         console.info('[acp-mcp] handled', {
+          server: label,
           method: message.method,
           tool: typeof message.params?.name === 'string' ? message.params.name : undefined,
         })
@@ -109,9 +141,9 @@ export async function startInkdownMcpServer(
   })
 
   const port = await listen(server)
-  console.info('[acp-mcp] server 已启动', { port })
+  console.info('[acp-mcp] server 已启动', { server: label, port })
 
-  handle = {
+  return {
     url: `http://127.0.0.1:${port}${MCP_ENDPOINT_PATH}`,
     authToken,
     close: () =>
@@ -122,10 +154,11 @@ export async function startInkdownMcpServer(
         server.close(() => resolve())
       }),
   }
-  return handle
 }
 
 export async function stopInkdownMcpServer(): Promise<void> {
   await handle?.close()
   handle = null
+  await tocHandle?.close()
+  tocHandle = null
 }

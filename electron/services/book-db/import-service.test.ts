@@ -1,0 +1,295 @@
+import { describe, expect, it } from 'vitest'
+import { DatabaseSync } from 'node:sqlite'
+import { ok } from '@shared/core/result'
+import { migrateBookDb } from './schema'
+import { countBookBlocks } from './queries'
+import { isRosettaImportActive, importScannedBookToDb, type RosettaImportDeps } from './import-service'
+
+// 最小 fake：3 页书，每页回固定标题行 + 正文行 + span
+type FakeLoader = NonNullable<RosettaImportDeps['loadInspector']>
+function fakeLoader(calls: string[]): FakeLoader {
+  const loader = async () => ({
+    OcrMode: { Auto: 'Auto' },
+    processPdfWithOcr: async (_data: unknown, options: { pageNumbers?: number[] }) => {
+      const pageNumbers = options.pageNumbers ?? [1, 2, 3]
+      calls.push(`ocr:${pageNumbers.join(',')}`)
+      return {
+        pageCount: 3,
+        pagesRoutedToOcr: [1, 2, 3],
+        pages: pageNumbers.map((page) => ({
+          pageNumber: page,
+          markdown: `# P${page} 标题\n\nP${page} 正文第一段`,
+          spans: [
+            { text: `P${page} 标题`, confidence: 0.9, x: 1, y: 2, width: 3, height: 4 },
+            { text: `P${page} 正文第一段`, confidence: 0.8, x: 1, y: 2, width: 3, height: 4 },
+          ],
+        })),
+      }
+    },
+  })
+  return loader as unknown as FakeLoader
+}
+
+function openMemDb(): DatabaseSync {
+  const db = new DatabaseSync(':memory:')
+  migrateBookDb(db)
+  return db
+}
+
+const memDeps = (calls: string[], memDb: DatabaseSync) => ({
+  loadInspector: fakeLoader(calls),
+  ensureRuntime: async () => ok({ modelDir: 'models' }),
+  readPdf: async () => Buffer.from('pdf'),
+  openDb: () => memDb,
+})
+
+const basePayload = {
+  filePath: 'D:/book/fake.pdf',
+  fileFingerprint: 'fake-fp-1',
+  title: '假书',
+  format: 'pdf',
+  pageCount: 3,
+  toc: [
+    { title: '第一章', realPage: 1, level: 1 },
+    { title: '第二章', realPage: 3, level: 1 },
+  ],
+}
+
+describe('importScannedBookToDb', () => {
+  it('全量导入：单次调用→入库→阶段进度', async () => {
+    const calls: string[] = []
+    const progress: [number, number, string][] = []
+    const memDb = openMemDb()
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      { onProgress: (done, total, phase) => progress.push([done, total, phase]) },
+      memDeps(calls, memDb),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value).toMatchObject({ chapters: 2, blocks: 6, pages: 3, ocrPages: 3, nativePages: 0 })
+    // 小书 single chunk：同一次调用完成
+    expect(calls).toEqual(['ocr:1,2,3'])
+    expect(progress).toEqual([
+      [0, 3, 'ocr'],
+      [3, 3, 'ocr'],
+      [3, 3, 'import'],
+    ])
+    expect(countBookBlocks(memDb, result.value.bookId)).toBe(6)
+    expect(isRosettaImportActive()).toBe(false)
+    memDb.close()
+  })
+
+  it('大书分大块：100 页两块，进度 50 步进', async () => {
+    const calls: string[] = []
+    const progress: [number, number, string][] = []
+    const memDb = openMemDb()
+    const bigLoader = (async () => ({
+      OcrMode: { Auto: 'Auto' },
+      processPdfWithOcr: async (_data: unknown, options: { pageNumbers?: number[] }) => {
+        const pageNumbers = options.pageNumbers ?? []
+        calls.push(`ocr:${pageNumbers[0]}-${pageNumbers[pageNumbers.length - 1]}`)
+        return {
+          pagesRoutedToOcr: [...pageNumbers],
+          pages: pageNumbers.map((page) => ({
+            pageNumber: page,
+            markdown: `P${page} 正文`,
+            spans: [{ text: `P${page} 正文`, confidence: 0.9, x: 1, y: 2, width: 3, height: 4 }],
+          })),
+        }
+      },
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, pageCount: 100, toc: [{ title: '全书', realPage: 1, level: 1 }] },
+      { onProgress: (done, total, phase) => progress.push([done, total, phase]) },
+      {
+        loadInspector: bigLoader,
+        ensureRuntime: async () => ok({ modelDir: 'models' }),
+        readPdf: async () => Buffer.from('pdf'),
+        openDb: () => memDb,
+      },
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(calls).toEqual(['ocr:1-50', 'ocr:51-100'])
+    expect(progress).toEqual([
+      [0, 100, 'ocr'],
+      [50, 100, 'ocr'],
+      [100, 100, 'ocr'],
+      [100, 100, 'import'],
+    ])
+    expect(result.value).toMatchObject({ pages: 100, ocrPages: 100, nativePages: 0 })
+    expect(countBookBlocks(memDb, result.value.bookId)).toBe(100)
+    memDb.close()
+  })
+
+  it('缺页数直接拒绝', async () => {
+    const calls: string[] = []
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, pageCount: 0 },
+      {},
+      memDeps(calls, openMemDb()),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('INVALID_ARGUMENT')
+    expect(calls).toEqual([])
+  })
+
+  it('取消后重进只做剩余块（续跑）', async () => {
+    const calls: string[] = []
+    const memDb = openMemDb()
+    const bigLoader = (async () => ({
+      OcrMode: { Auto: 'Auto' },
+      processPdfWithOcr: async (_data: unknown, options: { pageNumbers?: number[] }) => {
+        const pageNumbers = options.pageNumbers ?? []
+        calls.push(`ocr:${pageNumbers[0]}-${pageNumbers[pageNumbers.length - 1]}`)
+        return {
+          pagesRoutedToOcr: [...pageNumbers],
+          pages: pageNumbers.map((page) => ({
+            pageNumber: page,
+            markdown: `P${page} 正文`,
+            spans: [{ text: `P${page} 正文`, confidence: 0.9, x: 1, y: 2, width: 3, height: 4 }],
+          })),
+        }
+      },
+    })) as unknown as FakeLoader
+    const deps = {
+      loadInspector: bigLoader,
+      ensureRuntime: async () => ok({ modelDir: 'models' }),
+      readPdf: async () => Buffer.from('pdf'),
+      openDb: () => memDb,
+    }
+    const payload100 = {
+      ...basePayload,
+      pageCount: 100,
+      toc: [{ title: '全书', realPage: 1, level: 1 }],
+    }
+    // 第一轮：做完第 1 块后取消（shouldCancel 第 3 次调用起生效）
+    let checks = 0
+    const cancelled = await importScannedBookToDb('unused-user-data', payload100, {
+      shouldCancel: () => {
+        checks += 1
+        return checks >= 3
+      },
+    }, deps)
+    expect(cancelled.ok).toBe(false)
+    if (!cancelled.ok) {
+      expect(cancelled.error.code).toBe('CANCELLED')
+      expect(cancelled.error.message).toContain('50/100')
+    }
+    expect(calls).toEqual(['ocr:1-50'])
+
+    // 第二轮：跳过已入库块，只做 51-100
+    const progress: [number, number, string][] = []
+    const resumed = await importScannedBookToDb(
+      'unused-user-data',
+      payload100,
+      { onProgress: (done, total, phase) => progress.push([done, total, phase]) },
+      deps,
+    )
+    expect(resumed.ok).toBe(true)
+    if (!resumed.ok) return
+    expect(calls).toEqual(['ocr:1-50', 'ocr:51-100'])
+    expect(progress[0]).toEqual([50, 100, 'ocr'])
+    expect(progress).toContainEqual([100, 100, 'import'])
+    expect(resumed.value).toMatchObject({ pages: 100, ocrPages: 100, nativePages: 0 })
+    expect(countBookBlocks(memDb, resumed.value.bookId)).toBe(100)
+    // 章内序号连续无断号重号
+    const indexes = (
+      memDb.prepare('SELECT block_index AS b FROM blocks ORDER BY block_index').all() as { b: number }[]
+    ).map((r) => r.b)
+    expect(indexes).toEqual(indexes.map((_, i) => i))
+    memDb.close()
+  })
+
+  it('混合路由：仅扫描页计入 ocrPages，其余原生直提', async () => {
+    const calls: string[] = []
+    const memDb = openMemDb()
+    const mixedLoader = (async () => ({
+      OcrMode: { Auto: 'Auto' },
+      processPdfWithOcr: async () => ({
+        pageCount: 3,
+        pagesRoutedToOcr: [2],
+        pages: [1, 2, 3].map((page) => ({
+          pageNumber: page,
+          markdown: `# P${page}\n\n正文`,
+          // 原生页无 spans（引擎没跑），扫描页有
+          spans: page === 2 ? [{ text: '正文', confidence: 0.9, x: 1, y: 2, width: 3, height: 4 }] : [],
+        })),
+      }),
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      {},
+      {
+        loadInspector: mixedLoader,
+        ensureRuntime: async () => ok({ modelDir: 'models' }),
+        readPdf: async () => Buffer.from('pdf'),
+        openDb: () => memDb,
+      },
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value).toMatchObject({ pages: 3, ocrPages: 1, nativePages: 2 })
+    // 原生页块无 bbox（引擎没跑就没有坐标），定位回退到页
+    const nativeBlocks = memDb
+      .prepare('SELECT COUNT(*) AS n FROM blocks WHERE page_number = 1 AND bbox IS NULL')
+      .get() as { n: number }
+    expect(nativeBlocks.n).toBeGreaterThan(0)
+    memDb.close()
+  })
+
+  it('缺指纹直接拒绝，不碰引擎', async () => {
+    const calls: string[] = []
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, fileFingerprint: '  ' },
+      {},
+      memDeps(calls, openMemDb()),
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('INVALID_ARGUMENT')
+    expect(calls).toEqual([])
+  })
+
+  it('取消标记在首批前生效，不调 OCR', async () => {
+    const calls: string[] = []
+    let cancelled = false
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      { shouldCancel: () => cancelled },
+      {
+        ...memDeps(calls, openMemDb()),
+        readPdf: async () => {
+          cancelled = true
+          return Buffer.from('pdf')
+        },
+      },
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('CANCELLED')
+    // 取消在 readPdf 后即闩锁，一次 napi 调用都没发生
+    expect(calls).toEqual([])
+    expect(isRosettaImportActive()).toBe(false)
+  })
+
+  it('并发第二个导入被拒（引擎串行）', async () => {
+    const calls: string[] = []
+    const first = importScannedBookToDb('unused-user-data', basePayload, {}, memDeps(calls, openMemDb()))
+    const second = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, fileFingerprint: 'fake-fp-2' },
+      {},
+      memDeps(calls, openMemDb()),
+    )
+    expect(second.ok).toBe(false)
+    if (!second.ok) expect(second.error.code).toBe('INVALID_STATE')
+    await first
+    expect(isRosettaImportActive()).toBe(false)
+  })
+})

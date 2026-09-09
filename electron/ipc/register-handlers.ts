@@ -83,6 +83,14 @@ import {
 } from '../services/app-updater'
 import { appendRendererErrorLog, getErrorLogFilePath } from '../services/error-log-service'
 import { createWindow, getWindowInitByWebContents } from '../window/create-window'
+import { pendingExternalFiles } from '../window/external-file'
+import {
+  cancelRosettaImport,
+  getActiveRosettaImport,
+  importScannedBookToDb,
+} from '../services/book-db/import-service'
+import { getRosettaBookInfo, queryRosettaBook } from '../services/book-db/query-service'
+import type { RosettaImportPayload, RosettaImportStatus, RosettaQuery } from '@shared/types/rosetta'
 import { applyWindowTitle } from '../window/window-title'
 import { setVerboseRendererLogs } from '../services/runtime-state'
 import {
@@ -310,7 +318,7 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.ACP_DISCONNECT, () => disconnectAcp())
   ipcMain.handle(IPC.ACP_SESSION_NEW, (_event, payload: AcpSessionNewPayload) =>
-    createAcpSession(payload?.cwd),
+    createAcpSession(payload?.cwd, payload?.toolScope === 'toc' ? 'toc' : 'full'),
   )
   ipcMain.handle(IPC.ACP_PROMPT, (event, payload: AcpPromptPayload) => {
     // 换窗接着聊时，归属改到新的发起窗
@@ -324,6 +332,7 @@ export function registerIpcHandlers(): void {
 
   // --- 应用：版本与自动更新 ---
   ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())
+  ipcMain.handle(IPC.APP_TAKE_PENDING_EXTERNAL_FILE, () => pendingExternalFiles.take())
   ipcMain.handle(IPC.APP_UPDATE_CHECK, () => checkAppUpdate())
   ipcMain.handle(IPC.APP_UPDATE_DOWNLOAD, () => downloadAppUpdate())
   ipcMain.handle(IPC.APP_UPDATE_INSTALL, () => {
@@ -566,6 +575,66 @@ export function registerIpcHandlers(): void {
     async (_event, payload: ExtractPdfBookMarkdownPayload) =>
       extractPdfBookMarkdown(payload.filePath),
   )
+
+  // --- 罗盘索引（扫描书一键导入 + 读库）---
+  ipcMain.handle(IPC.ROSETTA_IMPORT_BOOK, (event, payload: RosettaImportPayload) => {
+    const sender = event.sender
+    const fingerprint =
+      typeof payload?.fileFingerprint === 'string' ? payload.fileFingerprint.trim() : ''
+    const push = (status: RosettaImportStatus): void => {
+      if (!sender.isDestroyed()) sender.send(IPC.ROSETTA_IMPORT_STATUS, status)
+    }
+    push({ fingerprint, state: 'running', donePages: 0, totalPages: 0, phase: 'preparing' })
+    // 长任务：invoke 挂到导入结束，进度另走推送（窗口重载也不丢状态）
+    return importScannedBookToDb(app.getPath('userData'), payload, {
+      onProgress: (donePages, totalPages, phase) =>
+        push({ fingerprint, state: 'running', donePages, totalPages, phase }),
+    }).then((result) => {
+      if (result.ok) {
+        const stats = result.value
+        push({
+          fingerprint,
+          state: 'done',
+          donePages: stats.pages,
+          totalPages: stats.pages,
+          message: `原生 ${stats.nativePages} 页直提，扫描 ${stats.ocrPages} 页识别，${stats.blocks} 块入库`,
+        })
+      } else {
+        push({
+          fingerprint,
+          state: result.error.code === 'CANCELLED' ? 'cancelled' : 'error',
+          donePages: 0,
+          totalPages: 0,
+          message: result.error.message,
+        })
+      }
+      return result
+    })
+  })
+  ipcMain.on(IPC.ROSETTA_CANCEL_IMPORT, () => {
+    cancelRosettaImport()
+  })
+  ipcMain.handle(IPC.ROSETTA_ACTIVE_IMPORT, () => ok(getActiveRosettaImport()))
+  ipcMain.handle(IPC.ROSETTA_BOOK_INFO, (_event, fingerprint: string) => {
+    try {
+      return getRosettaBookInfo(app.getPath('userData'), fingerprint ?? '')
+    } catch (cause) {
+      return err({
+        code: 'UNKNOWN',
+        message: cause instanceof Error ? cause.message : '读取罗盘信息失败',
+      })
+    }
+  })
+  ipcMain.handle(IPC.ROSETTA_QUERY_BOOK, (_event, query: RosettaQuery) => {
+    try {
+      return queryRosettaBook(app.getPath('userData'), query)
+    } catch (cause) {
+      return err({
+        code: 'UNKNOWN',
+        message: cause instanceof Error ? cause.message : '罗盘查询失败',
+      })
+    }
+  })
 
   // --- 云端同步 (WebDAV) ---
   ipcMain.handle(IPC.SYNC_GET_CONFIG, async () => readSyncConfig())

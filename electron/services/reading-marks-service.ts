@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { app } from 'electron'
@@ -40,7 +40,11 @@ export async function readMarksStore(): Promise<ReadingMarksFile> {
 export async function writeMarksStore(store: ReadingMarksFile): Promise<void> {
   const filePath = getMarksFilePath()
   await mkdir(app.getPath('userData'), { recursive: true })
-  await writeFile(filePath, `${JSON.stringify(store, null, 2)}\n`, 'utf-8')
+  // 原子写：先落临时文件再 rename，同目录 rename 是原子操作，
+  // 崩溃只会留下 .tmp（下次写入覆盖），主文件永不处于半写状态
+  const tmpPath = `${filePath}.tmp`
+  await writeFile(tmpPath, `${JSON.stringify(store, null, 2)}\n`, 'utf-8')
+  await rename(tmpPath, filePath)
 }
 
 async function readStore(): Promise<ReadingMarksFile> {

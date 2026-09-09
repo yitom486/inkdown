@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc/channels'
+import type { AppError } from '@shared/core/errors'
+import type { Result } from '@shared/core/result'
 import type { ExportDocumentPayload, ExportMarkdownPayload, OpenDialogOptions, SaveFilePayload, SavePastedImagePayload } from '@shared/types/file'
 import type { RendererErrorPayload } from '@shared/types/error-log'
 import type { WindowInit } from '@shared/types/window'
@@ -7,6 +9,7 @@ import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import type { GetPdfOcrTocPayload, GetPdfOcrPagePayload, ListPdfOcrPagesPayload, RecognizePdfPagePayload, RecognizePdfTocPayload, SavePdfOcrTocPayload } from '@shared/types/ocr'
 import type { ClassifyPdfDocumentPayload, ExtractPdfBookMarkdownPayload } from '@shared/types/pdf-inspect'
+import type { RosettaActiveImport, RosettaImportPayload, RosettaImportStatus, RosettaQuery } from '@shared/types/rosetta'
 import type { QuizSessionRecord } from '@shared/types/quiz'
 
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
@@ -85,7 +88,27 @@ const electronAPI: ElectronAPI = {
   newWindow: () => {
     ipcRenderer.send(IPC.APP_NEW_WINDOW)
   },
+  takePendingExternalFile: () => ipcRenderer.invoke(IPC.APP_TAKE_PENDING_EXTERNAL_FILE),
   openExternal: (url: string) => ipcRenderer.invoke(IPC.APP_OPEN_EXTERNAL, url),
+  importBookToRosetta: (payload: RosettaImportPayload) =>
+    ipcRenderer.invoke(IPC.ROSETTA_IMPORT_BOOK, payload),
+  cancelRosettaImport: () => {
+    ipcRenderer.send(IPC.ROSETTA_CANCEL_IMPORT)
+  },
+  onRosettaImportStatus: (callback: (status: RosettaImportStatus) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: RosettaImportStatus) => {
+      callback(status)
+    }
+    ipcRenderer.on(IPC.ROSETTA_IMPORT_STATUS, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC.ROSETTA_IMPORT_STATUS, handler)
+    }
+  },
+  getRosettaBookInfo: (fingerprint: string) =>
+    ipcRenderer.invoke(IPC.ROSETTA_BOOK_INFO, fingerprint),
+  getActiveRosettaImport: (): Promise<Result<RosettaActiveImport | null, AppError>> =>
+    ipcRenderer.invoke(IPC.ROSETTA_ACTIVE_IMPORT),
+  queryRosettaBook: (query: RosettaQuery) => ipcRenderer.invoke(IPC.ROSETTA_QUERY_BOOK, query),
   getBunRuntimeStatus: () => ipcRenderer.invoke(IPC.BUN_GET_STATUS),
   installBunRuntime: () => ipcRenderer.invoke(IPC.BUN_INSTALL),
   toggleDevTools: () => {

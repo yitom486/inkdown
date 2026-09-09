@@ -81,6 +81,15 @@ import type {
   TestConnectionResult,
   SyncExecuteResult,
 } from '@shared/types/sync'
+import type {
+  RosettaActiveImport,
+  RosettaBookInfo,
+  RosettaImportPayload,
+  RosettaImportStats,
+  RosettaImportStatus,
+  RosettaQuery,
+  RosettaQueryResult,
+} from '@shared/types/rosetta'
 
 /**
  * preload `contextBridge` 暴露给渲染进程的 API（`window.electronAPI`）。
@@ -165,8 +174,22 @@ export interface ElectronAPI {
   quit: () => void
   /** 再开一个主窗口（不恢复工作区） */
   newWindow: () => void
+  /** 取走一个待处理的外部打开文件（资源管理器双击/打开方式），无则返回 null */
+  takePendingExternalFile: () => Promise<string | null>
   /** 用系统默认浏览器打开外链 */
   openExternal: (url: string) => Promise<Result<void, AppError>>
+  /** 扫描书一键导入罗盘索引（长任务，进度另走推送） */
+  importBookToRosetta: (payload: RosettaImportPayload) => Promise<Result<RosettaImportStats, AppError>>
+  /** 取消正在进行的罗盘导入 */
+  cancelRosettaImport: () => void
+  /** 罗盘导入进度推送；返回取消订阅 */
+  onRosettaImportStatus: (callback: (status: RosettaImportStatus) => void) => () => void
+  /** 查询某书罗盘索引信息，未导入返回 null */
+  getRosettaBookInfo: (fingerprint: string) => Promise<Result<RosettaBookInfo | null, AppError>>
+  /** 查询当前导入快照（窗口重载后恢复进度显示），无则返回 null */
+  getActiveRosettaImport: () => Promise<Result<RosettaActiveImport | null, AppError>>
+  /** 罗盘统一读查询（页/章/目录/搜索/上下文） */
+  queryRosettaBook: (query: RosettaQuery) => Promise<Result<RosettaQueryResult, AppError>>
   /** 探测本机 Bun 运行时是否可用 */
   getBunRuntimeStatus: () => Promise<Result<BunRuntimeStatus, AppError>>
   /** 安装 / 确保 Bun 运行时 */

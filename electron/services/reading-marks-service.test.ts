@@ -86,8 +86,7 @@ describe('reading-marks-service', () => {
     expect(isOk(result)).toBe(false)
   })
 
-  it('在线文档 anchor 需合法 http(s) URL', async () => {
-    const bad = await createReadingMark({
+  it('在线文档 anchor 需合法 http(s) URL', async () => {    const bad = await createReadingMark({
       filePath: 'https://react.dev/learn',
       fileFingerprint: 'web|https://react.dev/learn',
       kind: 'highlight',
@@ -104,5 +103,24 @@ describe('reading-marks-service', () => {
       excerpt: 'test',
     })
     expect(isOk(good)).toBe(true)
+  })
+
+  it('原子写：成功后无 tmp 残留，崩溃残留 tmp 下次自愈', async () => {
+    const { writeFile, access } = await import('node:fs/promises')
+    const mainPath = join(tempUserData, 'reading-marks.json')
+    // 模拟上次崩溃留下的半写 tmp
+    await writeFile(`${mainPath}.tmp`, 'garbage-half-write', 'utf-8')
+
+    const created = await createReadingMark({
+      filePath: 'D:\\books\\atomic.epub',
+      fileFingerprint: 'fp-atomic',
+      kind: 'bookmark',
+      anchor: { format: 'epub', cfi: 'cfi-a' },
+    })
+    expect(isOk(created)).toBe(true)
+
+    const raw = await readFile(mainPath, 'utf-8')
+    expect(JSON.parse(raw).marks).toHaveLength(1)
+    await expect(access(`${mainPath}.tmp`)).rejects.toThrow()
   })
 })

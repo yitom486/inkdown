@@ -1,0 +1,257 @@
+import type { DatabaseSync } from 'node:sqlite'
+import type { BookBlockType, BookDbBlockHit } from '@shared/types/book-db'
+
+/** FTS5 查询转义：包成双引号短语，防 `*`/`"`/OR 等语法字符炸查询 */
+export function escapeFtsQuery(keyword: string): string {
+  return `"${keyword.replace(/"/g, '""')}"`
+}
+
+interface BlockRow {
+  id?: unknown
+  type?: unknown
+  content?: unknown
+  page_number?: unknown
+  chapter_index?: unknown
+  chapter_title?: unknown
+  block_index?: unknown
+  snippet?: unknown
+}
+
+function toHit(row: BlockRow, fallbackContent: string): BookDbBlockHit {
+  const content = typeof row.content === 'string' ? row.content : ''
+  return {
+    id: typeof row.id === 'number' ? row.id : 0,
+    type: (typeof row.type === 'string' ? row.type : 'paragraph') as BookBlockType,
+    content,
+    pageNumber: typeof row.page_number === 'number' ? row.page_number : 0,
+    chapterIndex: typeof row.chapter_index === 'number' ? row.chapter_index : -1,
+    chapterTitle: typeof row.chapter_title === 'string' ? row.chapter_title : null,
+    blockIndex: typeof row.block_index === 'number' ? row.block_index : 0,
+    snippet:
+      typeof row.snippet === 'string' && row.snippet.length > 0
+        ? row.snippet
+        : content.slice(0, 60),
+  }
+}
+
+/**
+ * 全书全文搜索（trigram，中日英三语可查）：返回命中块 + 高亮片段 + 所在章。
+ * 空关键词直接返回空数组（空短语是 FTS 语法错误）。
+ */
+export function searchBookBlocks(
+  db: DatabaseSync,
+  bookId: number,
+  keyword: string,
+  limit = 20,
+): BookDbBlockHit[] {
+  if (!keyword.trim() || limit <= 0) return []
+  const rows = db
+    .prepare(
+      `SELECT
+        blocks.id AS id,
+        blocks.type AS type,
+        blocks.content AS content,
+        blocks.page_number AS page_number,
+        blocks.chapter_index AS chapter_index,
+        chapters.title AS chapter_title,
+        blocks.block_index AS block_index,
+        snippet(block_fts, 0, '«', '»', '…', 12) AS snippet
+      FROM block_fts
+      JOIN blocks ON blocks.id = block_fts.rowid
+      LEFT JOIN chapters ON chapters.id = blocks.chapter_id
+      WHERE block_fts MATCH ? AND blocks.book_id = ?
+      LIMIT ?`,
+    )
+    .all(escapeFtsQuery(keyword), bookId, Math.floor(limit)) as BlockRow[]
+  return rows.map((row) => toHit(row, ''))
+}
+
+/** 按章顺序读块：AI “第 N 章讲了什么”的直接数据源 */
+export function getChapterBlocks(
+  db: DatabaseSync,
+  bookId: number,
+  chapterIndex: number,
+): BookDbBlockHit[] {
+  const rows = db
+    .prepare(
+      `SELECT
+        blocks.id AS id,
+        blocks.type AS type,
+        blocks.content AS content,
+        blocks.page_number AS page_number,
+        blocks.chapter_index AS chapter_index,
+        chapters.title AS chapter_title,
+        blocks.block_index AS block_index,
+        '' AS snippet
+      FROM blocks
+      LEFT JOIN chapters ON chapters.id = blocks.chapter_id
+      WHERE blocks.book_id = ? AND blocks.chapter_index = ?
+      ORDER BY blocks.block_index ASC`,
+    )
+    .all(bookId, chapterIndex) as BlockRow[]
+  return rows.map((row) => toHit(row, ''))
+}
+
+/** 单页块（顺序）：AI 当前页走库时的直接数据源 */
+export function getPageBlocks(db: DatabaseSync, bookId: number, page: number): BookDbBlockHit[] {
+  if (!Number.isInteger(page) || page < 1) return []
+  const rows = db
+    .prepare(
+      `SELECT
+        blocks.id AS id,
+        blocks.type AS type,
+        blocks.content AS content,
+        blocks.page_number AS page_number,
+        blocks.chapter_index AS chapter_index,
+        chapters.title AS chapter_title,
+        blocks.block_index AS block_index,
+        '' AS snippet
+      FROM blocks
+      LEFT JOIN chapters ON chapters.id = blocks.chapter_id
+      WHERE blocks.book_id = ? AND blocks.page_number = ?
+      ORDER BY blocks.chapter_index ASC, blocks.block_index ASC`,
+    )
+    .all(bookId, page) as BlockRow[]
+  return rows.map((row) => toHit(row, ''))
+}
+
+/** 块上下文：同章前后各 radius 个块（AI 当前块 ±N，不重解析全书） */
+export function getBlockContext(
+  db: DatabaseSync,
+  bookId: number,
+  chapterIndex: number,
+  blockIndex: number,
+  radius = 2,
+): BookDbBlockHit[] {
+  const safeRadius = Math.max(0, Math.floor(radius))
+  const rows = db
+    .prepare(
+      `SELECT
+        blocks.id AS id,
+        blocks.type AS type,
+        blocks.content AS content,
+        blocks.page_number AS page_number,
+        blocks.chapter_index AS chapter_index,
+        chapters.title AS chapter_title,
+        blocks.block_index AS block_index,
+        '' AS snippet
+      FROM blocks
+      LEFT JOIN chapters ON chapters.id = blocks.chapter_id
+      WHERE blocks.book_id = ?
+        AND blocks.chapter_index = ?
+        AND blocks.block_index BETWEEN ? AND ?
+      ORDER BY blocks.block_index ASC`,
+    )
+    .all(bookId, chapterIndex, blockIndex - safeRadius, blockIndex + safeRadius) as BlockRow[]
+  return rows.map((row) => toHit(row, ''))
+}
+
+/** 块定位：点 AI 文本 → 原图页 + bbox（点坐标 y-up，与 span 同帧） */
+export function locateBlock(
+  db: DatabaseSync,
+  blockId: number,
+): { pageNumber: number; bbox: { x: number; y: number; width: number; height: number } | null } | null {
+  const row = db
+    .prepare('SELECT page_number AS pageNumber, bbox FROM blocks WHERE id = ?')
+    .get(blockId) as { pageNumber?: unknown; bbox?: unknown } | undefined
+  if (!row || typeof row.pageNumber !== 'number') return null
+  let bbox: { x: number; y: number; width: number; height: number } | null = null
+  if (typeof row.bbox === 'string' && row.bbox) {
+    try {
+      const parsed = JSON.parse(row.bbox) as Record<string, unknown>
+      if (
+        typeof parsed.x === 'number' &&
+        typeof parsed.y === 'number' &&
+        typeof parsed.width === 'number' &&
+        typeof parsed.height === 'number'
+      ) {
+        bbox = { x: parsed.x, y: parsed.y, width: parsed.width, height: parsed.height }
+      }
+    } catch {
+      bbox = null
+    }
+  }
+  return { pageNumber: row.pageNumber, bbox }
+}
+
+export function countBookBlocks(db: DatabaseSync, bookId: number): number {
+  const row = db
+    .prepare('SELECT COUNT(*) AS total FROM blocks WHERE book_id = ?')
+    .get(bookId) as { total?: unknown } | undefined
+  return typeof row?.total === 'number' ? row.total : 0
+}
+
+/**
+ * 给定页中跑过 OCR 的页数（有 bbox 的块所在页去重）。
+ * OCR 页必有 spans → 对齐出 bbox；原生页 spans 为空 → bbox 全空。
+ * 用于续跑统计回补（跳过的块没经过本轮路由集合）。
+ */
+export function countPagesWithBbox(
+  db: DatabaseSync,
+  bookId: number,
+  pages: readonly number[],
+): number {
+  const valid = [...new Set(pages)].filter((page) => Number.isInteger(page) && page > 0)
+  if (valid.length === 0) return 0
+  const placeholders = valid.map(() => '?').join(',')
+  const row = db
+    .prepare(
+      `SELECT COUNT(DISTINCT page_number) AS total FROM blocks
+       WHERE book_id = ? AND bbox IS NOT NULL AND page_number IN (${placeholders})`,
+    )
+    .get(bookId, ...valid) as { total?: unknown } | undefined
+  return typeof row?.total === 'number' ? row.total : 0
+}
+
+export interface BookChapterRow {
+  index: number
+  title: string
+  startPage: number
+  endPage: number
+}
+
+/** 章目录：AI 章级问答先定位章范围 */
+export function listBookChapters(db: DatabaseSync, bookId: number): BookChapterRow[] {
+  const rows = db
+    .prepare(
+      `SELECT chapter_index AS chapterIndex, title, start_page AS startPage, end_page AS endPage
+       FROM chapters WHERE book_id = ? ORDER BY chapter_index ASC`,
+    )
+    .all(bookId) as { chapterIndex?: unknown; title?: unknown; startPage?: unknown; endPage?: unknown }[]
+  return rows
+    .filter((row) => typeof row.chapterIndex === 'number' && typeof row.title === 'string')
+    .map((row) => ({
+      index: row.chapterIndex as number,
+      title: row.title as string,
+      startPage: typeof row.startPage === 'number' ? row.startPage : 0,
+      endPage: typeof row.endPage === 'number' ? row.endPage : 0,
+    }))
+}
+
+export interface BookRecordInfo {
+  bookId: number
+  title: string
+  pageCount: number
+  cleanVersion: string
+  chapters: number
+  blocks: number
+}
+
+/** 按指纹取书 + 统计；未导入返回 null */
+export function getBookRecord(db: DatabaseSync, fingerprint: string): BookRecordInfo | null {
+  const book = db
+    .prepare('SELECT id, title, page_count AS pageCount, clean_version AS cleanVersion FROM books WHERE fingerprint = ?')
+    .get(fingerprint) as { id?: unknown; title?: unknown; pageCount?: unknown; cleanVersion?: unknown } | undefined
+  if (!book || typeof book.id !== 'number') return null
+  const chapters = db
+    .prepare('SELECT COUNT(*) AS total FROM chapters WHERE book_id = ?')
+    .get(book.id) as { total?: unknown } | undefined
+  return {
+    bookId: book.id,
+    title: typeof book.title === 'string' ? book.title : '',
+    pageCount: typeof book.pageCount === 'number' ? book.pageCount : 0,
+    cleanVersion: typeof book.cleanVersion === 'string' ? book.cleanVersion : '',
+    chapters: typeof chapters?.total === 'number' ? chapters.total : 0,
+    blocks: countBookBlocks(db, book.id),
+  }
+}

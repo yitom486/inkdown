@@ -18,6 +18,12 @@ import {
   proposeMarkAtForAgentResult,
 } from './read-marks-for-agent'
 import { suggestChaptersForAgent } from './suggest-chapters-for-agent'
+import {
+  deleteTocDraftEntry,
+  readTocDraft,
+  upsertTocDraftEntry,
+  writeTocDraft,
+} from './toc-draft'
 import { readSelectionWithContext } from './read-selection-context'
 import { searchReaderContent } from './search-reader-content'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
@@ -209,5 +215,47 @@ export async function resolveInkdownSnapshot(
         : []
       return JSON.stringify(await suggestChaptersForAgent(chapters), null, 2)
     }
+    case 'toc-draft-read': {
+      return JSON.stringify(readTocDraft() ?? { fingerprint: '', entries: [] }, null, 2)
+    }
+    case 'toc-draft-write': {
+      return JSON.stringify(applyTocDraftWrite(args), null, 2)
+    }
   }
+}
+
+/**
+ * 目录 Agent 草稿写回（toc_* MCP 工具经快照回路到这里）。
+ * 返回可直接回给模型的确认 JSON。
+ */
+function applyTocDraftWrite(args?: {
+  op?: unknown
+  fingerprint?: unknown
+  entries?: unknown
+  entry?: unknown
+  title?: unknown
+  index?: unknown
+}): Record<string, unknown> {
+  const fingerprint = typeof args?.fingerprint === 'string' ? args.fingerprint.trim() : ''
+  if (!fingerprint) {
+    return { ok: false, error: '缺少 fingerprint（取自任务提示）' }
+  }
+  const op = args?.op
+  if (op === 'replace') {
+    const { count, dropped } = writeTocDraft(fingerprint, args?.entries)
+    return { ok: true, op, count, dropped }
+  }
+  if (op === 'upsert') {
+    const result = upsertTocDraftEntry(fingerprint, args?.entry)
+    if ('error' in result) return { ok: false, error: result.error }
+    return { ok: true, op, ...result }
+  }
+  if (op === 'delete') {
+    const result = deleteTocDraftEntry(fingerprint, {
+      index: args?.index,
+      title: args?.title,
+    })
+    return { ok: true, op, ...result }
+  }
+  return { ok: false, error: `未知 op（replace | upsert | delete）：${String(op)}` }
 }

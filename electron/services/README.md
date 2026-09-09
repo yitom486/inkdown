@@ -26,6 +26,12 @@
 | `reading-marks-service.ts` | 书签 / 高亮 / 批注 JSON 持久化（`userData`） |
 | `quiz-service.ts` | AI 测验与答题打分记录 JSONL 追加型持久化（`userData`） |
 
+## 结构化索引（SQLite 罗盘，单书一库）
+
+| 目录 | 功能 |
+|------|------|
+| `book-db/` | `schema` 建表 + migrate（`user_version`，v2 加 `completed_pages` 续跑进度）；`import-book` 整书导入（book-index 章归属 + 行分类 + span 对齐 bbox）与块级原语（`ensureImportBookRow`/`importBookChunk`/进度标记，块事务原子、重复幂等、序号连续）；`queries` 章读块 / FTS trigram 中文搜 / 块上下文 / 块定位；`open-book-db` 单书一库打开 + 句柄缓存；`import-service` 扫描书一键导入（单次 Auto 全量改为大块分段 ≤4 块：全量解析成本只与文件大小有关，17×20 小分批会 churn 到 abort；页数由渲染端给，不再 classify；取消/崩溃按 `completed_pages` 续跑；终端 `[rosetta]` 日志；进行中快照可轮询）；`query-service` 统一读查询编排；`rosetta-book.test` 王道整书回归、`rosetta-native.test` 原生分流回归（各需环境变量给数据） |
+
 ## 云端同步 (WebDAV)
 
 | 目录 | 功能 |

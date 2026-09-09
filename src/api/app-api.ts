@@ -34,6 +34,13 @@ export const appApi = {
     getElectronAPI()?.newWindow()
   },
 
+  /** 取走一个待处理的外部打开文件；非 Electron 环境或无待处理时返回 null */
+  async takePendingExternalFile(): Promise<string | null> {
+    const api = getElectronAPI()
+    if (!api?.takePendingExternalFile) return null
+    return api.takePendingExternalFile()
+  },
+
   async openExternal(url: string): Promise<Result<void, AppError>> {
     const api = getElectronAPI()
     if (!api?.openExternal) {

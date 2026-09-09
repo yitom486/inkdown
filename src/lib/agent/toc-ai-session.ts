@@ -105,7 +105,7 @@ export async function ensureTocSessionId(overrides?: {
   const acpState = useAcpUiStore.getState()
   if (acpState.status !== 'connected') return null
 
-  const created = await acpApi.sessionNew({ cwd: resolvePreferredAgentCwd() })
+  const created = await acpApi.sessionNew({ cwd: resolvePreferredAgentCwd(), toolScope: 'toc' })
   if (!isOk(created)) return null
   const sid = created.value.sessionId
   let options = created.value.configOptions ?? []
@@ -134,13 +134,20 @@ export async function sendTocPrompt(promptText: string): Promise<string | null> 
   if (!tocSessionId) return null
   tocReplyBuffer = ''
   tocPrompting = true
+  const shortSid = tocSessionId.slice(0, 8)
+  console.info(`[toc-ai] prompt session=${shortSid} chars=${promptText.length}`)
   try {
     const result = await acpApi.prompt({
       sessionId: tocSessionId,
       prompt: [{ type: 'text', text: promptText }],
     })
-    if (!isOk(result)) return null
-    return tocReplyBuffer.trim()
+    if (!isOk(result)) {
+      console.info(`[toc-ai] prompt failed session=${shortSid}: ${result.error.message}`)
+      return null
+    }
+    const reply = tocReplyBuffer.trim()
+    console.info(`[toc-ai] reply session=${shortSid} chars=${reply.length} stop=${result.value.stopReason ?? 'ok'}`)
+    return reply
   } finally {
     tocPrompting = false
   }

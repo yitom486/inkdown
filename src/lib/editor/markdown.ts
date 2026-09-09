@@ -8,6 +8,7 @@ import { slugifyHeading } from '@/lib/editor/markdown-headings'
 import { buildCodeBlockCopyButtonHtml, escapeCodeBlockLangLabel } from '@/lib/preview/code-block-chrome'
 
 import { markdownItWikilinks } from '@/lib/editor/markdown-it-wikilinks'
+import { markdownItPageMarker } from '@/lib/editor/markdown-it-page-marker'
 
 // CJS 包在 Vite ESM 下可能导出为 { default: fn }，需兼容处理
 const markdownItKatex =
@@ -23,6 +24,7 @@ export const markdownParser = new MarkdownIt({
   .use(markdownItKatex, { throwOnError: false })
   .use(markdownItTaskLists, { enabled: true, label: true, labelAfter: true })
   .use(markdownItWikilinks)
+  .use(markdownItPageMarker)
 
 export type MarkdownRenderEnv = { headingSlugCounts?: Map<string, number> }
 

@@ -98,31 +98,30 @@ export function ReaderUnitOutline({
         collapsed && 'shrink-0 border-r border-border/60',
       )}
     >
-      <button
-        type="button"
-        className="flex w-full shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent/30 hover:text-foreground"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-      >
-        {collapsed ? (
-          <ChevronRight className="size-3.5 shrink-0" />
-        ) : (
-          <ChevronDown className="size-3.5 shrink-0" />
-        )}
-        <ListTree className="size-3.5 shrink-0" />
-        目录
+      <div className="flex w-full shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2.5">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? (
+            <ChevronRight className="size-3.5 shrink-0" />
+          ) : (
+            <ChevronDown className="size-3.5 shrink-0" />
+          )}
+          <ListTree className="size-3.5 shrink-0" />
+          目录
+        </button>
         {units.length > 0 && (
-          <span className="ml-auto flex items-center gap-1 text-[10px] font-normal normal-case text-muted-foreground/80">
+          <span className="flex shrink-0 items-center gap-1 text-[10px] font-normal normal-case text-muted-foreground/80">
             {onEditToc ? (
               <button
                 type="button"
                 className="rounded p-0.5 hover:bg-accent/50 hover:text-foreground"
                 aria-label="校正目录"
                 title="校正目录"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onEditToc()
-                }}
+                onClick={onEditToc}
               >
                 <Pencil className="size-3" />
               </button>
@@ -130,7 +129,7 @@ export function ReaderUnitOutline({
             {units.length}
           </span>
         )}
-      </button>
+      </div>
 
       {!collapsed && (
         <div className="min-h-0 flex-1 overflow-auto">

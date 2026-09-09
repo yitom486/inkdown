@@ -4,10 +4,13 @@ import { buildTocAiPrompt, parseTocAiEntries } from './toc-ai'
 
 describe('toc-ai', () => {
   it('prompt 约束 JSON 数组输出并截断超长文本', () => {
-    const prompt = buildTocAiPrompt(`${'目录文本。'.repeat(8000)}第一章 绪论 1`)
+    const prompt = buildTocAiPrompt(`${'目录文本。'.repeat(8000)}第一章 绪论 1`, 'fp-1')
     expect(prompt).toContain('JSON 数组')
     expect(prompt).toContain('printedPage')
-    expect(prompt.length).toBeLessThanOrEqual(31000)
+    expect(prompt).toContain('toc_replace_all')
+    expect(prompt).toContain('fp-1')
+    expect(prompt).toContain('同行数字')
+    expect(prompt.length).toBeLessThanOrEqual(31100)
   })
 
   it('解析围栏 JSON 并清洗条目', () => {
@@ -48,5 +51,38 @@ describe('toc-ai', () => {
       JSON.stringify([{ title: '深层', printedPage: 3, level: 99 }]),
     )
     expect(result.entries[0]?.level).toBe(6)
+  })
+
+  it('同一页码长连号警告编造嫌疑', () => {
+    const items = Array.from({ length: 14 }, (_, i) => ({
+      title: `第1.${i + 1}节`,
+      printedPage: 78,
+      level: 2,
+    }))
+    const result = parseTocAiEntries(JSON.stringify(items))
+    expect(result.entries).toHaveLength(14)
+    expect(result.warnings.some((w) => w.includes('疑似编造'))).toBe(true)
+  })
+
+  it('短连号不警告', () => {
+    const items = Array.from({ length: 5 }, (_, i) => ({
+      title: `第1.${i + 1}节`,
+      printedPage: 8,
+      level: 2,
+    }))
+    const result = parseTocAiEntries(JSON.stringify(items))
+    expect(result.warnings.some((w) => w.includes('疑似编造'))).toBe(false)
+  })
+
+  it('水印碎片按水印口径丢弃并计数', () => {
+    const result = parseTocAiEntries(
+      JSON.stringify([
+        { title: '87929797王道计', printedPage: 149, level: 1 },
+        { title: '3.1.2主存储器的组成', printedPage: 31, level: 2 },
+      ]),
+    )
+    expect(result.entries.map((e) => e.title)).toEqual(['3.1.2主存储器的组成'])
+    expect(result.dropped).toBe(1)
+    expect(result.warnings.some((w) => w.includes('水印'))).toBe(true)
   })
 })

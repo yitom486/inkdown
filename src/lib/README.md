@@ -36,6 +36,7 @@
 | `export-document` / `export-document-styles` | 导出 HTML/PDF 的文档与样式 |
 | `deep-link` | 跨格式深度回跳协议解析与构建（`inkdown://open`） |
 | `markdown-it-wikilinks` | 双向链接 `[[target\|label]]` markdown-it 扩展 |
+| `markdown-it-page-marker` | OCR 页标记 chip 插件（独立成行 `<!-- Page N -->`→分页 chip，`data-page` 预留跳原图页） |
 | `wikilink-completion` | CodeMirror 6 `[[` 实时自动补全源 |
 | `draft-utils` | 草稿 key 与可恢复草稿挑选 |
 | `editor-focus` | 判断 Markdown 编辑器是否聚焦 |
@@ -106,7 +107,7 @@
 | `parse-chapter-mark-plan` / `promote-chapter-mark-plans` | 章级划重点 tool 解析与 promote |
 | `mark-proposal-failure` | 提议/采用失败分类与「打开该章 / 去划词」引导 |
 
-`agent/context/`（原 `agent-context/`）：静态 Skill、turn-context、阅读器内容/选区/标记 registry、MCP 快照序列化；标记提议统一走 `propose-mark`（`inkdown_propose_mark`）。
+`agent/context/`（原 `agent-context/`）：静态 Skill、turn-context、阅读器内容/选区/标记 registry、MCP 快照序列化；标记提议统一走 `propose-mark`（`inkdown_propose_mark`）；目录 Agent 草稿走 `toc-draft`（`toc_*` 工具经快照回路写入，人点保存才进缓存）。
 
 ---
 

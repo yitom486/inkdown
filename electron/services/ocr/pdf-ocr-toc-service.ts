@@ -6,6 +6,7 @@ import {
   extractOcrTocFromText,
   ocrTocToReaderUnits,
 } from '@shared/reader/ocr-toc-extractor'
+import { cleanOcrWatermarks } from '@shared/reader/ocr-watermark'
 import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@shared/types/ocr'
 import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
 import { writePdfOcrTocCache } from './ocr-toc-cache'
@@ -59,9 +60,30 @@ async function recognizePdfTocWithInspector(
       minimumConfidence: 0.3,
     })
     const ordered = [...result.pages].sort((a, b) => a.pageNumber - b.pageNumber)
-    const textParts = ordered.map((page) => page.markdown ?? '')
+    // 水印/页眉先清洗再解析，避免“王道计”这类跨页重复行污染目录条目；
+    // 清洗永不删除表格行，目录页表格不受影响
+    const cleaned = cleanOcrWatermarks(
+      ordered.map((page) => ({
+        page: page.pageNumber,
+        markdown: page.markdown ?? '',
+        spans: page.spans ?? [],
+      })),
+    )
+    const textParts = cleaned.pages.map((page) => page.markdown)
 
-    const entries = extractOcrTocFromText(textParts.join('\n'))
+    const tocPageRange: [number, number] = [fromPage, toPage]
+    const resolvedOffset = pageOffset ?? defaultPdfPageOffset(tocPageRange)
+    // 先重组（竖线拆分/数字汤配对/范围门）再提取：页数由调用方给，不再解析一次；
+    // 页数非法（IPC 越界/NaN 落成 null）则退化 legacy，不断整条链路
+    const rawPageCount: unknown = payload.pageCount
+    const pageCount =
+      typeof rawPageCount === 'number' && Number.isInteger(rawPageCount) && rawPageCount > 0
+        ? rawPageCount
+        : undefined
+    const entries = extractOcrTocFromText(
+      textParts.join('\n'),
+      pageCount === undefined ? undefined : { pageCount, pageOffset: resolvedOffset },
+    )
     if (entries.length === 0) {
       return err({
         code: 'OCR_TOC_EMPTY',
@@ -69,8 +91,6 @@ async function recognizePdfTocWithInspector(
       })
     }
 
-    const tocPageRange: [number, number] = [fromPage, toPage]
-    const resolvedOffset = pageOffset ?? defaultPdfPageOffset(tocPageRange)
     const units = ocrTocToReaderUnits(entries, resolvedOffset)
 
     const cache: PdfOcrTocCache = {

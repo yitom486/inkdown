@@ -87,4 +87,64 @@ describe('readChapterByRef', () => {
     await expect(readChapterByRef({ flatIndex: 9 })).rejects.toThrow('越界')
     dispose()
   })
+
+  it('provider 返回整章时 label 透传（罗盘章粒度）', async () => {
+    useReaderNavigationStore.setState({
+      ready: true,
+      filePath: 'D:/book/a.pdf',
+      format: 'pdf',
+      units: [
+        { label: '第4章', href: '161', level: 1 },
+        { label: '4.1', href: '161', level: 2 },
+      ],
+    })
+    const dispose = registerReaderContent({
+      filePath: 'D:/book/a.pdf',
+      getCurrentText: () => '',
+      getUnitByIndex: async () => ({ label: '第4章 指令系统', text: '章正文' }),
+    })
+    const result = await readChapterByRef({ flatIndex: 0 })
+    expect(result).toMatchObject({
+      index: 0,
+      label: '第4章 指令系统',
+      text: '章正文',
+      matchedBy: 'flatIndex',
+    })
+    dispose()
+  })
+
+  it('超长整章截断并注记', async () => {
+    useReaderNavigationStore.setState({
+      ready: true,
+      filePath: 'D:/book/a.pdf',
+      format: 'pdf',
+      units: [{ label: '第4章', href: '161', level: 1 }],
+    })
+    const dispose = registerReaderContent({
+      filePath: 'D:/book/a.pdf',
+      getCurrentText: () => '',
+      getUnitByIndex: async () => ({ label: '第4章 指令系统', text: '正'.repeat(25000) }),
+    })
+    const result = await readChapterByRef({ flatIndex: 0 })
+    expect(result.label).toBe('第4章 指令系统')
+    expect(result.text).toContain('已截断')
+    expect(result.text.length).toBeLessThan(25000)
+    dispose()
+  })
+
+  it('空正文抛错', async () => {
+    useReaderNavigationStore.setState({
+      ready: true,
+      filePath: 'D:/book/a.pdf',
+      format: 'pdf',
+      units: [{ label: '第4章', href: '161', level: 1 }],
+    })
+    const dispose = registerReaderContent({
+      filePath: 'D:/book/a.pdf',
+      getCurrentText: () => '',
+      getUnitByIndex: async () => ({ label: '空', text: '   ' }),
+    })
+    await expect(readChapterByRef({ flatIndex: 0 })).rejects.toThrow('未能读取')
+    dispose()
+  })
 })

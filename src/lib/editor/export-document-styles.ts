@@ -430,6 +430,22 @@ body {
   color: #82071e;
   background-color: #ffebe9;
 }
+
+/* OCR 页标记 chip（与应用内预览同形；固定浅色纸张主题） */
+.markdown-preview .inkdown-page-marker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+  color: #6e7781;
+  font-size: 9pt;
+}
+.markdown-preview .inkdown-page-marker::before,
+.markdown-preview .inkdown-page-marker::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed #d0d7de;
+}
 `
 
 /** 导出前去掉交互控件，避免 PDF 里出现复制按钮占位 */

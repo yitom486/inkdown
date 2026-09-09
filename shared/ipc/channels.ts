@@ -23,6 +23,8 @@ export const IPC = {
   APP_SET_VERBOSE_LOGS: 'app:set-verbose-logs',
   /** send：再开一个主窗口（不恢复工作区） */
   APP_NEW_WINDOW: 'app:new-window',
+  /** invoke：取走一个待处理的外部打开文件（资源管理器双击/打开方式），无则返回 null */
+  APP_TAKE_PENDING_EXTERNAL_FILE: 'app:take-pending-external-file',
   /** main→renderer：触发全局快捷动作（quick-open / find / replace 等） */
   APP_GLOBAL_ACTION: 'app:global-action',
   /** sendSync（preload）：取窗口启动参数，如 isFreshWindow */
@@ -159,6 +161,18 @@ export const IPC = {
   PDF_INSPECT_CLASSIFY: 'pdf-inspect:classify',
   /** invoke：pdf-inspector 整档 Markdown（原生文字层） */
   PDF_INSPECT_BOOK_MARKDOWN: 'pdf-inspect:book-markdown',
+  /** invoke：扫描书一键导入罗盘索引（长任务，进度另走推送） */
+  ROSETTA_IMPORT_BOOK: 'rosetta:import-book',
+  /** send：取消正在进行的罗盘导入 */
+  ROSETTA_CANCEL_IMPORT: 'rosetta:cancel-import',
+  /** invoke：查询当前导入快照（窗口重载后恢复进度显示），无则返回 null */
+  ROSETTA_ACTIVE_IMPORT: 'rosetta:active-import',
+  /** main→renderer：罗盘导入进度推送 */
+  ROSETTA_IMPORT_STATUS: 'rosetta:import-status',
+  /** invoke：查询某书罗盘索引信息，未导入返回 null */
+  ROSETTA_BOOK_INFO: 'rosetta:book-info',
+  /** invoke：罗盘统一读查询（页/章/目录/搜索/上下文） */
+  ROSETTA_QUERY_BOOK: 'rosetta:query-book',
   /** main→renderer：OCR 组件下载/就绪状态推送 */
   OCR_COMPONENT_STATUS: 'ocr:component-status',
   /** invoke：追加保存测验记录到 JSONL */

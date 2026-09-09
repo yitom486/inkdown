@@ -35,6 +35,8 @@ export interface PdfOcrTocCache {
   entries: OcrTocEntry[]
   units: ReaderTocUnit[]
   createdAt: string
+  /** 提取器版本；读取时版本不符视为过期（旧水印条目等不再复活） */
+  extractorVersion?: number
 }
 
 export interface RecognizePdfTocPayload {
@@ -46,6 +48,8 @@ export interface RecognizePdfTocPayload {
   pageOffset?: number
   /** 渲染倍率，越高越清晰但更慢 */
   scale?: PdfOcrScale
+  /** 真实总页数（pdf.js 已知）：目录重组范围门用，不再为此解析一次 */
+  pageCount: number
 }
 
 export interface GetPdfOcrTocPayload {

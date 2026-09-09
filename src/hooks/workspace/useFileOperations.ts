@@ -28,6 +28,7 @@ function getFileName(filePath?: string): string {
 type UnsavedAction =
   | { kind: 'open-file' }
   | { kind: 'open-tree'; path: string }
+  | { kind: 'open-external'; dir: string; path: string }
   | { kind: 'close-app' }
 
 export function useFileOperations(onError?: (error: AppError) => void) {
@@ -244,6 +245,21 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     },
   })
 
+  /**
+   * 外部打开：先把工作区切到文件所在目录，再打开文件。
+   * 目录不变时跳过扫描；类型不支持时 openPath 内报错提示。
+   */
+  const openExternalFileCore = useCallback(
+    async (dir: string, path: string) => {
+      if (dir !== workspace?.rootPath) {
+        const scanResult = await rescanWorkspaceMutation.mutateAsync(dir)
+        if (!isOk(scanResult)) return
+      }
+      await openPathMutation.mutateAsync(path)
+    },
+    [openPathMutation, rescanWorkspaceMutation, workspace?.rootPath],
+  )
+
   const executeUnsavedAction = useCallback(async (action: UnsavedAction) => {
     switch (action.kind) {
       case 'open-file':
@@ -252,11 +268,14 @@ export function useFileOperations(onError?: (error: AppError) => void) {
       case 'open-tree':
         await openPathMutation.mutateAsync(action.path)
         break
+      case 'open-external':
+        await openExternalFileCore(action.dir, action.path)
+        break
       case 'close-app':
         window.electronAPI?.confirmClose('proceed')
         break
     }
-  }, [openFileMutation, openPathMutation])
+  }, [openFileMutation, openPathMutation, openExternalFileCore])
 
   const promptIfDirty = useCallback(
     (action: UnsavedAction, run: () => void | Promise<void>) => {
@@ -299,6 +318,17 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     (path: string) =>
       promptIfDirty({ kind: 'open-tree', path }, () => void openPathMutation.mutateAsync(path)),
     [openPathMutation, promptIfDirty],
+  )
+
+  /** 资源管理器双击/打开方式：工作区切到文件所在目录并打开（未保存时走统一确认） */
+  const openExternalFilePath = useCallback(
+    (filePath: string) => {
+      const dir = dirname(filePath)
+      promptIfDirty({ kind: 'open-external', dir, path: filePath }, () =>
+        void openExternalFileCore(dir, filePath),
+      )
+    },
+    [openExternalFileCore, promptIfDirty],
   )
 
   const saveFile = useCallback(
@@ -489,6 +519,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     rescanWorkspace,
     openFileFromTree,
     openRecentFile,
+    openExternalFilePath,
     saveFile,
     saveFileAs,
     restoreDraft,

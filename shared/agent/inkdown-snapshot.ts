@@ -18,6 +18,8 @@ export type InkdownSnapshotResource =
   | 'propose-note'
   | 'propose-mark'
   | 'suggest-chapters'
+  | 'toc-draft-read'
+  | 'toc-draft-write'
 
 export interface InkdownSnapshotArgs {
   query?: string
@@ -39,6 +41,16 @@ export interface InkdownSnapshotArgs {
     flatIndex?: number
     kind?: 'highlight' | 'note' | 'auto'
   }>
+  /** toc-draft-write：replace | upsert | delete */
+  op?: string
+  /** toc-draft 系列：目标书指纹（快照侧校验归属） */
+  fingerprint?: string
+  /** toc-draft-write replace：整单条目 */
+  entries?: unknown
+  /** toc-draft-write upsert：单条 */
+  entry?: unknown
+  /** toc-draft-write delete：按序号或标题 */
+  index?: number
 }
 
 /** 常规快照应在毫秒级返回 */
