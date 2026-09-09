@@ -18,6 +18,9 @@ import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
 import { reassembleDirectoryText } from '@shared/reader/directory-reassemble'
+import { ACP_MAX_IMAGE_BYTES, blobToBase64 } from '@/lib/agent/acp-composer'
+import type { TocPromptImage } from '@/lib/agent/toc-ai-session'
+import { renderPdfPagesToPng } from '@/lib/reader/pdf-page-image'
 import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta-agent-text'
 import type { RosettaBookInfo, RosettaImportState } from '@shared/types/rosetta'
 import { usePdfPageOcr } from '@/hooks/reader/usePdfPageOcr'
@@ -538,6 +541,32 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     )
     return text.trim() || null
   }, [tocPageFrom, tocPageTo, readPageText, numPages, tocPageOffset])
+
+  /** AI 整理用：目录范围页原图（离屏渲染 PNG；单页失败跳过，超限跳过） */
+  const getTocPageImages = useCallback(async (): Promise<TocPromptImage[] | null> => {
+    const pdf = pdfDocRef.current
+    if (!pdf) return null
+    const from = Math.min(tocPageFrom, tocPageTo)
+    const to = Math.max(tocPageFrom, tocPageTo)
+    const pages: number[] = []
+    for (let page = from; page <= to; page += 1) pages.push(page)
+    const rendered = await renderPdfPagesToPng(pdf, pages, 1.5)
+    if (rendered.length === 0) return null
+    const images: TocPromptImage[] = []
+    for (const item of rendered) {
+      if (item.blob.size > ACP_MAX_IMAGE_BYTES) continue
+      try {
+        images.push({
+          base64: await blobToBase64(item.blob),
+          mimeType: 'image/png',
+          name: `toc-p${item.page}.png`,
+        })
+      } catch {
+        // 单张转换失败跳过
+      }
+    }
+    return images.length > 0 ? images : null
+  }, [tocPageFrom, tocPageTo])
 
   /**
    * 自动推算偏移：目录前若干标题去正文页原生文字层找锚点，多标题共识。
@@ -1622,7 +1651,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               aiControl={
                 <TocAiPolishControl
                   getOcrText={getTocOcrText}
+                  getPageImages={getTocPageImages}
                   fileFingerprint={fileFingerprint}
+                  baselineEntries={ocrTocEntries}
+                  pageCount={numPages}
+                  pageOffset={tocPageOffset}
                   onApply={(entries) => setOcrTocEntries(entries)}
                 />
               }

@@ -7,22 +7,31 @@ import { isOk } from '@shared/core/result'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { AcpConfigOption } from '@shared/types/acp'
 import type { OcrTocEntry } from '@shared/types/ocr'
-import { buildTocAiPrompt, parseTocAiEntries } from '@/lib/reader/toc-ai'
+import { buildTocAiPrompt, mergeTocAiDraft, parseTocAiEntries } from '@/lib/reader/toc-ai'
 import { takeTocDraft } from '@/lib/agent/context/toc-draft'
 import {
+  canTocUseImages,
   ensureTocSessionId,
   pickTocModelOptions,
   pickTocThoughtOptions,
   sendTocPrompt,
+  type TocPromptImage,
 } from '@/lib/agent/toc-ai-session'
 
 interface TocAiPolishControlProps {
   /** 目录范围页的 OCR 原文（调用方按需识别后拼接） */
   getOcrText: () => Promise<string | null>
+  /** 目录范围页的原图（离屏渲染；Agent 无图片能力时不调用） */
+  getPageImages?: () => Promise<TocPromptImage[] | null>
   /** 解析出的条目进编辑器草稿（用户核对后才保存） */
   onApply: (entries: OcrTocEntry[]) => void
   /** 当前书指纹：与目录工具写入的草稿归属校验用 */
   fileFingerprint: string
+  /** 机器基线（启发式已出结果）：AI 当核对者，合并裁决后进草稿 */
+  baselineEntries?: readonly OcrTocEntry[]
+  /** 真实总页数 + 印刷页偏移：合并时 AI 新增条目的范围门用 */
+  pageCount?: number
+  pageOffset?: number
   disabled?: boolean
 }
 
@@ -47,9 +56,43 @@ function defaultSelect(options: readonly AcpConfigOption[]): SelectState | null 
  * 目录校正 editors 内的“AI 整理”：新建目录副会话 → 可选模型/思考档 →
  * 发 OCR 原文 → JSON 解析校验 → 回填草稿。不进右侧时间线。
  */
-export function TocAiPolishControl({ getOcrText, onApply, fileFingerprint, disabled }: TocAiPolishControlProps) {
+export function TocAiPolishControl({
+  getOcrText,
+  getPageImages,
+  onApply,
+  fileFingerprint,
+  baselineEntries,
+  pageCount,
+  pageOffset,
+  disabled,
+}: TocAiPolishControlProps) {
+  // 合并裁决（AI 为主干，钉死为红线）：两条应用路径共用，结果进草稿等人点保存
+  const applyMerged = useCallback(
+    (aiEntries: OcrTocEntry[], extraWarnings: string[]) => {
+      const merged = mergeTocAiDraft(baselineEntries ?? [], aiEntries, { pageCount, pageOffset })
+      console.info(
+        `[toc-ai] merge baseline=${baselineEntries?.length ?? 0} ai=${aiEntries.length} ` +
+          `kept=${merged.entries.length} aiAdded=${merged.aiAdded} ` +
+          `conflicts=${merged.conflicts.length} dropped=${merged.dropped.length}`,
+      )
+      onApply(merged.entries)
+      for (const warning of [...extraWarnings, ...merged.conflicts.slice(0, 5), ...merged.dropped.slice(0, 5)]) {
+        toast.message(warning)
+      }
+      if (merged.conflicts.length > 5 || merged.dropped.length > 5) {
+        toast.message(`另有 ${merged.conflicts.length + merged.dropped.length - 10} 条裁决细节已记入控制台`)
+      }
+      toast.success(
+        `AI 整理：采纳 ${merged.entries.length} 条（含新增 ${merged.aiAdded}）` +
+          (merged.conflicts.length > 0 ? `，${merged.conflicts.length} 处按钉死页保留` : '') +
+          '，请核对后保存',
+      )
+    },
+    [baselineEntries, pageCount, pageOffset, onApply],
+  )
   const agentConnected = useAcpUiStore((s) => s.status === 'connected')
   const mainPrompting = useAcpUiStore((s) => s.prompting)
+  const imageCapable = useAcpUiStore((s) => s.promptCapabilities.image === true)
   const [phase, setPhase] = useState<Phase>('idle')
   const [modelOptions, setModelOptions] = useState<AcpConfigOption[]>([])
   const [thoughtOptions, setThoughtOptions] = useState<AcpConfigOption[]>([])
@@ -119,19 +162,32 @@ export function TocAiPolishControl({ getOcrText, onApply, fileFingerprint, disab
         setPhase('ready')
         return
       }
-      const reply = await sendTocPrompt(buildTocAiPrompt(text, fileFingerprint))
+      // 有图片能力才渲染附图（5 页 PNG，文本照旧作为辅助一起发）
+      const useImages = canTocUseImages() && getPageImages !== undefined
+      const images = useImages ? ((await getPageImages()) ?? []) : []
+      if (!mountedRef.current) return
+      const imagePages = images
+        .map((image) => Number.parseInt(image.name.replace(/\D/g, ''), 10))
+        .filter((page) => Number.isInteger(page))
+      const reply = await sendTocPrompt(
+        buildTocAiPrompt(text, fileFingerprint, {
+          withImages: images.length > 0,
+          imagePages,
+          baseline: baselineEntries,
+        }),
+        images,
+      )
       if (!mountedRef.current) return
       if (!reply) {
         setError('AI 无回复，请重试')
         setPhase('ready')
         return
       }
-      // 工具优先：模型已用目录工具写草稿，直接取走进编辑器，避免与 JSON 双算
+      // 工具优先：模型已用目录工具写草稿，直接取走合并，避免与 JSON 双算
       const drafted = takeTocDraft(fileFingerprint)
       if (drafted) {
-        console.info(`[toc-ai] tool draft applied entries=${drafted.length}`)
-        onApply(drafted)
-        toast.success(`AI 已写入草稿 ${drafted.length} 条，请核对后保存`)
+        console.info(`[toc-ai] tool draft entries=${drafted.length}`)
+        applyMerged(drafted, [])
         setPhase('idle')
         return
       }
@@ -145,16 +201,14 @@ export function TocAiPolishControl({ getOcrText, onApply, fileFingerprint, disab
       console.info(
         `[toc-ai] parsed entries=${parsed.entries.length} dropped=${parsed.dropped} warnings=${parsed.warnings.length}`,
       )
-      onApply(parsed.entries)
-      for (const warning of parsed.warnings) toast.message(warning)
-      toast.success(`AI 整理出 ${parsed.entries.length} 条，已填入草稿，请核对后保存`)
+      applyMerged(parsed.entries, parsed.warnings)
       setPhase('idle')
     } catch (cause) {
       if (!mountedRef.current) return
       setError(cause instanceof Error ? cause.message : 'AI 整理失败')
       setPhase('ready')
     }
-  }, [fileFingerprint, getOcrText, model, onApply, thought])
+  }, [fileFingerprint, getOcrText, getPageImages, model, thought, applyMerged])
 
   const handleCancel = useCallback(() => {
     sessionRef.current = null
@@ -208,6 +262,9 @@ export function TocAiPolishControl({ getOcrText, onApply, fileFingerprint, disab
           </label>
         ) : null}
         {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
+        <p className="text-[11px] text-muted-foreground">
+          {imageCapable ? '整理时附带目录页原图，以图为准。' : '该 Agent 不支持图片，只用 OCR 文本整理。'}
+        </p>
         <div className="flex gap-2">
           <Button
             type="button"

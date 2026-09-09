@@ -46,7 +46,7 @@ export function PdfOcrTocEditor({
   const addEntry = () => {
     setDraft((prev) => [
       ...prev,
-      { title: '', printedPage: 1, level: 1 },
+      { title: '', printedPage: 1, level: 1, source: 'manual' as const },
     ])
   }
 

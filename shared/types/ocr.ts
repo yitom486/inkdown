@@ -13,6 +13,8 @@ export interface ReaderTocUnit {
 export const PDF_OCR_SCALE_OPTIONS = [1.5, 2, 2.5] as const
 export type PdfOcrScale = (typeof PDF_OCR_SCALE_OPTIONS)[number]
 export const DEFAULT_PDF_OCR_SCALE: PdfOcrScale = 2
+/** 目录页固定清晰档：仅 5 页左右，提清成本可忽略，正文仍走用户档 */
+export const DEFAULT_PDF_TOC_SCALE: PdfOcrScale = 2.5
 
 export const PDF_OCR_SCALE_OPTION_LABELS: Array<{ value: PdfOcrScale; label: string }> = [
   { value: 1.5, label: '快速' },
@@ -20,11 +22,25 @@ export const PDF_OCR_SCALE_OPTION_LABELS: Array<{ value: PdfOcrScale; label: str
   { value: 2.5, label: '清晰' },
 ]
 
-/** OCR 识别出的一条目录；printedPage 是印在纸上的页码 */
+/**
+ * OCR 识别出的一条目录；printedPage 是印在纸上的页码。
+ * source 是证据等级（合并裁决用）：manual（手填）> pipe/geo（表格/坐标钉死）
+ * > ai（模型看图）> read/paired/backfilled（文本直读/汤配/回填，皆为推测）。
+ */
+export type OcrTocEntrySource =
+  | 'pipe'
+  | 'geo'
+  | 'read'
+  | 'paired'
+  | 'backfilled'
+  | 'ai'
+  | 'manual'
+
 export interface OcrTocEntry {
   title: string
   printedPage: number
   level: number
+  source?: OcrTocEntrySource
 }
 
 export interface PdfOcrTocCache {

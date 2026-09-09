@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { buildTocAiPrompt, parseTocAiEntries } from './toc-ai'
+import type { OcrTocEntry } from '@shared/types/ocr'
+import { buildTocAiPrompt, mergeTocAiDraft, parseTocAiEntries } from './toc-ai'
 
 describe('toc-ai', () => {
   it('prompt 约束 JSON 数组输出并截断超长文本', () => {
@@ -13,6 +14,16 @@ describe('toc-ai', () => {
     expect(prompt.length).toBeLessThanOrEqual(31100)
   })
 
+  it('附图口径以图为准、OCR 只辅助', () => {
+    const prompt = buildTocAiPrompt('1.1 背景 5', 'fp-1', { withImages: true, imagePages: [8, 9] })
+    expect(prompt).toContain('以附图为准')
+    expect(prompt).toContain('8、9')
+    expect(prompt).toContain('看图读数')
+    const plain = buildTocAiPrompt('1.1 背景 5', 'fp-1')
+    expect(plain).not.toContain('以附图为准')
+    expect(plain).toContain('绝不跨行借用')
+  })
+
   it('解析围栏 JSON 并清洗条目', () => {
     const reply = `整理如下：\n\`\`\`json\n${JSON.stringify([
       { title: '第一章 绪论', printedPage: 1, level: 1 },
@@ -22,8 +33,8 @@ describe('toc-ai', () => {
     ])}\n\`\`\``
     const result = parseTocAiEntries(reply)
     expect(result.entries).toEqual([
-      { title: '第一章 绪论', printedPage: 1, level: 1 },
-      { title: '1.1 背景', printedPage: 5, level: 2 },
+      { title: '第一章 绪论', printedPage: 1, level: 0, source: 'ai' },
+      { title: '1.1 背景', printedPage: 5, level: 1, source: 'ai' },
     ])
     expect(result.dropped).toBe(2)
     expect(result.warnings.some((w) => w.includes('丢弃 2 条'))).toBe(true)
@@ -46,11 +57,15 @@ describe('toc-ai', () => {
     expect(result.warnings).toHaveLength(1)
   })
 
-  it('层级钳制到 1~6', () => {
+  it('模型 1-based 层级转存 0-based（章=0）并钳制', () => {
     const result = parseTocAiEntries(
-      JSON.stringify([{ title: '深层', printedPage: 3, level: 99 }]),
+      JSON.stringify([
+        { title: '第一章', printedPage: 1, level: 1 },
+        { title: '1.1 节', printedPage: 2, level: 2 },
+        { title: '深层', printedPage: 3, level: 99 },
+      ]),
     )
-    expect(result.entries[0]?.level).toBe(6)
+    expect(result.entries.map((e) => e.level)).toEqual([0, 1, 6])
   })
 
   it('同一页码长连号警告编造嫌疑', () => {
@@ -84,5 +99,81 @@ describe('toc-ai', () => {
     expect(result.entries.map((e) => e.title)).toEqual(['3.1.2主存储器的组成'])
     expect(result.dropped).toBe(1)
     expect(result.warnings.some((w) => w.includes('水印'))).toBe(true)
+  })
+
+  it('基线附进提示词并标注证据', () => {
+    const baseline: OcrTocEntry[] = [
+      { title: '3.5.4替换算法', printedPage: 114, level: 2, source: 'geo' },
+      { title: '3.5.5一致性', printedPage: 115, level: 2, source: 'paired' },
+    ]
+    const prompt = buildTocAiPrompt('文本', 'fp-1', { baseline })
+    expect(prompt).toContain('3.5.4替换算法 | 114 | 2 | 已钉死')
+    expect(prompt).toContain('3.5.5一致性 | 115 | 2 | 存疑')
+    expect(prompt).toContain('修正后的完整表')
+  })
+})
+
+describe('mergeTocAiDraft', () => {
+  const OPTS = { pageCount: 340, pageOffset: 12 }
+
+  it('钉死项 AI 改不动（留痕），汤配/回填听 AI 的', () => {
+    const baseline: OcrTocEntry[] = [
+      { title: '3.5.4替换算法', printedPage: 114, level: 2, source: 'geo' },
+      { title: '3.5.5一致性', printedPage: 115, level: 2, source: 'paired' },
+    ]
+    const ai: OcrTocEntry[] = [
+      { title: '3.5.4替换算法', printedPage: 99, level: 2, source: 'ai' },
+      { title: '3.5.5一致性', printedPage: 116, level: 2, source: 'ai' },
+    ]
+    const result = mergeTocAiDraft(baseline, ai, OPTS)
+    const byTitle = new Map(result.entries.map((e) => [e.title, e.printedPage]))
+    expect(byTitle.get('3.5.4替换算法')).toBe(114)
+    expect(byTitle.get('3.5.5一致性')).toBe(116)
+    expect(result.conflicts).toHaveLength(1)
+    expect(result.conflicts[0]).toContain('114')
+    expect(result.conflicts[0]).toContain('99')
+  })
+
+  it('AI 新增有据才收，无据丢弃留痕', () => {
+    const baseline: OcrTocEntry[] = [
+      { title: '1.2.2硬件', printedPage: 3, level: 1, source: 'geo' },
+    ]
+    const ai: OcrTocEntry[] = [
+      { title: '1.2.3软件', printedPage: 4, level: 1, source: 'ai' },
+      { title: '正文句子混入', printedPage: 0, level: 1, source: 'ai' },
+    ]
+    const result = mergeTocAiDraft(baseline, ai, OPTS)
+    expect(result.entries.map((e) => e.title)).toEqual(['1.2.2硬件', '1.2.3软件'])
+    expect(result.aiAdded).toBe(1)
+    expect(result.dropped).toHaveLength(1)
+  })
+
+  it('层级按章节号重算，不采模型填的', () => {
+    const result = mergeTocAiDraft(
+      [],
+      [{ title: '3.5.4替换算法', printedPage: 114, level: 0, source: 'ai' }],
+      OPTS,
+    )
+    expect(result.entries[0]?.level).toBe(2)
+  })
+
+  it('AI 幻觉倒退页进单调门丢弃', () => {
+    const result = mergeTocAiDraft(
+      [{ title: '3.5.3映射', printedPage: 111, level: 2, source: 'geo' }],
+      [{ title: '3.5.4替换算法', printedPage: 85, level: 2, source: 'ai' }],
+      OPTS,
+    )
+    expect(result.entries.map((e) => e.title)).toEqual(['3.5.3映射'])
+    expect(result.dropped.some((d) => d.includes('3.5.4替换算法'))).toBe(true)
+  })
+
+  it('手填是最高证据，AI 改不动', () => {
+    const result = mergeTocAiDraft(
+      [{ title: '1.1.1硬件', printedPage: 2, level: 2, source: 'manual' }],
+      [{ title: '1.1.1硬件', printedPage: 5, level: 2, source: 'ai' }],
+      OPTS,
+    )
+    expect(result.entries[0]?.printedPage).toBe(2)
+    expect(result.conflicts).toHaveLength(1)
   })
 })

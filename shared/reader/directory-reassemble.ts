@@ -5,6 +5,7 @@ import {
   isWatermarkTocEntry,
   normalizeOcrChinese,
   parsePagelessHeading,
+  splitStuckSections,
   TOC_LINE,
 } from './ocr-toc-extractor'
 
@@ -31,6 +32,11 @@ export interface DirectoryReassembleOptions {
   pageCount?: number
   /** 印刷页 + 偏移 = 真实页 */
   pageOffset?: number
+  /**
+   * 几何配对表（章节号 → 印刷页，见 toc-geometry）：光杆标题优先按表直接成对，
+   * 不进待配对队列——同行坐标钉死的页码，不跟数字汤抢，避免串行错位。
+   */
+  geometryPages?: ReadonlyMap<string, number>
   /** 调试追踪（默认关闭）：每行判定与配对事件 */
   onTrace?: (event: string) => void
 }
@@ -38,7 +44,9 @@ export interface DirectoryReassembleOptions {
 export interface DirectoryReassembleStats {
   /** 拆开的竖线行 */
   pipeRows: number
-  /** 配对成功的标题数 */
+  /** 几何配对成功的标题数（同行坐标，不经数字汤） */
+  geoPaired: number
+  /** 串行配对成功的标题数 */
   paired: number
   /** 进池的数字个数 */
   poolNumbers: number
@@ -53,6 +61,11 @@ export interface DirectoryReassembleStats {
 export interface ReassembledDirectory {
   text: string
   stats: DirectoryReassembleStats
+  /**
+   * 钉死表（章节号 → {页, 种类}）：pipe 表格行与几何直配。
+   * 下游据此标证据等级（合并裁决时 AI 推翻不了这两类）。
+   */
+  pinned: Map<string, { page: number; kind: 'pipe' | 'geo' }>
 }
 
 const PIPE_ROW = /^\|(.+)\|$/
@@ -119,6 +132,7 @@ export function reassembleDirectoryText(
 ): ReassembledDirectory {
   const stats: DirectoryReassembleStats = {
     pipeRows: 0,
+    geoPaired: 0,
     paired: 0,
     poolNumbers: 0,
     droppedPool: 0,
@@ -129,18 +143,38 @@ export function reassembleDirectoryText(
   // 无范围参数：整段原样透传，零行为变化（旧调用方与旧单测走这条）。
   // 有范围参数才做形状重组（竖线拆分/数字汤配对/范围门）。
   if (!rangeGated) {
-    return { text: rawText, stats }
+    return { text: rawText, stats, pinned: new Map() }
   }
   const trace = options?.onTrace
   const out: string[] = []
+  const pinned = new Map<string, { page: number; kind: 'pipe' | 'geo' }>()
   // 待配对的光杆标题（到达顺序）；遇到自带页码的行即全部吐出，避免跨区错配
   let pending: string[] = []
+  // 几何直配并记钉死表（合并裁决时 AI 推翻不了）；未命中返回 false 走串行
+  const pinGeo = (title: string): boolean => {
+    const section = sectionOfHeading(title)
+    const geo = section ? options?.geometryPages?.get(section) : undefined
+    if (geo === undefined || !Number.isInteger(geo) || geo < 1 || !inRange(geo, options)) {
+      return false
+    }
+    out.push(`${title} ${geo}`)
+    stats.geoPaired += 1
+    trace?.(`geo ${title} <- ${geo}`)
+    if (section && !pinned.has(section)) pinned.set(section, { page: geo, kind: 'geo' })
+    return true
+  }
+  // 光杆标题出口：几何表命中直接成对，不进队列；未命中才进待配对队列走数字汤
+  const emitBare = (title: string): void => {
+    if (!pinGeo(title)) pending.push(title)
+  }
   const flushPending = (): void => {
-    for (const title of pending) {
+    const queued = pending
+    pending = []
+    for (const title of queued) {
+      if (pinGeo(title)) continue
       out.push(title)
       stats.bareEmitted += 1
     }
-    pending = []
   }
   // 数字池只在同一次相遇中有效：标题→汤→配对→清零，不跨区携带
   // 配对门（-2≤pending-pool≤2 的绝对差 ≤2）：两边数量须基本一致，
@@ -175,12 +209,14 @@ export function reassembleDirectoryText(
   // 不拆则整行因不合形状被丢弃，7.1 系整段丢失。
   const splitLines: string[] = []
   for (const rawLine of rawText.split(/\r?\n/)) {
-    if (!rawLine.includes('*')) {
-      splitLines.push(rawLine)
-      continue
-    }
-    for (const part of rawLine.split('*')) {
-      if (part.trim()) splitLines.push(part)
+    const starParts =
+      rawLine.includes('*') && !rawLine.includes('|')
+        ? rawLine.split('*').filter((part) => part.trim())
+        : [rawLine]
+    for (const starPart of starParts) {
+      for (const part of splitStuckSections(starPart)) {
+        splitLines.push(part)
+      }
     }
   }
 
@@ -249,6 +285,8 @@ export function reassembleDirectoryText(
       if (cleanTitle && Number.isInteger(num) && num >= 1 && inRange(num, options)) {
         out.push(`${cleanTitle} ${num}`)
         trace?.(`pipe ${cleanTitle} <- ${num}`)
+        const section = sectionOfHeading(cleanTitle)
+        if (section && !pinned.has(section)) pinned.set(section, { page: num, kind: 'pipe' })
         continue
       }
       // 号无效、无号或标题不可留：标题进光杆队列（章行不进，下游专规则处理）；
@@ -256,7 +294,7 @@ export function reassembleDirectoryText(
       if (cleanTitle && !isBareChapterTitle(cleanTitle)) {
         const pageless = parsePagelessHeading(cleanTitle)
         if (pageless) {
-          pending.push(pageless)
+          emitBare(pageless)
           continue
         }
       }
@@ -271,10 +309,10 @@ export function reassembleDirectoryText(
       continue
     }
 
-    // 4. 光杆标题：攒起来等数字汤（章行不进队列，下游有专规则）
+    // 4. 光杆标题：几何命中直接成对，否则攒起来等数字汤（章行不进队列，下游有专规则）
     const pageless = parsePagelessHeading(compact)
     if (pageless) {
-      pending.push(pageless)
+      emitBare(pageless)
       continue
     }
 
@@ -291,5 +329,5 @@ export function reassembleDirectoryText(
     stats.droppedLines += 1
   }
   flushPending()
-  return { text: out.join('\n'), stats }
+  return { text: out.join('\n'), stats, pinned }
 }

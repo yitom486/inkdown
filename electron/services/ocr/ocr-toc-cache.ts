@@ -13,8 +13,8 @@ function cacheFilePath(fileFingerprint: string): string {
   return join(ocrCacheRoot(), `${hash}.json`)
 }
 
-/** 目录缓存版本；提取规则变更（水印条目过滤、无页码回填语义、目录重组等）时 +1，旧缓存自动失效 */
-export const PDF_OCR_TOC_CACHE_VERSION = 4
+/** 目录缓存版本；提取规则/识别清晰度变更时 +1，旧缓存自动失效（v7：AI 层级归一 0-based + 证据来源） */
+export const PDF_OCR_TOC_CACHE_VERSION = 7
 
 export async function readPdfOcrTocCache(
   fileFingerprint: string,

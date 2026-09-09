@@ -2,8 +2,17 @@ import { acpApi } from '@/api/acp-api'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { isOk } from '@shared/core/result'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
+import { buildAcpPromptBlocks, type ComposerAttachment } from '@/lib/agent/acp-composer'
 import { extractTextFromContent } from '@/stores/acp-chat-types'
 import type { AcpConfigOption } from '@shared/types/acp'
+
+/** 目录页原图（渲染端离屏渲染，供模型识图；无图片能力时自动退化纯文本） */
+export interface TocPromptImage {
+  base64: string
+  mimeType: string
+  /** 如 `toc-p8.png`，进附件名与日志 */
+  name: string
+}
 
 /**
  * 目录 AI 整理专用副会话（考官会话同款无头模式）。
@@ -17,6 +26,11 @@ let tocPrompting = false
 
 export function isTocPrompting(): boolean {
   return tocPrompting
+}
+
+/** 当前 Agent 是否接受图片（决定整理时附不附目录页原图） */
+export function canTocUseImages(): boolean {
+  return useAcpUiStore.getState().promptCapabilities.image === true
 }
 
 export function tocOwnsSessionId(sessionId: string): boolean {
@@ -129,17 +143,36 @@ export async function ensureTocSessionId(overrides?: {
   return { sessionId: sid, configOptions: options }
 }
 
-/** 发送目录整理 Prompt 并等待完成，返回累积正文（调用方再做 JSON 解析与校验） */
-export async function sendTocPrompt(promptText: string): Promise<string | null> {
+/**
+ * 发送目录整理 Prompt 并等待完成，返回累积正文（调用方再做 JSON 解析与校验）。
+ * 图片经 buildAcpPromptBlocks 组装：Agent 无 image 能力时自动只剩文本，
+ * 调用方据此把提示词切到纯文本口径（见 buildTocAiPrompt withImages）。
+ */
+export async function sendTocPrompt(
+  promptText: string,
+  images?: readonly TocPromptImage[],
+): Promise<string | null> {
   if (!tocSessionId) return null
   tocReplyBuffer = ''
   tocPrompting = true
   const shortSid = tocSessionId.slice(0, 8)
-  console.info(`[toc-ai] prompt session=${shortSid} chars=${promptText.length}`)
+  const attachments: ComposerAttachment[] = (images ?? []).map((image, index) => ({
+    id: `toc-img-${index}`,
+    kind: 'image',
+    name: image.name,
+    mimeType: image.mimeType,
+    base64: image.base64,
+  }))
+  const caps = useAcpUiStore.getState().promptCapabilities
+  const blocks = buildAcpPromptBlocks({ text: promptText, attachments, promptCapabilities: caps })
+  const imageCount = blocks.filter((block) => block.type === 'image').length
+  console.info(
+    `[toc-ai] prompt session=${shortSid} chars=${promptText.length} images=${imageCount}/${attachments.length}`,
+  )
   try {
     const result = await acpApi.prompt({
       sessionId: tocSessionId,
-      prompt: [{ type: 'text', text: promptText }],
+      prompt: blocks,
     })
     if (!isOk(result)) {
       console.info(`[toc-ai] prompt failed session=${shortSid}: ${result.error.message}`)

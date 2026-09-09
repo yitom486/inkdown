@@ -7,8 +7,9 @@ import {
   ocrTocToReaderUnits,
 } from '@shared/reader/ocr-toc-extractor'
 import { cleanOcrWatermarks } from '@shared/reader/ocr-watermark'
+import { buildSectionPageMap } from '@shared/reader/toc-geometry'
 import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@shared/types/ocr'
-import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
+import { DEFAULT_PDF_TOC_SCALE } from '@shared/types/ocr'
 import { writePdfOcrTocCache } from './ocr-toc-cache'
 import { ensureInspectorOcrRuntime } from './inspector-ocr-runtime'
 
@@ -39,7 +40,8 @@ async function recognizePdfTocWithInspector(
   payload: RecognizePdfTocPayload,
 ): Promise<Result<PdfOcrTocCache, AppError>> {
   const { filePath, fileFingerprint, fromPage, toPage, pageOffset } = payload
-  const scale = payload.scale ?? DEFAULT_PDF_OCR_SCALE
+  // 目录页强制清晰档（仅数页，成本可忽略）：忽略调用方全局档，不降低目录质量
+  const scale = DEFAULT_PDF_TOC_SCALE
 
   const runtime = await ensureInspectorOcrRuntime()
   if (!runtime.ok) {
@@ -73,16 +75,40 @@ async function recognizePdfTocWithInspector(
 
     const tocPageRange: [number, number] = [fromPage, toPage]
     const resolvedOffset = pageOffset ?? defaultPdfPageOffset(tocPageRange)
-    // 先重组（竖线拆分/数字汤配对/范围门）再提取：页数由调用方给，不再解析一次；
+    // 先重组（竖线拆分/数字汤配对/范围门/几何直配）再提取：页数由调用方给，不再解析一次；
     // 页数非法（IPC 越界/NaN 落成 null）则退化 legacy，不断整条链路
     const rawPageCount: unknown = payload.pageCount
     const pageCount =
       typeof rawPageCount === 'number' && Number.isInteger(rawPageCount) && rawPageCount > 0
         ? rawPageCount
         : undefined
+    // 几何配对：spans 坐标把右列页码钉回同行标题（第 8 页实录：串行全丢，坐标全对）；
+    // 失败/无 spans 时退化纯串行。phantom 碎片由置信门挡（见 toc-geometry）。
+    let geometryPages: Map<string, number> | undefined
+    if (pageCount !== undefined) {
+      try {
+        geometryPages = new Map<string, number>()
+        for (const page of ordered) {
+          const spans = (page.spans ?? []) as {
+            text: string
+            x: number
+            y: number
+            confidence: number
+          }[]
+          const built = buildSectionPageMap(spans, { pageCount, pageOffset: resolvedOffset })
+          for (const [section, printed] of built.pages) {
+            if (!geometryPages.has(section)) geometryPages.set(section, printed)
+          }
+        }
+      } catch {
+        geometryPages = undefined
+      }
+    }
     const entries = extractOcrTocFromText(
       textParts.join('\n'),
-      pageCount === undefined ? undefined : { pageCount, pageOffset: resolvedOffset },
+      pageCount === undefined
+        ? undefined
+        : { pageCount, pageOffset: resolvedOffset, geometryPages },
     )
     if (entries.length === 0) {
       return err({

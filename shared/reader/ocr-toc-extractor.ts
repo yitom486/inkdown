@@ -4,13 +4,16 @@
  * 注意与那边互引：双方只在函数体内使用对方绑定，无顶层求值循环。
  */
 
-import { reassembleDirectoryText } from './directory-reassemble'
+import { compareSectionStrings, reassembleDirectoryText } from './directory-reassemble'
+import type { OcrTocEntrySource } from '@shared/types/ocr'
 
 export interface OcrTocEntry {
   title: string
   printedPage: number
   level: number
   raw: string
+  /** 证据等级（合并裁决用，见 shared/types/ocr） */
+  source?: OcrTocEntrySource
 }
 
 const NOISE_PATTERNS = [
@@ -126,17 +129,22 @@ export interface ExtractOcrTocOptions {
   pageCount?: number
   /** 印刷页 + 偏移 = 真实页 */
   pageOffset?: number
+  /** 几何配对表（章节号 → 印刷页，见 toc-geometry），直透重组 */
+  geometryPages?: ReadonlyMap<string, number>
 }
 
 export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptions): OcrTocEntry[] {
-  // 有范围参数时先重组（竖线拆分/数字汤配对/范围门），无参数走 legacy 原文
-  const source =
-    options?.pageCount != null && options?.pageOffset != null
-      ? reassembleDirectoryText(text, {
-          pageCount: options.pageCount,
-          pageOffset: options.pageOffset,
-        }).text
-      : text
+  // 有范围参数时先重组（竖线拆分/数字汤配对/范围门/几何直配），无参数走 legacy 原文
+  const rangeGated = options?.pageCount != null && options?.pageOffset != null
+  const reassembled = rangeGated
+    ? reassembleDirectoryText(text, {
+        pageCount: options?.pageCount as number,
+        pageOffset: options?.pageOffset as number,
+        geometryPages: options?.geometryPages,
+      })
+    : null
+  const source = reassembled?.text ?? text
+  const pinned = reassembled?.pinned ?? new Map<string, { page: number; kind: 'pipe' | 'geo' }>()
   const entries: OcrTocEntry[] = []
   const seen = new Set<string>()
 
@@ -145,6 +153,7 @@ export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptio
     printedPage: number | null
     level: number
     raw: string
+    source?: OcrTocEntrySource
   }
   const rawEntries: RawEntry[] = []
 
@@ -152,12 +161,14 @@ export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptio
   // 与 directory-reassemble 同策略，否则整行超长被当正文丢弃。
   const splitLines: string[] = []
   for (const rawLine of source.split(/\r?\n/)) {
-    if (!rawLine.includes('*')) {
-      splitLines.push(rawLine)
-      continue
-    }
-    for (const part of rawLine.split('*')) {
-      if (part.trim()) splitLines.push(part)
+    const starParts =
+      rawLine.includes('*') && !rawLine.includes('|')
+        ? rawLine.split('*').filter((part) => part.trim())
+        : [rawLine]
+    for (const starPart of starParts) {
+      for (const part of splitStuckSections(starPart)) {
+        splitLines.push(part)
+      }
     }
   }
 
@@ -179,7 +190,13 @@ export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptio
       if (isWatermarkTocEntry(title)) continue
       if (isDigitSoupTitle(title)) continue
       if (/^7-121/.test(title)) continue
-      rawEntries.push({ title, printedPage, level: inferLevel(title), raw: line })
+      // 钉死表命中（同章节同页）→ pipe/geo 证据，否则为汤配或直读；
+      // 回填来源在 backfill 后统一标记
+      const section = parentSectionOf(title)
+      const pin = section ? pinned.get(section) : undefined
+      const source: OcrTocEntrySource =
+        pin && pin.page === printedPage ? pin.kind : rangeGated ? 'paired' : 'read'
+      rawEntries.push({ title, printedPage, level: inferLevel(title), raw: line, source })
       continue
     }
 
@@ -192,9 +209,14 @@ export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptio
 
   // 回填：无页码项取其后第一个有页码项的页；尾部无后继的丢弃。
   // 上限见 backfillMissingPages（连续过长=整段丢失，放弃）。
+  // 回填得页的标 backfilled（推测证据，合并裁决时 AI 可推翻）。
   const filled = backfillMissingPages(rawEntries)
-  for (const entry of filled) {
+  for (let i = 0; i < filled.length; i += 1) {
+    const entry = filled[i] as (typeof filled)[number] & { source?: OcrTocEntrySource }
     if (entry.printedPage === null) continue
+    const before = rawEntries[i]
+    const source: OcrTocEntrySource =
+      entry.source ?? (before && before.printedPage === null ? 'backfilled' : 'read')
     const key = `${entry.title}|${entry.printedPage}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -203,14 +225,87 @@ export function extractOcrTocFromText(text: string, options?: ExtractOcrTocOptio
       printedPage: entry.printedPage,
       level: entry.level,
       raw: entry.raw,
+      source,
     })
   }
 
-  return entries
+  return sortTocEntriesForDisplay(entries)
+}
+
+/** 展示序：按章节号回正（OCR 阅读序会甩尾，如 3.5.4 掉到 3.5.7 后面） */
+export interface TocDisplayEntry {
+  title: string
+  printedPage: number
+  level: number
+}
+
+/**
+ * 恢复逻辑序 + 单调过滤（合并裁决复用：AI  hallucinations 同样走这道门）。
+ * 页码严格递减即错配（如 3.5.4→85 掉在 111 后面），真目录后节不可能早于
+ * 前节，宁漏勿编直接丢弃；等页允许（父与长子同起一页）。onDrop 收被丢的条目。
+ */
+export function sortTocEntriesForDisplay<T extends TocDisplayEntry>(
+  entries: readonly T[],
+  onDrop?: (entry: T) => void,
+): T[] {
+  const withIndex = entries.map((entry, index) => ({ entry, index }))
+  withIndex.sort((a, b) => {
+    const sa = parentSectionOf(a.entry.title)
+    const sb = parentSectionOf(b.entry.title)
+    if (sa === null || sb === null) return a.index - b.index
+    const cmp = compareSectionStrings(sa, sb)
+    if (cmp === null || cmp === 0) return a.index - b.index
+    return cmp
+  })
+  const ordered: T[] = []
+  let maxPage = -Infinity
+  for (const { entry } of withIndex) {
+    if (entry.printedPage < maxPage) {
+      onDrop?.(entry)
+      continue
+    }
+    ordered.push(entry)
+    if (entry.printedPage > maxPage) maxPage = entry.printedPage
+  }
+  return ordered
 }
 
 export function defaultPdfPageOffset(tocPageRange: [number, number]): number {
   return tocPageRange[1]
+}
+
+/**
+ * 无星号黏连行拆分（`4.3.5本节习题精选4.4CISC和RISC的基本概念`）：
+ * 一行内出现 2+ 个章节号（`X.Y` 三段亦可）即从第二个起切开，
+ * 合回来的那条不拆（末尾纯页码不是章节号形状）。
+ * pipe 行不在此列（表格结构优先，由重组侧处理）。
+ */
+const STUCK_SECTION = /(^|[^\d.])(?=\d+\.\d+(?:\.\d+)*)/g
+
+export function splitStuckSections(line: string): string[] {
+  if (line.includes('|')) return [line]
+  const starts: number[] = []
+  for (const m of line.matchAll(STUCK_SECTION)) {
+    starts.push((m.index ?? 0) + (m[1] ?? '').length)
+  }
+  if (starts.length <= 1) return [line]
+  const parts: string[] = []
+  for (let i = 0; i < starts.length; i += 1) {
+    const part = line.slice(starts[i] as number, starts[i + 1] as number | undefined).trim()
+    if (part) parts.push(part)
+  }
+  if (parts.length <= 1) return [line]
+  // 行尾页码归第一段：黏连的是连续两行，第一行（上一节尾）的点线页码
+  // 贴在整行末尾（如 `4.3.5…4.4…181` 中 181 是 4.3.5 的——4.4.1 已 191，
+  // 4.4 不可能早 10 页）。后段留空走回填/几何，不硬分。
+  const first = parts[0] as string
+  const last = parts[parts.length - 1] as string
+  const tail = /^(.*\S)\s+(\d{1,4})\s*$/.exec(last)
+  if (tail && tail[1] && tail[2] && !/\d\s*$/.test(first) && /[\u4e00-\u9fff]/.test(tail[1])) {
+    parts[0] = `${first} ${tail[2]}`
+    parts[parts.length - 1] = (tail[1] as string).trim()
+  }
+  return parts
 }
 
 /** 回填输入：页码可空（调用方负责先滤掉无号章行，见 isBareChapterTitle） */

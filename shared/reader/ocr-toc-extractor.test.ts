@@ -8,6 +8,7 @@ import {
   isDigitSoupTitle,
   isWatermarkTocEntry,
   normalizeOcrChinese,
+  splitStuckSections,
 } from '@shared/reader/ocr-toc-extractor'
 
 describe('ocr-toc-extractor', () => {
@@ -85,10 +86,65 @@ describe('ocr-toc-extractor', () => {
     expect(cleanupOcrTocTitle('1.1历程①')).toBe('1.1历程')
   })
 
+  it('错序回正、倒退页码丢弃（3.5.4→85 不许留在 111 后面）', () => {
+    const entries = extractOcrTocFromText(
+      ['3.5.3 映射 111', '3.5.5 一致性 115', '3.5.7 应用 116', '3.5.4 替换算法 85'].join('\n'),
+    )
+    const titles = entries.map((e) => e.title)
+    // 按章节号回正：3.5.4 应在 3.5.3/3.5.5 之间；但 85<111 倒退即错配，直接丢弃
+    expect(titles).toEqual(['3.5.3映射', '3.5.5一致性', '3.5.7应用'])
+    expect(titles.some((t) => t.includes('3.5.4'))).toBe(false)
+  })
+
+  it('顺序正确时按章节号回正（2.2.4→39 回到 2.2.5 之前）', () => {
+    const entries = extractOcrTocFromText(
+      ['2.2.5 习题 44', '2.2.3 加减 35', '2.2.4 乘除 39'].join('\n'),
+    )
+    expect(entries.map((e) => e.title)).toEqual(['2.2.3加减', '2.2.4乘除', '2.2.5习题'])
+  })
+
+  it('无星号双章节号黏连拆分（4.3.5+4.4），行尾页码归第一段', () => {
+    expect(splitStuckSections('4.3.5本节习题精选4.4CISC和RISC的基本概念')).toEqual([
+      '4.3.5本节习题精选',
+      '4.4CISC和RISC的基本概念',
+    ])
+    expect(splitStuckSections('4.3.5本节习题精选4.4CISC和RISC的基本概念 181')).toEqual([
+      '4.3.5本节习题精选 181',
+      '4.4CISC和RISC的基本概念',
+    ])
+    // 单章节号、末尾纯页码、表格行一律不动
+    expect(splitStuckSections('3.1.2 主存储器的组成和基本操作…… 78')).toEqual([
+      '3.1.2 主存储器的组成和基本操作…… 78',
+    ])
+    expect(splitStuckSections('|2.1.2 定点数的编码表示·|…22|')).toEqual([
+      '|2.1.2 定点数的编码表示·|…22|',
+    ])
+    expect(splitStuckSections('2.3.1 IEEE 754 标准的浮点数')).toEqual([
+      '2.3.1 IEEE 754 标准的浮点数',
+    ])
+    // 拆开后 4.4 按父子规则从 4.4.1 继承（同起一页），不再是错页 181
+    const entries = extractOcrTocFromText(
+      ['4.3.4 过程调用 179', '4.3.5本节习题精选4.4CISC和RISC的基本概念 181', '4.4.1 复杂指令 191'].join('\n'),
+    )
+    const byTitle = new Map(entries.map((e) => [e.title, e.printedPage]))
+    expect(byTitle.get('4.3.5本节习题精选')).toBe(181)
+    expect(byTitle.get('4.4CISC和RISC的基本概念')).toBe(191)
+  })
+
   it('* 黏连行拆成多条（删纲标记）', () => {
     const entries = extractOcrTocFromText('*7.1.1 输入/输出系统 *7.1.2 外部设备\n7.1.3 有页码 291\n')
     // 7.1.1/7.1.2 与 7.1.3 同级不继承，只留落点；拆分本身不断言页码，只断言不吞条
     expect(entries.some((e) => e.title.includes('7.1.3'))).toBe(true)
+  })
+
+  it('证据来源标记（pipe 钉死 / 回填推测）', () => {
+    const opts = { pageCount: 340, pageOffset: 12 }
+    const piped = extractOcrTocFromText('|2.2运算方法和运算电路|32|', opts)
+    expect(piped[0]).toMatchObject({ title: '2.2运算方法和运算电路', printedPage: 32, source: 'pipe' })
+    const filled = extractOcrTocFromText('3.1 父项\n3.1.1 长子 45\n', opts)
+    const byTitle = new Map(filled.map((e) => [e.title, e.source]))
+    expect(byTitle.get('3.1父项')).toBe('backfilled')
+    expect(byTitle.get('3.1.1长子')).toBe('paired')
   })
 
   it('backfillMissingPages 纯函数语义', () => {

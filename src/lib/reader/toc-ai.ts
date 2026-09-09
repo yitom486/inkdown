@@ -1,5 +1,12 @@
-import type { OcrTocEntry } from '@shared/types/ocr'
-import { isWatermarkTocEntry } from '@shared/reader/ocr-toc-extractor'
+import type { OcrTocEntry, OcrTocEntrySource } from '@shared/types/ocr'
+import {
+  cleanupOcrTocTitle,
+  inferLevel,
+  isWatermarkTocEntry,
+  normalizeOcrChinese,
+  sortTocEntriesForDisplay,
+} from '@shared/reader/ocr-toc-extractor'
+import { sectionOfHeading } from '@shared/reader/directory-reassemble'
 
 /**
  * 目录 AI 整理：把目录页 OCR 原文发给大模型做结构化抽取，
@@ -24,13 +31,43 @@ export interface TocAiParseResult {
   warnings: string[]
 }
 
-export function buildTocAiPrompt(ocrText: string, fingerprint: string): string {
+export interface TocAiPromptOptions {
+  /** 附上目录页原图时为 true：以图为准，OCR 文本只当辅助定位 */
+  withImages?: boolean
+  /** 附图页数（withImages 时写入提示，便于模型核对缺页） */
+  imagePages?: readonly number[]
+  /**
+   * 机器基线表（启发式已出结果，附证据等级）：模型当核对者不当重做者——
+   * 逐行核对页码，错的修正，缺的补上，返回修正后的完整表。
+   */
+  baseline?: readonly OcrTocEntry[]
+}
+
+/** 基线行证据标注（钉死的错了也只能指出，不能直接改） */
+function baselineTrustLabel(source: OcrTocEntrySource | undefined): string {
+  if (source === 'manual') return '用户已确认，以它为准'
+  if (source === 'pipe' || source === 'geo') return '已钉死（表格/坐标证据），除非图上明确矛盾否则保留，矛盾请单列指出'
+  return '存疑（机器推测），重点核对'
+}
+
+export function buildTocAiPrompt(
+  ocrText: string,
+  fingerprint: string,
+  options?: TocAiPromptOptions,
+): string {
   const text =
     ocrText.length > TOC_AI_MAX_TEXT_CHARS
       ? ocrText.slice(0, TOC_AI_MAX_TEXT_CHARS)
       : ocrText
+  const withImages = options?.withImages === true
+  const imageLine =
+    withImages && options?.imagePages && options.imagePages.length > 0
+      ? `附图为目录页原图（共 ${options.imagePages.length} 页：第 ${options.imagePages.join('、')} 页，按页码顺序），`
+      : '附图为目录页原图（按页码顺序），'
   return [
-    '你是图书目录结构化助手。从下面的目录页 OCR 文本中提取章节条目。',
+    withImages
+      ? `你是图书目录结构化助手。${imageLine}以附图为准提取章节条目，OCR 文本只供辅助定位。`
+      : '你是图书目录结构化助手。从下面的目录页 OCR 文本中提取章节条目。',
     '首选目录工具：先调 toc_replace_all 把完整目录一次写入草稿' +
       '（fingerprint 照抄任务中的值；level：章/部=1，节=2，小节=3；水印碎片会被自动丢弃并计数）。' +
       '小修补用 toc_upsert_entry / toc_delete_entry，写完调 toc_list_draft 自查。',
@@ -42,11 +79,25 @@ export function buildTocAiPrompt(ocrText: string, fingerprint: string): string {
     '2. 每个元素为 {"title": "章节标题", "printedPage": 印刷页码数字, "level": 层级数字}。',
     '3. level：章/部为 1，节为 2，小节为 3，以此类推；无法判断时填 1。',
     '4. printedPage 取标题同一行或紧邻的页码；标题跨行时把多行拼成一个标题。',
-    '5. 文本已预处理：每行要么是“标题 页码”成对出现，要么是无页码标题——页码只取同行数字，绝不跨行借用、无中生有。',
+    withImages
+      ? '5. 看图读数：页码取标题同一行右侧的数字（点线只是引导线）；跨行、跨栏借用一律不许；图上看不清的宁可跳过，也绝不编造。OCR 文本里缺页码的行，图上能看清就补，看不清就跳过。'
+      : '5. 文本已预处理：每行要么是“标题 页码”成对出现，要么是无页码标题——页码只取同行数字，绝不跨行借用、无中生有。',
     '5. 找不到对应页码的标题宁可跳过，也绝不编造页码；同一页码连续出现超过 10 次必有错误，须停下来重新核对。',
     '6. 忽略页眉页脚、广告、"目录"字样本身、省略号点线、登录提示等非目录噪音。',
     '6. 标题保留原文（含标点），只做去首尾空白；不要改写、不要续写缺失章节。',
-    '目录页 OCR 文本如下：',
+    ...(options?.baseline && options.baseline.length > 0
+      ? [
+          '机器基线表如下（`标题 | 印刷页 | 层级 | 证据`；层级 0=章/部，1=节，2=小节）：',
+          ...options.baseline
+            .slice(0, 300)
+            .map(
+              (entry) =>
+                `- ${entry.title} | ${entry.printedPage} | ${entry.level} | ${baselineTrustLabel(entry.source)}`,
+            ),
+          '核对要求：逐行看图核对页码，错的在返回表里直接给对的页；基线缺的行（图上有、表上无）要补上；返回的一定是修正后的完整表，不要只给差异。',
+        ]
+      : []),
+    withImages ? '目录页 OCR 文本如下（仅供辅助定位）：' : '目录页 OCR 文本如下：',
     text,
   ].join('\n')
 }
@@ -61,10 +112,15 @@ function extractJsonArraySlice(replyText: string): string | null {
   return candidate.slice(start, end + 1)
 }
 
+
+/**
+ * 模型口径 1-based（章=1，见提示词）→ 存储 0-based（章=0，与启发式同口径）。
+ * 缺省按章算（0）。深度最终以章节号重算为准（见 mergeTocAiDraft），这里只保底。
+ */
 function toLevel(value: unknown): number {
   const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10)
-  if (!Number.isFinite(n)) return 1
-  return Math.min(6, Math.max(1, Math.floor(n)))
+  if (!Number.isFinite(n)) return 0
+  return Math.min(6, Math.max(0, Math.floor(n) - 1))
 }
 
 function toPrintedPage(value: unknown): number | null {
@@ -126,10 +182,127 @@ export function parseTocAiEntries(replyText: string): TocAiParseResult {
       warnings.push(`从「${runStartTitle}」起连续 ${samePageRun} 条同为 ${printedPage} 页，疑似编造页码，请核对目录页范围`)
     }
     prevPage = printedPage
-    entries.push({ title, printedPage, level: toLevel(record.level) })
+    entries.push({ title, printedPage, level: toLevel(record.level), source: 'ai' })
   }
   if (dropped > 0) {
     warnings.push(`丢弃 ${dropped} 条空标题/非法页码`)
   }
   return { entries, dropped, warnings }
+}
+
+/**
+ * 证据等级（merge 裁决用）：manual（手填）> pipe/geo（表格/坐标钉死）
+ * > ai（模型看图）> read/paired/backfilled/未知（文本推测）。
+ */
+function evidenceTier(source: OcrTocEntrySource | undefined): number {
+  if (source === 'manual') return 4
+  if (source === 'pipe' || source === 'geo') return 3
+  if (source === 'ai') return 2
+  return 1
+}
+
+/** 合并键：章节号优先（`1.2.7`），无号标题（第X章）按归一化标题 */
+function mergeKeyOf(title: string): string {
+  const section = sectionOfHeading(title)
+  if (section) return `S:${section}`
+  return `T:${cleanupOcrTocTitle(normalizeOcrChinese(title))}`
+}
+
+export interface TocMergeOptions {
+  /** 真实总页数（与 pageOffset 联动做范围门，AI 新增条目用） */
+  pageCount?: number
+  /** 印刷页 + 偏移 = 真实页 */
+  pageOffset?: number
+}
+
+export interface TocMergeResult {
+  entries: OcrTocEntry[]
+  /** 钉死项被 AI 改动：沿用钉死值，逐条留痕（展示用） */
+  conflicts: string[]
+  /** AI 新增且收下的条数 */
+  aiAdded: number
+  /** 丢弃的 AI 条目及原因（展示用） */
+  dropped: string[]
+}
+
+/**
+ * AI 核对表与机器基线的合并裁决（AI 为主干，钉死为红线）。
+ *
+ * - 同键两边都有：等级高者赢；manual/pipe/geo 赢时留冲突痕（AI 值公示）；
+ *   ai 赢（对 read/paired/backfilled）静默采用——这正是要 AI 干的活。
+ * - 仅 AI 有：有据（中文/章节号、合法页、范围内）才收，否则丢弃留痕。
+ * - 仅基线有：保留（AI 漏看不等于不存在）。
+ * - 层级一律按章节号重算（`inferLevel`），不采模型填的——深度是编号事实，
+ *   不是视觉判断；无号标题才用 AI 给的层级。
+ * - 最后过展示序 + 单调门（AI 幻觉页码同样被拦，丢弃留痕）。
+ */
+export function mergeTocAiDraft(
+  baseline: readonly OcrTocEntry[],
+  ai: readonly OcrTocEntry[],
+  options?: TocMergeOptions,
+): TocMergeResult {
+  const conflicts: string[] = []
+  const dropped: string[] = []
+  let aiAdded = 0
+
+  const inRange = (page: number): boolean => {
+    if (options?.pageCount == null || options?.pageOffset == null) return true
+    const real = page + Math.round(options.pageOffset)
+    return real >= 1 && real <= (options.pageCount as number)
+  }
+
+  const baseByKey = new Map<string, OcrTocEntry>()
+  for (const entry of baseline) {
+    const key = mergeKeyOf(entry.title)
+    if (!baseByKey.has(key)) baseByKey.set(key, entry)
+  }
+
+  const merged: OcrTocEntry[] = []
+  const consumed = new Set<string>()
+  for (const aiEntry of ai) {
+    const title = aiEntry.title.trim()
+    if (title.length < 2) {
+      dropped.push(`丢弃 AI 空标题（页 ${aiEntry.printedPage}）`)
+      continue
+    }
+    if (!/[\u4e00-\u9fff]/.test(title) && !sectionOfHeading(title)) {
+      dropped.push(`丢弃 AI 非目录条目「${title}」`)
+      continue
+    }
+    if (
+      !Number.isInteger(aiEntry.printedPage) ||
+      aiEntry.printedPage < 1 ||
+      aiEntry.printedPage > 3000 ||
+      !inRange(aiEntry.printedPage)
+    ) {
+      dropped.push(`丢弃 AI 非法页码「${title}」：${aiEntry.printedPage}`)
+      continue
+    }
+    const key = mergeKeyOf(title)
+    const base = baseByKey.get(key)
+    const level = sectionOfHeading(title) ? inferLevel(title) : aiEntry.level
+    if (!base) {
+      merged.push({ title, printedPage: aiEntry.printedPage, level, source: 'ai' })
+      aiAdded += 1
+      continue
+    }
+    consumed.add(key)
+    if (evidenceTier(base.source) > evidenceTier('ai')) {
+      merged.push({ ...base })
+      if (base.printedPage !== aiEntry.printedPage) {
+        conflicts.push(`「${title}」沿用钉死页 ${base.printedPage}（AI 给 ${aiEntry.printedPage}），请核对`)
+      }
+      continue
+    }
+    merged.push({ title, printedPage: aiEntry.printedPage, level, source: 'ai' })
+  }
+
+  for (const [key, base] of baseByKey) {
+    if (!consumed.has(key)) merged.push({ ...base })
+  }
+
+  const kept = sortTocEntriesForDisplay(merged, (entry) => {
+    dropped.push(`「${entry.title}」页码 ${entry.printedPage} 倒退，疑似错配已丢弃`)
+  })
+  return { entries: kept, conflicts, aiAdded, dropped }
 }

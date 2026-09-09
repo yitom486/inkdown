@@ -10,11 +10,12 @@ import {
 } from './toc-draft'
 
 describe('toc-draft', () => {
-  it('sanitize 与 toc-ai 解析同口径', () => {
+  it('sanitize 与 toc-ai 解析同口径（工具 1-based 转存 0-based）', () => {
     expect(sanitizeTocDraftEntry({ title: ' 3.1 组成 ', printedPage: '31', level: '2' })).toEqual({
       title: '3.1 组成',
       printedPage: 31,
-      level: 2,
+      level: 1,
+      source: 'ai',
     })
     expect(sanitizeTocDraftEntry({ title: '', printedPage: 1 })).toBeNull()
     expect(sanitizeTocDraftEntry({ title: '正文', printedPage: 0 })).toBeNull()
@@ -42,8 +43,8 @@ describe('toc-draft', () => {
     ])
     expect(result).toEqual({ count: 2, dropped: 1 })
     expect(readTocDraft()?.entries).toEqual([
-      { title: '3.1 主存储器', printedPage: 45, level: 1 },
-      { title: '3.1.1 概述', printedPage: 45, level: 2 },
+      { title: '3.1 主存储器', printedPage: 45, level: 0, source: 'ai' },
+      { title: '3.1.1 概述', printedPage: 45, level: 1, source: 'ai' },
     ])
   })
 

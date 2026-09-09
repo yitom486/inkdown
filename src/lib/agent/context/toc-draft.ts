@@ -3,6 +3,7 @@ import {
   isBareChapterTitle,
   isWatermarkTocEntry,
 } from '@shared/reader/ocr-toc-extractor'
+import type { OcrTocEntrySource } from '@shared/types/ocr'
 
 /**
  * 目录 Agent 草稿本（渲染进程内存单例）。
@@ -14,6 +15,8 @@ export interface TocDraftEntry {
   title: string
   printedPage: number
   level: number
+  /** 工具写入一律标 ai（0-based 已归一，合并裁决用） */
+  source?: OcrTocEntrySource
 }
 
 interface TocDraftState {
@@ -30,10 +33,15 @@ function toPrintedPage(value: unknown): number | null {
   return n
 }
 
+
+/**
+ * 工具入参 1-based（章=1，见提示词）→ 存储 0-based（章=0，与启发式同口径）。
+ * 与 toc-ai JSON 路径同口径，合并裁决不再错位。
+ */
 function toLevel(value: unknown): number {
   const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10)
-  if (!Number.isInteger(n)) return 1
-  return Math.min(6, Math.max(1, n))
+  if (!Number.isInteger(n)) return 0
+  return Math.min(6, Math.max(0, n - 1))
 }
 
 /** 单条校验（与 toc-ai 解析同口径：空标题/非法页码/水印一律丢弃） */
@@ -45,7 +53,7 @@ export function sanitizeTocDraftEntry(raw: unknown): TocDraftEntry | null {
   const printedPage = toPrintedPage(record.printedPage)
   if (printedPage === null) return null
   if (isWatermarkTocEntry(title)) return null
-  return { title, printedPage, level: toLevel(record.level) }
+  return { title, printedPage, level: toLevel(record.level), source: 'ai' as const }
 }
 
 /** 整单替换（toc_replace_all 主路径，幂等） */
@@ -58,7 +66,7 @@ export function writeTocDraft(
     return { count: 0, dropped: 0 }
   }
   // 宽松过一遍：留空页码给回填（与启发式同口径），无号章行直接丢弃
-  const prelim: { title: string; printedPage: number | null; level: number }[] = []
+  const prelim: { title: string; printedPage: number | null; level: number; source: OcrTocEntrySource }[] = []
   let dropped = 0
   for (const item of rawEntries) {
     if (typeof item !== 'object' || item === null) {
@@ -76,7 +84,7 @@ export function writeTocDraft(
       dropped += 1
       continue
     }
-    prelim.push({ title, printedPage, level: toLevel(record.level) })
+    prelim.push({ title, printedPage, level: toLevel(record.level), source: 'ai' })
   }
   const entries: TocDraftEntry[] = []
   for (const entry of backfillMissingPages(prelim)) {
@@ -84,7 +92,7 @@ export function writeTocDraft(
       dropped += 1
       continue
     }
-    entries.push({ title: entry.title, printedPage: entry.printedPage, level: entry.level })
+    entries.push({ title: entry.title, printedPage: entry.printedPage, level: entry.level, source: entry.source })
   }
   draft = { fingerprint, entries, updatedAt: Date.now() }
   return { count: entries.length, dropped }
