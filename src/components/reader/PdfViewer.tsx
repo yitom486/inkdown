@@ -21,8 +21,10 @@ import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
 import {
   TOC_DRAFT_GUARD_MESSAGE,
   createTocOpLock,
+  isLiveTocOpLease,
   tocBusyMessage,
   type OcrTocOperation,
+  type TocOpLease,
   type TocOpLock,
 } from '@/lib/reader/ocr-toc-op'
 import { resolveDetectApply } from '@shared/reader/toc-page-detect'
@@ -177,21 +179,36 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   /** mouseup 后提交的选区事务；后续 UI 不再依赖原生 Selection。 */
   const selectionTransactionRef = useRef<PdfSelectionSnapshot | null>(null)
   /**
-   * 目录操作同步锁（探测/识别/保存三取一）：布尔 state 要等下一次渲染，
-   * 快速连点能绕过，这里用 ref 做真正的门。布尔们只负责按钮禁用等渲染。
+   * 目录操作租约锁（探测/识别/保存三取一）+ 文档世代：
+   * - 布尔 state 要等下一次渲染，快速连点能绕过，这里用 ref 锁做真正的门；
+   * - tryBegin 返回租约对象，释放只认引用（ABA 安全：旧 finally 误释放不了新租约）；
+   * - 切文件时世代 +1 并作废租约，旧任务回写前必须两道门全过。
+   * 布尔们只负责按钮禁用等渲染。
    */
   const tocOpLockRef = useRef<TocOpLock | null>(null)
   if (tocOpLockRef.current === null) {
     tocOpLockRef.current = createTocOpLock()
   }
-  const beginTocOp = useCallback((operation: OcrTocOperation): boolean => {
+  /** 文档世代（单调递增，mount 期不清零）：切文件即 +1 */
+  const tocDocSessionRef = useRef(0)
+  const beginTocOp = useCallback((operation: OcrTocOperation): TocOpLease | null => {
     const lock = tocOpLockRef.current
-    if (lock && lock.tryBegin(operation)) return true
+    const lease = lock ? lock.tryBegin(operation) : null
+    if (lease) return lease
     toast.error(tocBusyMessage(lock?.current() ?? null) ?? '目录操作进行中，请稍候')
-    return false
+    return null
   }, [])
-  const endTocOp = useCallback((operation: OcrTocOperation): void => {
-    tocOpLockRef.current?.end(operation)
+  const endTocOp = useCallback((lease: TocOpLease): void => {
+    tocOpLockRef.current?.end(lease)
+  }, [])
+  /** 回写门：租约仍是当前持有者且世代未变（旧文件任务一律拦下，含清 busy） */
+  const isLiveTocOp = useCallback((lease: TocOpLease, session: number): boolean => {
+    return isLiveTocOpLease(
+      tocOpLockRef.current?.current() ?? null,
+      lease,
+      tocDocSessionRef.current,
+      session,
+    )
   }, [])
 
   const { data, isLoading, error } = useReaderBinary(filePath)
@@ -379,14 +396,16 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrRecognizing(false)
     setOcrTocNotice(null)
     setTocDetecting(false)
-    // 切文件时释放可能残留的目录操作锁（在途回调的 finally 会空操作，无害）
-    {
-      const runningOp = tocOpLockRef.current?.current()
-      if (runningOp) tocOpLockRef.current?.end(runningOp)
-    }
+    // 切文件：文档世代 +1 并作废当前租约；在途旧任务的回写与清 busy 一律被拦下，
+    // 其主进程侧 OCR/写缓存可自然结束（写的是旧指纹文件，不影响新文件）
+    tocDocSessionRef.current += 1
+    tocOpLockRef.current?.invalidate()
     resetPageOcr()
     setTocOpen(false)
     pageAnchorRefs.current.clear()
+
+    // 本次加载的世代：后续 await 回包只在本世代有效
+    const loadSession = tocDocSessionRef.current
 
     void (async () => {
       try {
@@ -441,7 +460,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           })
         ) {
           const cacheResult = await getPdfOcrToc({ fileFingerprint })
-          if (cacheResult.ok) {
+          // 旧文件慢回包不得写回新文件界面（与三操作同世代门）
+          if (cacheResult.ok && !cancelled && loadSession === tocDocSessionRef.current) {
             // 分级恢复：usable 照常；invalid 不进侧栏（原因进横幅附加行）；
             // suspect/legacy 照常供阅读，提示走独立 ocrTocNotice（不再写
             // outlineNotice：它在 OCR 侧栏下被抹掉，不打开侧栏不可见）。
@@ -525,8 +545,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       toast.error(TOC_DRAFT_GUARD_MESSAGE)
       return
     }
-    // 同步锁先行：参数错误与识别失败都在 finally 释放，见末尾
-    if (!beginTocOp('recognize')) return
+    // 租约先行：参数错误与识别失败都在 finally 释放，见末尾
+    const lease = beginTocOp('recognize')
+    if (!lease) return
+    const session = tocDocSessionRef.current
     setOcrRecognizing(true)
     try {
       if (!Number.isInteger(numPages) || numPages < 1) {
@@ -542,6 +564,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         scale: pdfOcrScale,
         pageCount: numPages,
       })
+      // 旧文件任务结果绝不写回新文件界面（含 toast 与 notice）
+      if (!isLiveTocOp(lease, session)) return
       if (result.ok) {
         setOutlineUnits(result.value.units)
         setOutlineSource('ocr')
@@ -555,16 +579,19 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         toast.error(result.error.message)
       }
     } finally {
-      setOcrRecognizing(false)
-      endTocOp('recognize')
+      // 旧任务不得清掉新任务的 busy：世代已变则跳过
+      if (isLiveTocOp(lease, session)) setOcrRecognizing(false)
+      endTocOp(lease)
     }
-  }, [fileFingerprint, filePath, ocrTocEditMode, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale, numPages, beginTocOp, endTocOp])
+  }, [fileFingerprint, filePath, ocrTocEditMode, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale, numPages, beginTocOp, endTocOp, isLiveTocOp])
 
   const handleSaveOcrToc = useCallback(
     async (entries: OcrTocEntry[]) => {
       if (!fileFingerprint) return
-      // 保存即解决草稿归属，不做草稿门；互斥锁保证不与探测/识别交错写缓存
-      if (!beginTocOp('save')) return
+      // 保存即解决草稿归属，不做草稿门；租约锁保证不与探测/识别交错写缓存
+      const lease = beginTocOp('save')
+      if (!lease) return
+      const session = tocDocSessionRef.current
       setOcrTocSaving(true)
       try {
         const cache = buildPdfOcrTocCache({
@@ -578,6 +605,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           return
         }
         const result = await savePdfOcrToc({ cache })
+        // 主进程写的是旧指纹文件（自然结束无害）；界面回写只认本世代
+        if (!isLiveTocOp(lease, session)) return
         if (!result.ok) {
           toast.error(result.error.message)
           return
@@ -589,11 +618,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         setOcrTocNotice(null)
         toast.success('目录已保存')
       } finally {
-        setOcrTocSaving(false)
-        endTocOp('save')
+        if (isLiveTocOp(lease, session)) setOcrTocSaving(false)
+        endTocOp(lease)
       }
     },
-    [fileFingerprint, tocPageFrom, tocPageTo, tocPageOffset, beginTocOp, endTocOp],
+    [fileFingerprint, tocPageFrom, tocPageTo, tocPageOffset, beginTocOp, endTocOp, isLiveTocOp],
   )
 
   /**
@@ -607,8 +636,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       toast.error(TOC_DRAFT_GUARD_MESSAGE)
       return
     }
-    // 同步锁先行：参数错误与探测失败都在 finally 释放，见末尾
-    if (!beginTocOp('detect')) return
+    // 租约先行：参数错误与探测失败都在 finally 释放，见末尾
+    const lease = beginTocOp('detect')
+    if (!lease) return
+    const session = tocDocSessionRef.current
     setTocDetecting(true)
     try {
       if (!Number.isInteger(numPages) || numPages < 1) {
@@ -616,6 +647,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         return
       }
       const result = await detectPdfTocPages({ filePath, pageCount: numPages })
+      // 旧文件探测结果不得改写新文件范围输入
+      if (!isLiveTocOp(lease, session)) return
       if (!result.ok) {
         toast.error(result.error.message)
         return
@@ -636,10 +669,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         toast.message(result.value.reason ?? '未找到可靠目录页，已保留当前范围')
       }
     } finally {
-      setTocDetecting(false)
-      endTocOp('detect')
+      if (isLiveTocOp(lease, session)) setTocDetecting(false)
+      endTocOp(lease)
     }
-  }, [fileFingerprint, filePath, ocrTocEditMode, numPages, tocPageFrom, tocPageTo, beginTocOp, endTocOp])
+  }, [fileFingerprint, filePath, ocrTocEditMode, numPages, tocPageFrom, tocPageTo, beginTocOp, endTocOp, isLiveTocOp])
 
   const [suggestingOffset, setSuggestingOffset] = useState(false)
 
