@@ -21,6 +21,7 @@ import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
 import {
   TOC_DRAFT_GUARD_MESSAGE,
   TocDocLifecycle,
+  isLiveLoadSession,
   tocBusyMessage,
   type OcrTocOperation,
   type TocOpLease,
@@ -403,15 +404,18 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setTocOpen(false)
     pageAnchorRefs.current.clear()
 
-    // 本次加载的世代：后续 await 回包只在本世代有效
+    // 本次加载的世代 + 统一回写门：每次 await 返回、写任何状态前必过此门；
+    // 失活即销毁局部任务并直接退出，不跳过某段再写旧数据
     const loadSession = tocLifecycleRef.current?.currentSession() ?? 0
+    const isLiveLoad = (): boolean =>
+      isLiveLoadSession(cancelled, loadSession, tocLifecycleRef.current?.currentSession() ?? -1)
 
     void (async () => {
       try {
         const loadingTask = openPdfDocument({ data: data.data.slice() })
         loadingTaskRef.current = loadingTask
         const pdf = await loadingTask.promise
-        if (cancelled) {
+        if (!isLiveLoad()) {
           void loadingTask.destroy()
           return
         }
@@ -434,17 +438,17 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         setPageNum(restoredPage)
 
         const firstPage = await pdf.getPage(1)
-        if (!cancelled) {
+        if (!isLiveLoad()) return
+        {
           const viewport = firstPage.getViewport({ scale: 1 })
           setPageCssSize({ width: viewport.width, height: viewport.height })
         }
 
         const units = await loadPdfOutlineInfo(pdf)
         const profile = await detectPdfDocumentProfile(pdf)
-        if (!cancelled) {
-          setIsScannedPdf(profile.isScanned)
-          setIsMixedPdf(profile.mixed)
-        }
+        if (!isLiveLoad()) return
+        setIsScannedPdf(profile.isScanned)
+        setIsMixedPdf(profile.mixed)
 
         let nextUnits = units.units
         let nextSource: PdfOutlineSource | 'ocr' = units.source
@@ -459,12 +463,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           })
         ) {
           const cacheResult = await getPdfOcrToc({ fileFingerprint })
+          if (!isLiveLoad()) return
           // 旧文件慢回包不得写回新文件界面（与三操作同世代门）
-          if (
-            cacheResult.ok &&
-            !cancelled &&
-            loadSession === (tocLifecycleRef.current?.currentSession() ?? -1)
-          ) {
+          if (cacheResult.ok) {
             // 分级恢复：usable 照常；invalid 不进侧栏（原因进横幅附加行）；
             // suspect/legacy 照常供阅读，提示走独立 ocrTocNotice（不再写
             // outlineNotice：它在 OCR 侧栏下被抹掉，不打开侧栏不可见）。
@@ -477,7 +478,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             )
             const notice = noticeForRestoredCache(assessment)
             if (assessment.status === 'invalid') {
-              if (!cancelled) setOcrTocNotice(notice)
+              setOcrTocNotice(notice)
             } else {
               const cache = cacheResult.value
               nextUnits = assessment.repairedUnits ?? cache.units
@@ -487,20 +488,22 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               setTocPageOffset(cache.pageOffset)
               setOcrTocEntries(cache.entries)
               nextNotice = undefined
-              if (!cancelled) setOcrTocNotice(notice)
+              setOcrTocNotice(notice)
             }
           }
         }
 
-        if (!cancelled) {
-          setOutlineUnits(nextUnits)
-          setOutlineSource(nextSource)
-          setOutlineNotice(nextNotice)
-        }
+        // 失活即直接退出：不得跳过恢复后再把旧 embedded outline 写入
+        if (!isLiveLoad()) return
+        setOutlineUnits(nextUnits)
+        setOutlineSource(nextSource)
+        setOutlineNotice(nextNotice)
 
+        if (!isLiveLoad()) return
         if (profile.isScanned && fileFingerprint) {
           const pagesResult = await listPdfOcrPages({ fileFingerprint })
-          if (!cancelled && pagesResult.ok && pagesResult.value.length > 0) {
+          if (!isLiveLoad()) return
+          if (pagesResult.ok && pagesResult.value.length > 0) {
             const entries = await Promise.all(
               pagesResult.value.map(async (pageNumber) => {
                 const pageResult = await getPdfOcrPage({ fileFingerprint, page: pageNumber })
@@ -508,18 +511,17 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                 return [pageNumber, pageResult.value] as const
               }),
             )
-            if (!cancelled) {
-              hydratePageCaches(Object.fromEntries(entries.filter((item) => item !== null)))
-            }
+            if (!isLiveLoad()) return
+            hydratePageCaches(Object.fromEntries(entries.filter((item) => item !== null)))
           }
         }
       } catch (cause) {
-        if (!cancelled) {
-          reportAppError({
-            code: 'FILE_READ_ERROR',
-            message: cause instanceof Error ? cause.message : 'PDF 加载失败',
-          })
-        }
+        // 旧加载失败不得向新文件弹 FILE_READ_ERROR
+        if (!isLiveLoad()) return
+        reportAppError({
+          code: 'FILE_READ_ERROR',
+          message: cause instanceof Error ? cause.message : 'PDF 加载失败',
+        })
       }
     })()
 

@@ -4,6 +4,7 @@ import {
   TocDocLifecycle,
   canBeginTocOp,
   createTocOpLock,
+  isLiveLoadSession,
   isLiveTocOpLease,
   tocBusyMessage,
   type OcrTocOperation,
@@ -198,6 +199,56 @@ describe('TocDocLifecycle 切文件交错', () => {
     expect(lifecycle.isLive(lease, session)).toBe(true)
     expect(lifecycle.end(lease)).toBe(true)
     expect(lifecycle.begin('save')).not.toBeNull()
+  })
+})
+
+describe('isLiveLoadSession 加载链统一回写门', () => {
+  it('正常加载链：各阶段门全开，可写入', () => {
+    // 按 PdfViewer 加载 effect 的 await 顺序走一遍：文档→尺寸→画像→恢复→落大纲→水合
+    const stages = [
+      'document',
+      'page-size',
+      'outline-profile',
+      'toc-restore',
+      'outline-commit',
+      'page-hydrate',
+    ]
+    for (const stage of stages) {
+      expect(isLiveLoadSession(false, 3, 3)).toBe(true)
+    }
+    void stages
+  })
+
+  it('旧世代（切过文件）：所有阶段的门全关', () => {
+    const stages = [
+      'document',
+      'page-size',
+      'outline-profile',
+      'toc-restore',
+      'outline-commit',
+      'page-hydrate',
+    ]
+    for (const stage of stages) {
+      // loadSession=3，当前已推进到 4（可多跳）
+      expect(isLiveLoadSession(false, 3, 4)).toBe(false)
+      expect(isLiveLoadSession(false, 3, 5)).toBe(false)
+    }
+    void stages
+  })
+
+  it('清理/卸载后：同世代也关闭', () => {
+    expect(isLiveLoadSession(true, 3, 3)).toBe(false)
+  })
+
+  it('旧加载失败：门关闭，不向新文件弹 FILE_READ_ERROR', () => {
+    const shouldReportLoadError = (cancelled: boolean, loadSession: number, current: number) =>
+      isLiveLoadSession(cancelled, loadSession, current)
+    // 新文件正常失败 → 上报
+    expect(shouldReportLoadError(false, 4, 4)).toBe(true)
+    // 旧文件失败（已切走）→ 吞掉不上报
+    expect(shouldReportLoadError(false, 3, 4)).toBe(false)
+    // 卸载后失败 → 不上报
+    expect(shouldReportLoadError(true, 4, 4)).toBe(false)
   })
 })
 

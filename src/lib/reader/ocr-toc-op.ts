@@ -138,3 +138,16 @@ export function isLiveTocOpLease(
 ): boolean {
   return lease !== null && current === lease && currentSession === session
 }
+
+/**
+ * PDF 加载链统一回写门：加载 effect 每次 await 返回、写任何状态前必过此门。
+ * cancelled（effect 清理/卸载）或世代已变（切过文件）即失活，直接退出，
+ * 不得跳过某段后再把旧数据（如 embedded outline）写入新界面。
+ */
+export function isLiveLoadSession(
+  cancelled: boolean,
+  loadSession: number,
+  currentSession: number,
+): boolean {
+  return !cancelled && loadSession === currentSession
+}
