@@ -7,7 +7,7 @@ import type { RendererErrorPayload } from '@shared/types/error-log'
 import type { WindowInit } from '@shared/types/window'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
-import type { GetPdfOcrTocPayload, GetPdfOcrPagePayload, ListPdfOcrPagesPayload, RecognizePdfPagePayload, RecognizePdfTocPayload, SavePdfOcrTocPayload } from '@shared/types/ocr'
+import type { DetectPdfTocPagesPayload, GetPdfOcrTocPayload, GetPdfOcrPagePayload, ListPdfOcrPagesPayload, RecognizePdfPagePayload, RecognizePdfTocPayload, SavePdfOcrTocPayload } from '@shared/types/ocr'
 import type { ClassifyPdfDocumentPayload, ExtractPdfBookMarkdownPayload } from '@shared/types/pdf-inspect'
 import type { RosettaActiveImport, RosettaImportPayload, RosettaImportStatus, RosettaQuery } from '@shared/types/rosetta'
 import type { QuizSessionRecord } from '@shared/types/quiz'
@@ -184,6 +184,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(IPC.OCR_GET_PDF_TOC, payload),
   recognizePdfOcrToc: (payload: RecognizePdfTocPayload) =>
     ipcRenderer.invoke(IPC.OCR_RECOGNIZE_PDF_TOC, payload),
+  detectPdfTocPages: (payload: DetectPdfTocPagesPayload) =>
+    ipcRenderer.invoke(IPC.OCR_DETECT_PDF_TOC_PAGES, payload),
   deletePdfOcrToc: (payload: GetPdfOcrTocPayload) =>
     ipcRenderer.invoke(IPC.OCR_DELETE_PDF_TOC, payload),
   getPdfOcrPage: (payload: GetPdfOcrPagePayload) =>

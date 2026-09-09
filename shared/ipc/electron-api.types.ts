@@ -57,6 +57,8 @@ import type {
   WebDocFetchResult,
 } from '@shared/types/web-doc'
 import type {
+  DetectPdfTocPagesPayload,
+  DetectPdfTocPagesResult,
   GetPdfOcrPagePayload,
   GetPdfOcrTocPayload,
   ListPdfOcrPagesPayload,
@@ -264,6 +266,10 @@ export interface ElectronAPI {
   recognizePdfOcrToc: (
     payload: RecognizePdfTocPayload,
   ) => Promise<Result<PdfOcrTocCache, AppError>>
+  /** 探测 PDF 目录页范围（只建议范围，不识别不缓存） */
+  detectPdfTocPages: (
+    payload: DetectPdfTocPagesPayload,
+  ) => Promise<Result<DetectPdfTocPagesResult, AppError>>
   /** 删除某 PDF 的目录 OCR 缓存 */
   deletePdfOcrToc: (payload: GetPdfOcrTocPayload) => Promise<Result<void, AppError>>
   /** 读取某页 PDF OCR 缓存 */

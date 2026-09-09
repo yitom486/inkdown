@@ -137,6 +137,8 @@ export const IPC = {
   OCR_GET_PDF_TOC: 'ocr:get-pdf-toc',
   /** invoke：对 PDF 目录页做 OCR 并缓存 */
   OCR_RECOGNIZE_PDF_TOC: 'ocr:recognize-pdf-toc',
+  /** invoke：探测 PDF 目录页范围（只建议范围，不识别不缓存） */
+  OCR_DETECT_PDF_TOC_PAGES: 'ocr:detect-pdf-toc-pages',
   /** invoke：删除某 PDF 的目录 OCR 缓存 */
   OCR_DELETE_PDF_TOC: 'ocr:delete-pdf-toc',
   /** invoke：读取某页 PDF OCR 缓存 */

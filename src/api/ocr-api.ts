@@ -1,4 +1,6 @@
 import type {
+  DetectPdfTocPagesPayload,
+  DetectPdfTocPagesResult,
   GetPdfOcrPagePayload,
   GetPdfOcrTocPayload,
   ListPdfOcrPagesPayload,
@@ -29,6 +31,12 @@ export function recognizePdfOcrToc(
   payload: RecognizePdfTocPayload,
 ): Promise<Result<PdfOcrTocCache, AppError>> {
   return api().recognizePdfOcrToc(payload)
+}
+
+export function detectPdfTocPages(
+  payload: DetectPdfTocPagesPayload,
+): Promise<Result<DetectPdfTocPagesResult, AppError>> {
+  return api().detectPdfTocPages(payload)
 }
 
 export function deletePdfOcrToc(

@@ -22,6 +22,9 @@ interface PdfOcrBannerProps {
   /** 自动推算偏移（调用方做标题锚定共识）；不传则不显示按钮 */
   onSuggestOffset?: () => void
   suggestingOffset?: boolean
+  /** 自动查找目录页（只建议范围，不识别）；不传则不显示按钮 */
+  onDetectTocPages?: () => void
+  detectingTocPages?: boolean
   extraActions?: ReactNode
 }
 
@@ -38,6 +41,8 @@ export function PdfOcrBanner({
   entryCount,
   onSuggestOffset,
   suggestingOffset = false,
+  onDetectTocPages,
+  detectingTocPages = false,
   extraActions,
 }: PdfOcrBannerProps) {
   const recognizeLabel = mode === 're-recognize-toc' ? '重新识别' : '识别目录'
@@ -124,6 +129,19 @@ export function PdfOcrBanner({
               onClick={onSuggestOffset}
             >
               {suggestingOffset ? '推算中…' : '自动推算'}
+            </Button>
+          ) : null}
+          {onDetectTocPages ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+              disabled={detectingTocPages}
+              title="在文档前部低清扫描找目录页，只填入范围，需核对后手动识别"
+              onClick={onDetectTocPages}
+            >
+              {detectingTocPages ? '查找中…' : '自动查找目录页'}
             </Button>
           ) : null}
           {extraActions}

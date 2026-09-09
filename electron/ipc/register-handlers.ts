@@ -32,6 +32,7 @@ import type {
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import { resolveSnapshotTimeoutMs } from '@shared/agent/inkdown-snapshot'
 import type {
+  DetectPdfTocPagesPayload,
   GetPdfOcrTocPayload,
   GetPdfOcrPagePayload,
   ListPdfOcrPagesPayload,
@@ -118,6 +119,7 @@ import {
 } from '../services/ocr/ocr-page-cache'
 import { recognizePdfPage } from '../services/ocr/pdf-page-ocr-service'
 import { recognizePdfToc } from '../services/ocr/pdf-ocr-toc-service'
+import { detectPdfTocPages } from '../services/ocr/pdf-toc-detect-service'
 import {
   cancelOcrComponentDownload,
   ensureOcrComponent,
@@ -514,6 +516,11 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.OCR_RECOGNIZE_PDF_TOC, async (_event, payload: RecognizePdfTocPayload) =>
     recognizePdfToc(payload),
+  )
+
+  ipcMain.handle(
+    IPC.OCR_DETECT_PDF_TOC_PAGES,
+    async (_event, payload: DetectPdfTocPagesPayload) => detectPdfTocPages(payload),
   )
 
   ipcMain.handle(IPC.OCR_DELETE_PDF_TOC, async (_event, payload: GetPdfOcrTocPayload) => {

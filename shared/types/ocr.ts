@@ -15,6 +15,8 @@ export type PdfOcrScale = (typeof PDF_OCR_SCALE_OPTIONS)[number]
 export const DEFAULT_PDF_OCR_SCALE: PdfOcrScale = 2
 /** 目录页固定清晰档：仅 5 页左右，提清成本可忽略，正文仍走用户档 */
 export const DEFAULT_PDF_TOC_SCALE: PdfOcrScale = 2.5
+/** 目录页探测固定低清档：只做范围建议，正式识别仍走 2.5 清晰档 */
+export const DEFAULT_PDF_TOC_DETECT_SCALE: PdfOcrScale = 1.5
 
 export const PDF_OCR_SCALE_OPTION_LABELS: Array<{ value: PdfOcrScale; label: string }> = [
   { value: 1.5, label: '快速' },
@@ -101,6 +103,37 @@ export interface GetPdfOcrTocPayload {
 
 export interface SavePdfOcrTocPayload {
   cache: PdfOcrTocCache
+}
+
+/** 目录页探测请求：只建议范围，不识别、不写缓存 */
+export interface DetectPdfTocPagesPayload {
+  filePath: string
+  /** 真实总页数（渲染端 pdfjs 已知）：决定探测窗口上界 */
+  pageCount: number
+}
+
+export type DetectPdfTocPagesOutcome = 'found' | 'ambiguous' | 'not-found'
+
+/** 候选目录段（按分排序；ambiguous 时给用户看差异） */
+export interface TocPageCandidate {
+  fromPage: number
+  toPage: number
+  score: number
+}
+
+export interface DetectPdfTocPagesResult {
+  outcome: DetectPdfTocPagesOutcome
+  /** found 时为建议范围（已含低分间隙页） */
+  fromPage?: number
+  toPage?: number
+  /** 候选段（最多 3 段） */
+  candidates: TocPageCandidate[]
+  /** 实际 OCR 的页数（窗口内） */
+  pagesScanned: number
+  /** 其中走 OCR 的页数（其余为原生文字层直读） */
+  ocrPages: number
+  /** ambiguous / not-found 时的人话原因 */
+  reason?: string
 }
 
 /** 页内像素框；与 OCR 引擎坐标系一致，划词要对齐阅读器缩放 */
