@@ -19,6 +19,11 @@ import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
 import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
 import {
+  reduceDetectFeedback,
+  selectDetectCandidate,
+  type TocDetectFeedback,
+} from '@/lib/reader/ocr-toc-detect-feedback'
+import {
   TOC_DRAFT_GUARD_MESSAGE,
   TocDocLifecycle,
   isLiveLoadSession,
@@ -166,6 +171,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const [tocPageOffset, setTocPageOffset] = useState(12)
   /** 目录页探测中：与正式识别/保存互斥（只填范围，不识别不缓存） */
   const [tocDetecting, setTocDetecting] = useState(false)
+  /** 探测反馈（ambiguous 候选 / not-found 提示）：临时 UI 状态，不写缓存 */
+  const [tocDetectFeedback, setTocDetectFeedback] = useState<TocDetectFeedback | null>(null)
   const [selectionSnapshot, setSelectionSnapshot] = useState<PdfSelectionSnapshot | null>(null)
   const [selectionToolbarPos, setSelectionToolbarPos] = useState<{ x: number; y: number } | null>(
     null,
@@ -374,6 +381,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrRecognizing(false)
     setTocDetecting(false)
     setOcrTocSaving(false)
+    setTocDetectFeedback((prev) => reduceDetectFeedback(prev, { type: 'file-switched' }))
     setOutlineUnits([])
     setOutlineSource('page-fallback')
     setOutlineNotice(undefined)
@@ -646,6 +654,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     if (!lease) return
     const session = tocLifecycleRef.current?.currentSession() ?? 0
     setTocDetecting(true)
+    // 新探测开始即清旧反馈（过期候选不得继续展示）
+    setTocDetectFeedback((prev) => reduceDetectFeedback(prev, { type: 'detect-started' }))
     try {
       if (!Number.isInteger(numPages) || numPages < 1) {
         toast.error('PDF 尚未加载完成，请稍后再试')
@@ -658,6 +668,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         toast.error(result.error.message)
         return
       }
+      // ambiguous/not-found 驻留反馈（found 只 toast，不驻留）；只填范围，不识别不缓存
+      setTocDetectFeedback((prev) =>
+        reduceDetectFeedback(prev, { type: 'detect-finished', result: result.value }),
+      )
       const applied = resolveDetectApply(
         { fromPage: tocPageFrom, toPage: tocPageTo },
         result.value,
@@ -678,6 +692,45 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       endTocOp(lease)
     }
   }, [fileFingerprint, filePath, ocrTocEditMode, numPages, tocPageFrom, tocPageTo, beginTocOp, endTocOp, isLiveTocOp])
+
+  /**
+   * 选中探测候选：只填页码范围。busy 或编辑器草稿未决时拒绝并明示原因；
+   * 自身不触碰 recognize/save/detect IPC。
+   */
+  const handleSelectDetectCandidate = useCallback(
+    (index: number) => {
+      const outcome = selectDetectCandidate(tocDetectFeedback, index, {
+        busy: ocrRecognizing || tocDetecting || ocrTocSaving,
+        hasDraft: ocrTocEditMode,
+      })
+      if (!outcome) return
+      if (outcome.action === 'blocked') {
+        if (outcome.reason === 'busy') {
+          toast.error(
+            tocBusyMessage(tocLifecycleRef.current?.current() ?? null) ?? '目录操作进行中，请稍候',
+          )
+        } else {
+          toast.error(TOC_DRAFT_GUARD_MESSAGE)
+        }
+        return
+      }
+      setTocPageFrom(outcome.fromPage)
+      setTocPageTo(outcome.toPage)
+    },
+    [tocDetectFeedback, ocrRecognizing, tocDetecting, ocrTocSaving, ocrTocEditMode],
+  )
+
+  /** 手改页码输入即清旧反馈（过期候选不得继续展示） */
+  const handleTocPageFromChange = useCallback((value: number) => {
+    setTocPageFrom(value)
+    setTocDetectFeedback((prev) => reduceDetectFeedback(prev, { type: 'range-edited' }))
+  }, [])
+
+  /** 手改页码输入即清旧反馈（过期候选不得继续展示） */
+  const handleTocPageToChange = useCallback((value: number) => {
+    setTocPageTo(value)
+    setTocDetectFeedback((prev) => reduceDetectFeedback(prev, { type: 'range-edited' }))
+  }, [])
 
   const [suggestingOffset, setSuggestingOffset] = useState(false)
 
@@ -1679,14 +1732,16 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           tocPageFrom={tocPageFrom}
           tocPageTo={tocPageTo}
           tocPageOffset={tocPageOffset}
-          onTocPageFromChange={setTocPageFrom}
-          onTocPageToChange={setTocPageTo}
+          onTocPageFromChange={handleTocPageFromChange}
+          onTocPageToChange={handleTocPageToChange}
           onTocPageOffsetChange={setTocPageOffset}
           onSuggestOffset={() => void handleSuggestOffset()}
           suggestingOffset={suggestingOffset}
           onDetectTocPages={() => void handleDetectTocPages()}
           detectingTocPages={tocDetecting}
           busy={ocrTocBusy}
+          detectFeedback={tocDetectFeedback}
+          onSelectDetectCandidate={handleSelectDetectCandidate}
           onRecognize={() => void handleRecognizeToc()}
           onDismiss={() => {
             setOcrTocEditorOpen(false)

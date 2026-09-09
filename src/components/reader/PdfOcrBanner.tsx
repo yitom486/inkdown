@@ -1,6 +1,7 @@
 import { Loader2, ScanText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ReactNode } from 'react'
+import type { TocDetectFeedback } from '@/lib/reader/ocr-toc-detect-feedback'
 
 export type PdfOcrBannerMode =
   | 'scanned-no-outline'
@@ -27,6 +28,10 @@ interface PdfOcrBannerProps {
   detectingTocPages?: boolean
   /** 目录三操作任一运行中：两个入口按钮同步禁用（锁负责逻辑互斥） */
   busy?: boolean
+  /** 探测反馈（ambiguous 候选 / not-found 提示；只含范围，不含评分原文） */
+  detectFeedback?: TocDetectFeedback | null
+  /** 选中候选：仅填充页码范围，不触发任何 IPC */
+  onSelectDetectCandidate?: (index: number) => void
   extraActions?: ReactNode
 }
 
@@ -46,6 +51,8 @@ export function PdfOcrBanner({
   onDetectTocPages,
   detectingTocPages = false,
   busy = false,
+  detectFeedback = null,
+  onSelectDetectCandidate,
   extraActions,
 }: PdfOcrBannerProps) {
   const recognizeLabel = mode === 're-recognize-toc' ? '重新识别' : '识别目录'
@@ -157,6 +164,30 @@ export function PdfOcrBanner({
           >
             {recognizeLabel}
           </Button>
+          {detectFeedback && detectFeedback.kind === 'ambiguous' ? (
+            <span className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-amber-900/80 dark:text-amber-100/80">疑似多处：</span>
+              {detectFeedback.candidates.map((candidate, index) => (
+                <Button
+                  key={`${candidate.fromPage}-${candidate.toPage}`}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-xs"
+                  disabled={busy || detectingTocPages}
+                  title="仅填入页码范围，需核对后手动识别"
+                  onClick={() => onSelectDetectCandidate?.(index)}
+                >
+                  使用第 {candidate.fromPage}–{candidate.toPage} 页
+                </Button>
+              ))}
+            </span>
+          ) : null}
+          {detectFeedback && detectFeedback.kind === 'not-found' ? (
+            <span className="text-xs text-amber-900/80 dark:text-amber-100/80">
+              前 {detectFeedback.pagesScanned} 页未找到可靠目录页，请手填
+            </span>
+          ) : null}
         </div>
       ) : null}
       <Button
