@@ -8,9 +8,15 @@ import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { AcpConfigOption } from '@shared/types/acp'
 import type { OcrTocEntry } from '@shared/types/ocr'
 import { buildTocAiPrompt, mergeTocAiDraft, parseTocAiEntries } from '@/lib/reader/toc-ai'
-import { decideTocAiPromptOutcome, takeTocDraft } from '@/lib/agent/context/toc-draft'
+import {
+  decideTocAiPromptOutcome,
+  peekTocDraftSeq,
+  takeTocDraftSince,
+  waitForTocDraft,
+} from '@/lib/agent/context/toc-draft'
 import {
   canTocUseImages,
+  cancelTocPrompt,
   ensureTocSessionId,
   pickTocModelOptions,
   pickTocThoughtOptions,
@@ -101,6 +107,10 @@ export function TocAiPolishControl({
   const [error, setError] = useState<string | null>(null)
   const sessionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
+  /** 整理轮次：新一轮开始/取消/切文件即递增，等草稿循环凭此过期 */
+  const runIdRef = useRef(0)
+  const fpRef = useRef(fileFingerprint)
+  fpRef.current = fileFingerprint
 
   useEffect(() => {
     mountedRef.current = true
@@ -117,6 +127,8 @@ export function TocAiPolishControl({
       toast.error('请先连接 AI')
       return
     }
+    // 新会话即新一轮：在途旧轮次的等待与回写全部过期
+    runIdRef.current += 1
     setError(null)
     setPhase('preparing')
     const session = await ensureTocSessionId()
@@ -169,36 +181,65 @@ export function TocAiPolishControl({
       const imagePages = images
         .map((image) => Number.parseInt(image.name.replace(/\D/g, ''), 10))
         .filter((page) => Number.isInteger(page))
-      const reply = await sendTocPrompt(
+      runIdRef.current += 1
+      const runId = runIdRef.current
+      const startedFp = fileFingerprint
+      // 本轮草稿基线：只接受此后落袋的同指纹草稿；之前残留的旧草稿
+      // 既不消费也不清除（旧超时操作随后写入会推进世代，仍可恢复）
+      const draftBaseline = peekTocDraftSeq(fileFingerprint)
+      const send = await sendTocPrompt(
         buildTocAiPrompt(text, fileFingerprint, {
           withImages: images.length > 0,
           imagePages,
           baseline: baselineEntries,
         }),
         images,
+        { fingerprint: fileFingerprint },
       )
-      if (!mountedRef.current) return
+      // 新一轮/切文件/卸载：本轮回写一律过期，静默退出（新轮次拥有 UI）
+      const isCurrentRun = (): boolean =>
+        mountedRef.current && runIdRef.current === runId && fpRef.current === startedFp
+      if (!isCurrentRun()) return
       // 先取工具草稿再判空回复：工具型 Agent 可能零正文回复，
-      // 先判 !reply 会丢弃已写好的草稿（见 decideTocAiPromptOutcome 单测）
-      const drafted = takeTocDraft(fileFingerprint)
-      const outcome = decideTocAiPromptOutcome(
+      // 先判空会丢弃已写好的草稿（见 decideTocAiPromptOutcome 单测）；
+      // 门控消费：只要本轮开始后落袋的，之前残留的不碰
+      let drafted = takeTocDraftSince(fileFingerprint, draftBaseline)
+      let outcome = decideTocAiPromptOutcome(
         drafted !== null,
-        reply !== null && reply !== '',
+        send.reply !== null && send.reply !== '',
       )
+      if (outcome.action !== 'apply-draft' && (send.outcome === 'timeout' || send.outcome === 'empty')) {
+        // 超时/空回复：服务端大概率仍在跑，等草稿落袋而不是直接报错；
+        // 同指纹且本轮之后落袋才消费（切文件/新一轮/卸载即停，旧草稿带不走）
+        const waited = await waitForTocDraft(fileFingerprint, {
+          minSeq: draftBaseline,
+          isCancelled: () => !isCurrentRun(),
+        })
+        console.info(
+          `[toc-ai] draft:wait op=${send.opId} outcome=${waited.outcome} waitedMs=${waited.waitedMs} entries=${waited.entries?.length ?? 0}`,
+        )
+        if (!isCurrentRun()) return
+        if (waited.entries) {
+          drafted = waited.entries
+          outcome = decideTocAiPromptOutcome(true, send.reply !== null && send.reply !== '')
+        }
+      }
       if (outcome.action === 'apply-draft') {
         console.info(
-          `[toc-ai] tool draft entries=${drafted?.length ?? 0} replyChars=${reply?.length ?? 0}`,
+          `[toc-ai] tool draft entries=${drafted?.length ?? 0} replyChars=${send.reply?.length ?? 0}`,
         )
         applyMerged(drafted ?? [], [])
         setPhase('idle')
         return
       }
       if (outcome.action === 'no-reply') {
+        // 彻底放弃才止血：只取消本轮自己的会话（sid 本轮捕获），新一轮的不碰
+        void cancelTocPrompt(sid)
         setError('AI 无回复，请重试')
         setPhase('ready')
         return
       }
-      const parsed = parseTocAiEntries(reply ?? '')
+      const parsed = parseTocAiEntries(send.reply ?? '')
       if (parsed.entries.length === 0) {
         console.info(`[toc-ai] parsed entries=0 dropped=${parsed.dropped} warnings=${parsed.warnings.length}`)
         setError(parsed.warnings[0] ?? '未能解析出条目')
@@ -218,6 +259,7 @@ export function TocAiPolishControl({
   }, [fileFingerprint, getOcrText, getPageImages, model, thought, applyMerged])
 
   const handleCancel = useCallback(() => {
+    runIdRef.current += 1
     sessionRef.current = null
     setError(null)
     setPhase('idle')

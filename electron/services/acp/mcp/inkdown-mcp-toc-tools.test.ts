@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   handleInkdownMcpRpc,
   type McpRpcMessage,
@@ -74,5 +74,27 @@ describe('toc mcp tools', () => {
   it('未知工具名报错', async () => {
     const result = await callInkdownTocTool('toc_nope', stubContext(''), {})
     expect(result.isError).toBe(true)
+  })
+
+  it('诊断日志只带指纹尾，不带完整路径', async () => {
+    const lines: string[] = []
+    const spy = vi.spyOn(console, 'info').mockImplementation((...args: unknown[]) => {
+      lines.push(args.map(String).join(' '))
+    })
+    try {
+      await callInkdownTocTool('toc_list_draft', stubContext('{}'), {
+        fingerprint: 'D:\\book\\secret-dir\\wangdao.pdf|208761996',
+      })
+    } finally {
+      spy.mockRestore()
+    }
+    const logged = lines.filter((line) => line.includes('[toc-mcp]'))
+    expect(logged.length).toBeGreaterThan(0)
+    for (const line of logged) {
+      expect(line).not.toContain('secret-dir')
+      expect(line).not.toContain('D:\\book')
+    }
+    expect(logged.some((line) => line.includes('wangdao.pdf|208761996'))).toBe(true)
+    expect(logged.some((line) => /elapsedMs=\d+/.test(line))).toBe(true)
   })
 })

@@ -95,7 +95,35 @@ function fingerprintOf(args?: Record<string, unknown>): string | null {
   return typeof fingerprint === 'string' && fingerprint.trim() ? fingerprint.trim() : null
 }
 
+/**
+ * 指纹尾部（审计关联用）：只取后 24 位（如 `…版.pdf|208761996`），
+ * 完整路径（含目录）绝不进日志。MCP 上下文里没有 session/opId
+ * （工具入参是给模型看的契约，不能加），跨端关联靠“指纹尾＋耗时＋
+ * 控制台时间戳”窗口对齐渲染端的 prompt:start / draft:wait 行。
+ */
+function fingerprintTail(args?: Record<string, unknown>): string {
+  const fingerprint = args?.fingerprint
+  if (typeof fingerprint !== 'string' || !fingerprint) return '-'
+  return fingerprint.length > 24 ? `…${fingerprint.slice(-24)}` : fingerprint
+}
+
 export async function callInkdownTocTool(
+  name: string,
+  context: InkdownMcpToolContext,
+  args?: Record<string, unknown>,
+): Promise<InkdownMcpToolResult> {
+  // 审计：工具起止耗时（渲染端按 operationId 关联 prompt 超时与草稿落袋时序）
+  const startedAt = Date.now()
+  try {
+    return await callInkdownTocToolInner(name, context, args)
+  } finally {
+    console.info(
+      `[toc-mcp] tool=${name} fp=${fingerprintTail(args)} elapsedMs=${Date.now() - startedAt}`,
+    )
+  }
+}
+
+async function callInkdownTocToolInner(
   name: string,
   context: InkdownMcpToolContext,
   args?: Record<string, unknown>,

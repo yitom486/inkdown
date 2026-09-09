@@ -23,9 +23,20 @@ interface TocDraftState {
   fingerprint: string
   entries: TocDraftEntry[]
   updatedAt: number
+  /**
+   * 草稿世代（模块单调递增，clear 不回退）：区分“本轮开始前已存在”
+   * 与“本轮开始后落袋”的同指纹草稿。entries 形状不变，不进缓存 schema。
+   */
+  seq: number
 }
 
 let draft: TocDraftState | null = null
+let draftSeqCounter = 0
+
+function nextDraftSeq(): number {
+  draftSeqCounter += 1
+  return draftSeqCounter
+}
 
 function toPrintedPage(value: unknown): number | null {
   const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10)
@@ -62,7 +73,7 @@ export function writeTocDraft(
   rawEntries: unknown,
 ): { count: number; dropped: number } {
   if (!Array.isArray(rawEntries)) {
-    draft = { fingerprint, entries: [], updatedAt: Date.now() }
+    draft = { fingerprint, entries: [], updatedAt: Date.now(), seq: nextDraftSeq() }
     return { count: 0, dropped: 0 }
   }
   // 宽松过一遍：留空页码给回填（与启发式同口径），无号章行直接丢弃
@@ -94,7 +105,7 @@ export function writeTocDraft(
     }
     entries.push({ title: entry.title, printedPage: entry.printedPage, level: entry.level, source: entry.source })
   }
-  draft = { fingerprint, entries, updatedAt: Date.now() }
+  draft = { fingerprint, entries, updatedAt: Date.now(), seq: nextDraftSeq() }
   return { count: entries.length, dropped }
 }
 
@@ -106,7 +117,7 @@ export function upsertTocDraftEntry(
   const entry = sanitizeTocDraftEntry(rawEntry)
   if (!entry) return { error: '条目无效（空标题/非法页码/水印）' }
   if (!draft || draft.fingerprint !== fingerprint) {
-    draft = { fingerprint, entries: [entry], updatedAt: Date.now() }
+    draft = { fingerprint, entries: [entry], updatedAt: Date.now(), seq: nextDraftSeq() }
     return { action: 'added', count: 1 }
   }
   const index = draft.entries.findIndex((item) => item.title === entry.title)
@@ -116,6 +127,7 @@ export function upsertTocDraftEntry(
     draft.entries.push(entry)
   }
   draft.updatedAt = Date.now()
+  draft.seq = nextDraftSeq()
   return { action: index >= 0 ? 'updated' : 'added', count: draft.entries.length }
 }
 
@@ -135,6 +147,7 @@ export function deleteTocDraftEntry(
   if (at < 0) return { removed: 0, count: draft.entries.length }
   draft.entries.splice(at, 1)
   draft.updatedAt = Date.now()
+  draft.seq = nextDraftSeq()
   return { removed: 1, count: draft.entries.length }
 }
 
@@ -157,6 +170,89 @@ export function takeTocDraft(expectedFingerprint: string): TocDraftEntry[] | nul
 
 export function clearTocDraft(): void {
   draft = null
+}
+
+/** 当前草稿世代（无草稿为 0）：新轮次开始时记录为基线用 */
+export function peekTocDraftSeq(fingerprint: string): number {
+  if (!draft || draft.fingerprint !== fingerprint || draft.entries.length === 0) {
+    return 0
+  }
+  return draft.seq
+}
+
+/**
+ * 门控消费：只取走 seq 严格大于 minSeq 的草稿（本轮开始后落袋的）。
+ * 旧草稿既不消费也不清除——旧超时操作随后写入会推进 seq，
+ * 正在等待的同文件轮次仍可消费；下一次写入会自然覆盖，无泄漏。
+ */
+export function takeTocDraftSince(
+  fingerprint: string,
+  minSeq: number,
+): TocDraftEntry[] | null {
+  if (!draft || draft.fingerprint !== fingerprint || draft.entries.length === 0) {
+    return null
+  }
+  if (draft.seq <= minSeq) return null
+  const entries = draft.entries
+  draft = null
+  return entries
+}
+
+export interface TocDraftWaitOptions {
+  /** 总等待上限，默认 90_000（模型已证明跑 2–4 分钟，RPC 只等 2 分钟） */
+  deadlineMs?: number
+  /** 轮询间隔，默认 2_000 */
+  intervalMs?: number
+  /** 取消谓词（卸载/切文件/新一轮开始即停） */
+  isCancelled?: () => boolean
+  /** 可注入时钟与睡眠（单测确定性用；默认真实时间） */
+  now?: () => number
+  sleep?: (ms: number) => Promise<void>
+  /** 取草稿实现（默认读内存单例；单测注入假序列） */
+  take?: (fingerprint: string) => TocDraftEntry[] | null
+  /**
+   * 世代下限（排他）：只接受 seq 严格大于它的草稿。
+   * 调用方传本轮开始时 peekTocDraftSeq 的值；默认 0（接受一切现存草稿）。
+   */
+  minSeq?: number
+}
+
+export interface TocDraftWaitResult {
+  entries: TocDraftEntry[] | null
+  waitedMs: number
+  outcome: 'hit' | 'timeout' | 'cancelled'
+}
+
+/**
+ * 等工具草稿落袋（send 超时/空回复后）：命中即消费返回；
+ * 超时或取消返回空，调用方走“AI 无回复”。指纹门由 take 保证——
+ * 旧文档/旧操作的草稿 key 不同，不会被误消费。
+ */
+export async function waitForTocDraft(
+  fingerprint: string,
+  options?: TocDraftWaitOptions,
+): Promise<TocDraftWaitResult> {
+  const deadlineMs = options?.deadlineMs ?? 90_000
+  const intervalMs = options?.intervalMs ?? 2_000
+  const now = options?.now ?? Date.now
+  const sleep =
+    options?.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  const minSeq = options?.minSeq ?? 0
+  const take = options?.take ?? ((fp: string) => takeTocDraftSince(fp, minSeq))
+  const startedAt = now()
+  for (;;) {
+    if (options?.isCancelled?.()) {
+      return { entries: null, waitedMs: now() - startedAt, outcome: 'cancelled' }
+    }
+    const entries = take(fingerprint)
+    if (entries) {
+      return { entries, waitedMs: now() - startedAt, outcome: 'hit' }
+    }
+    if (now() - startedAt >= deadlineMs) {
+      return { entries: null, waitedMs: now() - startedAt, outcome: 'timeout' }
+    }
+    await sleep(Math.min(intervalMs, Math.max(0, deadlineMs - (now() - startedAt))))
+  }
 }
 
 /**

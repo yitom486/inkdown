@@ -23,6 +23,8 @@ export interface TocPromptImage {
 let tocSessionId: string | null = null
 let tocReplyBuffer = ''
 let tocPrompting = false
+/** 单调 prompt 序号：与 session 短 id 合成 operationId（审计日志关联一次整理） */
+let tocPromptSeq = 0
 
 export function isTocPrompting(): boolean {
   return tocPrompting
@@ -143,16 +145,46 @@ export async function ensureTocSessionId(overrides?: {
   return { sessionId: sid, configOptions: options }
 }
 
+export type TocPromptSendOutcome = 'ok' | 'empty' | 'timeout' | 'error'
+
+export interface TocPromptSendResult {
+  /** 累积正文（可能为空字符串）；发送失败时为 null */
+  reply: string | null
+  /**
+   * 发送结局：ok（有正文）/ empty（成功但零正文，工具可能已跑）/
+   * timeout（客户端计时器先响且不发 cancel，服务端大概率仍在跑——草稿稍后到）/
+   * error（发送前失败，重试等待无意义）。
+   * 只有 timeout/empty 才值得等待工具草稿。
+   */
+  outcome: TocPromptSendOutcome
+  elapsedMs: number
+  /** 单调操作 id（审计日志关联一次整理） */
+  opId: string
+}
+
+export interface TocPromptSendOptions {
+  /** 当前书指纹：只取尾部进日志（全路径不落日志） */
+  fingerprint?: string
+}
+
 /**
- * 发送目录整理 Prompt 并等待完成，返回累积正文（调用方再做 JSON 解析与校验）。
+ * 发送目录整理 Prompt 并等待完成（调用方再做 JSON 解析与校验）。
  * 图片经 buildAcpPromptBlocks 组装：Agent 无 image 能力时自动只剩文本，
  * 调用方据此把提示词切到纯文本口径（见 buildTocAiPrompt withImages）。
  */
 export async function sendTocPrompt(
   promptText: string,
   images?: readonly TocPromptImage[],
-): Promise<string | null> {
-  if (!tocSessionId) return null
+  options?: TocPromptSendOptions,
+): Promise<TocPromptSendResult> {
+  const opId = `${tocSessionId?.slice(0, 8) ?? 'nosession'}-${(tocPromptSeq += 1)}`
+  const fpTail =
+    options?.fingerprint && options.fingerprint.length > 24
+      ? `…${options.fingerprint.slice(-24)}`
+      : (options?.fingerprint ?? '')
+  if (!tocSessionId) {
+    return { reply: null, outcome: 'error', elapsedMs: 0, opId }
+  }
   tocReplyBuffer = ''
   tocPrompting = true
   const shortSid = tocSessionId.slice(0, 8)
@@ -167,22 +199,52 @@ export async function sendTocPrompt(
   const blocks = buildAcpPromptBlocks({ text: promptText, attachments, promptCapabilities: caps })
   const imageCount = blocks.filter((block) => block.type === 'image').length
   console.info(
-    `[toc-ai] prompt session=${shortSid} chars=${promptText.length} images=${imageCount}/${attachments.length}`,
+    `[toc-ai] prompt:start op=${opId} session=${shortSid} fp=${fpTail} chars=${promptText.length} images=${imageCount}/${attachments.length}`,
   )
+  const startedAt = Date.now()
   try {
     const result = await acpApi.prompt({
       sessionId: tocSessionId,
       prompt: blocks,
     })
+    const elapsedMs = Date.now() - startedAt
     if (!isOk(result)) {
-      console.info(`[toc-ai] prompt failed session=${shortSid}: ${result.error.message}`)
-      return null
+      const outcome: TocPromptSendOutcome =
+        result.error.code === 'ACP_TIMEOUT' ? 'timeout' : 'error'
+      console.info(
+        `[toc-ai] send:return op=${opId} outcome=${outcome} elapsedMs=${elapsedMs} error=${result.error.message}`,
+      )
+      return { reply: null, outcome, elapsedMs, opId }
     }
     const reply = tocReplyBuffer.trim()
-    console.info(`[toc-ai] reply session=${shortSid} chars=${reply.length} stop=${result.value.stopReason ?? 'ok'}`)
-    return reply
+    const outcome: TocPromptSendOutcome = reply ? 'ok' : 'empty'
+    console.info(
+      `[toc-ai] send:return op=${opId} outcome=${outcome} elapsedMs=${elapsedMs} replyChars=${reply.length} stop=${result.value.stopReason ?? 'ok'}`,
+    )
+    return { reply, outcome, elapsedMs, opId }
+  } catch (cause) {
+    const elapsedMs = Date.now() - startedAt
+    console.info(
+      `[toc-ai] send:return op=${opId} outcome=error elapsedMs=${elapsedMs} error=${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    return { reply: null, outcome: 'error', elapsedMs, opId }
   } finally {
     tocPrompting = false
+  }
+}
+
+/**
+ * 尽力取消某次整理的目录副会话（放弃等待时止血）。
+ * 传本次 run 的 sid：新一轮可能已建新会话，误杀不得。
+ * 失败静默（会话可能已结束），调用方 fire-and-forget。
+ */
+export async function cancelTocPrompt(sessionId?: string | null): Promise<void> {
+  const sid = sessionId ?? tocSessionId
+  if (!sid) return
+  try {
+    await acpApi.cancel({ sessionId: sid })
+  } catch {
+    // 止血尽力而为，取消失败不影响调用方流程
   }
 }
 
