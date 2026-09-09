@@ -17,6 +17,7 @@ import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActi
 import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
+import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
 import { reassembleDirectoryText } from '@shared/reader/directory-reassemble'
 import { ACP_MAX_IMAGE_BYTES, blobToBase64 } from '@/lib/agent/acp-composer'
 import type { TocPromptImage } from '@/lib/agent/toc-ai-session'
@@ -387,7 +388,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         let nextSource: PdfOutlineSource | 'ocr' = units.source
         let nextNotice = formatPdfOutlineNotice(units, profile.isScanned)
 
-        if (units.source === 'page-fallback' && profile.isScanned && fileFingerprint) {
+        if (
+          fileFingerprint &&
+          canUseOcrToc({
+            outlineSource: units.source,
+            isScannedPdf: profile.isScanned,
+            isMixedPdf: profile.mixed,
+          })
+        ) {
           const cacheResult = await getPdfOcrToc({ fileFingerprint })
           if (cacheResult.ok && cacheResult.value.units.length > 0) {
             nextUnits = cacheResult.value.units
@@ -635,10 +643,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setTocPageOffset(tocPageTo)
   }, [outlineSource, tocPageTo])
 
+  /** OCR 目录可用（纯扫描沿用旧行为；混合无内置目录新增入口与缓存恢复） */
+  const ocrTocAvailable = canUseOcrToc({ outlineSource, isScannedPdf, isMixedPdf })
+
   const showOcrBanner =
-    (isScannedPdf && outlineSource === 'page-fallback' && !ocrBannerDismissed) ||
+    (ocrTocAvailable && outlineSource === 'page-fallback' && !ocrBannerDismissed) ||
     ocrRecognizing ||
-    (isScannedPdf && ocrTocEditorOpen)
+    (ocrTocAvailable && ocrTocEditorOpen)
 
   const pdfOcrBackgroundPrefetch = useAppSettingsStore((state) => state.pdfOcrBackgroundPrefetch)
 
@@ -1494,7 +1505,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               ? 'recognizing'
               : ocrTocEditorOpen
                 ? 're-recognize-toc'
-                : 'scanned-no-outline'
+                : isScannedPdf
+                  ? 'scanned-no-outline'
+                  : 'mixed-no-outline'
           }
           tocPageFrom={tocPageFrom}
           tocPageTo={tocPageTo}
@@ -1575,7 +1588,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                 )}
               </Button>
             ) : null}
-            {isScannedPdf && outlineSource === 'ocr' ? (
+            {ocrTocAvailable && outlineSource === 'ocr' ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1586,7 +1599,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                 重新识别目录
               </Button>
             ) : null}
-            {isScannedPdf && (ocrRecognizedCount > 0 || outlineSource === 'ocr') ? (
+            {ocrTocAvailable && (ocrRecognizedCount > 0 || outlineSource === 'ocr') ? (
               <Button
                 variant="ghost"
                 size="sm"

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 
 export type PdfOcrBannerMode =
   | 'scanned-no-outline'
+  | 'mixed-no-outline'
   | 're-recognize-toc'
   | 'recognizing'
 
@@ -57,6 +58,16 @@ export function PdfOcrBanner({
             </p>
             <p className="text-amber-900/80 dark:text-amber-100/80">
               调整目录页范围或页码偏移后重新识别。偏移错误会导致章节跳转不准。
+            </p>
+          </>
+        ) : mode === 'mixed-no-outline' ? (
+          <>
+            <p className="font-medium">混合版 PDF，无嵌入目录</p>
+            <p className="text-amber-900/80 dark:text-amber-100/80">
+              原生文字页可直接划词；扫描页按需识别。可识别印刷目录页以生成章节目录（按需 OCR）。
+            </p>
+            <p className="mt-0.5 text-xs text-amber-900/70 dark:text-amber-100/70">
+              页码偏移：印刷页码 + 偏移 = PDF 页（例：印刷第 1 页在 PDF 第 13 页则填 12）。
             </p>
           </>
         ) : (
