@@ -91,7 +91,15 @@ import {
   importScannedBookToDb,
 } from '../services/book-db/import-service'
 import { getRosettaBookInfo, queryRosettaBook } from '../services/book-db/query-service'
-import type { RosettaImportPayload, RosettaImportStatus, RosettaQuery } from '@shared/types/rosetta'
+import { getBookRecord } from '../services/book-db/queries'
+import { openBookDb } from '../services/book-db/open-book-db'
+import { rebuildTocIndex } from '../services/book-db/toc-rebuild'
+import type {
+  RosettaImportPayload,
+  RosettaImportStatus,
+  RosettaQuery,
+  RosettaTocRebuildPayload,
+} from '@shared/types/rosetta'
 import { applyWindowTitle } from '../window/window-title'
 import { setVerboseRendererLogs } from '../services/runtime-state'
 import {
@@ -639,6 +647,41 @@ export function registerIpcHandlers(): void {
       return err({
         code: 'UNKNOWN',
         message: cause instanceof Error ? cause.message : '罗盘查询失败',
+      })
+    }
+  })
+  ipcMain.handle(IPC.ROSETTA_REBUILD_TOC, (_event, payload: RosettaTocRebuildPayload) => {
+    try {
+      const fingerprint =
+        typeof payload?.fingerprint === 'string' ? payload.fingerprint.trim() : ''
+      if (!fingerprint) {
+        return err({ code: 'INVALID_ARGUMENT', message: '缺少文件指纹' })
+      }
+      if (!Array.isArray(payload?.toc)) {
+        return err({ code: 'INVALID_ARGUMENT', message: '缺少已确认目录' })
+      }
+      const db = openBookDb(app.getPath('userData'), fingerprint)
+      const record = getBookRecord(db, fingerprint)
+      if (!record) {
+        return err({ code: 'INVALID_STATE', message: '本书尚未导入罗盘索引' })
+      }
+      const result = rebuildTocIndex(db, record.bookId, payload.toc)
+      return ok({
+        bookId: result.bookId,
+        tocEntries: result.tocEntries,
+        chapters: result.chapters,
+        blocks: result.blocks,
+        completedPages: result.completedPages,
+        tocSignature: result.tocSignature,
+      })
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '罗盘目录重建失败'
+      if (message.includes('有效目录')) {
+        return err({ code: 'INVALID_ARGUMENT', message })
+      }
+      return err({
+        code: 'UNKNOWN',
+        message,
       })
     }
   })

@@ -203,6 +203,76 @@ export function countPagesWithBbox(
   return typeof row?.total === 'number' ? row.total : 0
 }
 
+export interface TocEntryRow {
+  tocIndex: number
+  title: string
+  level: number
+  startPage: number
+  endPage: number
+}
+
+/** 全量目录项（全部层级）：AI 按 toc_index 取小节范围的定位依据 */
+export function listTocEntries(db: DatabaseSync, bookId: number): TocEntryRow[] {
+  let rows: { tocIndex?: unknown; title?: unknown; level?: unknown; startPage?: unknown; endPage?: unknown }[]
+  try {
+    rows = db
+      .prepare(
+        `SELECT toc_index AS tocIndex, title, level, start_page AS startPage, end_page AS endPage
+         FROM toc_entries WHERE book_id = ? ORDER BY toc_index ASC`,
+      )
+      .all(bookId) as { tocIndex?: unknown; title?: unknown; level?: unknown; startPage?: unknown; endPage?: unknown }[]
+  } catch {
+    // v3 前旧库无 toc_entries：返回空，调用方回退章节逻辑
+    return []
+  }
+  return rows
+    .filter((row) => typeof row.tocIndex === 'number' && typeof row.title === 'string')
+    .map((row) => ({
+      tocIndex: row.tocIndex as number,
+      title: row.title as string,
+      level: typeof row.level === 'number' ? row.level : 0,
+      startPage: typeof row.startPage === 'number' ? row.startPage : 0,
+      endPage: typeof row.endPage === 'number' ? row.endPage : 0,
+    }))
+}
+
+export function getTocEntry(db: DatabaseSync, bookId: number, tocIndex: number): TocEntryRow | null {
+  if (!Number.isInteger(tocIndex) || tocIndex < 0) return null
+  const entries = listTocEntries(db, bookId)
+  return entries.find((entry) => entry.tocIndex === tocIndex) ?? null
+}
+
+/**
+ * 目录项范围读块：一级章读整章，二三级读对应小节（start_page..end_page）。
+ * 按页/入库顺序返回；当前页仍走 getPageBlocks（不动）。
+ */
+export function getTocRangeBlocks(
+  db: DatabaseSync,
+  bookId: number,
+  tocIndex: number,
+): BookDbBlockHit[] {
+  const entry = getTocEntry(db, bookId, tocIndex)
+  if (!entry) return []
+  const rows = db
+    .prepare(
+      `SELECT
+        blocks.id AS id,
+        blocks.type AS type,
+        blocks.content AS content,
+        blocks.page_number AS page_number,
+        blocks.chapter_index AS chapter_index,
+        chapters.title AS chapter_title,
+        blocks.block_index AS block_index,
+        '' AS snippet
+      FROM blocks
+      LEFT JOIN chapters ON chapters.id = blocks.chapter_id
+      WHERE blocks.book_id = ? AND blocks.page_number BETWEEN ? AND ?
+      ORDER BY blocks.page_number ASC, blocks.id ASC`,
+    )
+    .all(bookId, entry.startPage, entry.endPage) as BlockRow[]
+  return rows.map((row) => toHit(row, ''))
+}
+
 export interface BookChapterRow {
   index: number
   title: string
@@ -235,9 +305,11 @@ export interface BookRecordInfo {
   cleanVersion: string
   chapters: number
   blocks: number
+  tocSignature: string
+  tocEntries: number
 }
 
-/** 按指纹取书 + 统计；未导入返回 null */
+/** 按指纹取书 + 统计；未导入返回 null（toc 签名缺列/缺表时回 ''/0，不抛错） */
 export function getBookRecord(db: DatabaseSync, fingerprint: string): BookRecordInfo | null {
   const book = db
     .prepare('SELECT id, title, page_count AS pageCount, clean_version AS cleanVersion FROM books WHERE fingerprint = ?')
@@ -246,6 +318,24 @@ export function getBookRecord(db: DatabaseSync, fingerprint: string): BookRecord
   const chapters = db
     .prepare('SELECT COUNT(*) AS total FROM chapters WHERE book_id = ?')
     .get(book.id) as { total?: unknown } | undefined
+  let tocSignature = ''
+  try {
+    const sigRow = db
+      .prepare('SELECT toc_signature AS sig FROM books WHERE id = ?')
+      .get(book.id) as { sig?: unknown } | undefined
+    if (typeof sigRow?.sig === 'string') tocSignature = sigRow.sig
+  } catch {
+    tocSignature = ''
+  }
+  let tocEntries = 0
+  try {
+    const tocRow = db
+      .prepare('SELECT COUNT(*) AS total FROM toc_entries WHERE book_id = ?')
+      .get(book.id) as { total?: unknown } | undefined
+    if (typeof tocRow?.total === 'number') tocEntries = tocRow.total
+  } catch {
+    tocEntries = 0
+  }
   return {
     bookId: book.id,
     title: typeof book.title === 'string' ? book.title : '',
@@ -253,5 +343,7 @@ export function getBookRecord(db: DatabaseSync, fingerprint: string): BookRecord
     cleanVersion: typeof book.cleanVersion === 'string' ? book.cleanVersion : '',
     chapters: typeof chapters?.total === 'number' ? chapters.total : 0,
     blocks: countBookBlocks(db, book.id),
+    tocSignature,
+    tocEntries,
   }
 }

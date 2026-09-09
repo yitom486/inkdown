@@ -173,8 +173,10 @@ export const IPC = {
   ROSETTA_IMPORT_STATUS: 'rosetta:import-status',
   /** invoke：查询某书罗盘索引信息，未导入返回 null */
   ROSETTA_BOOK_INFO: 'rosetta:book-info',
-  /** invoke：罗盘统一读查询（页/章/目录/搜索/上下文） */
+  /** invoke：罗盘统一读查询（页/章/目录/搜索/上下文/目录项） */
   ROSETTA_QUERY_BOOK: 'rosetta:query-book',
+  /** invoke：纯本地重建罗盘目录索引（只写 toc_entries/chapters/块归属，不调 OCR） */
+  ROSETTA_REBUILD_TOC: 'rosetta:rebuild-toc',
   /** main→renderer：OCR 组件下载/就绪状态推送 */
   OCR_COMPONENT_STATUS: 'ocr:component-status',
   /** invoke：追加保存测验记录到 JSONL */

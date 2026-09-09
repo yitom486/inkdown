@@ -100,5 +100,20 @@ export function useRosettaImport(fileFingerprint: string) {
     rosettaApi.cancelImport()
   }, [])
 
-  return { state, phase, donePages, totalPages, info, startImport, cancelImport, refreshInfo }
+  /** 纯本地目录重建：只写库不调 OCR，成功后刷新书信息 */
+  const rebuildToc = useCallback(
+    async (toc: RosettaTocEntryInput[]) => {
+      if (!fileFingerprint) return null
+      const result = await rosettaApi.rebuildToc({ fingerprint: fileFingerprint, toc })
+      if (isOk(result)) {
+        await refreshInfo()
+        return result.value
+      }
+      toast.error(result.error.message || '罗盘目录更新失败')
+      return null
+    },
+    [fileFingerprint, refreshInfo],
+  )
+
+  return { state, phase, donePages, totalPages, info, startImport, cancelImport, refreshInfo, rebuildToc }
 }

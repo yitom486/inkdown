@@ -7,7 +7,10 @@ import {
   getBlockContext,
   getChapterBlocks,
   getPageBlocks,
+  getTocEntry,
+  getTocRangeBlocks,
   listBookChapters,
+  listTocEntries,
   searchBookBlocks,
 } from './queries'
 
@@ -76,6 +79,39 @@ export function queryRosettaBook(
         blocks: getBlockContext(db, bookId, query.chapterIndex, query.blockIndex, query.radius ?? 2),
       })
     }
+    case 'toc': {
+      if (!Number.isInteger(query.tocIndex) || query.tocIndex < 0) {
+        return err({ code: 'INVALID_ARGUMENT', message: '目录序号无效' })
+      }
+      const entry = getTocEntry(db, bookId, query.tocIndex)
+      if (!entry) {
+        return err({ code: 'INVALID_ARGUMENT', message: '目录项不存在' })
+      }
+      return ok({
+        kind: 'toc',
+        entry: {
+          tocIndex: entry.tocIndex,
+          title: entry.title,
+          level: entry.level,
+          startPage: entry.startPage,
+          endPage: entry.endPage,
+        },
+        blocks: getTocRangeBlocks(db, bookId, query.tocIndex),
+      })
+    }
+    case 'tocEntries': {
+      const tocEntries = listTocEntries(db, bookId)
+      return ok({
+        kind: 'tocEntries',
+        tocEntries: tocEntries.map((entry) => ({
+          tocIndex: entry.tocIndex,
+          title: entry.title,
+          level: entry.level,
+          startPage: entry.startPage,
+          endPage: entry.endPage,
+        })),
+      })
+    }
     default:
       return err({ code: 'INVALID_ARGUMENT', message: '未知查询类型' })
   }
@@ -99,5 +135,7 @@ export function getRosettaBookInfo(
     pages: record.pageCount,
     pageCount: record.pageCount,
     cleanVersion: record.cleanVersion,
+    tocSignature: record.tocSignature,
+    tocEntries: record.tocEntries,
   })
 }

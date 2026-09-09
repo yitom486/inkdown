@@ -9,7 +9,7 @@ import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import type { DetectPdfTocPagesPayload, GetPdfOcrTocPayload, GetPdfOcrPagePayload, ListPdfOcrPagesPayload, RecognizePdfPagePayload, RecognizePdfTocPayload, SavePdfOcrTocPayload } from '@shared/types/ocr'
 import type { ClassifyPdfDocumentPayload, ExtractPdfBookMarkdownPayload } from '@shared/types/pdf-inspect'
-import type { RosettaActiveImport, RosettaImportPayload, RosettaImportStatus, RosettaQuery } from '@shared/types/rosetta'
+import type { RosettaActiveImport, RosettaImportPayload, RosettaImportStatus, RosettaQuery, RosettaTocRebuildPayload } from '@shared/types/rosetta'
 import type { QuizSessionRecord } from '@shared/types/quiz'
 
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
@@ -109,6 +109,8 @@ const electronAPI: ElectronAPI = {
   getActiveRosettaImport: (): Promise<Result<RosettaActiveImport | null, AppError>> =>
     ipcRenderer.invoke(IPC.ROSETTA_ACTIVE_IMPORT),
   queryRosettaBook: (query: RosettaQuery) => ipcRenderer.invoke(IPC.ROSETTA_QUERY_BOOK, query),
+  rebuildRosettaToc: (payload: RosettaTocRebuildPayload) =>
+    ipcRenderer.invoke(IPC.ROSETTA_REBUILD_TOC, payload),
   getBunRuntimeStatus: () => ipcRenderer.invoke(IPC.BUN_GET_STATUS),
   installBunRuntime: () => ipcRenderer.invoke(IPC.BUN_INSTALL),
   toggleDevTools: () => {

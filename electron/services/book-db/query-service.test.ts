@@ -86,4 +86,34 @@ describe('query-service', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('目录项查询：tocEntries 列表与 toc 范围读块，一级章读整章', () => {
+    const { dir, fingerprint } = seedUserData()
+    try {
+      const info = getRosettaBookInfo(dir, fingerprint)
+      expect(info.ok).toBe(true)
+      if (!info.ok || !info.value) return
+      expect(info.value.tocEntries).toBe(1)
+      expect(info.value.tocSignature).not.toBe('')
+
+      const list = queryRosettaBook(dir, { kind: 'tocEntries', fingerprint })
+      expect(list.ok).toBe(true)
+      if (!list.ok || list.value.kind !== 'tocEntries') return
+      expect(list.value.tocEntries).toEqual([
+        { tocIndex: 0, title: '第一章', level: 1, startPage: 1, endPage: 2 },
+      ])
+
+      const range = queryRosettaBook(dir, { kind: 'toc', fingerprint, tocIndex: 0 })
+      expect(range.ok).toBe(true)
+      if (!range.ok || range.value.kind !== 'toc') return
+      expect(range.value.entry).toMatchObject({ tocIndex: 0, title: '第一章' })
+      expect(range.value.blocks).toHaveLength(3)
+
+      expect(queryRosettaBook(dir, { kind: 'toc', fingerprint, tocIndex: 99 }).ok).toBe(false)
+      expect(queryRosettaBook(dir, { kind: 'toc', fingerprint, tocIndex: -1 }).ok).toBe(false)
+    } finally {
+      closeAllBookDbs()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

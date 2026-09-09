@@ -10,6 +10,7 @@ import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
 // 复用同一套归一化做 span 对齐（空格/标点/全角折叠），保证入库匹配与清洗一致
 import { normalizeWatermarkText } from '@shared/reader/ocr-watermark'
 import type { BookBlockType, BookDbBlockBBox } from '@shared/types/book-db'
+import { computeTocSignature } from '@shared/reader/toc-signature'
 import { migrateBookDb } from './schema'
 
 export interface ImportBookPageInput {
@@ -207,11 +208,14 @@ export function ensureImportBookRow(
     if (existing) {
       db.prepare('DELETE FROM books WHERE id = ?').run(existing.id)
     }
+    const tocSignature = computeTocSignature(
+      index.toc.map((entry) => ({ title: entry.title, realPage: entry.realPage, level: entry.level })),
+    )
     const bookResult = db
       .prepare(
         `INSERT INTO books
-          (fingerprint, title, source_path, format, page_count, page_offset, clean_version, completed_pages, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, ?)`,
+          (fingerprint, title, source_path, format, page_count, page_offset, clean_version, completed_pages, toc_signature, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?)`,
       )
       .run(
         meta.fingerprint,
@@ -221,6 +225,7 @@ export function ensureImportBookRow(
         meta.pageCount,
         meta.pageOffset,
         meta.cleanVersion,
+        tocSignature,
         now,
         now,
       )
@@ -233,6 +238,14 @@ export function ensureImportBookRow(
         `INSERT INTO chapters (book_id, chapter_index, title, level, start_page, end_page)
         VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(bookId, chapterIndex, entry.title, entry.level, range[0], range[1])
+    })
+    const insertToc = db.prepare(
+      `INSERT INTO toc_entries (book_id, toc_index, title, level, start_page, end_page)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    index.toc.forEach((entry, tocIndex) => {
+      const range = modulePageRange(index, tocIndex) ?? [entry.realPage, entry.realPage]
+      insertToc.run(bookId, tocIndex, entry.title, entry.level, range[0], range[1])
     })
     db.exec('COMMIT')
     return { bookId, fresh: true }

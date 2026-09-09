@@ -64,11 +64,24 @@ export interface RosettaBookInfo {
   pages: number
   pageCount: number
   cleanVersion: string
+  /** 目录签名（v3+；缺省 '' 表示未重建）；渲染端据此判断是否显示“更新罗盘目录” */
+  tocSignature: string
+  /** toc_entries 行数（v3+；旧库为 0） */
+  tocEntries: number
 }
 
 export interface RosettaChapterInfo {
   index: number
   title: string
+  startPage: number
+  endPage: number
+}
+
+/** 单条目录项（含全部层级；范围由 modulePageRange 语义算出） */
+export interface RosettaTocInfo {
+  tocIndex: number
+  title: string
+  level: number
   startPage: number
   endPage: number
 }
@@ -79,7 +92,26 @@ export type RosettaQuery =
   | { kind: 'chapters'; fingerprint: string }
   | { kind: 'search'; fingerprint: string; keyword: string; limit?: number }
   | { kind: 'context'; fingerprint: string; chapterIndex: number; blockIndex: number; radius?: number }
+  | { kind: 'toc'; fingerprint: string; tocIndex: number }
+  | { kind: 'tocEntries'; fingerprint: string }
 
 export type RosettaQueryResult =
   | { kind: 'page' | 'chapter' | 'search' | 'context'; blocks: BookDbBlockHit[] }
   | { kind: 'chapters'; chapters: RosettaChapterInfo[] }
+  | { kind: 'toc'; entry: RosettaTocInfo; blocks: BookDbBlockHit[] }
+  | { kind: 'tocEntries'; tocEntries: RosettaTocInfo[] }
+
+/** 纯本地目录重建请求：调用方传入已确认目录（真实页帧），不读 OCR 缓存、不调引擎 */
+export interface RosettaTocRebuildPayload {
+  fingerprint: string
+  toc: RosettaTocEntryInput[]
+}
+
+export interface RosettaTocRebuildResult {
+  bookId: number
+  tocEntries: number
+  chapters: number
+  blocks: number
+  completedPages: number[]
+  tocSignature: string
+}

@@ -91,6 +91,8 @@ import type {
   RosettaImportStatus,
   RosettaQuery,
   RosettaQueryResult,
+  RosettaTocRebuildPayload,
+  RosettaTocRebuildResult,
 } from '@shared/types/rosetta'
 
 /**
@@ -190,8 +192,12 @@ export interface ElectronAPI {
   getRosettaBookInfo: (fingerprint: string) => Promise<Result<RosettaBookInfo | null, AppError>>
   /** 查询当前导入快照（窗口重载后恢复进度显示），无则返回 null */
   getActiveRosettaImport: () => Promise<Result<RosettaActiveImport | null, AppError>>
-  /** 罗盘统一读查询（页/章/目录/搜索/上下文） */
+  /** 罗盘统一读查询（页/章/目录/搜索/上下文/目录项） */
   queryRosettaBook: (query: RosettaQuery) => Promise<Result<RosettaQueryResult, AppError>>
+  /** 纯本地重建罗盘目录索引（只写库，不调 OCR） */
+  rebuildRosettaToc: (
+    payload: RosettaTocRebuildPayload,
+  ) => Promise<Result<RosettaTocRebuildResult, AppError>>
   /** 探测本机 Bun 运行时是否可用 */
   getBunRuntimeStatus: () => Promise<Result<BunRuntimeStatus, AppError>>
   /** 安装 / 确保 Bun 运行时 */

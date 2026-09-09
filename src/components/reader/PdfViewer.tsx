@@ -17,6 +17,10 @@ import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActi
 import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
+import {
+  getCurrentRosettaTocSignature,
+  resolveRosettaIndexStatus,
+} from '@/lib/reader/rosetta-toc-status'
 import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
 import {
   reduceDetectFeedback,
@@ -304,13 +308,46 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     [fileFingerprint],
   )
 
-  /** 罗盘走库读单元：目录单元所在章整章文本，未命中回 null */
+  /**
+   * 罗盘走库读单元：按 toc_index 取 start_page..end_page（一级章整章，二三级小节范围）。
+   * toc 为空的旧库回退到最近占位章，保证不断粮。
+   */
   const readRosettaUnitText = useCallback(
     async (unit: ReaderUnit): Promise<{ label: string; text: string } | null> => {
       if (!fileFingerprint || !rosettaInfoRef.current) return null
       const page = Number.parseInt('href' in unit ? unit.href : '', 10)
       if (!Number.isFinite(page) || page < 1) return null
+      const label = 'label' in unit && typeof unit.label === 'string' ? unit.label : ''
       try {
+        const tocListResult = await rosettaApi.queryBook({ kind: 'tocEntries', fingerprint: fileFingerprint })
+        if (isOk(tocListResult) && tocListResult.value.kind === 'tocEntries' && tocListResult.value.tocEntries.length > 0) {
+          const entries = tocListResult.value.tocEntries
+          const exact = entries.find((e) => e.title === label && e.startPage === page)
+          const samePage = entries.filter((e) => e.startPage === page)
+          let matched: (typeof entries)[number] | null =
+            exact ?? samePage.find((e) => e.title === label) ?? samePage[0] ?? null
+          if (!matched) {
+            const sameTitle = [...entries].reverse().find((e) => e.startPage <= page && e.title === label)
+            let nearest: (typeof entries)[number] | null = null
+            for (const entry of entries) {
+              if (entry.startPage <= page) nearest = entry
+              else break
+            }
+            matched = sameTitle ?? nearest
+          }
+          if (matched) {
+            const tocResult = await rosettaApi.queryBook({
+              kind: 'toc',
+              fingerprint: fileFingerprint,
+              tocIndex: matched.tocIndex,
+            })
+            if (isOk(tocResult) && tocResult.value.kind === 'toc' && tocResult.value.blocks.length > 0) {
+              return { label: tocResult.value.entry.title, text: formatRosettaBlocksForAgent(tocResult.value.blocks) }
+            }
+            return null
+          }
+          return null
+        }
         const chaptersResult = await rosettaApi.queryBook({ kind: 'chapters', fingerprint: fileFingerprint })
         if (!isOk(chaptersResult) || chaptersResult.value.kind !== 'chapters') return null
         let current: { index: number; title: string } | null = null
@@ -1661,6 +1698,44 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     })
   }, [filePath, numPages, ocrTocEntries, outlineUnits, pdfOcrScale, rosettaImport, tocPageOffset])
 
+  /** 当前 OCR 目录签名（纯本地计算，与库内 toc_signature 同一规范化） */
+  const currentRosettaTocSignature = useMemo(
+    () =>
+      getCurrentRosettaTocSignature({
+        outlineUnits,
+        ocrEntries: ocrTocEntries,
+        pageOffset: tocPageOffset,
+        pageCount: numPages,
+      }),
+    [outlineUnits, ocrTocEntries, tocPageOffset, numPages],
+  )
+  const rosettaTocStatus = resolveRosettaIndexStatus(rosettaImport.info, currentRosettaTocSignature)
+  const [rosettaRebuilding, setRosettaRebuilding] = useState(false)
+
+  /** 纯本地目录重建：只写库，不重新 OCR */
+  const handleRosettaRebuildToc = useCallback(async () => {
+    if (!Number.isInteger(numPages) || numPages < 1 || rosettaRebuilding) return
+    const toc = resolveRosettaTocEntries({
+      outlineUnits,
+      ocrEntries: ocrTocEntries,
+      pageOffset: tocPageOffset,
+      pageCount: numPages,
+    })
+    if (toc.length === 0) {
+      toast.error('当前没有可用目录，无法更新')
+      return
+    }
+    setRosettaRebuilding(true)
+    try {
+      const result = await rosettaImport.rebuildToc(toc)
+      if (result) {
+        toast.success(`罗盘目录已更新：${result.tocEntries} 条目录 / ${result.chapters} 章`)
+      }
+    } finally {
+      setRosettaRebuilding(false)
+    }
+  }, [numPages, outlineUnits, ocrTocEntries, tocPageOffset, rosettaImport, rosettaRebuilding])
+
   let rosettaExtraAction: ReactNode | null = null
   if (fileFingerprint) {
     if (rosettaImport.state === 'running') {
@@ -1689,7 +1764,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           </Button>
         </span>
       )
-    } else if (rosettaImport.info) {
+    } else if (rosettaImport.info && rosettaTocStatus === 'ready') {
       rosettaExtraAction = (
         <span
           className="flex items-center gap-1 text-xs text-muted-foreground"
@@ -1698,6 +1773,25 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           <Database className="size-3.5" aria-hidden />
           ✓
         </span>
+      )
+    } else if (rosettaImport.info && rosettaTocStatus === 'stale') {
+      rosettaExtraAction = (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1 text-xs text-muted-foreground"
+          title="库内目录与当前已确认目录不一致，只做本地重建，不重新识别"
+          disabled={rosettaRebuilding}
+          onClick={() => void handleRosettaRebuildToc()}
+        >
+          {rosettaRebuilding ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Database className="size-3.5" aria-hidden />
+          )}
+          更新罗盘目录
+        </Button>
       )
     } else {
       rosettaExtraAction = (

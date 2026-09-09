@@ -6,7 +6,7 @@ import type { DatabaseSync } from 'node:sqlite'
  * FTS 外部内容表才能用 content_rowid 挂接。
  */
 
-export const BOOK_DB_SCHEMA_VERSION = 2
+export const BOOK_DB_SCHEMA_VERSION = 3
 
 const MIGRATION_V1 = `
 CREATE TABLE IF NOT EXISTS books (
@@ -67,6 +67,20 @@ const MIGRATIONS: Record<number, string> = {
   1: MIGRATION_V1,
   // v2：books.completed_pages 记录已完成 OCR+入库的页（含空页），崩溃/取消后续跑
   2: `ALTER TABLE books ADD COLUMN completed_pages TEXT NOT NULL DEFAULT '[]';`,
+  // v3：books.toc_signature（目录签名，缺省 ''=未重建）+ toc_entries 全量目录项。
+  // 前向兼容：只新增列/表，不改旧列语义；旧代码忽略新表仍可读写 books/chapters/blocks。
+  3: `ALTER TABLE books ADD COLUMN toc_signature TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS toc_entries (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  toc_index INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  level INTEGER NOT NULL,
+  start_page INTEGER NOT NULL,
+  end_page INTEGER NOT NULL,
+  UNIQUE (book_id, toc_index)
+);
+CREATE INDEX IF NOT EXISTS idx_toc_entries_book ON toc_entries (book_id, toc_index);`,
 }
 
 export function getBookDbVersion(db: DatabaseSync): number {

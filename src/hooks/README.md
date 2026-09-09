@@ -45,7 +45,7 @@
 | `useReaderSelectionActions` | 三阅读器划选工具条共享动作：复制/批注/高亮/加入对话/问 Agent |
 | `useReaderExportMenu` | 三阅读器笔记与 Anki 导出菜单共享外壳（toc/当前章由各家传入） |
 | `usePdfPageOcr` | PDF 单页 OCR 域：页缓存/识别去重/统一正文读取/当前页识别 |
-| `useRosettaImport` | 罗盘导入视图状态：横幅按钮 + 进度 + 已索引信息 |
+| `useRosettaImport` | 罗盘导入视图状态：横幅按钮 + 进度 + 已索引信息 + 纯本地目录重建 |
 | `useReaderWheelNavigation` | 滚轮到顶/底翻页。逻辑已抽出，Viewer 里仍有内联调用，此 Hook **暂无引用** |
 | `useSyncProgressBridge` | 阅读进度 Store 与主进程云同步双向桥接 |
 

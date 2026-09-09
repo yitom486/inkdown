@@ -63,6 +63,7 @@
 | `reader-adapter` / `foliate-*` | 统一阅读后端契约与 foliate 实现（EPUB+MOBI/KF8，MOBI 旧链已删） |
 | `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js） |
 | `toc-ai` / `toc-offset` | 目录 AI 整理 Prompt 构造与 JSON 校验；目录偏移多标题锚定共识 |
+| `rosetta-*` | 罗盘索引：目录归一（rosetta-toc）、块转 Agent 文本（rosetta-agent-text）、目录签名与健康状态（rosetta-toc-status） |
 | `ocr-toc-*` | OCR 目录缓存状态：独立提示与校正/重识入口落点（ocr-toc-notice）、校正目录条目决议（pdf-ocr-toc-cache）、探测/识别/保存三取一租约锁＋文档世代（ocr-toc-op，防 ABA 与切文件旧写回）、探测反馈状态机（ocr-toc-detect-feedback，只填范围）；分级评估见 shared/reader/ocr-toc-assess，可用性门控见 pdf-ocr-toc-gate，范围评分见 shared/reader/toc-page-detect |
 | `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | 在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe（如 Python Tutor） |
 

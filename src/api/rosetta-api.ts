@@ -8,6 +8,8 @@ import type {
   RosettaImportStatus,
   RosettaQuery,
   RosettaQueryResult,
+  RosettaTocRebuildPayload,
+  RosettaTocRebuildResult,
 } from '@shared/types/rosetta'
 
 function getElectronAPI() {
@@ -55,5 +57,16 @@ export const rosettaApi = {
       return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
     }
     return api.queryRosettaBook(query)
+  },
+
+  /** 纯本地重建罗盘目录索引（不调 OCR，调用方传入已确认目录） */
+  async rebuildToc(
+    payload: RosettaTocRebuildPayload,
+  ): Promise<Result<RosettaTocRebuildResult, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.rebuildRosettaToc) {
+      return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
+    }
+    return api.rebuildRosettaToc(payload)
   },
 }
