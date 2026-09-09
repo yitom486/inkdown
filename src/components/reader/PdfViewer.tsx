@@ -18,6 +18,13 @@ import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
 import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
+import {
+  TOC_DRAFT_GUARD_MESSAGE,
+  createTocOpLock,
+  tocBusyMessage,
+  type OcrTocOperation,
+  type TocOpLock,
+} from '@/lib/reader/ocr-toc-op'
 import { resolveDetectApply } from '@shared/reader/toc-page-detect'
 import {
   noticeForFreshRecognize,
@@ -169,6 +176,23 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null)
   /** mouseup 后提交的选区事务；后续 UI 不再依赖原生 Selection。 */
   const selectionTransactionRef = useRef<PdfSelectionSnapshot | null>(null)
+  /**
+   * 目录操作同步锁（探测/识别/保存三取一）：布尔 state 要等下一次渲染，
+   * 快速连点能绕过，这里用 ref 做真正的门。布尔们只负责按钮禁用等渲染。
+   */
+  const tocOpLockRef = useRef<TocOpLock | null>(null)
+  if (tocOpLockRef.current === null) {
+    tocOpLockRef.current = createTocOpLock()
+  }
+  const beginTocOp = useCallback((operation: OcrTocOperation): boolean => {
+    const lock = tocOpLockRef.current
+    if (lock && lock.tryBegin(operation)) return true
+    toast.error(tocBusyMessage(lock?.current() ?? null) ?? '目录操作进行中，请稍候')
+    return false
+  }, [])
+  const endTocOp = useCallback((operation: OcrTocOperation): void => {
+    tocOpLockRef.current?.end(operation)
+  }, [])
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
@@ -355,6 +379,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrRecognizing(false)
     setOcrTocNotice(null)
     setTocDetecting(false)
+    // 切文件时释放可能残留的目录操作锁（在途回调的 finally 会空操作，无害）
+    {
+      const runningOp = tocOpLockRef.current?.current()
+      if (runningOp) tocOpLockRef.current?.end(runningOp)
+    }
     resetPageOcr()
     setTocOpen(false)
     pageAnchorRefs.current.clear()
@@ -490,13 +519,20 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const pdfOcrScale = useAppSettingsStore((state) => state.pdfOcrScale)
 
   const handleRecognizeToc = useCallback(async () => {
-    if (!fileFingerprint || ocrRecognizing || tocDetecting) return
-    if (!Number.isInteger(numPages) || numPages < 1) {
-      toast.error('PDF 尚未加载完成，请稍后再试')
+    if (!fileFingerprint) return
+    // 编辑器有未保存草稿时不得悄悄覆盖：先让人保存或取消
+    if (ocrTocEditMode) {
+      toast.error(TOC_DRAFT_GUARD_MESSAGE)
       return
     }
+    // 同步锁先行：参数错误与识别失败都在 finally 释放，见末尾
+    if (!beginTocOp('recognize')) return
     setOcrRecognizing(true)
     try {
+      if (!Number.isInteger(numPages) || numPages < 1) {
+        toast.error('PDF 尚未加载完成，请稍后再试')
+        return
+      }
       const result = await recognizePdfOcrToc({
         filePath,
         fileFingerprint,
@@ -520,12 +556,15 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       }
     } finally {
       setOcrRecognizing(false)
+      endTocOp('recognize')
     }
-  }, [fileFingerprint, filePath, ocrRecognizing, tocDetecting, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale, numPages])
+  }, [fileFingerprint, filePath, ocrTocEditMode, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale, numPages, beginTocOp, endTocOp])
 
   const handleSaveOcrToc = useCallback(
     async (entries: OcrTocEntry[]) => {
-      if (!fileFingerprint || tocDetecting) return
+      if (!fileFingerprint) return
+      // 保存即解决草稿归属，不做草稿门；互斥锁保证不与探测/识别交错写缓存
+      if (!beginTocOp('save')) return
       setOcrTocSaving(true)
       try {
         const cache = buildPdfOcrTocCache({
@@ -551,9 +590,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         toast.success('目录已保存')
       } finally {
         setOcrTocSaving(false)
+        endTocOp('save')
       }
     },
-    [fileFingerprint, tocDetecting, tocPageFrom, tocPageTo, tocPageOffset],
+    [fileFingerprint, tocPageFrom, tocPageTo, tocPageOffset, beginTocOp, endTocOp],
   )
 
   /**
@@ -561,17 +601,20 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
    * 与正式识别/保存互斥；ambiguous/not-found 保留用户当前范围并说明原因。
    */
   const handleDetectTocPages = useCallback(async () => {
-    if (!fileFingerprint || tocDetecting) return
-    if (ocrRecognizing || ocrTocSaving) {
-      toast.error('识别或保存进行中，请稍候')
+    if (!fileFingerprint) return
+    // 编辑器有未保存草稿时不得动范围输入：先让人保存或取消
+    if (ocrTocEditMode) {
+      toast.error(TOC_DRAFT_GUARD_MESSAGE)
       return
     }
-    if (!Number.isInteger(numPages) || numPages < 1) {
-      toast.error('PDF 尚未加载完成，请稍后再试')
-      return
-    }
+    // 同步锁先行：参数错误与探测失败都在 finally 释放，见末尾
+    if (!beginTocOp('detect')) return
     setTocDetecting(true)
     try {
+      if (!Number.isInteger(numPages) || numPages < 1) {
+        toast.error('PDF 尚未加载完成，请稍后再试')
+        return
+      }
       const result = await detectPdfTocPages({ filePath, pageCount: numPages })
       if (!result.ok) {
         toast.error(result.error.message)
@@ -594,8 +637,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       }
     } finally {
       setTocDetecting(false)
+      endTocOp('detect')
     }
-  }, [fileFingerprint, filePath, tocDetecting, ocrRecognizing, ocrTocSaving, numPages, tocPageFrom, tocPageTo])
+  }, [fileFingerprint, filePath, ocrTocEditMode, numPages, tocPageFrom, tocPageTo, beginTocOp, endTocOp])
 
   const [suggestingOffset, setSuggestingOffset] = useState(false)
 
@@ -724,6 +768,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   /** OCR 目录可用（纯扫描沿用旧行为；混合无内置目录新增入口与缓存恢复） */
   const ocrTocAvailable = canUseOcrToc({ outlineSource, isScannedPdf, isMixedPdf })
+  /** 目录三操作（探测/识别/保存）任一运行中：可见入口同步禁用（锁负责逻辑互斥） */
+  const ocrTocBusy = ocrRecognizing || tocDetecting || ocrTocSaving
 
   const showOcrBanner =
     (ocrTocAvailable && outlineSource === 'page-fallback' && !ocrBannerDismissed) ||
@@ -1602,6 +1648,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           suggestingOffset={suggestingOffset}
           onDetectTocPages={() => void handleDetectTocPages()}
           detectingTocPages={tocDetecting}
+          busy={ocrTocBusy}
           onRecognize={() => void handleRecognizeToc()}
           onDismiss={() => {
             setOcrTocEditorOpen(false)
@@ -1635,7 +1682,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             size="sm"
             variant="ghost"
             className="h-6 text-xs"
-            disabled={ocrRecognizing || tocDetecting}
+            disabled={ocrTocBusy}
             onClick={() => void handleRecognizeToc()}
           >
             重新识别
@@ -1785,6 +1832,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               entries={ocrTocEntries}
               pageOffset={tocPageOffset}
               saving={ocrTocSaving}
+              busy={ocrTocBusy}
               onToggle={() => setTocOpen(false)}
               onSave={(entries) => void handleSaveOcrToc(entries)}
               onCancel={() => setOcrTocEditMode(false)}

@@ -7,6 +7,8 @@ interface PdfOcrTocEditorProps {
   entries: OcrTocEntry[]
   pageOffset: number
   saving?: boolean
+  /** 目录探测/识别运行中：保存按钮同步禁用（锁负责逻辑互斥） */
+  busy?: boolean
   onToggle: () => void
   onSave: (entries: OcrTocEntry[]) => void
   onCancel: () => void
@@ -22,6 +24,7 @@ export function PdfOcrTocEditor({
   entries,
   pageOffset,
   saving = false,
+  busy = false,
   onToggle,
   onSave,
   onCancel,
@@ -131,7 +134,7 @@ export function PdfOcrTocEditor({
           type="button"
           size="sm"
           className="flex-1"
-          disabled={saving || draft.length === 0}
+          disabled={saving || busy || draft.length === 0}
           onClick={() => onSave(draft)}
         >
           {saving ? '保存中…' : '保存'}
