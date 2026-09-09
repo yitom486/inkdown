@@ -8,7 +8,7 @@ import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { AcpConfigOption } from '@shared/types/acp'
 import type { OcrTocEntry } from '@shared/types/ocr'
 import { buildTocAiPrompt, mergeTocAiDraft, parseTocAiEntries } from '@/lib/reader/toc-ai'
-import { takeTocDraft } from '@/lib/agent/context/toc-draft'
+import { decideTocAiPromptOutcome, takeTocDraft } from '@/lib/agent/context/toc-draft'
 import {
   canTocUseImages,
   ensureTocSessionId,
@@ -178,20 +178,27 @@ export function TocAiPolishControl({
         images,
       )
       if (!mountedRef.current) return
-      if (!reply) {
+      // 先取工具草稿再判空回复：工具型 Agent 可能零正文回复，
+      // 先判 !reply 会丢弃已写好的草稿（见 decideTocAiPromptOutcome 单测）
+      const drafted = takeTocDraft(fileFingerprint)
+      const outcome = decideTocAiPromptOutcome(
+        drafted !== null,
+        reply !== null && reply !== '',
+      )
+      if (outcome.action === 'apply-draft') {
+        console.info(
+          `[toc-ai] tool draft entries=${drafted?.length ?? 0} replyChars=${reply?.length ?? 0}`,
+        )
+        applyMerged(drafted ?? [], [])
+        setPhase('idle')
+        return
+      }
+      if (outcome.action === 'no-reply') {
         setError('AI 无回复，请重试')
         setPhase('ready')
         return
       }
-      // 工具优先：模型已用目录工具写草稿，直接取走合并，避免与 JSON 双算
-      const drafted = takeTocDraft(fileFingerprint)
-      if (drafted) {
-        console.info(`[toc-ai] tool draft entries=${drafted.length}`)
-        applyMerged(drafted, [])
-        setPhase('idle')
-        return
-      }
-      const parsed = parseTocAiEntries(reply)
+      const parsed = parseTocAiEntries(reply ?? '')
       if (parsed.entries.length === 0) {
         console.info(`[toc-ai] parsed entries=0 dropped=${parsed.dropped} warnings=${parsed.warnings.length}`)
         setError(parsed.warnings[0] ?? '未能解析出条目')

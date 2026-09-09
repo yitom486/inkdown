@@ -201,13 +201,6 @@ function evidenceTier(source: OcrTocEntrySource | undefined): number {
   return 1
 }
 
-/** 合并键：章节号优先（`1.2.7`），无号标题（第X章）按归一化标题 */
-function mergeKeyOf(title: string): string {
-  const section = sectionOfHeading(title)
-  if (section) return `S:${section}`
-  return `T:${cleanupOcrTocTitle(normalizeOcrChinese(title))}`
-}
-
 export interface TocMergeOptions {
   /** 真实总页数（与 pageOffset 联动做范围门，AI 新增条目用） */
   pageCount?: number
@@ -234,6 +227,7 @@ export interface TocMergeResult {
  * - 仅基线有：保留（AI 漏看不等于不存在）。
  * - 层级一律按章节号重算（`inferLevel`），不采模型填的——深度是编号事实，
  *   不是视觉判断；无号标题才用 AI 给的层级。
+ * - 同标题同页重复只留一条（模型重发/基线自带重复，`5.3.4` 这种同号不同名不受影响）。
  * - 最后过展示序 + 单调门（AI 幻觉页码同样被拦，丢弃留痕）。
  */
 export function mergeTocAiDraft(
@@ -251,14 +245,58 @@ export function mergeTocAiDraft(
     return real >= 1 && real <= (options.pageCount as number)
   }
 
-  const baseByKey = new Map<string, OcrTocEntry>()
-  for (const entry of baseline) {
-    const key = mergeKeyOf(entry.title)
-    if (!baseByKey.has(key)) baseByKey.set(key, entry)
-  }
+  // 基线双索引：标题精确匹配优先（同号双胞胎如两个 5.3.4 各对各的），
+  // 标题对不上才按章节号找同节首个未消费行；消费按行下标记，不按合并键。
+  const normTitleOf = (title: string): string =>
+    cleanupOcrTocTitle(normalizeOcrChinese(title))
+  const baseByTitle = new Map<string, number[]>()
+  const baseBySection = new Map<string, number[]>()
+  baseline.forEach((entry, index) => {
+    const titleKey = normTitleOf(entry.title)
+    if (titleKey) {
+      const list = baseByTitle.get(titleKey) ?? []
+      list.push(index)
+      baseByTitle.set(titleKey, list)
+    }
+    const section = sectionOfHeading(entry.title)
+    if (section) {
+      const list = baseBySection.get(section) ?? []
+      list.push(index)
+      baseBySection.set(section, list)
+    }
+  })
 
   const merged: OcrTocEntry[] = []
-  const consumed = new Set<string>()
+  const consumed = new Set<number>()
+  const seen = new Set<string>()
+  const pushUnique = (entry: OcrTocEntry): boolean => {
+    const key = `${entry.title}|${entry.printedPage}`
+    if (seen.has(key)) {
+      dropped.push(`重复条目「${entry.title}」已去重（页 ${entry.printedPage}）`)
+      return false
+    }
+    seen.add(key)
+    merged.push(entry)
+    return true
+  }
+  const takeBaseMatch = (title: string): OcrTocEntry | null => {
+    const titleHits = baseByTitle.get(normTitleOf(title)) ?? []
+    for (const index of titleHits) {
+      if (!consumed.has(index)) {
+        consumed.add(index)
+        return baseline[index] as OcrTocEntry
+      }
+    }
+    const section = sectionOfHeading(title)
+    const sectionHits = section ? (baseBySection.get(section) ?? []) : []
+    for (const index of sectionHits) {
+      if (!consumed.has(index)) {
+        consumed.add(index)
+        return baseline[index] as OcrTocEntry
+      }
+    }
+    return null
+  };
   for (const aiEntry of ai) {
     const title = aiEntry.title.trim()
     if (title.length < 2) {
@@ -278,28 +316,27 @@ export function mergeTocAiDraft(
       dropped.push(`丢弃 AI 非法页码「${title}」：${aiEntry.printedPage}`)
       continue
     }
-    const key = mergeKeyOf(title)
-    const base = baseByKey.get(key)
+    const base = takeBaseMatch(title)
     const level = sectionOfHeading(title) ? inferLevel(title) : aiEntry.level
     if (!base) {
-      merged.push({ title, printedPage: aiEntry.printedPage, level, source: 'ai' })
-      aiAdded += 1
+      if (pushUnique({ title, printedPage: aiEntry.printedPage, level, source: 'ai' })) {
+        aiAdded += 1
+      }
       continue
     }
-    consumed.add(key)
     if (evidenceTier(base.source) > evidenceTier('ai')) {
-      merged.push({ ...base })
+      pushUnique({ ...base })
       if (base.printedPage !== aiEntry.printedPage) {
         conflicts.push(`「${title}」沿用钉死页 ${base.printedPage}（AI 给 ${aiEntry.printedPage}），请核对`)
       }
       continue
     }
-    merged.push({ title, printedPage: aiEntry.printedPage, level, source: 'ai' })
+    pushUnique({ title, printedPage: aiEntry.printedPage, level, source: 'ai' })
   }
 
-  for (const [key, base] of baseByKey) {
-    if (!consumed.has(key)) merged.push({ ...base })
-  }
+  baseline.forEach((base, index) => {
+    if (!consumed.has(index)) pushUnique({ ...base })
+  })
 
   const kept = sortTocEntriesForDisplay(merged, (entry) => {
     dropped.push(`「${entry.title}」页码 ${entry.printedPage} 倒退，疑似错配已丢弃`)

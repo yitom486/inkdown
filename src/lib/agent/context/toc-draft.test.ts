@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clearTocDraft,
+  decideTocAiPromptOutcome,
   deleteTocDraftEntry,
   readTocDraft,
   sanitizeTocDraftEntry,
@@ -92,6 +93,43 @@ describe('toc-draft', () => {
     expect(deleteTocDraftEntry('fp-1', { index: 5 })).toEqual({ removed: 0, count: 2 })
     expect(deleteTocDraftEntry('fp-1', { title: 'A' })).toEqual({ removed: 1, count: 1 })
     expect(deleteTocDraftEntry('other-fp', { index: 0 })).toEqual({ removed: 0, count: 1 })
+  })
+
+  it('工具草稿 + 空文字回复 => 用工具草稿（零正文 agent 不丢稿）', () => {
+    clearTocDraft()
+    writeTocDraft('fp-1', [{ title: '1.2.3软件', printedPage: 4, level: 2 }])
+    const drafted = takeTocDraft('fp-1')
+    expect(
+      decideTocAiPromptOutcome(drafted !== null, false),
+    ).toEqual({ action: 'apply-draft', source: 'tool' })
+  })
+
+  it('无工具草稿 + 空文字回复 => AI 无回复', () => {
+    clearTocDraft()
+    const drafted = takeTocDraft('fp-1')
+    expect(decideTocAiPromptOutcome(drafted !== null, false)).toEqual({ action: 'no-reply' })
+  })
+
+  it('工具草稿 + 有文字回复 => 工具草稿优先（不双算）', () => {
+    clearTocDraft()
+    writeTocDraft('fp-1', [{ title: '1.2.3软件', printedPage: 4, level: 2 }])
+    const drafted = takeTocDraft('fp-1')
+    expect(decideTocAiPromptOutcome(drafted !== null, true)).toEqual({
+      action: 'apply-draft',
+      source: 'tool',
+    })
+    // 取即清空：同一份草稿不会被 JSON 回退再消费一次
+    expect(takeTocDraft('fp-1')).toBeNull()
+  })
+
+  it('指纹不符草稿不被消费（保留给对的书）', () => {
+    clearTocDraft()
+    writeTocDraft('fp-1', [{ title: '1.2.3软件', printedPage: 4, level: 2 }])
+    expect(takeTocDraft('other-fp')).toBeNull()
+    expect(
+      decideTocAiPromptOutcome(takeTocDraft('other-fp') !== null, false),
+    ).toEqual({ action: 'no-reply' })
+    expect(readTocDraft()?.entries).toHaveLength(1)
   })
 
   it('take 指纹一致才给且取即清空，不符保留', () => {

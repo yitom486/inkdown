@@ -158,3 +158,24 @@ export function takeTocDraft(expectedFingerprint: string): TocDraftEntry[] | nul
 export function clearTocDraft(): void {
   draft = null
 }
+
+/**
+ * prompt 回来后的出路裁决（纯函数，被 TocAiPolishControl 实际调用）：
+ * - 有工具草稿 → 用草稿（工具优先），**无论文字回复是否为空**
+ *   （工具型 Agent 可能零正文回复；先判空回复会丢弃已写好的草稿）；
+ * - 无草稿但有文字 → 走 JSON 解析回退；
+ * - 两者皆无 → AI 无回复。
+ */
+export type TocAiPromptOutcome =
+  | { action: 'apply-draft'; source: 'tool' }
+  | { action: 'parse-reply' }
+  | { action: 'no-reply' }
+
+export function decideTocAiPromptOutcome(
+  hasDraft: boolean,
+  hasReply: boolean,
+): TocAiPromptOutcome {
+  if (hasDraft) return { action: 'apply-draft', source: 'tool' }
+  if (hasReply) return { action: 'parse-reply' }
+  return { action: 'no-reply' }
+}

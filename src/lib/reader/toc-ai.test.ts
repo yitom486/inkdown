@@ -167,6 +167,24 @@ describe('mergeTocAiDraft', () => {
     expect(result.dropped.some((d) => d.includes('3.5.4替换算法'))).toBe(true)
   })
 
+  it('同标题同页重复只留一条（模型重发），同号不同名不受影响', () => {
+    const baseline: OcrTocEntry[] = [
+      { title: '1.4本章小结', printedPage: 18, level: 1, source: 'paired' },
+      { title: '5.3.4单总线结构的数据通路', printedPage: 208, level: 2, source: 'geo' },
+      { title: '5.3.4专用结构的数据通路', printedPage: 208, level: 2, source: 'geo' },
+    ]
+    const ai: OcrTocEntry[] = [
+      { title: '1.4本章小结', printedPage: 18, level: 1, source: 'ai' },
+      { title: '1.4本章小结', printedPage: 18, level: 1, source: 'ai' },
+    ]
+    const result = mergeTocAiDraft(baseline, ai, OPTS)
+    expect(result.entries.filter((e) => e.title === '1.4本章小结')).toHaveLength(1)
+    expect(result.dropped.some((d) => d.includes('去重'))).toBe(true)
+    expect(
+      result.entries.filter((e) => e.title.startsWith('5.3.4')),
+    ).toHaveLength(2)
+  })
+
   it('手填是最高证据，AI 改不动', () => {
     const result = mergeTocAiDraft(
       [{ title: '1.1.1硬件', printedPage: 2, level: 2, source: 'manual' }],
