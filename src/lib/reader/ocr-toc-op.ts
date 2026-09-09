@@ -74,6 +74,50 @@ export function canBeginTocOp(
   return running === null
 }
 
+/**
+ * 文档级生命周期（租约锁 + 单调世代，可脱离 React 单测交错时序）。
+ *
+ * - begin/end/current：转调内部锁（语义同上）。
+ * - switchDocument：切文件时调用——世代 +1 并作废当前租约；
+ *   旧任务的 end/回写/清 busy 一律失效，即使新任务操作同名。
+ * - isLive：回写门（租约仍是当前持有者且世代未变）。
+ * - isBusy：是否有在途操作（切文件后旧 busy 不得残留：调用方在
+ *   switchDocument 后把渲染侧 busy 同步清零，见 PdfViewer）。
+ */
+export class TocDocLifecycle {
+  private readonly lock: TocOpLock = createTocOpLock()
+  private session = 0
+
+  begin(operation: OcrTocOperation): TocOpLease | null {
+    return this.lock.tryBegin(operation)
+  }
+
+  end(lease: TocOpLease): boolean {
+    return this.lock.end(lease)
+  }
+
+  current(): TocOpLease | null {
+    return this.lock.current()
+  }
+
+  currentSession(): number {
+    return this.session
+  }
+
+  isBusy(): boolean {
+    return this.lock.current() !== null
+  }
+
+  switchDocument(): void {
+    this.session += 1
+    this.lock.invalidate()
+  }
+
+  isLive(lease: TocOpLease | null, session: number): boolean {
+    return isLiveTocOpLease(this.lock.current(), lease, this.session, session)
+  }
+}
+
 /** 占线时的忙提示（null 表示空闲）；调用方在 tryBegin 失败时展示 */
 export function tocBusyMessage(running: TocOpLease | null): string | null {
   if (running === null) return null

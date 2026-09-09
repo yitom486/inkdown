@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   TOC_DRAFT_GUARD_MESSAGE,
+  TocDocLifecycle,
   canBeginTocOp,
   createTocOpLock,
   isLiveTocOpLease,
@@ -141,6 +142,62 @@ describe('isLiveTocOpLease 回写门', () => {
 
   it('租约为 null 永不放行', () => {
     expect(isLiveTocOpLease(null, null, 1, 1)).toBe(false)
+  })
+})
+
+describe('TocDocLifecycle 切文件交错', () => {
+  it('A recognize → 切到 B（data 未到）→ A 回写门关闭', () => {
+    const lifecycle = new TocDocLifecycle()
+    const leaseA = lifecycle.begin('recognize') as TocOpLease
+    const sessionA = lifecycle.currentSession()
+    expect(lifecycle.isLive(leaseA, sessionA)).toBe(true)
+    // 切到 B：B 的 data 尚未到达，但切换边界已推进
+    lifecycle.switchDocument()
+    expect(lifecycle.isLive(leaseA, sessionA)).toBe(false)
+    expect(lifecycle.current()).toBeNull()
+    expect(lifecycle.isBusy()).toBe(false)
+  })
+
+  it('B 读取失败：A 的 lease 无效，busy 无残留，新操作可开始', () => {
+    const lifecycle = new TocDocLifecycle()
+    const leaseA = lifecycle.begin('recognize') as TocOpLease
+    lifecycle.switchDocument()
+    // B 读取失败：没有任何新操作，锁必须空、busy 必须无
+    expect(lifecycle.end(leaseA)).toBe(false)
+    expect(lifecycle.current()).toBeNull()
+    expect(lifecycle.isBusy()).toBe(false)
+    expect(lifecycle.begin('detect')).not.toBeNull()
+  })
+
+  it('新文件同名 recognize 后，A 的 finally 不能释放 B 的 lease 或清 B 的 busy', () => {
+    const lifecycle = new TocDocLifecycle()
+    const leaseA = lifecycle.begin('recognize') as TocOpLease
+    const sessionA = lifecycle.currentSession()
+    lifecycle.switchDocument()
+    const sessionB = lifecycle.currentSession()
+    expect(sessionB).toBeGreaterThan(sessionA)
+    const leaseB = lifecycle.begin('recognize') as TocOpLease
+    expect(leaseB).not.toBe(leaseA)
+    // A 的 finally：end 空操作，回写门关闭
+    expect(lifecycle.end(leaseA)).toBe(false)
+    expect(lifecycle.current()).toBe(leaseB)
+    expect(lifecycle.isBusy()).toBe(true)
+    expect(lifecycle.isLive(leaseA, sessionA)).toBe(false)
+    expect(lifecycle.isLive(leaseB, sessionB)).toBe(true)
+    // B 正常结束：释放并可再开始
+    expect(lifecycle.end(leaseB)).toBe(true)
+    expect(lifecycle.isBusy()).toBe(false)
+    expect(lifecycle.begin('save')).not.toBeNull()
+  })
+
+  it('正常切换（无在途操作）与正常完成不受影响', () => {
+    const lifecycle = new TocDocLifecycle()
+    lifecycle.switchDocument()
+    const lease = lifecycle.begin('detect') as TocOpLease
+    const session = lifecycle.currentSession()
+    expect(lifecycle.isLive(lease, session)).toBe(true)
+    expect(lifecycle.end(lease)).toBe(true)
+    expect(lifecycle.begin('save')).not.toBeNull()
   })
 })
 

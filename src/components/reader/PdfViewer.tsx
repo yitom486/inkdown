@@ -20,12 +20,10 @@ import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
 import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
 import {
   TOC_DRAFT_GUARD_MESSAGE,
-  createTocOpLock,
-  isLiveTocOpLease,
+  TocDocLifecycle,
   tocBusyMessage,
   type OcrTocOperation,
   type TocOpLease,
-  type TocOpLock,
 } from '@/lib/reader/ocr-toc-op'
 import { resolveDetectApply } from '@shared/reader/toc-page-detect'
 import {
@@ -179,36 +177,27 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   /** mouseup 后提交的选区事务；后续 UI 不再依赖原生 Selection。 */
   const selectionTransactionRef = useRef<PdfSelectionSnapshot | null>(null)
   /**
-   * 目录操作租约锁（探测/识别/保存三取一）+ 文档世代：
-   * - 布尔 state 要等下一次渲染，快速连点能绕过，这里用 ref 锁做真正的门；
-   * - tryBegin 返回租约对象，释放只认引用（ABA 安全：旧 finally 误释放不了新租约）；
-   * - 切文件时世代 +1 并作废租约，旧任务回写前必须两道门全过。
-   * 布尔们只负责按钮禁用等渲染。
+   * 目录操作生命周期（租约锁 + 文档世代，见 ocr-toc-op.TocDocLifecycle）：
+   * 布尔 state 只负责按钮禁用等渲染，真正的门是同步租约（快速连点绕不过），
+   * 回写门另要世代未变（切文件旧任务一律拦下，含清 busy）。
    */
-  const tocOpLockRef = useRef<TocOpLock | null>(null)
-  if (tocOpLockRef.current === null) {
-    tocOpLockRef.current = createTocOpLock()
+  const tocLifecycleRef = useRef<TocDocLifecycle | null>(null)
+  if (tocLifecycleRef.current === null) {
+    tocLifecycleRef.current = new TocDocLifecycle()
   }
-  /** 文档世代（单调递增，mount 期不清零）：切文件即 +1 */
-  const tocDocSessionRef = useRef(0)
   const beginTocOp = useCallback((operation: OcrTocOperation): TocOpLease | null => {
-    const lock = tocOpLockRef.current
-    const lease = lock ? lock.tryBegin(operation) : null
+    const lifecycle = tocLifecycleRef.current
+    const lease = lifecycle ? lifecycle.begin(operation) : null
     if (lease) return lease
-    toast.error(tocBusyMessage(lock?.current() ?? null) ?? '目录操作进行中，请稍候')
+    toast.error(tocBusyMessage(lifecycle?.current() ?? null) ?? '目录操作进行中，请稍候')
     return null
   }, [])
   const endTocOp = useCallback((lease: TocOpLease): void => {
-    tocOpLockRef.current?.end(lease)
+    tocLifecycleRef.current?.end(lease)
   }, [])
   /** 回写门：租约仍是当前持有者且世代未变（旧文件任务一律拦下，含清 busy） */
   const isLiveTocOp = useCallback((lease: TocOpLease, session: number): boolean => {
-    return isLiveTocOpLease(
-      tocOpLockRef.current?.current() ?? null,
-      lease,
-      tocDocSessionRef.current,
-      session,
-    )
+    return tocLifecycleRef.current?.isLive(lease, session) ?? false
   }, [])
 
   const { data, isLoading, error } = useReaderBinary(filePath)
@@ -371,6 +360,30 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     }
   }, [error])
 
+  /**
+   * 文档切换边界（只依赖 filePath/fileFingerprint，不经过 data）：
+   * useReaderBinary 切 queryKey 后 data 可能暂时为空（未缓存/失败），
+   * 若把世代推进放在 data 后面，旧任务会在新文件加载期继续通过回写门。
+   * 这里用 layout effect 先于 passive data effect 与用户交互执行：
+   * 世代 +1、作废租约、清三种 busy 与旧目录状态；data effect 不再重复。
+   * 同路径换内容（fingerprint 变、path 不变）同样视为新文档。
+   */
+  useLayoutEffect(() => {
+    tocLifecycleRef.current?.switchDocument()
+    setOcrRecognizing(false)
+    setTocDetecting(false)
+    setOcrTocSaving(false)
+    setOutlineUnits([])
+    setOutlineSource('page-fallback')
+    setOutlineNotice(undefined)
+    setIsScannedPdf(false)
+    setIsMixedPdf(false)
+    setOcrTocEditorOpen(false)
+    setOcrTocEditMode(false)
+    setOcrTocEntries([])
+    setOcrTocNotice(null)
+  }, [filePath, fileFingerprint])
+
   useEffect(() => {
     // 文档切换即释放结构化 Worker 与整档缓存（大文档内存不跨文档驻留）
     pdfStructureClient.dispose()
@@ -383,29 +396,15 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setPdfDoc(null)
     setPageNum(1)
     setNumPages(0)
-    setOutlineUnits([])
-    setOutlineSource('page-fallback')
-    setOutlineNotice(undefined)
-    setIsScannedPdf(false)
-    setIsMixedPdf(false)
+    // 目录/OCR 内容状态已由 filePath layout effect 清理（不经过 data）；
+    // 这里只负责打开 PDF、恢复缓存和初始化页面
     setOcrBannerDismissed(false)
-    setOcrTocEditorOpen(false)
-    setOcrTocEditMode(false)
-    setOcrTocEntries([])
-    setOcrTocSaving(false)
-    setOcrRecognizing(false)
-    setOcrTocNotice(null)
-    setTocDetecting(false)
-    // 切文件：文档世代 +1 并作废当前租约；在途旧任务的回写与清 busy 一律被拦下，
-    // 其主进程侧 OCR/写缓存可自然结束（写的是旧指纹文件，不影响新文件）
-    tocDocSessionRef.current += 1
-    tocOpLockRef.current?.invalidate()
     resetPageOcr()
     setTocOpen(false)
     pageAnchorRefs.current.clear()
 
     // 本次加载的世代：后续 await 回包只在本世代有效
-    const loadSession = tocDocSessionRef.current
+    const loadSession = tocLifecycleRef.current?.currentSession() ?? 0
 
     void (async () => {
       try {
@@ -461,7 +460,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         ) {
           const cacheResult = await getPdfOcrToc({ fileFingerprint })
           // 旧文件慢回包不得写回新文件界面（与三操作同世代门）
-          if (cacheResult.ok && !cancelled && loadSession === tocDocSessionRef.current) {
+          if (
+            cacheResult.ok &&
+            !cancelled &&
+            loadSession === (tocLifecycleRef.current?.currentSession() ?? -1)
+          ) {
             // 分级恢复：usable 照常；invalid 不进侧栏（原因进横幅附加行）；
             // suspect/legacy 照常供阅读，提示走独立 ocrTocNotice（不再写
             // outlineNotice：它在 OCR 侧栏下被抹掉，不打开侧栏不可见）。
@@ -548,7 +551,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     // 租约先行：参数错误与识别失败都在 finally 释放，见末尾
     const lease = beginTocOp('recognize')
     if (!lease) return
-    const session = tocDocSessionRef.current
+    const session = tocLifecycleRef.current?.currentSession() ?? 0
     setOcrRecognizing(true)
     try {
       if (!Number.isInteger(numPages) || numPages < 1) {
@@ -591,7 +594,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       // 保存即解决草稿归属，不做草稿门；租约锁保证不与探测/识别交错写缓存
       const lease = beginTocOp('save')
       if (!lease) return
-      const session = tocDocSessionRef.current
+      const session = tocLifecycleRef.current?.currentSession() ?? 0
       setOcrTocSaving(true)
       try {
         const cache = buildPdfOcrTocCache({
@@ -639,7 +642,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     // 租约先行：参数错误与探测失败都在 finally 释放，见末尾
     const lease = beginTocOp('detect')
     if (!lease) return
-    const session = tocDocSessionRef.current
+    const session = tocLifecycleRef.current?.currentSession() ?? 0
     setTocDetecting(true)
     try {
       if (!Number.isInteger(numPages) || numPages < 1) {
