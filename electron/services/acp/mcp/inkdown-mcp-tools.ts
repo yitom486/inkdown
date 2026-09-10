@@ -35,7 +35,9 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
       `读取当前打开的 ${READER_FORMATS} 内容（不含用户选区；选区用 inkdown_get_selection）。` +
       'scope 含义：toc=目录结构；viewport=当前视口约一屏（优先于整章）；current=当前章/页全文；' +
       'chapter=指定 TOC 章/页（需 flatIndex 或 title，不跳转）；search=全书关键词检索（需 query）。' +
-      '正文 escalation：viewport → current → chapter；结构用 toc；「哪里提到 X」用 search。',
+      '正文 escalation：viewport → current → chapter；结构用 toc；「哪里提到 X」用 search。' +
+      'scope=search 的 JSON 含 source=memory|index，以及 preciseTotal=false' +
+      '（精确 corpus total 只用 inkdown_inspect_content）。',
     inputSchema: {
       type: 'object',
       properties: {

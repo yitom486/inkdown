@@ -25,6 +25,12 @@ export interface ReaderContentProvider {
    * Foliate / WebDoc 不要设这个字段。
    */
   searchBlockedReason?: string
+  /**
+   * S2 搜索来源标注：仅 PDF Viewer 设置（有罗盘索引为 index，否则 memory）；
+   * Foliate / WebDoc 不要设（缺省即 memory）。只影响 search 结果的 source
+   * 字段，不改变任何检索算法。
+   */
+  searchSource?: 'memory' | 'index'
   /** 当前章节 / 页的纯文本；EPUB/MOBI 取 iframe DOM，PDF 取 textContent，MD 取编辑器内容 */
   getCurrentText: () => Promise<string> | string
   /**

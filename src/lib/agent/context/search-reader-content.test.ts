@@ -42,6 +42,31 @@ describe('searchReaderContent', () => {
       expect(result.totalMatches).toBe(1)
       expect(result.hits).toHaveLength(1)
       expect(result.hits[0]?.snippet).toContain('王道计')
+      // S2：缺省即 memory，精确总数恒 false
+      expect(result.source).toBe('memory')
+      expect(result.preciseTotal).toBe(false)
+    } finally {
+      unregister()
+    }
+  })
+
+  it('provider 标 index 时来源为 index，hits 算法相同', async () => {
+    const unregister = registerReaderContent({
+      filePath: '/book/indexed.pdf',
+      fileFingerprint: '/book/indexed.pdf|9',
+      searchSource: 'index',
+      getCurrentText: () => '',
+      iterateUnits: async function* () {
+        yield { label: '第一章', text: '正文王道计正文' }
+      },
+    })
+    try {
+      const result = await searchReaderContent('王道计')
+      expect(result.source).toBe('index')
+      expect(result.preciseTotal).toBe(false)
+      expect(result.totalMatches).toBe(1)
+      expect(result.hits).toHaveLength(1)
+      expect(result.hits[0]?.snippet).toContain('王道计')
     } finally {
       unregister()
     }

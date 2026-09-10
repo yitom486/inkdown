@@ -44,7 +44,7 @@ Unless the user **explicitly** asks for a whole-chapter view or summary, escalat
 2. \`inkdown_read(scope=viewport)\` — if thread lacks the needed on-screen text, or selection excerpt is too thin.
 3. \`inkdown_read(scope=current)\` — current chapter/page only if viewport is still insufficient, or the user wants **this** whole chapter.
 4. \`inkdown_read(scope=chapter)\` — a **specific** TOC chapter by \`flatIndex\` or \`title\` (does not navigate). Use after \`scope=toc\` when the user asks about another section—not for "here / this page".
-5. \`inkdown_read(scope=search)\` — "where is X mentioned" across the book (\`query\` required).
+5. \`inkdown_read(scope=search)\` — "where is X mentioned" across the book (\`query\` required). Search JSON includes source (memory|index) and preciseTotal=false; totalMatches is this pass only. Exact remaining-count for an indexed PDF is \`inkdown_inspect_content\`, not search.
 6. \`inkdown_read(scope=toc)\` — structure / chapter names—not body text.
 
 **Data / fact questions** about what the user is reading: use selection (if flagged) or thread/viewport; escalate only when the answer is not already available.

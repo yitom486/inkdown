@@ -4,6 +4,9 @@ export const READER_SEARCH_MAX_HITS = 20
 /** 命中处前后各截取的字数，够模型判断语境又不至于灌满上下文 */
 const SNIPPET_RADIUS = 60
 
+/** S2 搜索来源：memory=阅读器内存迭代；index=罗盘已入库章文本 */
+export type ReaderSearchSource = 'memory' | 'index'
+
 export interface ReaderSearchHit {
   /** 人类可读定位：章节标题或「第 N 页」 */
   label: string
@@ -18,6 +21,16 @@ export interface ReaderSearchResult {
   totalMatches: number
   /** 命中过多提前收尾，结果不完整 */
   truncated: boolean
+  /**
+   * S2：单元来源。memory=阅读器内存迭代（EPUB/MOBI/在线文档/未入库文字版 PDF
+   * 逐页原生层）；index=罗盘已入库章文本。只标注，不改变匹配算法。
+   */
+  source: ReaderSearchSource
+  /**
+   * S2：本工具恒为 false。全书精确 total 只有 inkdown_inspect_content；
+   * 禁止根据 source 或 truncated=false 把它设为 true。
+   */
+  preciseTotal: false
 }
 
 function countOccurrences(haystack: string, needle: string): number {
@@ -75,5 +88,12 @@ export async function searchReaderContent(rawQuery: string): Promise<ReaderSearc
     }
   }
 
-  return { query, hits, totalMatches, truncated }
+  return {
+    query,
+    hits,
+    totalMatches,
+    truncated,
+    source: provider.searchSource === 'index' ? 'index' : 'memory',
+    preciseTotal: false,
+  }
 }

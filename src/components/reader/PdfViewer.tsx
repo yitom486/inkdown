@@ -1054,6 +1054,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           isMixedPdf,
           indexed: Boolean(rosettaImport.info),
         }) ?? undefined,
+      // S2：来源标注（有索引为 index，否则 memory）；不改任何检索逻辑
+      searchSource: Boolean(rosettaImport.info) ? 'index' : 'memory',
       getCurrentText: () => readAgentPageText(pageNumRef.current),
       // PDF 一页 ≈ 视口；多页同时露边时仍以当前页为主
       getViewportText: () => readAgentPageText(pageNumRef.current),
