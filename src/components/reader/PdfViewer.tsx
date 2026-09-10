@@ -134,6 +134,7 @@ import {
   tocFromPdfUnits,
 } from '@/lib/reader/export-reading-notes'
 import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr-prefetch'
+import { loadPersistedOcrPageCaches } from '@/lib/reader/pdf-ocr-page-hydrate'
 import { suggestTocPageOffset } from '@/lib/reader/toc-offset'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -556,20 +557,20 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         setOutlineNotice(nextNotice)
 
         if (!isLiveLoad()) return
-        if (profile.isScanned && fileFingerprint) {
-          const pagesResult = await listPdfOcrPages({ fileFingerprint })
+        // U1：有页词缓存就载（扫描/混合不区分；原生书无缓存，list 为空零开销）
+        if (fileFingerprint) {
+          const hydrated = await loadPersistedOcrPageCaches(fileFingerprint, {
+            listPages: async () => {
+              const pagesResult = await listPdfOcrPages({ fileFingerprint })
+              return pagesResult.ok ? pagesResult.value : []
+            },
+            getPage: async (pageNumber) => {
+              const pageResult = await getPdfOcrPage({ fileFingerprint, page: pageNumber })
+              return pageResult.ok ? pageResult.value : null
+            },
+          })
           if (!isLiveLoad()) return
-          if (pagesResult.ok && pagesResult.value.length > 0) {
-            const entries = await Promise.all(
-              pagesResult.value.map(async (pageNumber) => {
-                const pageResult = await getPdfOcrPage({ fileFingerprint, page: pageNumber })
-                if (!pageResult.ok || pageResult.value.page !== pageNumber) return null
-                return [pageNumber, pageResult.value] as const
-              }),
-            )
-            if (!isLiveLoad()) return
-            hydratePageCaches(Object.fromEntries(entries.filter((item) => item !== null)))
-          }
+          hydratePageCaches(hydrated)
         }
       } catch (cause) {
         // 旧加载失败不得向新文件弹 FILE_READ_ERROR
@@ -1591,7 +1592,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       }
 
       if (!snapshot) {
-        throw new Error('未在当前页及相邻页找到该摘录，请翻到对应页后划词重试')
+        throw new Error('本页未建立可定位文字层，请识别本页后重试')
       }
 
       captureSelectionSnapshot(snapshot)

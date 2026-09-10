@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { ok } from '@shared/core/result'
+import type { PdfOcrPageCache } from '@shared/types/ocr'
 import { migrateBookDb } from './schema'
 import { countBookBlocks } from './queries'
 import { isRosettaImportActive, importScannedBookToDb, formatRosettaImportDoneMessage, ROSETTA_CLEAN_VERSION, type RosettaImportDeps } from './import-service'
@@ -448,8 +449,7 @@ describe('importScannedBookToDb', () => {
     expect(isRosettaImportActive()).toBe(false)
   })
 
-  it('P1.3 preferNative 差页只标记不 OCR，完成文案带建议数', async () => {
-    const memDb = openMemDb()
+  it('P1.3 preferNative 差页只标记不 OCR，完成文案带建议数', async () => {    const memDb = openMemDb()
     let runtimeCalls = 0
     const seenModes: unknown[] = []
     const nativeLoader = (async () => ({
@@ -492,6 +492,146 @@ describe('importScannedBookToDb', () => {
     expect(
       formatRosettaImportDoneMessage(result.value),
     ).toContain('2 页原生质量较差可手动识别')
+    memDb.close()
+  })
+})
+
+describe('U1 导入写页词缓存', () => {
+  const sizes612x792 = async (_data: Buffer, pages: readonly number[]) =>
+    new Map(pages.map((page) => [page, { width: 612, height: 792 }]))
+
+  it('OCR chunk 成功后对应页有 page cache（spans→words，不碰 blocks.bbox）', async () => {
+    const calls: string[] = []
+    const memDb = openMemDb()
+    const written: PdfOcrPageCache[] = []
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      {},
+      {
+        ...memDeps(calls, memDb),
+        readPageSizes: sizes612x792,
+        writePageCache: async (cache) => {
+          written.push(cache)
+        },
+      },
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      memDb.close()
+      return
+    }
+    // 3 页全路由且有 spans → 3 份缓存，字段对齐单页识别
+    expect(written.map((cache) => cache.page).sort()).toEqual([1, 2, 3])
+    for (const cache of written) {
+      expect(cache.fileFingerprint).toBe('fake-fp-1')
+      expect(cache.pageWidth).toBe(612)
+      expect(cache.pageHeight).toBe(792)
+      expect(cache.ocrScale).toBe(2)
+      expect(typeof cache.createdAt).toBe('string')
+      // 词来自 spans 文本（`P${page} 标题` → P1/标/题…），非 blocks.bbox 反推
+      const pageTag = `P${cache.page}`
+      expect(cache.words.slice(0, 3).map((word) => word.text)).toEqual([pageTag, '标', '题'])
+      expect(cache.words.map((word) => word.text).join('')).toBe(
+        `${pageTag}标题${pageTag}正文第一段`,
+      )
+      for (const word of cache.words) {
+        expect(word.bbox.x0).toBeGreaterThanOrEqual(0)
+        expect(word.bbox.x1).toBeLessThanOrEqual(1)
+        expect(word.bbox.y0).toBeGreaterThanOrEqual(0)
+        expect(word.bbox.y1).toBeLessThanOrEqual(1)
+        expect(word.bbox.x1).toBeGreaterThan(word.bbox.x0)
+      }
+    }
+    memDb.close()
+  })
+
+  it('原生直提页不写空 cache（混合路由只有 OCR 页落盘）', async () => {
+    const memDb = openMemDb()
+    const written: PdfOcrPageCache[] = []
+    const mixedLoader = (async () => ({
+      OcrMode: { Auto: 'Auto' },
+      processPdfWithOcr: async (_data: unknown, options: { pageNumbers?: number[] }) => {
+        const pageNumbers = options.pageNumbers ?? [1, 2, 3]
+        return {
+          pagesRoutedToOcr: [1, 3],
+          pages: pageNumbers.map((page) =>
+            page === 2
+              ? { pageNumber: page, markdown: `# P${page} 标题\n\nP${page} 原生正文`, spans: [] }
+              : {
+                  pageNumber: page,
+                  markdown: `# P${page} 标题\n\nP${page} 正文第一段`,
+                  spans: [
+                    { text: `P${page} 正文第一段`, confidence: 0.9, x: 1, y: 2, width: 3, height: 4 },
+                  ],
+                },
+          ),
+        }
+      },
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      {},
+      {
+        loadInspector: mixedLoader,
+        ensureRuntime: async () => ok({ modelDir: 'models' }),
+        readPdf: async () => Buffer.from('pdf'),
+        openDb: () => memDb,
+        readPageSizes: sizes612x792,
+        writePageCache: async (cache) => {
+          written.push(cache)
+        },
+      },
+    )
+    expect(result.ok).toBe(true)
+    expect(written.map((cache) => cache.page).sort()).toEqual([1, 3])
+    expect(written.every((cache) => cache.words.length > 0)).toBe(true)
+    memDb.close()
+  })
+
+  it('尺寸缺失则不写 cache，导入仍成功（停手路径）', async () => {
+    const calls: string[] = []
+    const memDb = openMemDb()
+    const written: PdfOcrPageCache[] = []
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      {},
+      {
+        ...memDeps(calls, memDb),
+        readPageSizes: async () => new Map(),
+        writePageCache: async (cache) => {
+          written.push(cache)
+        },
+      },
+    )
+    expect(result.ok).toBe(true)
+    expect(written).toEqual([])
+    memDb.close()
+  })
+
+  it('缓存写入失败不回滚 SQLite（记日志即可）', async () => {
+    const calls: string[] = []
+    const memDb = openMemDb()
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      {},
+      {
+        ...memDeps(calls, memDb),
+        readPageSizes: sizes612x792,
+        writePageCache: async () => {
+          throw new Error('disk full')
+        },
+      },
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      memDb.close()
+      return
+    }
+    expect(countBookBlocks(memDb, result.value.bookId)).toBe(6)
     memDb.close()
   })
 })

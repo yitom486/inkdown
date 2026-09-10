@@ -75,4 +75,25 @@ describe('normalizeInspectorSpans', () => {
       ),
     ).toEqual([])
   })
+
+  it('U1：有宽高词全落在 0–1；无/非法宽高一律为空', () => {
+    const words = normalizeInspectorSpans(
+      [{ text: '甲乙丙', confidence: 0.9, x: 560, y: 750, width: 30, height: 30 }],
+      612,
+      792,
+    )
+    expect(words).toHaveLength(3)
+    for (const word of words) {
+      expect(word.bbox.x0).toBeGreaterThanOrEqual(0)
+      expect(word.bbox.x1).toBeLessThanOrEqual(1)
+      expect(word.bbox.y0).toBeGreaterThanOrEqual(0)
+      expect(word.bbox.y1).toBeLessThanOrEqual(1)
+    }
+    const span = [{ text: '甲', confidence: 0.9, x: 0, y: 0, width: 10, height: 10 }]
+    expect(normalizeInspectorSpans(span, 0, 792)).toEqual([])
+    expect(normalizeInspectorSpans(span, 612, 0)).toEqual([])
+    expect(normalizeInspectorSpans(span, Number.NaN, 792)).toEqual([])
+    expect(normalizeInspectorSpans(span, 612, Number.NaN)).toEqual([])
+    expect(normalizeInspectorSpans(span, -612, 792)).toEqual([])
+  })
 })

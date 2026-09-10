@@ -15,4 +15,10 @@ describe('classifyMarkProposalFailure', () => {
     expect(guide.canOpenChapter).toBe(false)
     expect(guide.canSelectText).toBe(false)
   })
+
+  it('U1：无字层人话归到可划词引导（不新 code）', () => {
+    const guide = classifyMarkProposalFailure('本页未建立可定位文字层，请识别本页后重试', 2)
+    expect(guide.message).toBe('本页未建立可定位文字层，请识别本页后重试')
+    expect(guide.canSelectText).toBe(true)
+  })
 })

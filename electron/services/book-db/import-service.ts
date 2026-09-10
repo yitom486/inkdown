@@ -5,6 +5,7 @@ import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 import { buildBookIndex } from '@shared/reader/book-index'
 import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@shared/types/ocr'
 import type {
   RosettaActiveImport,
   RosettaImportPayload,
@@ -12,7 +13,10 @@ import type {
   RosettaImportStats,
 } from '@shared/types/rosetta'
 import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
+import { normalizeInspectorSpans } from '@shared/reader/ocr-page-words'
 import { ensureInspectorOcrRuntime } from '../ocr/inspector-ocr-runtime'
+import { writePdfOcrPageCache } from '../ocr/ocr-page-cache'
+import { readPdfPageSizes } from '../ocr/pdf-page-geometry'
 import { openBookDb } from './open-book-db'
 import {
   ensureImportBookRow,
@@ -33,6 +37,13 @@ export interface RosettaImportDeps {
   readPdf?: (filePath: string) => Promise<Buffer>
   /** 默认走 userData 落盘库；单测注入 :memory: 库 */
   openDb?: (fingerprint: string) => DatabaseSync
+  /** U1：只读页尺寸（默认 pdfjs legacy getPage scale=1）；单测注入假尺寸 */
+  readPageSizes?: (
+    data: Buffer,
+    pages: readonly number[],
+  ) => Promise<Map<number, { width: number; height: number }>>
+  /** U1：页词缓存落盘（默认 userData/ocr-cache）；写入失败只记日志不回滚 */
+  writePageCache?: (cache: PdfOcrPageCache) => Promise<void>
 }
 
 export interface RosettaImportHooks {
@@ -75,6 +86,70 @@ export function formatRosettaImportDoneMessage(stats: RosettaImportStats): strin
   const suggested = stats.ocrSuggestedPages.length
   if (suggested <= 0) return base
   return `${base}，${suggested} 页原生质量较差可手动识别`
+}
+
+/**
+ * U1：同一轮 processPdfWithOcr 的 spans → 页词缓存（打开即划词/Adopt 可定位）。
+ * 只写「本轮有 spans」的 OCR 页：原生直提页 spans 为空，天然跳过，
+ * 永不写空缓存盖掉原生文字层；只读 chunkSpans，不碰 blocks.bbox。
+ * 尺寸来自只读几何（与 recognizePdfPage 同一约定）；拿不到真实尺寸的页
+ * 跳过（不用假尺寸）；words 为空不写；写入失败只记日志（可「识别本页」补）。
+ */
+async function persistOcrPageCaches(args: {
+  fingerprint: string
+  scale: number
+  data: Buffer
+  spansByPage: ReadonlyMap<number, readonly InspectorSpanLike[]>
+  routed: readonly number[]
+  deps: RosettaImportDeps | undefined
+  log: (message: string) => void
+}): Promise<void> {
+  const routedSet = new Set(args.routed)
+  const candidates = new Map<number, readonly InspectorSpanLike[]>()
+  for (const [page, spans] of args.spansByPage) {
+    if (!Number.isInteger(page) || page < 1) continue
+    const list = spans ?? []
+    // 只写 OCR 页（路由集合或本轮有 spans）；纯文字直提页两者皆无，天然跳过。
+    // 有路由无 spans 的页不写空缓存（words.length>0 兜底，不盖原生层）。
+    if (!routedSet.has(page) && list.length === 0) continue
+    candidates.set(page, list)
+  }
+  if (candidates.size === 0) return
+  let sizes: Map<number, { width: number; height: number }>
+  try {
+    const readSizes = args.deps?.readPageSizes ?? readPdfPageSizes
+    sizes = await readSizes(args.data, [...candidates.keys()])
+  } catch (cause) {
+    args.log(
+      `页词缓存跳过：页面尺寸读取失败 ${cause instanceof Error ? cause.message : '未知错误'}`,
+    )
+    return
+  }
+  const writeCache = args.deps?.writePageCache ?? writePdfOcrPageCache
+  for (const [page, spans] of candidates) {
+    const size = sizes.get(page)
+    if (!size || !(size.width > 0) || !(size.height > 0)) {
+      args.log(`页词缓存跳过：第 ${page} 页无真实尺寸，不用假尺寸归一化`)
+      continue
+    }
+    const words = normalizeInspectorSpans([...spans], size.width, size.height)
+    if (words.length === 0) continue
+    try {
+      await writeCache({
+        fileFingerprint: args.fingerprint,
+        page,
+        pageWidth: size.width,
+        pageHeight: size.height,
+        ocrScale: args.scale,
+        words,
+        createdAt: new Date().toISOString(),
+      })
+    } catch (cause) {
+      args.log(
+        `页词缓存写入失败：第 ${page} 页 ${cause instanceof Error ? cause.message : '未知错误'}（已入库不受影响，可「识别本页」补）`,
+      )
+    }
+  }
 }
 
 /**
@@ -326,6 +401,22 @@ async function runImport(
     }
     markPagesCompleted(db, bookId, rangePages)
     for (const page of rangePages) done.add(page)
+    // U1：同一轮 spans → 页词缓存（SQLite 成功之后；失败只记日志，永不回滚/重跑 OCR）
+    try {
+      await persistOcrPageCaches({
+        fingerprint,
+        scale,
+        data,
+        spansByPage: chunkSpans,
+        routed: routed.filter((page): page is number => Number.isInteger(page)),
+        deps,
+        log,
+      })
+    } catch (cause) {
+      log(
+        `页词缓存跳过：${start}-${end} ${cause instanceof Error ? cause.message : '未知错误'}（已入库不受影响）`,
+      )
+    }
     track(end, 'ocr')
     log(
       `chunk ${chunkNo}/${totalChunks} ${start}-${end} ${Date.now() - chunkStart}ms ` +
