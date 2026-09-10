@@ -25,7 +25,24 @@ async function openWorkspaceFile(window: Page, fileName: string, query: string):
   await expect(dialog).toBeHidden({ timeout: 10_000 })
 }
 
+async function waitForE2eReaderHook(window: Page): Promise<void> {
+  await expect(window.locator('#main').locator('foliate-view').first()).toBeAttached({
+    timeout: 20_000,
+  })
+  await expect(window.locator('#main').locator('.foliate-reader-host')).toHaveAttribute(
+    'data-e2e-section-text',
+    /Inkdown E2E minimal/,
+    { timeout: 20_000 },
+  )
+  await window.waitForFunction(
+    () => typeof window.__inkdownE2eReader?.selectText === 'function',
+    undefined,
+    { timeout: 20_000 },
+  )
+}
+
 async function e2eSelectText(window: Page, excerpt: string): Promise<void> {
+  await waitForE2eReaderHook(window)
   const ok = await window.evaluate(
     (text) => window.__inkdownE2eReader?.selectText(text) ?? false,
     excerpt,

@@ -6,9 +6,8 @@ import { launchBuiltApp } from './helpers/launch-app'
 
 /**
  * 扫描版 PDF 单页 OCR 回归：
- * 1. 工具栏「识别本页」→ 缓存落盘（按钮变“重新识别本页”）；
- * 2. 文字层挂载且含识别文本（几何链路不断）；
- * 3. Agent 当前页正文可读（文本链路不断）。
+ * 1. 无文字层当前页会自动识别；若仍显示「本页未识别」，再经「更多工具 → 识别本页」触发；
+ * 2. 工具栏出现「已识别」且文字层含识别文本（几何链路不断）。
  * 引擎走主进程 pdf-inspector（失败回退 tesseract，不影响断言）。
  * 本地如设 PDFIUM_LIB_PATH / ORT_DYLIB_PATH / PDF_INSPECTOR_MODEL_CACHE
  * 则复用本地运行时免下载，CI 走在线下载链路。
@@ -63,13 +62,20 @@ test.describe('扫描版 PDF 单页 OCR', () => {
       await expect(panel.getByText('1 / 1').first()).toBeVisible({ timeout: 20_000 })
       await expect(panel.locator('canvas').first()).toBeVisible({ timeout: 10_000 })
 
-      const recognizeButton = panel.getByRole('button', { name: '识别本页' })
-      await expect(recognizeButton).toBeVisible({ timeout: 20_000 })
-      await recognizeButton.click()
+      const more = panel.getByRole('button', { name: '更多工具' })
+      await expect(more).toBeVisible({ timeout: 20_000 })
 
-      await expect(panel.getByRole('button', { name: '重新识别本页' })).toBeVisible({
-        timeout: 240_000,
-      })
+      const unread = panel.getByText(/本页未识别/)
+      const busy = panel.getByText(/识别中…/)
+      const done = panel.getByText(/已识别 \d+\/\d+/)
+      await expect(unread.or(busy).or(done)).toBeVisible({ timeout: 20_000 })
+
+      if (await unread.isVisible()) {
+        await more.click()
+        await window.getByRole('menuitem', { name: '识别本页', exact: true }).click()
+      }
+
+      await expect(done).toBeVisible({ timeout: 240_000 })
       await expect(panel.locator('.pdf-text-layer-host')).toContainText('Hello', {
         timeout: 10_000,
       })

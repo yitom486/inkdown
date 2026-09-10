@@ -4,6 +4,7 @@ import {
   E2E_WEB_DOC_INSTALL_URL,
   E2E_WEB_DOC_START_URL,
   webDocFixtureDir,
+  welcomeWebDocUrlField,
 } from './helpers/web-doc-fixture'
 
 function webDocFrame(window: Awaited<ReturnType<Awaited<ReturnType<typeof launchBuiltApp>>['firstWindow']>>) {
@@ -22,8 +23,8 @@ test.describe('在线文档阅读', () => {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
 
-      await window.getByPlaceholder('https://react.dev/learn').fill(E2E_WEB_DOC_START_URL)
-      await window.getByPlaceholder('https://react.dev/learn').press('Enter')
+      await welcomeWebDocUrlField(window).fill(E2E_WEB_DOC_START_URL)
+      await welcomeWebDocUrlField(window).press('Enter')
 
       // 侧栏 / 主区 / Agent 横幅都可能含「在线文档」，须限定主区且 exact
       const panel = mainPanel(window)
@@ -46,13 +47,14 @@ test.describe('在线文档阅读', () => {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
 
-      await window.getByPlaceholder('https://react.dev/learn').fill(E2E_WEB_DOC_START_URL)
-      await window.getByPlaceholder('https://react.dev/learn').press('Enter')
+      await welcomeWebDocUrlField(window).fill(E2E_WEB_DOC_START_URL)
+      await welcomeWebDocUrlField(window).press('Enter')
 
-      const addressBar = window.locator('input[placeholder="https://"]')
+      const panel = mainPanel(window)
+      const addressBar = panel.locator('input[placeholder="https://"]')
       await expect(addressBar).toBeVisible({ timeout: 15_000 })
       await addressBar.fill(E2E_WEB_DOC_INSTALL_URL)
-      await window.getByRole('button', { name: '前往', exact: true }).click()
+      await panel.getByRole('button', { name: '前往', exact: true }).click()
 
       const frame = webDocFrame(window)
       await expect(frame.getByRole('heading', { name: 'Installation' })).toBeVisible({ timeout: 15_000 })
@@ -69,8 +71,8 @@ test.describe('在线文档阅读', () => {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
 
-      await window.getByPlaceholder('https://react.dev/learn').fill(E2E_WEB_DOC_START_URL)
-      await window.getByPlaceholder('https://react.dev/learn').press('Enter')
+      await welcomeWebDocUrlField(window).fill(E2E_WEB_DOC_START_URL)
+      await welcomeWebDocUrlField(window).press('Enter')
 
       const panel = mainPanel(window)
       const tocButton = panel.getByRole('button', { name: '目录' })

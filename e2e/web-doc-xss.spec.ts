@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { launchBuiltApp } from './helpers/launch-app'
-import { E2E_WEB_DOC_XSS_URL, webDocFixtureDir } from './helpers/web-doc-fixture'
+import {
+  E2E_WEB_DOC_XSS_URL,
+  webDocFixtureDir,
+  welcomeWebDocUrlField,
+} from './helpers/web-doc-fixture'
 
 /**
  * 真浏览器 XSS 回归：happy-dom 下 DOMPurify 属性级行为失真，属性级断言只在
@@ -15,8 +19,8 @@ test.describe('在线文档 XSS 防护（真浏览器）', () => {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
 
-      await window.getByPlaceholder('https://react.dev/learn').fill(E2E_WEB_DOC_XSS_URL)
-      await window.getByPlaceholder('https://react.dev/learn').press('Enter')
+      await welcomeWebDocUrlField(window).fill(E2E_WEB_DOC_XSS_URL)
+      await welcomeWebDocUrlField(window).press('Enter')
 
       const frameLoc = window.frameLocator('.web-doc-viewer-host iframe')
       await expect(frameLoc.getByRole('heading', { name: 'XSS Probe' })).toBeVisible({
