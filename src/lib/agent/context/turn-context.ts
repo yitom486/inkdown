@@ -20,6 +20,8 @@ export interface InkdownReadingState {
   next?: string
   /** 目录单元总数（EPUB/MOBI 为章节数，PDF 为大纲项数） */
   unitCount?: number
+  /** T1：PDF 当前页（正整数）；EPUB 不填，禁止编造 */
+  page?: number
 }
 
 export interface InkdownTurnContext {
@@ -62,13 +64,13 @@ export function formatTurnContextBlock(
     { ...context, reading },
     // 退化 1：丢掉顶层目录（可选、体积最大）
     { ...context, reading, tocTopLevel: undefined },
-    // 退化 2：只保留进度与当前位置
+    // 退化 2：只保留进度与当前位置（T1：页码是位置本身，退化也不丢）
     {
       documentChanged: context.documentChanged,
       activeDocument: context.activeDocument,
       ...(context.hasSelection ? { hasSelection: true } : {}),
       reading: reading
-        ? compactReading({ percent: reading.percent, current: reading.current })
+        ? compactReading({ percent: reading.percent, current: reading.current, page: reading.page })
         : undefined,
     },
     // 退化 3：只剩文件本身

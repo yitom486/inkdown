@@ -79,4 +79,35 @@ describe('reader-navigation-store', () => {
     expect(useReaderNavigationStore.getState().nav.current?.label).toContain('第一章')
     expect(useReaderNavigationStore.getState().navIntent?.flatIndex).toBe(1)
   })
+
+  it('T1：同一章内翻页更新 pageNum，页码不变不无意义 set', () => {
+    const units = [
+      { label: '第一章', href: '1', level: 0 },
+      { label: '附录', href: '30', level: 0 },
+    ]
+    const store = useReaderNavigationStore
+    store.getState().syncPdf(units, 19)
+    expect(store.getState().pageNum).toBe(19)
+    const firstLabel = store.getState().nav.current?.label
+    store.getState().syncPdf(units, 20)
+    // 同一章（19/20 都落在 href=1 的单元），nav 不变但页码更新
+    expect(store.getState().nav.current?.label).toBe(firstLabel)
+    expect(store.getState().pageNum).toBe(20)
+
+    let sets = 0
+    const unsubscribe = store.subscribe(() => {
+      sets += 1
+    })
+    store.getState().syncPdf(units, 20)
+    expect(sets).toBe(0)
+    unsubscribe()
+  })
+
+  it('T1：beginSession 清掉 pageNum', () => {
+    const units = [{ label: '第一章', href: '1', level: 0 }]
+    useReaderNavigationStore.getState().syncPdf(units, 5)
+    expect(useReaderNavigationStore.getState().pageNum).toBe(5)
+    useReaderNavigationStore.getState().beginSession('/other.pdf', 'pdf')
+    expect(useReaderNavigationStore.getState().pageNum).toBeNull()
+  })
 })

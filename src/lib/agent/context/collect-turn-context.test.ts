@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { collectTocTopLevel, TOC_TOP_LEVEL_LIMIT } from './collect-turn-context'
+import { collectReadingState, collectTocTopLevel, TOC_TOP_LEVEL_LIMIT } from './collect-turn-context'
+import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 
 describe('collectTocTopLevel', () => {
   it('取最小 level 的条目并去重、截断条数', () => {
@@ -26,5 +27,49 @@ describe('collectTocTopLevel', () => {
 
   it('空目录返回 undefined', () => {
     expect(collectTocTopLevel([])).toBeUndefined()
+  })
+})
+
+describe('collectReadingState', () => {
+  function setupPdf(pageNum: number | null) {
+    useReaderNavigationStore.setState({
+      filePath: '/book/a.pdf',
+      format: 'pdf',
+      ready: true,
+      units: [{ label: '第一章', href: '1', level: 0 }],
+      nav: {
+        current: { label: '第一章', href: '1', level: 0 },
+        previous: null,
+        next: null,
+        currentIndex: 0,
+        previousIndex: -1,
+        nextIndex: -1,
+        flatIndex: 0,
+      },
+      pageNum,
+    })
+  }
+
+  it('T1：PDF 产出 page，EPUB 不填页码', () => {
+    setupPdf(36)
+    const pdf = collectReadingState({ path: '/book/a.pdf', kind: 'pdf', name: 'a.pdf' })
+    expect(pdf?.page).toBe(36)
+    expect(pdf?.current).toBe('第一章')
+
+    useReaderNavigationStore.setState({ filePath: '/book/b.epub', format: 'epub', pageNum: null })
+    const epub = collectReadingState({ path: '/book/b.epub', kind: 'epub', name: 'b.epub' })
+    expect(epub).not.toHaveProperty('page')
+  })
+
+  it('未就绪或无页码时无 page', () => {
+    setupPdf(null)
+    expect(
+      collectReadingState({ path: '/book/a.pdf', kind: 'pdf', name: 'a.pdf' })?.page,
+    ).toBeUndefined()
+    useReaderNavigationStore.setState({ ready: false })
+    expect(
+      collectReadingState({ path: '/book/a.pdf', kind: 'pdf', name: 'a.pdf' }),
+    ).toBeUndefined()
+    useReaderNavigationStore.setState({ ready: true })
   })
 })

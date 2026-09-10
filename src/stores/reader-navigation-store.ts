@@ -48,6 +48,8 @@ interface ReaderNavigationStore {
   nav: AdjacentFlatNavState<ReaderUnit>
   navIntent: NavIntent | null
   ready: boolean
+  /** T1：PDF 当前页（1-based）；EPUB/web/未就绪为 null，仅 Agent 快照用 */
+  pageNum: number | null
   beginSession: (filePath: string, format: ReaderFormat) => void
   setUnits: (units: ReaderNavUnit[]) => void
   setReady: (ready: boolean) => void
@@ -65,6 +67,7 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
   nav: EMPTY_READER_NAV,
   navIntent: null,
   ready: false,
+  pageNum: null,
 
   beginSession: (filePath, format) => {
     set({
@@ -74,6 +77,7 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
       nav: EMPTY_READER_NAV,
       navIntent: null,
       ready: false,
+      pageNum: null,
     })
   },
 
@@ -98,8 +102,9 @@ export const useReaderNavigationStore = create<ReaderNavigationStore>((set, get)
     const prev = get()
     if (isNavIntentLocked(prev.navIntent)) return
     const nav = syncPdfNavigation(units, pageNum)
-    if (prev.format === 'pdf' && prev.units === units && isSameNav(prev.nav, nav)) return
-    set({ units, format: 'pdf', nav })
+    // T1：同一章内翻页时 nav 不变，但页码变了也要写；三者全同才跳过
+    if (prev.format === 'pdf' && prev.units === units && isSameNav(prev.nav, nav) && prev.pageNum === pageNum) return
+    set({ units, format: 'pdf', nav, pageNum })
   },
 
   syncWeb: (units, pageUrl, flatIndex) => {

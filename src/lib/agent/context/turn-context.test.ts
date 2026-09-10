@@ -59,6 +59,38 @@ describe('formatTurnContextBlock', () => {
     // 10 条超长标题会超限，应退化掉 tocTopLevel 仍保留文件信息
     expect(json).toMatchObject({ activeDocument: { kind: 'epub' } })
   })
+
+  it('T1：JSON 含 reading.page；退化档在体积允许时保留页码', () => {
+    const text = formatTurnContextBlock({
+      documentChanged: false,
+      activeDocument: { path: '/book/a.pdf', kind: 'pdf', name: 'a.pdf' },
+      reading: { percent: 10, current: '第一章', page: 36 },
+    })
+    const json = JSON.parse(text.slice(text.indexOf('\n') + 1, text.lastIndexOf('\n'))) as {
+      reading?: { page?: number }
+    }
+    expect(json.reading?.page).toBe(36)
+
+    // 强行压体积：退化到只剩进度+当前位置+页码，页码不丢
+    //（previous/next 各 200 字把 level-1 撑爆，level-2 恰好装下）
+    const squeezed = formatTurnContextBlock(
+      {
+        documentChanged: false,
+        activeDocument: { path: '/book/a.pdf', kind: 'pdf', name: 'a.pdf' },
+        reading: {
+          percent: 10,
+          current: '第一章',
+          previous: '前'.repeat(200),
+          next: '后'.repeat(200),
+          page: 36,
+        },
+      },
+      400,
+    )
+    expect(squeezed.length).toBeLessThanOrEqual(400)
+    expect(squeezed).toContain('"page":36')
+    expect(squeezed).not.toContain('前前')
+  })
 })
 
 describe('documentKey', () => {
@@ -91,6 +123,11 @@ describe('INKDOWN_STATIC_SKILL', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('「选区」')
     expect(INKDOWN_STATIC_SKILL).toContain('Match the **language of the user')
     expect(INKDOWN_STATIC_SKILL).not.toContain('默认使用简体中文')
+  })
+
+  it('T1：turn-context 节说明 reading.page 的用法与边界', () => {
+    expect(INKDOWN_STATIC_SKILL).toContain('reading.page')
+    expect(INKDOWN_STATIC_SKILL).toContain('inkdown_read(scope=viewport)')
   })
 
   it('S1.3：已入库只读库口径与代码一致，不再教整书 OCR', () => {

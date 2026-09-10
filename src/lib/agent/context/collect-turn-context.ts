@@ -92,6 +92,10 @@ export function collectReadingState(
     previous: reader.nav.previous?.label,
     next: reader.nav.next?.label,
     unitCount: unitCount > 0 ? unitCount : undefined,
+    // T1：仅 PDF 写当前页；EPUB 连键都不给（不许编页码）
+    ...(doc.kind === 'pdf' && typeof reader.pageNum === 'number' && reader.pageNum >= 1
+      ? { page: reader.pageNum }
+      : {}),
   }
 }
 
