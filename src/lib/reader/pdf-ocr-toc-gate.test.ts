@@ -14,12 +14,18 @@ describe('canUseOcrToc', () => {
     ).toBe(true)
   })
 
-  it('有内置目录：混合与纯扫描都不用 OCR（不覆盖）', () => {
+  it('有内置目录：混合与纯扫描仍可用 OCR（书签不锁入口）', () => {
     expect(
       canUseOcrToc({ isScannedPdf: false, isMixedPdf: true, outlineSource: 'embedded' }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       canUseOcrToc({ isScannedPdf: true, isMixedPdf: false, outlineSource: 'embedded' }),
+    ).toBe(true)
+  })
+
+  it('纯文字 PDF 有内置目录：仍不可用（不打扰）', () => {
+    expect(
+      canUseOcrToc({ isScannedPdf: false, isMixedPdf: false, outlineSource: 'embedded' }),
     ).toBe(false)
   })
 

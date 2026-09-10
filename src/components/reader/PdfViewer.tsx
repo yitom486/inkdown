@@ -178,6 +178,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   /** 混合文档：部分抽样页无文字层；仅放行单页自动 OCR，不触发扫描横幅与后台预识别 */
   const [isMixedPdf, setIsMixedPdf] = useState(false)
   const [ocrBannerDismissed, setOcrBannerDismissed] = useState(false)
+  /** 瘦提示关闭态：embedded+扫描/混合时提示可改识别印刷目录（不评判书签质量） */
+  const [bookmarkSlimDismissed, setBookmarkSlimDismissed] = useState(false)
   const [ocrTocEditorOpen, setOcrTocEditorOpen] = useState(false)
   /** OCR 目录缓存状态的独立提示（不复用 outlineNotice：后者在 OCR 侧栏下被抹掉） */
   const [ocrTocNotice, setOcrTocNotice] = useState<OcrTocNotice | null>(null)
@@ -448,6 +450,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setOcrTocEditMode(false)
     setOcrTocEntries([])
     setOcrTocNotice(null)
+    setBookmarkSlimDismissed(false)
   }, [filePath, fileFingerprint])
 
   useEffect(() => {
@@ -612,6 +615,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const handleRecognizeToc = useCallback(async () => {
     if (!fileFingerprint) return
+    // 全书导入进行中禁止第二趟 processPdfWithOcr（与 W3 单页互斥同一道门）
+    if (rosettaImport.state === 'running') {
+      toast.error('全书识别进行中，目录识别请等待完成或取消后再试')
+      return
+    }
     // 编辑器有未保存草稿时不得悄悄覆盖：先让人保存或取消
     if (ocrTocEditMode) {
       toast.error(TOC_DRAFT_GUARD_MESSAGE)
@@ -655,7 +663,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       if (isLiveTocOp(lease, session)) setOcrRecognizing(false)
       endTocOp(lease)
     }
-  }, [fileFingerprint, filePath, ocrTocEditMode, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale, numPages, beginTocOp, endTocOp, isLiveTocOp])
+  }, [fileFingerprint, filePath, ocrTocEditMode, tocPageFrom, tocPageTo, tocPageOffset, pdfOcrScale, numPages, beginTocOp, endTocOp, isLiveTocOp, rosettaImport.state])
 
   const handleSaveOcrToc = useCallback(
     async (entries: OcrTocEntry[]) => {
@@ -685,6 +693,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         }
         setOcrTocEntries(cache.entries)
         setOutlineUnits(cache.units)
+        // 只保存校正也要切源：自建目录一旦落盘即为准（侧栏/切章/入库全走它）
+        setOutlineSource('ocr')
         setOcrTocEditMode(false)
         // 用户保存确认（reviewed）：提示立即消失
         setOcrTocNotice(null)
@@ -703,6 +713,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
    */
   const handleDetectTocPages = useCallback(async () => {
     if (!fileFingerprint) return
+    // 探测同样跑全书解析，导入进行中一并挡住
+    if (rosettaImport.state === 'running') {
+      toast.error('全书识别进行中，目录识别请等待完成或取消后再试')
+      return
+    }
     // 编辑器有未保存草稿时不得动范围输入：先让人保存或取消
     if (ocrTocEditMode) {
       toast.error(TOC_DRAFT_GUARD_MESSAGE)
@@ -750,7 +765,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       if (isLiveTocOp(lease, session)) setTocDetecting(false)
       endTocOp(lease)
     }
-  }, [fileFingerprint, filePath, ocrTocEditMode, numPages, tocPageFrom, tocPageTo, beginTocOp, endTocOp, isLiveTocOp])
+  }, [fileFingerprint, filePath, ocrTocEditMode, numPages, tocPageFrom, tocPageTo, beginTocOp, endTocOp, isLiveTocOp, rosettaImport.state])
 
   /**
    * 选中探测候选：只填页码范围。busy 或编辑器草稿未决时拒绝并明示原因；
@@ -916,7 +931,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setTocPageOffset(tocPageTo)
   }, [outlineSource, tocPageTo])
 
-  /** OCR 目录可用（纯扫描沿用旧行为；混合无内置目录新增入口与缓存恢复） */
+  /** OCR 目录可用（纯文字不用；扫描/混合含 embedded 可用，自建保存后为准） */
   const ocrTocAvailable = canUseOcrToc({ outlineSource, isScannedPdf, isMixedPdf })
   /** 目录三操作（探测/识别/保存）任一运行中：可见入口同步禁用（锁负责逻辑互斥） */
   const ocrTocBusy = ocrRecognizing || tocDetecting || ocrTocSaving
@@ -1920,7 +1935,17 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     moreMenuItems.push({
       key: 're-recognize-toc',
       label: '重新识别目录',
-      disabled: ocrRecognizing || tocDetecting,
+      disabled: ocrRecognizing || tocDetecting || rosettaImport.state === 'running',
+      onSelect: () => setOcrTocEditorOpen(true),
+    })
+  }
+  // 自建目录入口：embedded + 扫描/混合且无 OCR 目录时出现（不自动弹横幅，由瘦提示指引）
+  if (ocrTocAvailable && outlineSource === 'embedded') {
+    moreMenuItems.push({
+      key: 'recognize-toc',
+      label: '识别印刷目录',
+      title: '探测印刷目录页并识别自建目录（书签保留，保存后以自建目录为准；全书导入中不可用）',
+      disabled: ocrRecognizing || tocDetecting || rosettaImport.state === 'running',
       onSelect: () => setOcrTocEditorOpen(true),
     })
   }
@@ -2064,7 +2089,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             size="sm"
             variant="ghost"
             className="h-6 text-xs"
-            disabled={ocrTocBusy}
+            disabled={ocrTocBusy || rosettaImport.state === 'running'}
             onClick={() => void handleRecognizeToc()}
           >
             重新识别
@@ -2076,6 +2101,35 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             className="shrink-0"
             aria-label="关闭提示"
             onClick={() => setOcrTocNotice(null)}
+          >
+            <X />
+          </Button>
+        </div>
+      ) : null}
+      {/* 瘦提示：用书签但可改识别（不自动弹识别横幅，不评判书签质量） */}
+      {outlineSource === 'embedded' &&
+      ocrTocAvailable &&
+      !bookmarkSlimDismissed &&
+      !showOcrBanner ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-4 py-1.5 text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1">正在使用 PDF 自带书签，可改为识别印刷目录（保存后以自建目录为准）</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 text-xs"
+            disabled={ocrTocBusy || rosettaImport.state === 'running'}
+            onClick={() => setOcrTocEditorOpen(true)}
+          >
+            识别印刷目录
+          </Button>
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            className="shrink-0"
+            aria-label="关闭提示"
+            onClick={() => setBookmarkSlimDismissed(true)}
           >
             <X />
           </Button>

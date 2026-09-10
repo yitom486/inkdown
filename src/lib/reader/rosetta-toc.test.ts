@@ -33,4 +33,21 @@ describe('resolveRosettaTocEntries', () => {
       }),
     ).toEqual([{ title: '第1章', realPage: 13, level: 1 }])
   })
+
+  it('自建目录保存后 outlineUnits 已是课名：入库切章用课名，不用旧书签/旧印刷条目', () => {
+    expect(
+      resolveRosettaTocEntries({
+        outlineUnits: [
+          { label: '绪论', href: '13', level: 1 },
+          { label: '第一章 计算机系统概述', href: '25', level: 1 },
+        ],
+        ocrEntries: [{ title: '旧印刷条目', printedPage: 1, level: 1 }],
+        pageOffset: 12,
+        pageCount: 340,
+      }),
+    ).toEqual([
+      { title: '绪论', realPage: 13, level: 1 },
+      { title: '第一章 计算机系统概述', realPage: 25, level: 1 },
+    ])
+  })
 })
