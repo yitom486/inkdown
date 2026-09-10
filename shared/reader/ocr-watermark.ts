@@ -107,6 +107,35 @@ export function discoverWatermarksByPosition(
   return [...found].sort()
 }
 
+/** V2 斜戳印检测框长宽比区间：接近方形（对角线扫出的框）；横排正文薄长，不在此列 */
+const STAMP_BOX_ASPECT_LO = 0.4
+const STAMP_BOX_ASPECT_HI = 2.5
+
+/**
+ * V2 persist 侧 span 预过滤：归一化文本命中已证水印集合、且检测框接近方形
+ * ⇒ 斜戳印行，命中层不收。横排正文即使文本恰好命中（如页脚重复串）也因
+ * 长宽比豁免；纯文本频次不定罪（必须已证集合成员）。不改 schema。
+ */
+export function isDiagonalStampSpan(
+  span: InspectorSpanLike,
+  watermarks: ReadonlySet<string>,
+): boolean {
+  if (!span || typeof span.text !== 'string') return false
+  if (!(span.width > 0) || !(span.height > 0)) return false
+  const norm = normalizeWatermarkText(span.text)
+  if (!norm || norm.length > MAX_WATERMARK_CHARS) return false
+  let known = false
+  for (const watermark of watermarks) {
+    if (watermark.includes(norm) || norm.includes(watermark)) {
+      known = true
+      break
+    }
+  }
+  if (!known) return false
+  const aspect = span.width / span.height
+  return aspect >= STAMP_BOX_ASPECT_LO && aspect <= STAMP_BOX_ASPECT_HI
+}
+
 /** 碎片亲和：短行长度上限；仅补几何发现的漏网碎片 */
 const MAX_FRAGMENT_CHARS = 10
 /** 碎片亲和要求的水印母体最小长度，避免短水印误吸正文 */

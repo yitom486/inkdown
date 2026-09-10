@@ -13,7 +13,8 @@ import type {
   RosettaImportStats,
 } from '@shared/types/rosetta'
 import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
-import { normalizeInspectorSpans } from '@shared/reader/ocr-page-words'
+import { filterOcrHitLayerWords, normalizeInspectorSpans } from '@shared/reader/ocr-page-words'
+import { discoverWatermarksByPosition, isDiagonalStampSpan } from '@shared/reader/ocr-watermark'
 import { ensureInspectorOcrRuntime } from '../ocr/inspector-ocr-runtime'
 import { deleteAllPdfOcrPageCaches, writePdfOcrPageCache } from '../ocr/ocr-page-cache'
 import { deletePdfOcrTocCache } from '../ocr/ocr-toc-cache'
@@ -136,6 +137,8 @@ export function formatRosettaImportDoneMessage(stats: RosettaImportStats): strin
  * 永不写空缓存盖掉原生文字层；只读 chunkSpans，不碰 blocks.bbox。
  * 尺寸来自只读几何（与 recognizePdfPage 同一约定）；拿不到真实尺寸的页
  * 跳过（不用假尺寸）；words 为空不写；写入失败只记日志（可「识别本页」补）。
+ * V2：写入前做命中层过滤（chunk 内跨页已证水印 + 方形框先丢 span，
+ * 再按行聚类丢斜戳印词），以后导入不再把戳印写进缓存。
  */
 async function persistOcrPageCaches(args: {
   fingerprint: string
@@ -147,6 +150,12 @@ async function persistOcrPageCaches(args: {
   log: (message: string) => void
 }): Promise<void> {
   const routedSet = new Set(args.routed)
+  // V2：chunk 内跨页几何发现已证水印（<3 页的 chunk 发现为空，仅走行聚类）
+  const watermarks = new Set(
+    discoverWatermarksByPosition(
+      [...args.spansByPage].map(([page, spans]) => ({ page, markdown: '', spans: spans ?? [] })),
+    ),
+  )
   const candidates = new Map<number, readonly InspectorSpanLike[]>()
   for (const [page, spans] of args.spansByPage) {
     if (!Number.isInteger(page) || page < 1) continue
@@ -154,7 +163,8 @@ async function persistOcrPageCaches(args: {
     // 只写 OCR 页（路由集合或本轮有 spans）；纯文字直提页两者皆无，天然跳过。
     // 有路由无 spans 的页不写空缓存（words.length>0 兜底，不盖原生层）。
     if (!routedSet.has(page) && list.length === 0) continue
-    candidates.set(page, list)
+    // V2：已证水印 + 方形检测框的斜戳印 span 先丢（横排正文长宽比豁免）
+    candidates.set(page, list.filter((span) => !isDiagonalStampSpan(span, watermarks)))
   }
   if (candidates.size === 0) return
   let sizes: Map<number, { width: number; height: number }>
@@ -174,7 +184,9 @@ async function persistOcrPageCaches(args: {
       args.log(`页词缓存跳过：第 ${page} 页无真实尺寸，不用假尺寸归一化`)
       continue
     }
-    const words = normalizeInspectorSpans([...spans], size.width, size.height)
+    const words = filterOcrHitLayerWords(
+      normalizeInspectorSpans([...spans], size.width, size.height),
+    )
     if (words.length === 0) continue
     try {
       await writeCache({

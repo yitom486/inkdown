@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  filterOcrHitLayerWords,
   normalizeInspectorSpans,
   ocrPageCacheToTextContent,
   pageHasNativeText,
   splitCjkUnits,
 } from './ocr-page-words'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import type { OcrPageWord, PdfOcrPageCache } from '@shared/types/ocr'
 
 describe('ocr-page-words', () => {
   it('pageHasNativeText 阈值', () => {
@@ -95,5 +96,99 @@ describe('normalizeInspectorSpans', () => {
     expect(normalizeInspectorSpans(span, Number.NaN, 792)).toEqual([])
     expect(normalizeInspectorSpans(span, 612, Number.NaN)).toEqual([])
     expect(normalizeInspectorSpans(span, -612, 792)).toEqual([])
+  })
+})
+
+describe('filterOcrHitLayerWords', () => {
+  const w = (text: string, x0: number, y0: number, x1: number, y1: number): OcrPageWord => ({
+    text,
+    bbox: { x0, y0, x1, y1 },
+  })
+  const bodyLine = (y0: number, chars = '甲乙丙丁戊己庚辛壬癸'): OcrPageWord[] =>
+    [...chars].map((char, i) => w(char, 0.1 + i * 0.03, y0, 0.125 + i * 0.03, y0 + 0.02))
+
+  it('水平正文行全部保留', () => {
+    const words = bodyLine(0.4)
+    expect(filterOcrHitLayerWords(words).map((word) => word.text).join('')).toBe(
+      '甲乙丙丁戊己庚辛壬癸',
+    )
+  })
+
+  it('中带斜戳印短行丢弃（高瘦字、行高巨大）', () => {
+    const stamp = ['戳', '印', '甲', '乙', '丙'].map((char, i) =>
+      w(char, 0.5 + i * 0.03, 0.4, 0.525 + i * 0.03, 0.55),
+    )
+    expect(filterOcrHitLayerWords(stamp)).toEqual([])
+  })
+
+  it('一行正文 + 对角短词：正文保留、戳印丢弃', () => {
+    const body = bodyLine(0.5, '正文段落内容测试')
+    const stamp = ['斜', '戳', '印'].map((char, i) =>
+      w(char, 0.5 + i * 0.03, 0.6, 0.525 + i * 0.03, 0.72),
+    )
+    const kept = filterOcrHitLayerWords([...body, ...stamp]).map((word) => word.text)
+    expect(kept.join('')).toBe('正文段落内容测试')
+  })
+
+  it('底部页码与顶部标题保留（边距豁免）', () => {
+    const pageNum = [w('3', 0.5, 0.97, 0.515, 0.985), w('6', 0.515, 0.97, 0.53, 0.985)]
+    expect(filterOcrHitLayerWords(pageNum)).toHaveLength(2)
+    const title = [...'本书标题'].map((char, i) => w(char, 0.3 + i * 0.03, 0.01, 0.325 + i * 0.03, 0.05))
+    expect(filterOcrHitLayerWords(title)).toHaveLength(4)
+  })
+
+  it('短标题与独立公式不误杀（行高正常）', () => {
+    const heading = ['第', '一', '章'].map((char, i) =>
+      w(char, 0.4 + i * 0.03, 0.3, 0.425 + i * 0.03, 0.325),
+    )
+    expect(filterOcrHitLayerWords(heading)).toHaveLength(3)
+    const bigHeading = ['绪', '论'].map((char, i) =>
+      w(char, 0.4 + i * 0.05, 0.3, 0.445 + i * 0.05, 0.353),
+    )
+    expect(filterOcrHitLayerWords(bigHeading)).toHaveLength(2)
+    const formula = ['∑', 'x', '=', '1'].map((char, i) =>
+      w(char, 0.4 + i * 0.03, 0.5, 0.425 + i * 0.03, 0.52),
+    )
+    expect(filterOcrHitLayerWords(formula)).toHaveLength(4)
+  })
+
+  it('行高离谱的中带行直接丢（字符再多也不收）', () => {
+    const words = [...'甲乙丙丁戊己庚辛'].map((char, i) =>
+      w(char, 0.1 + i * 0.03, 0.4, 0.125 + i * 0.03, 0.53),
+    )
+    expect(filterOcrHitLayerWords(words)).toEqual([])
+  })
+
+  it('密排段落链式合并成高行不误杀（中位字高门）', () => {
+    // 7 行密排正文：链式聚成一行（行高 0.128 ≥ 离谱线），中位字高正常 ⇒ 全保留
+    const para: OcrPageWord[] = []
+    for (let line = 0; line < 7; line += 1) {
+      for (let i = 0; i < 6; i += 1) {
+        para.push(w('正', 0.1 + i * 0.03, 0.4 + line * 0.018, 0.125 + i * 0.03, 0.42 + line * 0.018))
+      }
+    }
+    expect(filterOcrHitLayerWords(para)).toHaveLength(42)
+  })
+
+  it('密行压字只摘巨框单字（戳印压正文行）', () => {
+    const body = bodyLine(0.5, '正文段落内容测试啊')
+    const pressed = [w('戳', 0.2, 0.46, 0.23, 0.56), w('印', 0.3, 0.46, 0.33, 0.56)]
+    const kept = filterOcrHitLayerWords([...body, ...pressed]).map((word) => word.text)
+    expect(kept.join('')).toBe('正文段落内容测试啊')
+  })
+
+  it('稀疏巨字行丢弃（60pt 级独占标题，接受不可选）', () => {
+    const giant = ['绪', '论'].map((char, i) =>
+      w(char, 0.4 + i * 0.06, 0.4, 0.45 + i * 0.06, 0.48),
+    )
+    expect(filterOcrHitLayerWords(giant)).toEqual([])
+  })
+
+  it('空输入与原序保持', () => {
+    expect(filterOcrHitLayerWords([])).toEqual([])
+    const a = bodyLine(0.5, '甲乙')
+    const b = bodyLine(0.6, '丙丁')
+    const kept = filterOcrHitLayerWords([...b, ...a])
+    expect(kept.map((word) => word.text)).toEqual(['丙', '丁', '甲', '乙'])
   })
 })

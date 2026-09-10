@@ -3,6 +3,7 @@ import {
   cleanOcrWatermarks,
   discoverWatermarksByPosition,
   expandWatermarkFragments,
+  isDiagonalStampSpan,
   normalizeWatermarkText,
 } from './ocr-watermark'
 import type { InspectorSpanLike } from './ocr-page-words'
@@ -138,5 +139,33 @@ describe('cleanOcrWatermarks', () => {
     const result = cleanOcrWatermarks([{ page: 1, markdown: md }])
     expect(result.pages[0]?.markdown).toBe(md)
     expect(result.removedLines).toBe(0)
+  })
+})
+
+describe('isDiagonalStampSpan', () => {
+  const known = new Set(['stamptext'])
+  it('已证水印 + 方形框 ⇒ 斜戳印', () => {
+    expect(
+      isDiagonalStampSpan(
+        { text: 'StampText', confidence: 0.95, x: 200, y: 300, width: 100, height: 100 },
+        known,
+      ),
+    ).toBe(true)
+  })
+  it('已证水印 + 横排薄长框 ⇒ 正文豁免（如每页重复页脚）', () => {
+    expect(
+      isDiagonalStampSpan(
+        { text: 'StampText', confidence: 0.95, x: 1, y: 0, width: 407.5, height: 25 },
+        known,
+      ),
+    ).toBe(false)
+  })
+  it('方形框 + 未知文本 ⇒ 不定罪', () => {
+    expect(
+      isDiagonalStampSpan(
+        { text: '正文标题', confidence: 0.95, x: 200, y: 300, width: 100, height: 100 },
+        known,
+      ),
+    ).toBe(false)
   })
 })

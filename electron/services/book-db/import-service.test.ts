@@ -634,6 +634,54 @@ describe('U1 导入写页词缓存', () => {
     expect(countBookBlocks(memDb, result.value.bookId)).toBe(6)
     memDb.close()
   })
+
+  it('V2：chunk 内跨页已证方形戳印不写进缓存（正文保留）', async () => {
+    const calls: string[] = []
+    const memDb = openMemDb()
+    const written: PdfOcrPageCache[] = []
+    // 三页同位置同文本的方形 span ⇒ 几何发现为水印；每页正文 span 各不同 ⇒ 保留
+    const stampLoader = (async () => ({
+      OcrMode: { Auto: 'Auto' },
+      processPdfWithOcr: async (_data: unknown, options: { pageNumbers?: number[] }) => {
+        const pageNumbers = options.pageNumbers ?? [1, 2, 3]
+        calls.push(`ocr:${pageNumbers.join(',')}`)
+        return {
+          pagesRoutedToOcr: [...pageNumbers],
+          pages: pageNumbers.map((page) => ({
+            pageNumber: page,
+            markdown: `Body${page} 正文`,
+            spans: [
+              { text: `Body${page} 正文`, confidence: 0.9, x: 81, y: 600, width: 200, height: 12 },
+              { text: 'STAMP', confidence: 0.95, x: 200, y: 300, width: 100, height: 100 },
+            ],
+          })),
+        }
+      },
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      {},
+      {
+        loadInspector: stampLoader,
+        ensureRuntime: async () => ok({ modelDir: 'models' }),
+        readPdf: async () => Buffer.from('pdf'),
+        openDb: () => memDb,
+        readPageSizes: sizes612x792,
+        writePageCache: async (cache) => {
+          written.push(cache)
+        },
+      },
+    )
+    expect(result.ok).toBe(true)
+    expect(written).toHaveLength(3)
+    for (const cache of written) {
+      const text = cache.words.map((word) => word.text).join('')
+      expect(text).toContain('正文')
+      expect(text).not.toContain('STAMP')
+    }
+    memDb.close()
+  })
 })
 
 describe('U2 forceRebuild', () => {
