@@ -93,8 +93,10 @@ import {
 import { getRosettaBookInfo, queryRosettaBook } from '../services/book-db/query-service'
 import { getBookRecord } from '../services/book-db/queries'
 import { openBookDb } from '../services/book-db/open-book-db'
+import { previewBodyWatermarkFile } from '../services/book-db/body-watermark-preview'
 import { rebuildTocIndex } from '../services/book-db/toc-rebuild'
 import type {
+  RosettaBodyWatermarkPreviewPayload,
   RosettaImportPayload,
   RosettaImportStatus,
   RosettaQuery,
@@ -685,6 +687,27 @@ export function registerIpcHandlers(): void {
       })
     }
   })
+
+  ipcMain.handle(
+    IPC.ROSETTA_PREVIEW_BODY_WATERMARK,
+    (_event, payload: RosettaBodyWatermarkPreviewPayload) => {
+      try {
+        const fingerprint =
+          typeof payload?.fingerprint === 'string' ? payload.fingerprint.trim() : ''
+        if (!fingerprint) {
+          return err({ code: 'INVALID_ARGUMENT', message: '缺少文件指纹' })
+        }
+        // 只读预览：文件入口内部先判存在、不建库，以 readOnly + query_only 打开；
+        // samplePage 原样透传，非法值由预览服务返回 INVALID_ARGUMENT
+        return previewBodyWatermarkFile(app.getPath('userData'), fingerprint, payload?.samplePage)
+      } catch (cause) {
+        return err({
+          code: 'UNKNOWN',
+          message: cause instanceof Error ? cause.message : '正文水印预览失败',
+        })
+      }
+    },
+  )
 
   // --- 云端同步 (WebDAV) ---
   ipcMain.handle(IPC.SYNC_GET_CONFIG, async () => readSyncConfig())

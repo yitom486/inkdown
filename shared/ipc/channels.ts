@@ -177,6 +177,8 @@ export const IPC = {
   ROSETTA_QUERY_BOOK: 'rosetta:query-book',
   /** invoke：纯本地重建罗盘目录索引（只写 toc_entries/chapters/块归属，不调 OCR） */
   ROSETTA_REBUILD_TOC: 'rosetta:rebuild-toc',
+  /** invoke：只读预览正文水印清洗（readOnly + query_only，不写库，最多 20 条样例） */
+  ROSETTA_PREVIEW_BODY_WATERMARK: 'rosetta:preview-body-watermark',
   /** main→renderer：OCR 组件下载/就绪状态推送 */
   OCR_COMPONENT_STATUS: 'ocr:component-status',
   /** invoke：追加保存测验记录到 JSONL */

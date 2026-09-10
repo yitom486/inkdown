@@ -87,6 +87,7 @@ declare global {
 }
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import { PdfOcrTocEditor } from '@/components/reader/PdfOcrTocEditor'
+import { BodyWatermarkPreviewDialog } from '@/components/reader/BodyWatermarkPreviewDialog'
 import { TocAiPolishControl } from '@/components/reader/TocAiPolishControl'
 import type { OcrTocEntry } from '@shared/types/ocr'
 import {
@@ -1711,6 +1712,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   )
   const rosettaTocStatus = resolveRosettaIndexStatus(rosettaImport.info, currentRosettaTocSignature)
   const [rosettaRebuilding, setRosettaRebuilding] = useState(false)
+  const [bodyWatermarkPreviewOpen, setBodyWatermarkPreviewOpen] = useState(false)
 
   /** 纯本地目录重建：只写库，不重新 OCR */
   const handleRosettaRebuildToc = useCallback(async () => {
@@ -1766,12 +1768,24 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       )
     } else if (rosettaImport.info && rosettaTocStatus === 'ready') {
       rosettaExtraAction = (
-        <span
-          className="flex items-center gap-1 text-xs text-muted-foreground"
-          title={`罗盘索引：${rosettaImport.info.chapters} 章 / ${rosettaImport.info.blocks} 块，AI 直接读库`}
-        >
-          <Database className="size-3.5" aria-hidden />
-          ✓
+        <span className="flex items-center gap-1">
+          <span
+            className="flex items-center gap-1 text-xs text-muted-foreground"
+            title={`罗盘索引：${rosettaImport.info.chapters} 章 / ${rosettaImport.info.blocks} 块，AI 直接读库`}
+          >
+            <Database className="size-3.5" aria-hidden />
+            ✓
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 text-xs text-muted-foreground"
+            title="只读统计正文水印清洗影响，不修改数据库"
+            onClick={() => setBodyWatermarkPreviewOpen(true)}
+          >
+            预览正文水印清洗
+          </Button>
         </span>
       )
     } else if (rosettaImport.info && rosettaTocStatus === 'stale') {
@@ -2190,6 +2204,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               toast.error(cause instanceof Error ? cause.message : '保存批注失败')
             })
         }}
+      />
+      <BodyWatermarkPreviewDialog
+        open={bodyWatermarkPreviewOpen}
+        fingerprint={fileFingerprint}
+        onOpenChange={setBodyWatermarkPreviewOpen}
       />
     </div>
   )

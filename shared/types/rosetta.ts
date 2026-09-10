@@ -115,3 +115,37 @@ export interface RosettaTocRebuildResult {
   completedPages: number[]
   tocSignature: string
 }
+
+/** 正文水印清洗只读预览请求：只传指纹，主进程只读库、不写库 */
+export interface RosettaBodyWatermarkPreviewPayload {
+  fingerprint: string
+  /** 可选按页筛选样例（正整数）；不传返回全书前 20 条，统计始终全局 */
+  samplePage?: number
+}
+
+/** 预览样例单条：正文前后文本已截断（主进程侧截断，最多展示用） */
+export interface RosettaBodyWatermarkPreviewSample {
+  id: number
+  pageNumber: number
+  action: 'delete' | 'update'
+  reason: string
+  before: string
+  after?: string
+}
+
+/** 正文水印清洗只读预览结果：计数 + 样例（最多 20 条），不含任何写入副作用 */
+export interface RosettaBodyWatermarkPreviewResult {
+  fingerprint: string
+  bookId: number
+  totalPatches: number
+  deleteCount: number
+  updateCount: number
+  /** 涉及页数（去重后） */
+  pageCount: number
+  /** 按 reason 精确聚合计数 */
+  reasonCounts: Record<string, number>
+  /** 最多 20 条样例（库顺序），文本已截断 */
+  samples: RosettaBodyWatermarkPreviewSample[]
+  /** 回传本次样例页筛（未传为 null），UI 据此标明“全书/第 N 页” */
+  samplePage?: number | null
+}
