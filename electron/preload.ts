@@ -46,6 +46,8 @@ const electronAPI: ElectronAPI = {
   openFile: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN, options),
   openFolder: (options?: OpenDialogOptions) => ipcRenderer.invoke(IPC.FILE_OPEN_FOLDER, options),
   scanWorkspace: (rootPath: string) => ipcRenderer.invoke(IPC.FILE_SCAN_WORKSPACE, rootPath),
+  searchWorkspaceMarkdown: (payload) =>
+    ipcRenderer.invoke(IPC.WORKSPACE_SEARCH_MARKDOWN, payload),
   watchWorkspace: (rootPath: string) => {
     ipcRenderer.send(IPC.WORKSPACE_WATCH, rootPath)
   },

@@ -19,6 +19,8 @@ import type {
   WorkspaceFsMovePayload,
   WorkspaceFsPathResult,
   WorkspaceFsRenamePayload,
+  WorkspaceSearchMarkdownPayload,
+  WorkspaceSearchMarkdownResult,
 } from '@shared/types/file'
 import type { AppError } from '@shared/core/errors'
 import type { RendererErrorPayload } from '@shared/types/error-log'
@@ -130,6 +132,10 @@ export interface ElectronAPI {
   openFolder: (options?: OpenDialogOptions) => Promise<Result<OpenFolderResult, AppError>>
   /** 扫描已有工作区路径，返回文件树 */
   scanWorkspace: (rootPath: string) => Promise<Result<OpenFolderResult, AppError>>
+  /** 工作区 Markdown 字面检索（只读，仅渲染端 inspect 链调用） */
+  searchWorkspaceMarkdown: (
+    payload: WorkspaceSearchMarkdownPayload,
+  ) => Promise<Result<WorkspaceSearchMarkdownResult, AppError>>
   /** 开始监听工作区磁盘变化 */
   watchWorkspace: (rootPath: string) => void
   /** 停止监听工作区 */

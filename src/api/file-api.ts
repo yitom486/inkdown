@@ -20,6 +20,8 @@ import type {
   WorkspaceFsMovePayload,
   WorkspaceFsPathResult,
   WorkspaceFsRenamePayload,
+  WorkspaceSearchMarkdownPayload,
+  WorkspaceSearchMarkdownResult,
 } from '@shared/types/file'
 import { err, ok, type Result } from '@shared/core/result'
 import type { ElectronAPI } from '@shared/ipc/electron-api.types'
@@ -76,6 +78,21 @@ export const fileApi = {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.scanWorkspace(rootPath)
+  },
+
+  /**
+   * P2.2 工作区 Markdown 字面检索（只读）。仅 inspect 链调用，
+   * root 取文件树状态，模型碰不到；失败由调用方降级为纯内存结果。
+   */
+  async searchWorkspaceMarkdown(
+    payload: WorkspaceSearchMarkdownPayload,
+  ): Promise<Result<WorkspaceSearchMarkdownResult, AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    if (typeof api.value.searchWorkspaceMarkdown !== 'function') {
+      return err({ code: 'API_UNAVAILABLE', message: '工作区检索 API 不可用' })
+    }
+    return api.value.searchWorkspaceMarkdown(payload)
   },
 
   async readFile(filePath: string): Promise<Result<OpenFileResult, AppError>> {

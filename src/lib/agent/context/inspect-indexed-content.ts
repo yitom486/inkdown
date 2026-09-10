@@ -1,11 +1,19 @@
 import { isOk, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
 import type { RosettaInspectContentResult } from '@shared/types/rosetta'
+import type { WorkspaceSearchMarkdownResult } from '@shared/types/file'
 import {
+  CONTENT_AUDIT_HIT_TEXT_BUDGET,
+  CONTENT_AUDIT_RESPONSE_TEXT_BUDGET,
   normalizeContentAuditQuery,
   parseContentAuditLimit,
+  resolveContentAuditMatchPosition,
+  windowContentAuditText,
+  type ContentAuditHit,
 } from '@shared/agent/content-audit'
 import { rosettaApi } from '@/api/rosetta-api'
+import { fileApi } from '@/api/file-api'
+import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { collectActiveDocument } from './collect-turn-context'
 import { getReaderContentProvider } from './reader-content-registry'
 import { inspectEditorBufferText } from './inspect-editor-buffer'
@@ -24,6 +32,14 @@ export interface InspectIndexedContentDeps {
   getFingerprint?: () => string
   /** 无指纹时读编辑器内存；非 markdown/未绑定返回 null（调用方报不支持） */
   getBufferText?: () => Promise<string | null>
+  /** P2.2 工作区根（文件树状态）；无文件夹返回 '' 则只做内存 */
+  getWorkspaceRoot?: () => string
+  /** P2.2 工作区检索；失败由调用方降级为纯内存结果 */
+  searchWorkspace?: (
+    root: string,
+    query: string,
+    excludePath: string,
+  ) => Promise<Result<WorkspaceSearchMarkdownResult, AppError>>
   callInspect?: (
     fingerprint: string,
     query: string,
@@ -47,6 +63,9 @@ function defaultDeps(): Required<InspectIndexedContentDeps> {
       if (active.kind !== 'markdown') return null
       return (await provider.getCurrentText()) ?? ''
     },
+    getWorkspaceRoot: () => useAppSettingsStore.getState().lastWorkspaceRoot ?? '',
+    searchWorkspace: (root, query, excludePath) =>
+      fileApi.searchWorkspaceMarkdown({ workspaceRoot: root, query, excludePath }),
     callInspect: (fingerprint, query, limit) =>
       rosettaApi.inspectContent({ fingerprint, query, limit }),
   }
@@ -84,6 +103,41 @@ export async function inspectIndexedContentForAgent(
   }
   // P2.1：无指纹 + markdown 活动文档 → 检索编辑器内存
   const text = await resolved.getBufferText()
-  if (text === null) throw new Error('当前文档不支持内容审计（仅已入库 PDF）')
-  return JSON.stringify(inspectEditorBufferText(text, validQuery, validLimit), null, 2)
+  if (text === null) throw new Error('当前文档不支持内容审计（仅已入库 PDF 或当前 Markdown）')
+  const bufferResult = inspectEditorBufferText(text, validQuery, validLimit)
+  // P2.2：有工作区根则合并其他已保存 markdown（buffer 在前，workspace 在后）；
+  // 无根或检索失败都降级为纯内存结果，永不整次失败
+  const workspaceRoot = resolved.getWorkspaceRoot()
+  if (!workspaceRoot) return JSON.stringify(bufferResult, null, 2)
+  const workspaceResult = await resolved.searchWorkspace(workspaceRoot, validQuery, activePath)
+  if (!isOk(workspaceResult)) return JSON.stringify(bufferResult, null, 2)
+  const pending = workspaceResult.value.hits.slice(
+    0,
+    Math.max(0, validLimit - bufferResult.hits.length),
+  )
+  const usedChars = bufferResult.hits.reduce((sum, hit) => sum + hit.text.length, 0)
+  const budgetEach =
+    pending.length === 0
+      ? CONTENT_AUDIT_HIT_TEXT_BUDGET
+      : Math.min(
+          CONTENT_AUDIT_HIT_TEXT_BUDGET,
+          Math.max(200, Math.floor((CONTENT_AUDIT_RESPONSE_TEXT_BUDGET - usedChars) / pending.length)),
+        )
+  const workspaceHits: ContentAuditHit[] = pending.map((hit) => {
+    const windowed = windowContentAuditText(hit.line, validQuery, budgetEach)
+    return {
+      source: 'workspace-file' as const,
+      locator: { filePath: hit.filePath, lineStart: hit.lineStart },
+      text: windowed.text,
+      textTruncated: windowed.truncated,
+      matchPosition: resolveContentAuditMatchPosition(windowed.text, validQuery),
+    }
+  })
+  const hits = [...bufferResult.hits, ...workspaceHits]
+  const total = bufferResult.total + workspaceResult.value.total
+  return JSON.stringify(
+    { query: validQuery, total, truncated: hits.length < total, limit: validLimit, hits },
+    null,
+    2,
+  )
 }

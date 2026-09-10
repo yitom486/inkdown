@@ -9,6 +9,7 @@
 | `file-service.ts` | 打开/保存对话框、读文本/二进制/图片、粘贴图、导出入口 |
 | `workspace.ts` | 扫描工作区树（深度限制、忽略目录、去掉空文件夹） |
 | `workspace-fs.ts` | 工作区内新建/重命名/移动/复制/删除 |
+| `workspace-md-search.ts` | 工作区 Markdown 字面检索（只读：根内断言 + symlink 跳过，仅 .md，200 文件/256KB/100 命中上限，仅 inspect 链调用） |
 | `workspace-watcher.ts` | 监听工作区变更并通知渲染进程 |
 | `export-save-path.ts` | 导出 HTML/PDF/Markdown 的保存路径 |
 | `web-doc-service.ts` | 在线文档抓取与目录发现入口（含 SSRF 策略与重定向校验） |

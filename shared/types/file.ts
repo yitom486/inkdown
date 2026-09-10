@@ -123,3 +123,29 @@ export interface WorkspaceFsMovePayload {
   fromPath: string
   toPath: string
 }
+
+/**
+ * P2.2 工作区 Markdown 字面检索请求。workspaceRoot 来自渲染端文件树状态
+ * （与文件树同一来源），模型碰不到；主进程逐文件 assert 在根内。
+ * excludePath 为当前打开文件的磁盘路径（其磁盘副本不搜，内存已覆盖）。
+ */
+export interface WorkspaceSearchMarkdownPayload {
+  workspaceRoot: string
+  query: string
+  excludePath?: string
+}
+
+export interface WorkspaceSearchMarkdownHit {
+  /** 相对根的 posix 相对路径（永不绝对路径/盘符） */
+  filePath: string
+  /** 1-based 行号 */
+  lineStart: number
+  /** 命中行原文（至多 2000 字） */
+  line: string
+}
+
+export interface WorkspaceSearchMarkdownResult {
+  /** 精确命中数（文件×行，上限 100） */
+  total: number
+  hits: WorkspaceSearchMarkdownHit[]
+}

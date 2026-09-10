@@ -12,6 +12,7 @@ import type {
   WorkspaceFsDeletePayload,
   WorkspaceFsMovePayload,
   WorkspaceFsRenamePayload,
+  WorkspaceSearchMarkdownPayload,
 } from '@shared/types/file'
 import type { RendererErrorPayload } from '@shared/types/error-log'
 import type {
@@ -75,6 +76,7 @@ import {
   workspaceRename,
 } from '../services/workspace-fs'
 import { getAppVersion } from '../services/app-service'
+import { searchWorkspaceMarkdown } from '../services/workspace-md-search'
 import { installBunRuntime, probeBunRuntime } from '../services/bun-runtime'
 import {
   checkAppUpdate,
@@ -379,6 +381,33 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.FILE_SCAN_WORKSPACE, (_event, rootPath: string) =>
     scanWorkspaceFolder(rootPath),
   )
+  // P2.2 工作区 Markdown 字面检索：只读，不暴露给模型（无 MCP 接线）。
+  // root 由渲染端文件树状态给出；query 长度 double-check（渲染端已先拒短词）。
+  ipcMain.handle(IPC.WORKSPACE_SEARCH_MARKDOWN, (_event, payload: WorkspaceSearchMarkdownPayload) => {
+    try {
+      const workspaceRoot =
+        typeof payload?.workspaceRoot === 'string' ? payload.workspaceRoot.trim() : ''
+      const query = typeof payload?.query === 'string' ? payload.query : ''
+      if (!workspaceRoot) {
+        return err({ code: 'INVALID_ARGUMENT', message: '缺少工作区根目录' })
+      }
+      if (!query.trim() || [...query.trim()].length > 200) {
+        return err({ code: 'INVALID_ARGUMENT', message: '检索词无效' })
+      }
+      return ok(
+        searchWorkspaceMarkdown({
+          root: workspaceRoot,
+          query: query.trim(),
+          excludePath: typeof payload?.excludePath === 'string' ? payload.excludePath : null,
+        }),
+      )
+    } catch (cause) {
+      return err({
+        code: 'UNKNOWN',
+        message: cause instanceof Error ? cause.message : '工作区检索失败',
+      })
+    }
+  })
 
   ipcMain.on(IPC.WORKSPACE_WATCH, (event, rootPath: string) => {
     if (typeof rootPath !== 'string' || rootPath.length === 0) return

@@ -51,6 +51,8 @@ export const IPC = {
   FILE_OPEN_FOLDER: 'file:open-folder',
   /** invoke：扫描已有工作区路径，返回文件树 */
   FILE_SCAN_WORKSPACE: 'file:scan-workspace',
+  /** invoke：工作区 Markdown 字面检索（只读，仅渲染端 inspect 链调用，不暴露给模型） */
+  WORKSPACE_SEARCH_MARKDOWN: 'workspace:search-markdown',
   /** invoke：按路径读文本文件 */
   FILE_READ: 'file:read',
   /** invoke：按路径读二进制文件 */

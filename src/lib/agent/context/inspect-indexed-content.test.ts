@@ -137,6 +137,97 @@ describe('inspectIndexedContentForAgent', () => {
     await expect(inspectIndexedContentForAgent('王道计', 10, d)).rejects.toThrow('不支持内容审计')
   })
 
+  it('P2.2 合并：buffer 在前、workspace 在后，total 精确相加', async () => {
+    const d = deps({
+      getFingerprint: () => '',
+      getBufferText: vi.fn(async () => '内存王道计一行'),
+      getWorkspaceRoot: () => '/ws',
+      searchWorkspace: vi.fn(async () => ({
+        ok: true as const,
+        value: {
+          total: 2,
+          hits: [
+            { filePath: 'a.md', lineStart: 3, line: '工作区王道计甲' },
+            { filePath: 'b.md', lineStart: 1, line: '工作区王道计乙' },
+          ],
+        },
+      })),
+    })
+    const parsed = JSON.parse(await inspectIndexedContentForAgent('王道计', 10, d)) as {
+      total: number
+      truncated: boolean
+      hits: Array<{ source: string; locator: Record<string, unknown>; text: string }>
+    }
+    expect(parsed.total).toBe(3)
+    expect(parsed.truncated).toBe(false)
+    expect(parsed.hits.map((hit) => hit.source)).toEqual([
+      'editor-buffer',
+      'workspace-file',
+      'workspace-file',
+    ])
+    expect(parsed.hits[1]?.locator).toEqual({ filePath: 'a.md', lineStart: 3 })
+    expect(parsed.hits[1]).not.toHaveProperty('pageNumber')
+  })
+
+  it('P2.2 limit 截断展示但 total 含工作区精确数', async () => {
+    const d = deps({
+      getFingerprint: () => '',
+      getBufferText: vi.fn(async () => '内存王道计一行'),
+      getWorkspaceRoot: () => '/ws',
+      searchWorkspace: vi.fn(async () => ({
+        ok: true as const,
+        value: {
+          total: 5,
+          hits: Array.from({ length: 5 }, (_, i) => ({
+            filePath: `f${i}.md`,
+            lineStart: 1,
+            line: '工作区王道计',
+          })),
+        },
+      })),
+    })
+    const parsed = JSON.parse(await inspectIndexedContentForAgent('王道计', 2, d)) as {
+      total: number
+      truncated: boolean
+      limit: number
+      hits: unknown[]
+    }
+    expect(parsed.total).toBe(6)
+    expect(parsed.truncated).toBe(true)
+    expect(parsed.limit).toBe(2)
+    expect(parsed.hits).toHaveLength(2)
+  })
+
+  it('P2.2 无工作区根则行为等于 P2.1；工作区失败降级纯内存', async () => {
+    const buffer = vi.fn(async () => '内存王道计一行')
+    const searchWorkspace = vi.fn()
+    const noRoot = deps({ getFingerprint: () => '', getBufferText: buffer, getWorkspaceRoot: () => '' })
+    expect(JSON.parse(await inspectIndexedContentForAgent('王道计', 10, noRoot))).toMatchObject({
+      total: 1,
+    })
+    expect(searchWorkspace).not.toHaveBeenCalled()
+    const failing = deps({
+      getFingerprint: () => '',
+      getBufferText: buffer,
+      getWorkspaceRoot: () => '/ws',
+      searchWorkspace: vi.fn(async () => ({
+        ok: false as const,
+        error: { code: 'UNKNOWN' as const, message: '炸了' },
+      })),
+    })
+    expect(JSON.parse(await inspectIndexedContentForAgent('王道计', 10, failing))).toMatchObject({
+      total: 1,
+      truncated: false,
+    })
+  })
+
+  it('P2.2 指纹路径零次工作区搜索', async () => {
+    const searchWorkspace = vi.fn()
+    const d = deps({ getWorkspaceRoot: () => '/ws', searchWorkspace })
+    await inspectIndexedContentForAgent('王道计', 10, d)
+    expect(searchWorkspace).not.toHaveBeenCalled()
+  })
+
   it('默认接线：markdown 读内存、epub 拒绝、错文件拒绝', async () => {
     const callInspect = vi.fn()
     const base = { getFingerprint: () => '', callInspect }
