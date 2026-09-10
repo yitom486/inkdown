@@ -63,4 +63,15 @@ describe('readViewportText', () => {
     await expect(readViewportText()).resolves.toBe('视口可见')
     dispose()
   })
+
+  it('S1.2：getCurrentText 抛罗盘缺文错误向上传递，不吞成空串', async () => {
+    const dispose = registerReaderContent({
+      filePath: '/tmp/a.pdf',
+      getCurrentText: () => {
+        throw new Error('本页罗盘无正文（第 36 页），请重建索引或手动识别本页')
+      },
+    })
+    await expect(readCurrentDocumentText()).rejects.toThrow('罗盘无正文')
+    dispose()
+  })
 })

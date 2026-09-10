@@ -125,6 +125,7 @@ import {
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
 import { resolvePreferNativeImport, shouldOfferPageOcr } from '@/lib/reader/pdf-import-mode'
 import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf-agent-search-gate'
+import { rosettaPageMissingError } from '@/lib/reader/rosetta-read-guard'
 import { iterateRosettaChapterUnits } from '@/lib/agent/context/rosetta-chapter-units'
 import { reportAppError } from '@/lib/workspace/report-error'
 import {
@@ -957,10 +958,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       }
       const total = numPages || pdfDocRef.current?.numPages || 0
       // 罗盘优先：已索引的书直接读库（结构化分页文本，零 OCR 开销）；
-      // 未命中/异常一律静默回退旧链路，Agent 永不断粮
+      // S1.2：已入库时库中无块直接抛错，禁止 inspector/WASM/OCR 回退；
+      // 未入库才走旧链路（单页按需 OCR）
       const rosettaText = await readRosettaPageText(page)
       if (rosettaText !== null) {
         return { text: formatPdfPageTextForAgent(page, total, rosettaText), source: 'rosetta' }
+      }
+      if (fileFingerprint && rosettaInfoRef.current) {
+        throw rosettaPageMissingError(page)
       }
       // Agent 正文：主进程 inspector（表格/标题更优）→ WASM 阅读顺序版；
       // 任何失败静默回退，UI/搜索/选区仍走 pdf.js
@@ -1095,6 +1100,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         if (!Number.isFinite(page) || page < 1) {
           return null
         }
+        // S1.2 已入库标记：罗盘 miss 时抛错（向上传递为工具错误），
+        // 未入库才允许 OCR 该页；readRosettaUnitText 自身永不抛错
+        const indexed = Boolean(fileFingerprint && rosettaInfoRef.current)
         try {
           const rosettaUnit = await readRosettaUnitText(unit)
           const total = pdfDocRef.current?.numPages ?? numPages
@@ -1104,12 +1112,15 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               text: formatPdfPageTextForAgent(page, total, rosettaUnit.text),
             }
           }
+          if (indexed) throw rosettaPageMissingError(page)
           const raw = await readPageText(page, { allowAutoOcr: agentAutoOcr() })
           return {
             label: unit.label || `第 ${page} 页`,
             text: formatPdfPageTextForAgent(page, total, raw),
           }
-        } catch {
+        } catch (cause) {
+          // 已入库时只可能是缺文错误，原样上抛；未入库保持旧语义回 null
+          if (indexed) throw cause
           return null
         }
       },

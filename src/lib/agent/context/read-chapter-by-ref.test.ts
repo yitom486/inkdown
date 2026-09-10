@@ -147,4 +147,22 @@ describe('readChapterByRef', () => {
     await expect(readChapterByRef({ flatIndex: 0 })).rejects.toThrow('未能读取')
     dispose()
   })
+
+  it('S1.2：getUnitByIndex 抛罗盘缺文错误向上传递，不吞成空结果', async () => {
+    useReaderNavigationStore.setState({
+      ready: true,
+      filePath: 'D:/book/a.pdf',
+      format: 'pdf',
+      units: [{ label: '第4章', href: '161', level: 1 }],
+    })
+    const dispose = registerReaderContent({
+      filePath: 'D:/book/a.pdf',
+      getCurrentText: () => '',
+      getUnitByIndex: async () => {
+        throw new Error('本页罗盘无正文（第 161 页），请重建索引或手动识别本页')
+      },
+    })
+    await expect(readChapterByRef({ flatIndex: 0 })).rejects.toThrow('罗盘无正文')
+    dispose()
+  })
 })
