@@ -19,6 +19,8 @@ export interface RosettaImportStartArgs {
   toc: RosettaTocEntryInput[]
   /** P1.2：纯文字书直提（跳过 OCR 运行时），由 PdfViewer 按 !isScannedPdf && !isMixedPdf 设置 */
   preferNative?: boolean
+  /** U2：确认后重建（先删本书旧库与 OCR 缓存再全书导入），仅 PdfViewer 置 true */
+  forceRebuild?: boolean
 }
 
 /**

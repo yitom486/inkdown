@@ -25,6 +25,12 @@ export interface RosettaImportPayload {
    * P1.2 pure-text fast path: true skips the OCR runtime (no ensureRuntime, no model download) and extracts native text with OcrMode.Off. Absent/false keeps the legacy path (ensureRuntime + Auto). Set only by PdfViewer as !isScannedPdf && !isMixedPdf; never by Agent/MCP.
    */
   preferNative?: boolean
+  /**
+   * U2 rebuild: true deletes this book's compass db + OCR page/toc caches first,
+   * then imports as a fresh book (no completed_pages resume). Absent/false keeps
+   * resume-skip untouched. Set only by PdfViewer after window.confirm; never by Agent/MCP.
+   */
+  forceRebuild?: boolean
 }
 
 export interface RosettaImportStats {

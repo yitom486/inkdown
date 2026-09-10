@@ -70,3 +70,18 @@ export function resolvePdfIndexBadge(input: {
   if (!input.indexed) return input.isScannedPdf ? 'unindexed-scanned' : 'hidden'
   return input.tocStale ? 'stale' : 'ready'
 }
+
+export type RosettaIndexMenuAction = 'build' | 'rebuild'
+
+/**
+ * U2 罗盘菜单动作（纯函数）：未入库且空闲 → 建；已入库（ready/stale 皆可）
+ * 且空闲 → 重建；导入中/无指纹 → 无按钮（两按钮永不同时出现）。
+ */
+export function resolveRosettaIndexMenuAction(input: {
+  hasFingerprint: boolean
+  indexed: boolean
+  importRunning: boolean
+}): RosettaIndexMenuAction | null {
+  if (!input.hasFingerprint || input.importRunning) return null
+  return input.indexed ? 'rebuild' : 'build'
+}

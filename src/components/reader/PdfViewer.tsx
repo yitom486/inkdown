@@ -91,6 +91,7 @@ import { PdfBookSearch } from '@/components/reader/PdfBookSearch'
 import {
   PdfToolbarMoreMenu,
   resolvePdfIndexBadge,
+  resolveRosettaIndexMenuAction,
   type PdfToolbarMenuItem,
 } from '@/components/reader/PdfToolbarMoreMenu'
 import { BodyWatermarkPreviewDialog } from '@/components/reader/BodyWatermarkPreviewDialog'
@@ -1692,7 +1693,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   const estimatedPageHeight = Math.max(120, scaledPageSize.height)
   const estimatedPageWidth = Math.max(120, scaledPageSize.width)
 
-  const handleRosettaImport = useCallback(() => {
+  const handleRosettaImport = useCallback((forceRebuild?: boolean) => {
     if (!Number.isInteger(numPages) || numPages < 1) return
     const toc = resolveRosettaTocEntries({
       outlineUnits,
@@ -1709,7 +1710,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       toc,
       // P1.2：纯文字书直提，跳过 OCR 运行时；混合书仍走 OCR
       preferNative: resolvePreferNativeImport({ isScannedPdf, isMixedPdf }),
+      // U2：重建时删旧库全量重来，缺省走续跑
+      forceRebuild: forceRebuild === true ? true : undefined,
     })
+    // 删库重建时旧 info 已失效，刷新一次让徽章跟随 running/done 推送
+    void rosettaImport.refreshInfo()
   }, [filePath, numPages, ocrTocEntries, outlineUnits, pdfOcrScale, rosettaImport, tocPageOffset, isScannedPdf, isMixedPdf])
 
   /** 当前 OCR 目录签名（纯本地计算，与库内 toc_signature 同一规范化） */
@@ -1763,12 +1768,35 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     isScannedPdf,
   })
   const moreMenuItems: PdfToolbarMenuItem[] = []
-  if (fileFingerprint && !rosettaImport.info && rosettaImport.state !== 'running') {
+  // U2：建与重建互斥（无 info → 建，有 info → 重建，导入中都不出现）
+  const rosettaMenuAction = resolveRosettaIndexMenuAction({
+    hasFingerprint: Boolean(fileFingerprint),
+    indexed: Boolean(rosettaImport.info),
+    importRunning: rosettaImport.state === 'running',
+  })
+  if (rosettaMenuAction === 'build') {
     moreMenuItems.push({
       key: 'rosetta-import',
       label: '建立罗盘索引',
       title: '全书解析后建章节块索引并落盘（原生页直提、扫描页识别），之后 AI 直接读库不再现场识别',
       onSelect: () => void handleRosettaImport(),
+    })
+  }
+  if (rosettaMenuAction === 'rebuild') {
+    moreMenuItems.push({
+      key: 'rosetta-rebuild',
+      label: '重新建立罗盘索引',
+      title: '删除本书旧罗盘库与 OCR 缓存后全书重新识别（划重点/批注保留），之后 AI 直接读库',
+      onSelect: () => {
+        if (
+          !window.confirm(
+            '将删除本书罗盘并重新识别全书（可能数分钟）。划重点/批注会保留。取消在阶段边界生效，取消后可能只入库一部分。',
+          )
+        ) {
+          return
+        }
+        handleRosettaImport(true)
+      },
     })
   }
   if (indexBadge === 'ready') {

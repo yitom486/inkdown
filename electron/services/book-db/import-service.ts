@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { readFile, rm } from 'node:fs/promises'
+import { basename, dirname } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
@@ -15,9 +15,10 @@ import type {
 import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
 import { normalizeInspectorSpans } from '@shared/reader/ocr-page-words'
 import { ensureInspectorOcrRuntime } from '../ocr/inspector-ocr-runtime'
-import { writePdfOcrPageCache } from '../ocr/ocr-page-cache'
+import { deleteAllPdfOcrPageCaches, writePdfOcrPageCache } from '../ocr/ocr-page-cache'
+import { deletePdfOcrTocCache } from '../ocr/ocr-toc-cache'
 import { readPdfPageSizes } from '../ocr/pdf-page-geometry'
-import { openBookDb } from './open-book-db'
+import { closeBookDb, getBookDbPath, openBookDb } from './open-book-db'
 import {
   ensureImportBookRow,
   getCompletedPages,
@@ -44,6 +45,14 @@ export interface RosettaImportDeps {
   ) => Promise<Map<number, { width: number; height: number }>>
   /** U1：页词缓存落盘（默认 userData/ocr-cache）；写入失败只记日志不回滚 */
   writePageCache?: (cache: PdfOcrPageCache) => Promise<void>
+  /** U2：关本书 db handle（默认 closeBookDb）；Windows 上不关删不掉文件 */
+  closeBookDb?: (userDataDir: string, fingerprint: string) => boolean
+  /** U2：删本书库目录 book-index/<hash>/（默认 rm 整目录）；失败则中止重建 */
+  removeBookDbDir?: (userDataDir: string, fingerprint: string) => Promise<void>
+  /** U2：删本书 OCR 页缓存（默认 deleteAllPdfOcrPageCaches，指纹内聚不碰其它书） */
+  deletePageCaches?: (fingerprint: string) => Promise<void>
+  /** U2：删本书 OCR 目录缓存（默认 deletePdfOcrTocCache） */
+  deleteTocCache?: (fingerprint: string) => Promise<void>
 }
 
 export interface RosettaImportHooks {
@@ -78,6 +87,39 @@ function cancelledError(donePages: number, totalPages: number): Result<never, Ap
     code: 'CANCELLED',
     message: `已取消罗盘导入，已入库 ${donePages}/${totalPages} 页，下次继续`,
   })
+}
+
+async function defaultRemoveBookDbDir(userDataDir: string, fingerprint: string): Promise<void> {
+  await rm(dirname(getBookDbPath(userDataDir, fingerprint)), { recursive: true, force: true })
+}
+
+/**
+ * U2 重建：关本书 handle（Windows 不关删不掉）→ 删整库目录
+ * book-index/<hash>/（旧 blocks/completed_pages 一起消失，不新旧混块）→
+ * 删本书 OCR 页/目录缓存。然后按新书走现有流程。
+ * 任一步失败直接中止，半残库不进 OCR；缺省/false 时不调用，续跑一字不改。
+ */
+async function wipeBookForRebuild(
+  userDataDir: string,
+  fingerprint: string,
+  deps: RosettaImportDeps | undefined,
+): Promise<Result<null, AppError>> {
+  try {
+    const close = deps?.closeBookDb ?? closeBookDb
+    close(userDataDir, fingerprint)
+    const removeDir = deps?.removeBookDbDir ?? defaultRemoveBookDbDir
+    await removeDir(userDataDir, fingerprint)
+    const deletePages = deps?.deletePageCaches ?? deleteAllPdfOcrPageCaches
+    await deletePages(fingerprint)
+    const deleteToc = deps?.deleteTocCache ?? deletePdfOcrTocCache
+    await deleteToc(fingerprint)
+    return ok(null)
+  } catch (cause) {
+    return err({
+      code: 'FILE_WRITE_ERROR',
+      message: `旧罗盘清除失败，未开始重新识别：${cause instanceof Error ? cause.message : '未知错误'}`,
+    })
+  }
 }
 
 /** 导入完成文案：统计 + 可选的原生差页提示（不触发 OCR） */
@@ -243,6 +285,15 @@ async function runImport(
     hooks?.onProgress?.(donePages, plannedTotal, phase)
   };
   log(`import start: ${title} ${plannedTotal}页`)
+  // U2：确认后重建先清旧库（失败直接中止，不进 OCR）；缺省走续跑
+  if (payload.forceRebuild === true) {
+    log('rebuild: 清除本书旧罗盘库与 OCR 缓存后全量重建')
+    const wiped = await wipeBookForRebuild(userDataDir, fingerprint, deps)
+    if (!wiped.ok) {
+      log(`rebuild failed: ${wiped.error.message}`)
+      return err(wiped.error)
+    }
+  }
   const chunkCount = Math.min(4, Math.max(1, Math.ceil(plannedTotal / 85)))
   const chunkSize = Math.ceil(plannedTotal / chunkCount)
 

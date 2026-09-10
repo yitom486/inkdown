@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PdfToolbarMoreMenu, resolvePdfIndexBadge } from './PdfToolbarMoreMenu'
+import { PdfToolbarMoreMenu, resolvePdfIndexBadge, resolveRosettaIndexMenuAction } from './PdfToolbarMoreMenu'
 
 ;(globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -29,6 +29,26 @@ describe('resolvePdfIndexBadge', () => {
   it('已入库按目录新鲜度区分', () => {
     expect(resolvePdfIndexBadge({ ...base, indexed: true })).toBe('ready')
     expect(resolvePdfIndexBadge({ ...base, indexed: true, tocStale: true })).toBe('stale')
+  })
+})
+
+describe('resolveRosettaIndexMenuAction', () => {
+  it('U2：建与重建互斥，无 info 建、有 info 重建', () => {
+    const idle = { hasFingerprint: true, importRunning: false }
+    expect(resolveRosettaIndexMenuAction({ ...idle, indexed: false })).toBe('build')
+    expect(resolveRosettaIndexMenuAction({ ...idle, indexed: true })).toBe('rebuild')
+  })
+
+  it('导入中或无指纹无按钮', () => {
+    expect(
+      resolveRosettaIndexMenuAction({ hasFingerprint: true, indexed: true, importRunning: true }),
+    ).toBeNull()
+    expect(
+      resolveRosettaIndexMenuAction({ hasFingerprint: true, indexed: false, importRunning: true }),
+    ).toBeNull()
+    expect(
+      resolveRosettaIndexMenuAction({ hasFingerprint: false, indexed: false, importRunning: false }),
+    ).toBeNull()
   })
 })
 

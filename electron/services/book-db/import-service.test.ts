@@ -635,3 +635,101 @@ describe('U1 导入写页词缓存', () => {
     memDb.close()
   })
 })
+
+describe('U2 forceRebuild', () => {
+  it('缺省仍续跑：第二次不调 OCR、不碰清除注入点', async () => {
+    const calls: string[] = []
+    const wiped: string[] = []
+    const memDb = openMemDb()
+    const deps = {
+      ...memDeps(calls, memDb),
+      closeBookDb: () => {
+        wiped.push('close')
+        return true
+      },
+      removeBookDbDir: async () => {
+        wiped.push('rm')
+      },
+      deletePageCaches: async () => {
+        wiped.push('pages')
+      },
+      deleteTocCache: async () => {
+        wiped.push('toc')
+      },
+    }
+    const first = await importScannedBookToDb('unused-user-data', basePayload, {}, deps)
+    expect(first.ok).toBe(true)
+    const second = await importScannedBookToDb('unused-user-data', basePayload, {}, deps)
+    expect(second.ok).toBe(true)
+    expect(calls).toEqual(['ocr:1,2,3'])
+    expect(wiped).toEqual([])
+    memDb.close()
+  })
+
+  it('forceRebuild=true：清旧库后全量重跑 OCR（注入点按序全调）', async () => {
+    const calls: string[] = []
+    const wiped: string[] = []
+    // 真实语义：删目录后 openDb 拿到的是空库（每轮新 :memory: 库）
+    const dbs: DatabaseSync[] = []
+    const deps = {
+      loadInspector: fakeLoader(calls),
+      ensureRuntime: async () => ok({ modelDir: 'models' }),
+      readPdf: async () => Buffer.from('pdf'),
+      openDb: () => {
+        const db = openMemDb()
+        dbs.push(db)
+        return db
+      },
+      closeBookDb: () => {
+        wiped.push('close')
+        return true
+      },
+      removeBookDbDir: async () => {
+        wiped.push('rm')
+      },
+      deletePageCaches: async (fp: string) => {
+        wiped.push(`pages:${fp}`)
+      },
+      deleteTocCache: async (fp: string) => {
+        wiped.push(`toc:${fp}`)
+      },
+    }
+    const first = await importScannedBookToDb('unused-user-data', basePayload, {}, deps)
+    expect(first.ok).toBe(true)
+    const rebuilt = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, forceRebuild: true },
+      {},
+      deps,
+    )
+    expect(rebuilt.ok).toBe(true)
+    // 第二次再次全量 OCR（非续跑跳过），清除四步按序执行
+    expect(calls).toEqual(['ocr:1,2,3', 'ocr:1,2,3'])
+    expect(wiped).toEqual(['close', 'rm', 'pages:fake-fp-1', 'toc:fake-fp-1'])
+    if (rebuilt.ok) expect(countBookBlocks(dbs[1], rebuilt.value.bookId)).toBe(6)
+    dbs.forEach((db) => db.close())
+  })
+
+  it('删库失败则中止，不开跑 OCR', async () => {
+    const calls: string[] = []
+    const memDb = openMemDb()
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, fileFingerprint: 'fake-fp-del-fail', forceRebuild: true },
+      {},
+      {
+        ...memDeps(calls, memDb),
+        removeBookDbDir: async () => {
+          throw new Error('EPERM')
+        },
+      },
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.code).toBe('FILE_WRITE_ERROR')
+      expect(result.error.message).toContain('未开始重新识别')
+    }
+    expect(calls).toEqual([])
+    memDb.close()
+  })
+})
