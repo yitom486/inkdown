@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { rosettaApi } from '@/api/rosetta-api'
 import { isOk } from '@shared/core/result'
-import type { RosettaBodyWatermarkPreviewResult } from '@shared/types/rosetta'
+import type {
+  RosettaBodyWatermarkApplyResult,
+  RosettaBodyWatermarkPreviewResult,
+} from '@shared/types/rosetta'
 
 interface BodyWatermarkPreviewDialogProps {
   open: boolean
@@ -20,8 +23,10 @@ interface BodyWatermarkPreviewDialogProps {
 }
 
 /**
- * 正文水印清洗只读预览（Phase 2.2）：只展示计数与样例，不提供任何写入入口。
- * 关闭是唯一出口；面板明确声明尚未修改数据库。
+ * 正文水印清洗预览 + 备份并应用（Phase 2.3）。
+ * 预览语义与 Phase 2.2 一致（只读计数 + 最多 20 条样例，不写库）；
+ * 应用须经二次确认态：先展示签名/统计，点“确认应用”后才调应用通道；
+ * 应用成功后展示备份路径与结果。确认前绝不调用应用通道。
  */
 export function BodyWatermarkPreviewDialog({
   open,
@@ -32,6 +37,11 @@ export function BodyWatermarkPreviewDialog({
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<RosettaBodyWatermarkPreviewResult | null>(null)
   const [pageInput, setPageInput] = useState('')
+  /** 二次确认态：preview 仅展示，confirm 才允许调应用通道 */
+  const [confirming, setConfirming] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [applyResult, setApplyResult] = useState<RosettaBodyWatermarkApplyResult | null>(null)
 
   async function loadPreview(samplePage: number | null): Promise<void> {
     if (!fingerprint) return
@@ -71,6 +81,10 @@ export function BodyWatermarkPreviewDialog({
     setError(null)
     setPreview(null)
     setPageInput('')
+    setConfirming(false)
+    setApplying(false)
+    setApplyError(null)
+    setApplyResult(null)
     void (async () => {
       try {
         const result = await rosettaApi.previewBodyWatermark({ fingerprint })
@@ -88,6 +102,27 @@ export function BodyWatermarkPreviewDialog({
     }
   }, [open, fingerprint])
 
+  /** 二次确认后才调应用通道；确认前仅展示签名/统计，绝不写库 */
+  async function handleConfirmApply(): Promise<void> {
+    if (!preview || applying) return
+    setApplying(true)
+    setApplyError(null)
+    try {
+      const result = await rosettaApi.applyBodyWatermark({
+        fingerprint,
+        planSignature: preview.planSignature,
+        deleteCount: preview.deleteCount,
+        updateCount: preview.updateCount,
+      })
+      if (isOk(result)) setApplyResult(result.value)
+      else setApplyError(result.error.message || '应用失败')
+    } catch (cause) {
+      setApplyError(cause instanceof Error ? cause.message : '应用失败')
+    } finally {
+      setApplying(false)
+    }
+  }
+
   const reasonEntries = preview
     ? Object.entries(preview.reasonCounts).sort((a, b) => b[1] - a[1])
     : []
@@ -101,7 +136,9 @@ export function BodyWatermarkPreviewDialog({
         <DialogHeader>
           <DialogTitle>预览正文水印清洗</DialogTitle>
           <DialogDescription id="body-watermark-preview-desc">
-            只读预览，尚未修改数据库。如需处理请等待后续版本，本面板只允许关闭。
+            {confirming
+              ? '二次确认：核对签名与统计后，点“确认应用”才会备份并写库；返回则不写库。'
+              : '只读预览，尚未修改数据库。进入“备份并应用”需二次确认，确认前不写库。'}
           </DialogDescription>
         </DialogHeader>
 
@@ -121,81 +158,150 @@ export function BodyWatermarkPreviewDialog({
               <span>共 {preview.totalPatches} 条</span>
               <span>涉及 {preview.pageCount} 页</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <label htmlFor="body-watermark-sample-page">查看第 N 页候选</label>
-              <Input
-                id="body-watermark-sample-page"
-                type="number"
-                min={1}
-                step={1}
-                inputMode="numeric"
-                placeholder="如 36 / 303"
-                className="h-7 w-28"
-                value={pageInput}
-                onChange={(event) => setPageInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') handleRefreshSamples()
-                }}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7"
-                disabled={loading}
-                onClick={handleRefreshSamples}
-              >
-                刷新
-              </Button>
+            <div className="break-all text-xs text-muted-foreground" title={preview.planSignature}>
+              计划签名：{preview.planSignature}
             </div>
-            {reasonEntries.length > 0 ? (
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-muted-foreground">按原因聚合</div>
-                <ul className="space-y-1 text-xs">
-                  {reasonEntries.map(([reason, count]) => (
-                    <li key={reason} className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate" title={reason}>
-                        {reason}
-                      </span>
-                      <span className="shrink-0 tabular-nums">× {count}</span>
-                    </li>
-                  ))}
-                </ul>
+            {!confirming ? (
+              <>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <label htmlFor="body-watermark-sample-page">查看第 N 页候选</label>
+                  <Input
+                    id="body-watermark-sample-page"
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="如 36 / 303"
+                    className="h-7 w-28"
+                    value={pageInput}
+                    onChange={(event) => setPageInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handleRefreshSamples()
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    disabled={loading}
+                    onClick={handleRefreshSamples}
+                  >
+                    刷新
+                  </Button>
+                </div>
+                {reasonEntries.length > 0 ? (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-muted-foreground">按原因聚合</div>
+                    <ul className="space-y-1 text-xs">
+                      {reasonEntries.map(([reason, count]) => (
+                        <li key={reason} className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 flex-1 truncate" title={reason}>
+                            {reason}
+                          </span>
+                          <span className="shrink-0 tabular-nums">× {count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    {preview.samplePage == null
+                      ? '全书样例（最多 20 条，仅展示）'
+                      : `第 ${preview.samplePage} 页样例（最多 20 条，仅展示）`}
+                  </div>
+                  {preview.samples.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">暂无可清洗水印块</div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {preview.samples.map((sample) => (
+                        <li key={sample.id} className="rounded-md border p-2 text-xs">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <span>第 {sample.pageNumber} 页</span>
+                            <span>#{sample.id}</span>
+                            <span>{sample.action === 'delete' ? '删除整块' : '修剪首尾'}</span>
+                          </div>
+                          <div className="mt-1 truncate" title={sample.reason}>
+                            {sample.reason}
+                          </div>
+                          <div className="mt-1 break-all">前：{sample.before}</div>
+                          {sample.after !== undefined ? (
+                            <div className="mt-1 break-all">后：{sample.after}</div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                <div className="font-medium">二次确认 · 备份并应用</div>
+                <div className="text-muted-foreground">
+                  将先在同目录生成时间戳备份（不可覆盖），校验通过后单事务写入；
+                  任一条件冲突即整体回滚。确认后才调用应用通道。
+                </div>
+                <div className="break-all">
+                  签名：<span className="font-mono">{preview.planSignature}</span>
+                </div>
+                <div className="text-muted-foreground">
+                  待删 {preview.deleteCount} 条 / 待改 {preview.updateCount} 条 / 共{' '}
+                  {preview.totalPatches} 条
+                </div>
+                {applying ? (
+                  <div className="text-muted-foreground">正在备份并应用…</div>
+                ) : null}
+                {applyError ? <div className="text-destructive">{applyError}</div> : null}
+                {applyResult ? (
+                  <div className="space-y-1">
+                    <div>
+                      {applyResult.status === 'noop'
+                        ? '无需写入：计划为空（noop）。'
+                        : `已应用：${applyResult.blocksBefore} → ${applyResult.blocksAfter} 块。`}
+                    </div>
+                    {applyResult.status === 'applied' ? (
+                      <>
+                        <div className="break-all">备份路径：{applyResult.backupPath}</div>
+                        <div className="text-muted-foreground">
+                          备份 {applyResult.backupSize} 字节 / sha256{' '}
+                          <span className="font-mono break-all">{applyResult.backupHash}</span>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={applying}
+                    onClick={() => setConfirming(false)}
+                  >
+                    返回预览
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={applying || preview.totalPatches === 0 || applyResult !== null}
+                    onClick={() => void handleConfirmApply()}
+                  >
+                    {applying ? '应用中…' : '确认应用'}
+                  </Button>
+                </div>
               </div>
-            ) : null}
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground">
-                {preview.samplePage == null
-                  ? '全书样例（最多 20 条，仅展示）'
-                  : `第 ${preview.samplePage} 页样例（最多 20 条，仅展示）`}
-              </div>
-              {preview.samples.length === 0 ? (
-                <div className="text-xs text-muted-foreground">暂无可清洗水印块</div>
-              ) : (
-                <ul className="space-y-2">
-                  {preview.samples.map((sample) => (
-                    <li key={sample.id} className="rounded-md border p-2 text-xs">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <span>第 {sample.pageNumber} 页</span>
-                        <span>#{sample.id}</span>
-                        <span>{sample.action === 'delete' ? '删除整块' : '修剪首尾'}</span>
-                      </div>
-                      <div className="mt-1 truncate" title={sample.reason}>
-                        {sample.reason}
-                      </div>
-                      <div className="mt-1 break-all">前：{sample.before}</div>
-                      {sample.after !== undefined ? (
-                        <div className="mt-1 break-all">后：{sample.after}</div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            )}
           </div>
         ) : null}
 
         <DialogFooter>
+          {!confirming && preview && preview.totalPatches > 0 ? (
+            <Button type="button" variant="secondary" onClick={() => setConfirming(true)}>
+              备份并应用…
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             关闭
           </Button>

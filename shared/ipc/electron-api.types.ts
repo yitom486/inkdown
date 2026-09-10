@@ -85,6 +85,8 @@ import type {
 } from '@shared/types/sync'
 import type {
   RosettaActiveImport,
+  RosettaBodyWatermarkApplyPayload,
+  RosettaBodyWatermarkApplyResult,
   RosettaBodyWatermarkPreviewPayload,
   RosettaBodyWatermarkPreviewResult,
   RosettaBookInfo,
@@ -204,6 +206,10 @@ export interface ElectronAPI {
   previewBodyWatermark: (
     payload: RosettaBodyWatermarkPreviewPayload,
   ) => Promise<Result<RosettaBodyWatermarkPreviewResult, AppError>>
+  /** 备份并应用正文水印清洗（须用户二次确认后调用；空计划返回 noop） */
+  applyBodyWatermark: (
+    payload: RosettaBodyWatermarkApplyPayload,
+  ) => Promise<Result<RosettaBodyWatermarkApplyResult, AppError>>
   /** 探测本机 Bun 运行时是否可用 */
   getBunRuntimeStatus: () => Promise<Result<BunRuntimeStatus, AppError>>
   /** 安装 / 确保 Bun 运行时 */

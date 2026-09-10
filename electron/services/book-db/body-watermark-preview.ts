@@ -8,6 +8,7 @@ import type {
   RosettaBodyWatermarkPreviewSample,
 } from '@shared/types/rosetta'
 import {
+  computeBodyWatermarkPlanSignature,
   planBodyWatermarkPatches,
   type BodyBlockInput,
   type BodyWatermarkPatch,
@@ -117,6 +118,8 @@ export function previewBodyWatermarkInDb(
       .slice(0, BODY_WATERMARK_PREVIEW_MAX_SAMPLES)
       .map(toSample),
     samplePage: pageResult.value,
+    // Phase 2.2 计数/样例语义不动；仅新增确定性签名供应用守卫复用
+    planSignature: computeBodyWatermarkPlanSignature(patches),
   })
 }
 

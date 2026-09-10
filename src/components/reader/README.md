@@ -17,7 +17,7 @@
 | `FlashcardReviewDialog` | 沉浸式 3D 闪卡复习弹窗（挖空遮罩、正反翻转、原书一键秒回与记忆打分） |
 | `SelectionToolbar` | 划选工具条（划重点、问 Agent、批注等） |
 | `AnnotationNoteDialog` | 批注输入；可选 AI 意图/结果 chip 与草稿确认 |
-| `BodyWatermarkPreviewDialog` | 正文水印清洗只读预览（仅罗盘就绪态入口，明确“尚未修改数据库”，只允许关闭） |
+| `BodyWatermarkPreviewDialog` | 正文水印清洗预览 + 二次确认应用（只读计数/样例 + 签名展示，确认态展示统计/签名，确认后调应用通道，成功展示备份路径/结果；确认前不写库） |
 | `ProposeMarkChatBlock`（经 Agent 气泡内嵌） | 正式 Agent / 批注助手会话内批注提议 |
 | `EpubMarkTooltip` / `ReadingProgressRing` | EPUB 批注提示、进度环 |
 

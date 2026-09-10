@@ -148,4 +148,39 @@ export interface RosettaBodyWatermarkPreviewResult {
   samples: RosettaBodyWatermarkPreviewSample[]
   /** 回传本次样例页筛（未传为 null），UI 据此标明“全书/第 N 页” */
   samplePage?: number | null
+  /**
+   * 补丁计划确定性签名（Phase 2.3 应用守卫）：
+   * 对全量补丁按 (id, action, before, after ?? '', reason) 排序后 SHA-256（见
+   * `computeBodyWatermarkPlanSignature`）。应用请求须原样回传，主进程在同一
+   * 连接重算比对，不一致零写入。
+   */
+  planSignature: string
+}
+
+/** 正文水印清洗备份并应用请求：签名 + 统计须与预览时重算一致，否则零写入 */
+export interface RosettaBodyWatermarkApplyPayload {
+  fingerprint: string
+  /** 预览返回的 planSignature（空计划即 sha256("[]")） */
+  planSignature: string
+  deleteCount: number
+  updateCount: number
+}
+
+/** 正文水印清洗备份并应用结果：applied 写库，noop 表示计划为空无需写入 */
+export interface RosettaBodyWatermarkApplyResult {
+  fingerprint: string
+  bookId: number
+  planSignature: string
+  deleteCount: number
+  updateCount: number
+  totalPatches: number
+  /** applied 已写库并校验通过；noop 计划为空未备份未写库 */
+  status: 'applied' | 'noop'
+  /** applied 才有：同目录时间戳备份绝对路径；noop 为 '' */
+  backupPath: string
+  /** applied 才有：备份文件字节数 / sha256；noop 为 0 / '' */
+  backupSize: number
+  backupHash: string
+  blocksBefore: number
+  blocksAfter: number
 }

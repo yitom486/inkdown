@@ -2,6 +2,8 @@ import type { AppError } from '@shared/core/errors'
 import { err, type Result } from '@shared/core/result'
 import type {
   RosettaActiveImport,
+  RosettaBodyWatermarkApplyPayload,
+  RosettaBodyWatermarkApplyResult,
   RosettaBodyWatermarkPreviewPayload,
   RosettaBodyWatermarkPreviewResult,
   RosettaBookInfo,
@@ -81,5 +83,19 @@ export const rosettaApi = {
       return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
     }
     return api.previewBodyWatermark(payload)
+  },
+
+  /**
+   * 备份并应用正文水印清洗（须用户二次确认后调用；空计划返回 noop）。
+   * 确认前绝不调用：调用方须先展示签名/统计，确认后才调本方法。
+   */
+  async applyBodyWatermark(
+    payload: RosettaBodyWatermarkApplyPayload,
+  ): Promise<Result<RosettaBodyWatermarkApplyResult, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.applyBodyWatermark) {
+      return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
+    }
+    return api.applyBodyWatermark(payload)
   },
 }

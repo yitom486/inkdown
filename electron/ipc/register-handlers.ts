@@ -94,8 +94,10 @@ import { getRosettaBookInfo, queryRosettaBook } from '../services/book-db/query-
 import { getBookRecord } from '../services/book-db/queries'
 import { openBookDb } from '../services/book-db/open-book-db'
 import { previewBodyWatermarkFile } from '../services/book-db/body-watermark-preview'
+import { applyBodyWatermarkFile } from '../services/book-db/body-watermark-apply'
 import { rebuildTocIndex } from '../services/book-db/toc-rebuild'
 import type {
+  RosettaBodyWatermarkApplyPayload,
   RosettaBodyWatermarkPreviewPayload,
   RosettaImportPayload,
   RosettaImportStatus,
@@ -704,6 +706,31 @@ export function registerIpcHandlers(): void {
         return err({
           code: 'UNKNOWN',
           message: cause instanceof Error ? cause.message : '正文水印预览失败',
+        })
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IPC.ROSETTA_APPLY_BODY_WATERMARK,
+    (_event, payload: RosettaBodyWatermarkApplyPayload) => {
+      try {
+        const fingerprint =
+          typeof payload?.fingerprint === 'string' ? payload.fingerprint.trim() : ''
+        if (!fingerprint) {
+          return err({ code: 'INVALID_ARGUMENT', message: '缺少文件指纹' })
+        }
+        // 备份并应用：须用户在 UI 二次确认后调用；签名/统计由服务在同一连接重算比对
+        return applyBodyWatermarkFile(app.getPath('userData'), fingerprint, {
+          fingerprint,
+          planSignature: payload?.planSignature,
+          deleteCount: payload?.deleteCount,
+          updateCount: payload?.updateCount,
+        })
+      } catch (cause) {
+        return err({
+          code: 'UNKNOWN',
+          message: cause instanceof Error ? cause.message : '正文水印应用失败',
         })
       }
     },
