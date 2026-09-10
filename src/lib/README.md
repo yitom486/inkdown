@@ -109,7 +109,7 @@
 | `parse-chapter-mark-plan` / `promote-chapter-mark-plans` | 章级划重点 tool 解析与 promote |
 | `mark-proposal-failure` | 提议/采用失败分类与「打开该章 / 去划词」引导 |
 
-`agent/context/`（原 `agent-context/`）：静态 Skill、turn-context、阅读器内容/选区/标记 registry、MCP 快照序列化；标记提议统一走 `propose-mark`（`inkdown_propose_mark`）；目录 Agent 草稿走 `toc-draft`（`toc_*` 工具经快照回路写入，人点保存才进缓存）；已入库内容审计走 `inspect-indexed-content`（`inkdown_inspect_content` 经快照回路只读取证）。
+`agent/context/`（原 `agent-context/`）：静态 Skill、turn-context、阅读器内容/选区/标记 registry、MCP 快照序列化；标记提议统一走 `propose-mark`（`inkdown_propose_mark`）；目录 Agent 草稿走 `toc-draft`（`toc_*` 工具经快照回路写入，人点保存才进缓存）；已入库内容审计走 `inspect-indexed-content`（`inkdown_inspect_content` 经快照回路只读取证）；编辑器内存审计走 `inspect-editor-buffer`（当前 .md 未保存修改可见，`editor-buffer` 来源）。
 
 ---
 

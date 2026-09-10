@@ -1,9 +1,8 @@
 /**
- * 统一内容审计契约（P0：仅已入库 PDF，后端 source='book-index'）。
- *
- * 公开命名不绑定 PDF：未来 pdf-native / editor-buffer / workspace-file
- * 复用同一命中结构。Agent 不得提交 fingerprint、路径、SQL 或正则，
- * 查询一律绑定当前打开文档（渲染端快照侧绑定）。
+ * 统一内容审计契约（P0 已入库 PDF source='book-index'；P2.1 编辑器内存
+ * source='editor-buffer'）。公开命名不绑定 PDF：未来 pdf-native /
+ * workspace-file 复用同一命中结构。Agent 不得提交 fingerprint、路径、
+ * SQL 或正则，查询一律绑定当前打开文档（渲染端快照侧绑定）。
  */
 
 /** 命中来源；P0 只返回 'book-index'，不得伪造其他来源 */
@@ -12,14 +11,16 @@ export type ContentAuditSource = 'book-index' | 'pdf-native' | 'editor-buffer' |
 export type ContentAuditMatchPosition = 'start' | 'end' | 'middle' | 'multiple'
 
 export interface ContentAuditHit {
-  source: 'book-index'
+  source: ContentAuditSource
   locator: {
-    /** PDF 页码（1-indexed），P0 必有 */
-    pageNumber: number
+    /** PDF 页码（1-indexed）；editor-buffer 不返回，不得伪造 */
+    pageNumber?: number
     /** 章节标题；块无归属时为 null，不得编造 */
-    chapterTitle: string | null
-    /** blocks.id，P0 必有 */
-    blockId: number
+    chapterTitle?: string | null
+    /** blocks.id；editor-buffer 不返回 */
+    blockId?: number
+    /** editor-buffer：命中所在行（1-based）；filePath 永不返回 */
+    lineStart?: number
   }
   text: string
   textTruncated: boolean
