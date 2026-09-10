@@ -137,6 +137,7 @@ import {
 } from '@/lib/reader/export-reading-notes'
 import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr-prefetch'
 import { loadPersistedOcrPageCaches } from '@/lib/reader/pdf-ocr-page-hydrate'
+import { shouldAutoOcrViewportPage } from '@/lib/reader/pdf-page-auto-ocr'
 import { suggestTocPageOffset } from '@/lib/reader/toc-offset'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
@@ -260,6 +261,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     ? buildReadingFileFingerprint(filePath, data.data.byteLength)
     : ''
 
+  const rosettaImport = useRosettaImport(fileFingerprint)
+
   const {
     ocrPageCaches,
     ocrPageCachesRef,
@@ -280,6 +283,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     pdfDocRef,
     isScannedPdf,
     isMixedPdf,
+    // W3：导入进行中 runPageOcr 直接拒绝（防第二趟 OCR）
+    importRunning: rosettaImport.state === 'running',
     // 与覆盖层同族：pdfjs scale:1 视口即 PDF 点尺寸（含旋转）
     getPageSizePt: useCallback(async (page: number) => {
       const pdf = pdfDocRef.current
@@ -297,7 +302,6 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const ready = numPages > 0 && pdfDoc !== null
 
-  const rosettaImport = useRosettaImport(fileFingerprint)
   const rosettaInfoRef = useRef<RosettaBookInfo | null>(null)
   useEffect(() => {
     rosettaInfoRef.current = rosettaImport.info
@@ -462,6 +466,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     // 这里只负责打开 PDF、恢复缓存和初始化页面
     setOcrBannerDismissed(false)
     resetPageOcr()
+    // W3 补丁：缺层集合跟文档走，旧书页码不得触发新书自动认
+    missingWordLayerRef.current.clear()
     setTocOpen(false)
     pageAnchorRefs.current.clear()
 
@@ -1012,7 +1018,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   )
 
   useEffect(() => {
-    if (!pdfOcrBackgroundPrefetch || !isScannedPdf || !fileFingerprint || !ready || numPages < 1) {
+    if (
+      !pdfOcrBackgroundPrefetch ||
+      !isScannedPdf ||
+      !fileFingerprint ||
+      !ready ||
+      numPages < 1 ||
+      rosettaImport.state === 'running'
+    ) {
       return
     }
 
@@ -1055,7 +1068,83 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     pageNum,
     pdfOcrBackgroundPrefetch,
     ready,
+    rosettaImport.state,
     runPageOcr,
+  ])
+
+  // W3：导入每完成一块，把已落盘页缓存 merge 进来（U1 persist 边导边写）。
+  // 已在内存的页跳过 IPC；merge 不丢用户已认的其它页。
+  useEffect(() => {
+    if (!fileFingerprint || rosettaImport.state !== 'running' || rosettaImport.donePages <= 0) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const fresh = await loadPersistedOcrPageCaches(fileFingerprint, {
+        listPages: async () => {
+          const pagesResult = await listPdfOcrPages({ fileFingerprint })
+          if (!pagesResult.ok) return []
+          return pagesResult.value.filter((page) => !ocrPageCachesRef.current[page]?.words.length)
+        },
+        getPage: async (pageNumber) => {
+          const pageResult = await getPdfOcrPage({ fileFingerprint, page: pageNumber })
+          return pageResult.ok ? pageResult.value : null
+        },
+      })
+      if (!cancelled) hydratePageCaches(fresh)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [fileFingerprint, hydratePageCaches, rosettaImport.donePages, rosettaImport.state])
+
+  // W3 补丁：已上报无原生层的页集合。profile 可能晚于页面提交到达，
+  // 自动认页只看"该页报过缺层 + 当前页 + 无缓存 + 未导入"，不等扫描标志。
+  const missingWordLayerRef = useRef<Set<number>>(new Set())
+
+  // W3 补丁：只认当前页（窗口邻页只记不认，翻到再认；禁窗口并行 OCR）。
+  // 去重表 + 进行中检查保证同一页不叠跑；失败静默，手动「识别本页」不变。
+  const tryAutoOcrMissingPage = useCallback(() => {
+    const current = pageNumRef.current
+    if (ocrPageCachesRef.current[current]?.words.length) {
+      missingWordLayerRef.current.delete(current)
+      return
+    }
+    if (
+      !shouldAutoOcrViewportPage({
+        reportedMissing: missingWordLayerRef.current.has(current),
+        isCurrentPage: true,
+        hasCache: false,
+        importRunning: rosettaImportStateRef.current === 'running',
+      })
+    ) {
+      return
+    }
+    if (hasPendingPageOcr(current)) return
+    void runPageOcr(current).catch(() => {
+      // 静默：工具栏「识别本页」仍可手动重试
+    })
+  }, [hasPendingPageOcr, runPageOcr])
+
+  // W3 补丁：上报只记录；扫描标志后到 / 翻页 / 导入结束靠下面的 effect 补跑。
+  const handleWordLayerMissing = useCallback(
+    (missingPage: number) => {
+      missingWordLayerRef.current.add(missingPage)
+      tryAutoOcrMissingPage()
+    },
+    [tryAutoOcrMissingPage],
+  )
+
+  // W3 补丁：补跑——当前页已在 missing 集合但此前门为假（profile 未到/导入中/
+  // 翻页）时，条件具备即认一次；缓存到达后门自然为假。
+  useEffect(() => {
+    tryAutoOcrMissingPage()
+  }, [
+    pageNum,
+    isScannedPdf,
+    isMixedPdf,
+    rosettaImport.state,
+    tryAutoOcrMissingPage,
   ])
 
   useEffect(() => {
@@ -2129,6 +2218,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
                           theme={theme}
                           marks={marks}
                           ocrPageCache={ocrPageCaches[page] ?? null}
+                          onWordLayerMissing={handleWordLayerMissing}
                           transientSelection={
                             selectionSnapshot?.page === page ? selectionSnapshot : null
                           }

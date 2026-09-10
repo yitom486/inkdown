@@ -28,6 +28,8 @@ interface PdfPageViewProps {
   theme: 'dark' | 'light'
   marks: ReadingMark[]
   ocrPageCache?: PdfOcrPageCache | null
+  /** W3：无原生层又无词缓存时通知调用方（由调用方决定是否自动识别本页） */
+  onWordLayerMissing?: (pageNumber: number) => void
   transientSelection?: PdfSelectionSnapshot | null
   onMouseUp?: (pageNumber: number, pageElement: HTMLElement, point: { clientX: number; clientY: number }) => void
   onPointerOrigin?: (x: number, y: number) => void
@@ -40,6 +42,7 @@ export function PdfPageView({
   theme,
   marks,
   ocrPageCache,
+  onWordLayerMissing,
   transientSelection,
   onMouseUp,
   onPointerOrigin,
@@ -50,6 +53,11 @@ export function PdfPageView({
   const wrapperRef = useRef<HTMLDivElement>(null)
   const geometryDisposeRef = useRef<(() => void) | null>(null)
   const committedSourceRef = useRef<{ pdf: PDFDocumentProxy; pageNumber: number } | null>(null)
+  // 回调 ref 化：识别触发不引起渲染 effect 重跑（缓存到达后条件自然为假）
+  const onWordLayerMissingRef = useRef(onWordLayerMissing)
+  useEffect(() => {
+    onWordLayerMissingRef.current = onWordLayerMissing
+  }, [onWordLayerMissing])
   const [rendering, setRendering] = useState(true)
   const [hasCommittedPage, setHasCommittedPage] = useState(false)
   const [pageViewport, setPageViewport] = useState<PageViewport | null>(null)
@@ -140,6 +148,10 @@ export function PdfPageView({
           return sum + str.replace(/\s/g, '').length
         }, 0)
         const useOcrLayer = !pageHasNativeText(nativeCharCount) && !!ocrPageCache?.words.length
+        // W3：无原生层又无词缓存 → 上报，调用方按门控自动识别（本组件不直接 OCR）
+        if (!pageHasNativeText(nativeCharCount) && !ocrPageCache?.words.length) {
+          onWordLayerMissingRef.current?.(pageNumber)
+        }
 
         pageRoot.style.setProperty('--scale-factor', String(cssViewport.scale))
         pageRoot.style.setProperty('--user-unit', String(cssViewport.userUnit))

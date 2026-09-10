@@ -8,6 +8,7 @@ import {
   readPdfPageNativeText,
   textFromOcrPageCache,
 } from '@/lib/reader/pdf-page-text'
+import { assertPageOcrAllowed, mergeOcrPageCaches } from '@/lib/reader/pdf-page-auto-ocr'
 import type { PdfOcrPageCache } from '@shared/types/ocr'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 
@@ -28,11 +29,24 @@ export interface PdfPageOcrOptions {
    * 缺失时单页识别降级报错（调用方须从 pdfjs viewport 提供）。
    */
   getPageSizePt?: (page: number) => Promise<{ width: number; height: number } | null>
+  /**
+   * W3：全书导入进行中（调用方传 rosettaImport.state === 'running'）。
+   * 为 true 时 runPageOcr 直接拒绝，防第二趟 OCR 叠跑（W1：单次 OCR 常驻 2–3GB）。
+   */
+  importRunning?: boolean
 }
 
 export function usePdfPageOcr(options: PdfPageOcrOptions) {
-  const { filePath, fileFingerprint, pageNum, pdfDocRef, isScannedPdf, isMixedPdf, getPageSizePt } =
-    options
+  const {
+    filePath,
+    fileFingerprint,
+    pageNum,
+    pdfDocRef,
+    isScannedPdf,
+    isMixedPdf,
+    getPageSizePt,
+    importRunning = false,
+  } = options
   const pdfOcrScale = useAppSettingsStore((state) => state.pdfOcrScale)
 
   const [ocrPageCaches, setOcrPageCaches] = useState<Record<number, PdfOcrPageCache>>({})
@@ -41,6 +55,11 @@ export function usePdfPageOcr(options: PdfPageOcrOptions) {
 
   const ocrPagePendingRef = useRef<Map<number, Promise<string>>>(new Map())
   const ocrPageCachesRef = useRef(ocrPageCaches)
+  // 调用时刻判定（ref 镜像，避免回调身份随导入状态抖动）
+  const importRunningRef = useRef(importRunning)
+  useEffect(() => {
+    importRunningRef.current = importRunning
+  }, [importRunning])
 
   useEffect(() => {
     ocrPageCachesRef.current = ocrPageCaches
@@ -63,9 +82,9 @@ export function usePdfPageOcr(options: PdfPageOcrOptions) {
     ocrPagePendingRef.current.clear()
   }, [])
 
-  /** 文档打开：载入已持久化的页缓存 */
+  /** 文档打开 / 导入 progress：按页合并已持久化的页缓存（不丢内存中已有页） */
   const hydratePageCaches = useCallback((caches: Record<number, PdfOcrPageCache>) => {
-    setOcrPageCaches(caches)
+    setOcrPageCaches((prev) => mergeOcrPageCaches(prev, caches))
   }, [])
 
   const runPageOcr = useCallback(
@@ -78,6 +97,7 @@ export function usePdfPageOcr(options: PdfPageOcrOptions) {
       if (pending) return pending
 
       const task = (async () => {
+        assertPageOcrAllowed({ importRunning: importRunningRef.current, page })
         setOcrPagesInFlight((prev) => new Set(prev).add(page))
         try {
           const size = await getPageSizePt?.(page)
