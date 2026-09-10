@@ -15,6 +15,10 @@ import { normalizeWatermarkText } from './ocr-watermark'
  *      非 table 块去前导空白后精确以“早机教育”开头，删恰好 4 字，
  *      剩余 trim 非空；不碰结尾/中间/其他词。仅当前两者未命中才尝试，
  *      同一 block 至多一条补丁。
+ *   4. custom-edge（P1，显式参数传入，不写成硬编码）：归一化 token 只匹配
+ *      空白分隔的首/尾 token（首边优先，只替换一边）；整块恰为 token、
+ *      余空、table、中间命中一律不补丁。仅当前三者未命中才尝试，
+ *      内置优先，同一 block 至多一条补丁。
  * - type=table 永不产出补丁；输出只含 { id, action, before, after?, reason, pageNumber }，
  *   不携带、不修改 id/坐标/章节归属/type/confidence。
  */
@@ -24,6 +28,41 @@ export interface BodyBlockInput {
   type: BookBlockType
   content: string
   pageNumber: number
+}
+
+export interface BodyWatermarkPlanOptions {
+  /**
+   * P1 自定义边缘 token（用户输入原文，内部归一化校验）。
+   * 显式参数，不写成硬编码规则；非法值等价于未传（调用方应先用
+   * validateCustomEdgeToken 校验并提示）。
+   */
+  customEdgeToken?: unknown
+}
+
+/**
+ * 自定义水印文本校验（纯函数）。归一化后长度须 3–24；拒绝空值、
+ * 纯标点（归一化后为空）、纯数字、超长。返回归一化 token 供匹配用。
+ */
+export function validateCustomEdgeToken(
+  input: unknown,
+): { ok: true; token: string } | { ok: false; reason: string } {
+  if (typeof input !== 'string' || input.trim().length === 0) {
+    return { ok: false, reason: '自定义水印文本不能为空' }
+  }
+  const token = normalizeWatermarkText(input)
+  if (token.length === 0) {
+    return { ok: false, reason: '自定义水印文本不能是纯标点或空白' }
+  }
+  if ([...token].length < 3) {
+    return { ok: false, reason: '自定义水印文本至少需要 3 个字符' }
+  }
+  if ([...token].length > 24) {
+    return { ok: false, reason: '自定义水印文本最多 24 个字符' }
+  }
+  if (/^[\p{N}]+$/u.test(token)) {
+    return { ok: false, reason: '自定义水印文本不能是纯数字' }
+  }
+  return { ok: true, token }
 }
 
 export type BodyWatermarkAction = 'delete' | 'update'
@@ -126,7 +165,48 @@ function planAttachedStart(block: BodyBlockInput): BodyWatermarkPatch | null {
   }
 }
 
-function planOne(block: BodyBlockInput): BodyWatermarkPatch | null {
+/**
+ * P1 自定义边缘匹配。仅空白边界：首 token 或尾 token 归一化后等于 token
+ * 才剥离一边（首边优先），且只做一次替换。整块恰为 token 时不删
+ * （整块删除只允许内置 allowlist）。余 trim 为空也不补丁。
+ * 无空格黏连、中间命中、table 均不命中；不用正则。
+ */
+function planCustomEdge(block: BodyBlockInput, token: string): BodyWatermarkPatch | null {
+  const spans = splitTokenSpans(block.content)
+  if (spans.length === 0) return null
+  const first = spans[0]
+  const last = spans[spans.length - 1]
+  if (!first || !last) return null
+  let keepStart = -1
+  let keepEnd = -1
+  let edge: 'start' | 'end' | null = null
+  if (normalizeWatermarkText(first.text) === token) {
+    keepStart = first.end
+    keepEnd = block.content.length
+    edge = 'start'
+  } else if (normalizeWatermarkText(last.text) === token) {
+    keepStart = 0
+    keepEnd = last.start
+    edge = 'end'
+  } else {
+    return null
+  }
+  const raw = block.content.slice(keepStart, keepEnd)
+  if (raw === block.content) return null
+  // 与水印相邻的分隔空白一并带走，保持入库正文干净；整块/余空不补丁
+  const after = raw.trim()
+  if (after.length === 0) return null
+  return {
+    id: block.id,
+    action: 'update',
+    before: block.content,
+    after,
+    reason: `custom-edge-${edge}:${token}`,
+    pageNumber: block.pageNumber,
+  }
+}
+
+function planOne(block: BodyBlockInput, customToken: string | null): BodyWatermarkPatch | null {
   if (block.type === 'table') return null
   if (block.content.trim().length === 0) return null
   const norm = normalizeWatermarkText(block.content)
@@ -157,7 +237,10 @@ function planOne(block: BodyBlockInput): BodyWatermarkPatch | null {
     stripped.push(key)
     end -= 1
   }
-  if (stripped.length === 0) return planAttachedStart(block)
+  if (stripped.length === 0) {
+    // fallback 顺序：narrow 未命中才试自定义；内置优先，单块单补丁
+    return planAttachedStart(block) ?? (customToken ? planCustomEdge(block, customToken) : null)
+  }
   if (start >= end) {
     // 整块全由水印 token 组成（如“王道计 王道计 机教育 机教育”）：删块，不留空串
     return {
@@ -194,10 +277,17 @@ function planOne(block: BodyBlockInput): BodyWatermarkPatch | null {
 }
 
 /** 既有 blocks → 补丁提案（输入顺序即输出顺序，不重排 block_index） */
-export function planBodyWatermarkPatches(blocks: readonly BodyBlockInput[]): BodyWatermarkPatch[] {
+export function planBodyWatermarkPatches(
+  blocks: readonly BodyBlockInput[],
+  options?: BodyWatermarkPlanOptions,
+): BodyWatermarkPatch[] {
+  // 自定义 token 预校验一次：非法等价于未传（调用方应先用 validateCustomEdgeToken 提示）
+  const validated =
+    options && 'customEdgeToken' in options ? validateCustomEdgeToken(options.customEdgeToken) : null
+  const customToken = validated && validated.ok ? validated.token : null
   const patches: BodyWatermarkPatch[] = []
   for (const block of blocks) {
-    const patch = planOne(block)
+    const patch = planOne(block, customToken)
     if (patch) patches.push(patch)
   }
   return patches

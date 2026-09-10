@@ -120,8 +120,14 @@ export interface RosettaTocRebuildResult {
 /** 正文水印清洗只读预览请求：只传指纹，主进程只读库、不写库 */
 export interface RosettaBodyWatermarkPreviewPayload {
   fingerprint: string
-  /** 可选按页筛选样例（正整数）；不传返回全书前 20 条，统计始终全局 */
+  /** ???????????????????????????????? 20 ???????????? */
   samplePage?: number
+  /**
+   * P1 自定义水印文本原文（可选）：主进程归一化校验（3–24 字，拒绝纯标点/
+   * 纯数字/超长），仅做空白边界边缘匹配 preview；不进签名应用链
+   * （应用侧无参重算必然失配，天然写保护）。
+   */
+  customToken?: string
 }
 
 /** 预览样例单条：正文前后文本已截断（主进程侧截断，最多展示用） */

@@ -10,6 +10,7 @@ import type {
 import {
   computeBodyWatermarkPlanSignature,
   planBodyWatermarkPatches,
+  validateCustomEdgeToken,
   type BodyBlockInput,
   type BodyWatermarkPatch,
 } from '@shared/reader/body-watermark-plan'
@@ -63,6 +64,7 @@ export function previewBodyWatermarkInDb(
   db: DatabaseSync,
   fingerprint: string,
   samplePage?: number | null,
+  customToken?: unknown,
 ): Result<RosettaBodyWatermarkPreviewResult, AppError> {
   const fp = typeof fingerprint === 'string' ? fingerprint.trim() : ''
   if (!fp) {
@@ -70,6 +72,15 @@ export function previewBodyWatermarkInDb(
   }
   const pageResult = normalizeSamplePage(samplePage)
   if (!pageResult.ok) return pageResult
+  // P1 自定义 token：非法直接拒绝（带校验原因），不读库
+  let customEdgeToken: unknown
+  if (customToken !== undefined && customToken !== null) {
+    const validated = validateCustomEdgeToken(customToken)
+    if (!validated.ok) {
+      return err({ code: 'INVALID_ARGUMENT', message: validated.reason })
+    }
+    customEdgeToken = validated.token
+  }
   const record = getBookRecord(db, fp)
   if (!record) {
     return err({ code: 'INVALID_STATE', message: '本书尚未导入罗盘索引' })
@@ -91,7 +102,7 @@ export function previewBodyWatermarkInDb(
       pageNumber: row.pageNumber,
     })
   }
-  const patches = planBodyWatermarkPatches(inputs)
+  const patches = planBodyWatermarkPatches(inputs, { customEdgeToken })
   let deleteCount = 0
   let updateCount = 0
   const pages = new Set<number>()
@@ -128,6 +139,7 @@ export function previewBodyWatermarkFile(
   userDataDir: string,
   fingerprint: string,
   samplePage?: number | null,
+  customToken?: unknown,
 ): Result<RosettaBodyWatermarkPreviewResult, AppError> {
   const fp = typeof fingerprint === 'string' ? fingerprint.trim() : ''
   if (!fp) {
@@ -135,6 +147,12 @@ export function previewBodyWatermarkFile(
   }
   const pageResult = normalizeSamplePage(samplePage)
   if (!pageResult.ok) return pageResult
+  if (customToken !== undefined && customToken !== null) {
+    const validated = validateCustomEdgeToken(customToken)
+    if (!validated.ok) {
+      return err({ code: 'INVALID_ARGUMENT', message: validated.reason })
+    }
+  }
   const dbPath = getBookDbPath(userDataDir, fp)
   if (!existsSync(dbPath)) {
     return err({ code: 'FILE_NOT_FOUND', message: '本书尚未导入罗盘索引' })
@@ -143,7 +161,7 @@ export function previewBodyWatermarkFile(
   try {
     db = new DatabaseSync(dbPath, { readOnly: true })
     db.exec('PRAGMA query_only = ON')
-    return previewBodyWatermarkInDb(db, fp, pageResult.value)
+    return previewBodyWatermarkInDb(db, fp, pageResult.value, customToken)
   } catch (cause) {
     return err({
       code: 'UNKNOWN',

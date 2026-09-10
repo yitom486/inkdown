@@ -329,6 +329,88 @@ describe('body-watermark-preview 只读预览', () => {
     }
   })
 
+  it('P1 自定义 token 非法直接拒绝（参数先行，不读库）', () => {
+    const db = openMemDb()
+    try {
+      seedBook(db, 'preview-fp-custom-bad', [{ content: '版权所有 翻印必究', pageNumber: 36 }])
+      for (const bad of ['', '  ', '！！', 'ab', '20251015', `水${'印'.repeat(30)}`]) {
+        const result = previewBodyWatermarkInDb(db, 'preview-fp-custom-bad', null, bad)
+        expect(result.ok).toBe(false)
+        if (!result.ok) expect(result.error.code).toBe('INVALID_ARGUMENT')
+      }
+    } finally {
+      db.close()
+    }
+  })
+
+  it('P1 自定义有效：只增 custom-edge 补丁，内置统计逐字不变', () => {
+    const db = openMemDb()
+    try {
+      seedBook(db, 'preview-fp-custom-ok', [
+        { content: '版权所有 翻印必究', pageNumber: 36 },
+        { content: '本章小结 版权所有', pageNumber: 37 },
+        { content: '王道计', pageNumber: 38 },
+        { content: '普通正文，无水印', pageNumber: 39 },
+      ])
+      const builtin = previewBodyWatermarkInDb(db, 'preview-fp-custom-ok')
+      const custom = previewBodyWatermarkInDb(db, 'preview-fp-custom-ok', null, '版权所有')
+      expect(builtin.ok && custom.ok).toBe(true)
+      if (!builtin.ok || !custom.ok) return
+      // 内置部分逐字不变：delete 1（王道计整块），update 0
+      expect(builtin.value.deleteCount).toBe(1)
+      expect(builtin.value.updateCount).toBe(0)
+      expect(custom.value.deleteCount).toBe(1)
+      expect(custom.value.updateCount).toBe(2)
+      expect(custom.value.totalPatches).toBe(3)
+      expect(custom.value.reasonCounts['custom-edge-start:版权所有']).toBe(1)
+      expect(custom.value.reasonCounts['custom-edge-end:版权所有']).toBe(1)
+      // 签名必然不同：应用侧无参重算对不上，天然写保护
+      expect(custom.value.planSignature).not.toBe(builtin.value.planSignature)
+    } finally {
+      db.close()
+    }
+  })
+
+  it('P1 文件入口自定义预览只读：hash/size/mtime 与表计数不变', () => {
+    const fingerprint = 'preview-fp-custom-ro'
+    const { dir, dbPath } = createFileDb(fingerprint, [
+      { content: '版权所有 翻印必究', pageNumber: 36 },
+      { content: '王道计', pageNumber: 37 },
+    ])
+    try {
+      const countTables = (): string => {
+        const probe = new DatabaseSync(dbPath, { readOnly: true })
+        try {
+          return ['books', 'chapters', 'blocks', 'toc_entries', 'block_fts']
+            .map((table) => {
+              try {
+                return (probe.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n
+              } catch {
+                return -1
+              }
+            })
+            .join('/')
+        } finally {
+          probe.close()
+        }
+      }
+      const before = snapshotFile(dbPath)
+      const beforeTables = countTables()
+      const result = previewBodyWatermarkFile(dir, fingerprint, null, '版权所有')
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.updateCount).toBe(1)
+      expect(result.value.deleteCount).toBe(1)
+      const after = snapshotFile(dbPath)
+      expect(after.hash).toBe(before.hash)
+      expect(after.size).toBe(before.size)
+      expect(after.mtimeMs).toBe(before.mtimeMs)
+      expect(countTables()).toBe(beforeTables)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('P0.3 窄规则：attached-start 只 update、无 delete、无重复补丁', () => {
     const db = openMemDb()
     try {

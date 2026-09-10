@@ -703,7 +703,7 @@ export function registerIpcHandlers(): void {
         }
         // 只读预览：文件入口内部先判存在、不建库，以 readOnly + query_only 打开；
         // samplePage 原样透传，非法值由预览服务返回 INVALID_ARGUMENT
-        return previewBodyWatermarkFile(app.getPath('userData'), fingerprint, payload?.samplePage)
+        return previewBodyWatermarkFile(app.getPath('userData'), fingerprint, payload?.samplePage, payload?.customToken)
       } catch (cause) {
         return err({
           code: 'UNKNOWN',

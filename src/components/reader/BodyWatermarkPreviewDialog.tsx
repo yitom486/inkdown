@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { rosettaApi } from '@/api/rosetta-api'
 import { isOk } from '@shared/core/result'
+import { validateCustomEdgeToken } from '@shared/reader/body-watermark-plan'
 import type {
   RosettaBodyWatermarkApplyResult,
   RosettaBodyWatermarkPreviewResult,
@@ -20,6 +21,64 @@ interface BodyWatermarkPreviewDialogProps {
   open: boolean
   fingerprint: string
   onOpenChange: (open: boolean) => void
+}
+
+/**
+ * P1 自定义结果区：只展示本轮自定义候选（reason `custom-edge-*` 前缀过滤），
+ * 无任何应用入口。样例来自全局前 20 条，自定义候选超出时如实注明。
+ */
+function CustomPreviewResult({ preview }: { preview: RosettaBodyWatermarkPreviewResult }) {
+  const reasonEntries = Object.entries(preview.reasonCounts)
+    .filter(([reason]) => reason.startsWith('custom-edge-'))
+    .sort((a, b) => b[1] - a[1])
+  const samples = preview.samples.filter((sample) => sample.reason.startsWith('custom-edge-'))
+  const customCount = reasonEntries.reduce((sum, [, count]) => sum + count, 0)
+  const samplePages = new Set(samples.map((sample) => sample.pageNumber)).size
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span>自定义候选 {customCount} 条</span>
+        <span>样例涉及 {samplePages} 页</span>
+      </div>
+      {reasonEntries.length > 0 ? (
+        <ul className="space-y-1 text-xs">
+          {reasonEntries.map(([reason, count]) => (
+            <li key={reason} className="flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate" title={reason}>
+                {reason}
+              </span>
+              <span className="shrink-0 tabular-nums">× {count}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">本轮自定义规则无候选</p>
+      )}
+      {samples.length > 0 ? (
+        <ul className="space-y-2">
+          {samples.map((sample) => (
+            <li key={sample.id} className="rounded-md border p-2 text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>第 {sample.pageNumber} 页</span>
+                <span>#{sample.id}</span>
+                <span>自定义修剪</span>
+              </div>
+              <div className="mt-1 truncate" title={sample.reason}>
+                {sample.reason}
+              </div>
+              <div className="mt-1 break-all">前：{sample.before}</div>
+              {sample.after !== undefined ? (
+                <div className="mt-1 break-all">后：{sample.after}</div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {customCount > samples.length ? (
+        <p className="text-xs text-muted-foreground">样例为全局前 20 条，自定义候选超出部分未展示。</p>
+      ) : null}
+    </div>
+  )
 }
 
 /**
@@ -42,6 +101,11 @@ export function BodyWatermarkPreviewDialog({
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applyResult, setApplyResult] = useState<RosettaBodyWatermarkApplyResult | null>(null)
+  /** P1 自定义规则（仅预览）：输入原文 + 本轮自定义结果；绝无应用入口 */
+  const [customInput, setCustomInput] = useState('')
+  const [customLoading, setCustomLoading] = useState(false)
+  const [customError, setCustomError] = useState<string | null>(null)
+  const [customPreview, setCustomPreview] = useState<RosettaBodyWatermarkPreviewResult | null>(null)
 
   async function loadPreview(samplePage: number | null): Promise<void> {
     if (!fingerprint) return
@@ -85,6 +149,10 @@ export function BodyWatermarkPreviewDialog({
     setApplying(false)
     setApplyError(null)
     setApplyResult(null)
+    setCustomInput('')
+    setCustomLoading(false)
+    setCustomError(null)
+    setCustomPreview(null)
     void (async () => {
       try {
         const result = await rosettaApi.previewBodyWatermark({ fingerprint })
@@ -101,6 +169,52 @@ export function BodyWatermarkPreviewDialog({
       cancelled = true
     }
   }, [open, fingerprint])
+
+  /** P1 自定义预览：仅生成候选，不存在应用入口；输入一变就清旧结果 */
+  function handleCustomInputChange(value: string): void {
+    setCustomInput(value)
+    setCustomPreview(null)
+    setCustomError(null)
+  }
+
+  async function handleCustomPreview(): Promise<void> {
+    if (!fingerprint || customLoading) return
+    const token = customInput.trim()
+    if (!token) {
+      setCustomError('请输入自定义水印文本')
+      return
+    }
+    const validated = validateCustomEdgeToken(token)
+    if (!validated.ok) {
+      setCustomError(validated.reason)
+      return
+    }
+    let samplePage: number | null = null
+    const pageText = pageInput.trim()
+    if (pageText) {
+      const page = Number(pageText)
+      if (!Number.isInteger(page) || page < 1) {
+        setCustomError('页码须为正整数')
+        return
+      }
+      samplePage = page
+    }
+    setCustomLoading(true)
+    setCustomError(null)
+    try {
+      const result = await rosettaApi.previewBodyWatermark(
+        samplePage === null
+          ? { fingerprint, customToken: token }
+          : { fingerprint, samplePage, customToken: token },
+      )
+      if (isOk(result)) setCustomPreview(result.value)
+      else setCustomError(result.error.message || '预览失败')
+    } catch (cause) {
+      setCustomError(cause instanceof Error ? cause.message : '预览失败')
+    } finally {
+      setCustomLoading(false)
+    }
+  }
 
   /** 二次确认后才调应用通道；确认前仅展示签名/统计，绝不写库 */
   async function handleConfirmApply(): Promise<void> {
@@ -126,6 +240,11 @@ export function BodyWatermarkPreviewDialog({
   const reasonEntries = preview
     ? Object.entries(preview.reasonCounts).sort((a, b) => b[1] - a[1])
     : []
+
+  /** 自定义输入即时提示（纯本地校验；权威校验在主进程预览服务） */
+  const customLocalValidation = customInput.trim()
+    ? validateCustomEdgeToken(customInput.trim())
+    : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -233,6 +352,42 @@ export function BodyWatermarkPreviewDialog({
                       ))}
                     </ul>
                   )}
+                </div>
+                <div className="space-y-2 rounded-md border p-2">
+                  <div className="text-xs font-medium">自定义水印规则（仅预览）</div>
+                  <div className="text-xs text-muted-foreground">
+                    仅预览，尚未写入数据库；自定义规则目前不可应用。3–24 字，
+                    只匹配块首/块尾空白边界，不删整块、不碰中间。
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={customInput}
+                      placeholder="如 版权所有"
+                      aria-label="自定义水印文本"
+                      className="h-7 text-xs"
+                      onChange={(event) => handleCustomInputChange(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') void handleCustomPreview()
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 shrink-0"
+                      disabled={customLoading}
+                      onClick={() => void handleCustomPreview()}
+                    >
+                      {customLoading ? '生成中…' : '生成预览'}
+                    </Button>
+                  </div>
+                  {customLocalValidation && !customLocalValidation.ok ? (
+                    <p className="text-xs text-muted-foreground">{customLocalValidation.reason}</p>
+                  ) : null}
+                  {customError ? <p className="text-xs text-destructive">{customError}</p> : null}
+                  {customPreview ? (
+                    <CustomPreviewResult preview={customPreview} />
+                  ) : null}
                 </div>
               </>
             ) : (

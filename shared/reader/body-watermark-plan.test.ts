@@ -3,6 +3,7 @@ import {
   computeBodyWatermarkPlanSignature,
   planBodyWatermarkPatches,
   TRIM_ELIGIBLE_WATERMARKS,
+  validateCustomEdgeToken,
   WHOLE_BLOCK_ONLY_WATERMARKS,
   type BodyBlockInput,
 } from './body-watermark-plan'
@@ -166,5 +167,85 @@ describe('body-watermark-plan', () => {
     const reversed = computeBodyWatermarkPlanSignature([...patches].reverse())
     expect(forward).toBe(reversed)
     expect(forward).toMatch(/^[0-9a-f]{64}$/)
+  })
+})
+
+describe('P1 自定义边缘规则', () => {
+  it('块首/块尾空白边界各一例，正确 update', () => {
+    const patches = planBodyWatermarkPatches(
+      [
+        block({ id: 1, content: '版权所有 翻印必究' }),
+        block({ id: 2, content: '本章小结 版权所有' }),
+      ],
+      { customEdgeToken: '版权所有' },
+    )
+    expect(patches).toHaveLength(2)
+    expect(patches[0]).toMatchObject({
+      id: 1,
+      action: 'update',
+      after: '翻印必究',
+      reason: 'custom-edge-start:版权所有',
+    })
+    expect(patches[1]).toMatchObject({
+      id: 2,
+      action: 'update',
+      after: '本章小结',
+      reason: 'custom-edge-end:版权所有',
+    })
+  })
+
+  it('黏连/中间/table/纯整块不命中', () => {
+    const patches = planBodyWatermarkPatches(
+      [
+        block({ id: 3, content: '版权所有正文' }),
+        block({ id: 4, content: '正文版权所有正文' }),
+        block({ id: 5, type: 'table', content: '版权所有 说明' }),
+        block({ id: 6, content: '版权所有' }),
+        block({ id: 7, content: '版权所有   ' }),
+      ],
+      { customEdgeToken: '版权所有' },
+    )
+    expect(patches).toEqual([])
+  })
+
+  it('输入校验：空/纯标点/过短/超长/纯数字被拒绝', () => {
+    expect(validateCustomEdgeToken('').ok).toBe(false)
+    expect(validateCustomEdgeToken('   ').ok).toBe(false)
+    expect(validateCustomEdgeToken('！！！。。。').ok).toBe(false)
+    expect(validateCustomEdgeToken('王道').ok).toBe(false)
+    expect(validateCustomEdgeToken(`水${'印'.repeat(30)}`).ok).toBe(false)
+    expect(validateCustomEdgeToken('20251015').ok).toBe(false)
+    expect(validateCustomEdgeToken(123).ok).toBe(false)
+    const good = validateCustomEdgeToken('  版权所有  ')
+    expect(good).toEqual({ ok: true, token: '版权所有' })
+  })
+
+  it('非法自定义 token 等价于未传，不影响内置规则', () => {
+    const patches = planBodyWatermarkPatches([block({ id: 8, content: '王道计' })], {
+      customEdgeToken: '!!',
+    })
+    expect(patches).toHaveLength(1)
+    expect(patches[0]?.reason).toBe('whole-block:王道计')
+  })
+
+  it('冲突时内置优先，单块单补丁', () => {
+    // 首 token 命中内置 trim，自定义即使也能命中也不得重复
+    const patches = planBodyWatermarkPatches(
+      [block({ id: 9, content: '早机教育 单项选择题' })],
+      { customEdgeToken: '早机教育' },
+    )
+    expect(patches).toHaveLength(1)
+    expect(patches[0]?.reason).toBe('trim-edge:早机教育')
+  })
+
+  it('自定义改变签名（应用侧无参重算必然失配，写保护）', () => {
+    const inputs = [block({ id: 10, content: '版权所有 翻印必究' })]
+    const plain = computeBodyWatermarkPlanSignature(planBodyWatermarkPatches(inputs))
+    const custom = computeBodyWatermarkPlanSignature(
+      planBodyWatermarkPatches(inputs, { customEdgeToken: '版权所有' }),
+    )
+    expect(plain).not.toBe(custom)
+    // 无自定义时计划为空：空签名稳定
+    expect(computeBodyWatermarkPlanSignature(planBodyWatermarkPatches(inputs))).toBe(plain)
   })
 })
