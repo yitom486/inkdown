@@ -183,6 +183,116 @@ describe('importScannedBookToDb', () => {
     memDb.close()
   })
 
+  it('P1.2 preferNative：零运行时调用、无模型目录、ocrPages=0、全块 native', async () => {
+    const memDb = openMemDb()
+    let runtimeCalls = 0
+    const seenOptions: Record<string, unknown>[] = []
+    const nativeLoader = (async () => ({
+      OcrMode: { Auto: 'Auto', Off: 'Off' },
+      processPdfWithOcr: async (_data: unknown, options: Record<string, unknown>) => {
+        seenOptions.push({ ...options })
+        const pageNumbers = (options.pageNumbers as number[] | undefined) ?? [1, 2, 3]
+        return {
+          pagesRoutedToOcr: [],
+          pages: pageNumbers.map((page) => ({
+            pageNumber: page,
+            markdown: `# P${page} 标题\n\nP${page} 原生正文`,
+            spans: [],
+          })),
+        }
+      },
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, preferNative: true },
+      undefined,
+      {
+        loadInspector: nativeLoader,
+        ensureRuntime: async () => {
+          runtimeCalls += 1
+          return ok({ modelDir: 'models' })
+        },
+        readPdf: async () => Buffer.from('pdf'),
+        openDb: () => memDb,
+      },
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      memDb.close()
+      return
+    }
+    expect(runtimeCalls).toBe(0)
+    expect(seenOptions).toHaveLength(1)
+    expect(seenOptions[0]?.mode).toBe('Off')
+    expect(seenOptions[0]?.modelDirectory).toBeUndefined()
+    expect(result.value).toMatchObject({ ocrPages: 0, nativePages: 3 })
+    const rows = memDb
+      .prepare('SELECT source AS s, extract_version AS v FROM blocks')
+      .all() as { s: string; v: string }[]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row.s).toBe('native')
+      expect(row.v).toBe(ROSETTA_CLEAN_VERSION)
+    }
+    memDb.close()
+  })
+
+  it('P1.2 缺省仍走 OCR 运行时（回归）', async () => {
+    const memDb = openMemDb()
+    let runtimeCalls = 0
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      basePayload,
+      undefined,
+      {
+        ...memDeps([], memDb),
+        ensureRuntime: async () => {
+          runtimeCalls += 1
+          return ok({ modelDir: 'models' })
+        },
+      },
+    )
+    expect(result.ok).toBe(true)
+    expect(runtimeCalls).toBeGreaterThan(0)
+    memDb.close()
+  })
+
+  it('P1.2 直提全轮无字明确报错，不静默建空索引', async () => {
+    const memDb = openMemDb()
+    let runtimeCalls = 0
+    const emptyLoader = (async () => ({
+      OcrMode: { Auto: 'Auto', Off: 'Off' },
+      processPdfWithOcr: async (_data: unknown, options: { pageNumbers?: number[] }) => {
+        const pageNumbers = options?.pageNumbers ?? [1, 2, 3]
+        return {
+          pagesRoutedToOcr: [],
+          pages: pageNumbers.map((page) => ({ pageNumber: page, markdown: '  ', spans: [] })),
+        }
+      },
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, preferNative: true },
+      undefined,
+      {
+        loadInspector: emptyLoader,
+        ensureRuntime: async () => {
+          runtimeCalls += 1
+          return ok({ modelDir: 'models' })
+        },
+        readPdf: async () => Buffer.from('pdf'),
+        openDb: () => memDb,
+      },
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.message).toContain('原生文字')
+    expect(runtimeCalls).toBe(0)
+    expect(
+      (memDb.prepare('SELECT COUNT(*) AS n FROM blocks').get() as { n: number }).n,
+    ).toBe(0)
+    memDb.close()
+  })
+
   it('取消后重进只做剩余块（续跑）', async () => {
     const calls: string[] = []
     const memDb = openMemDb()

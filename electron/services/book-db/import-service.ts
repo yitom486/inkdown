@@ -107,9 +107,15 @@ async function runImport(
   deps: RosettaImportDeps | undefined,
 ): Promise<Result<RosettaImportStats, AppError>> {
   const ensureRuntime = deps?.ensureRuntime ?? ensureInspectorOcrRuntime
-  const runtime = await ensureRuntime()
-  if (!runtime.ok) {
-    return err({ code: 'OCR_FAILED', message: runtime.error.message })
+  // P1.2：纯文字书直提，跳过 OCR 运行时（不下载/校验模型）；扫描/混合走旧行为
+  const preferNative = payload.preferNative === true
+  let modelDir: string | undefined
+  if (!preferNative) {
+    const runtime = await ensureRuntime()
+    if (!runtime.ok) {
+      return err({ code: 'OCR_FAILED', message: runtime.error.message })
+    }
+    modelDir = runtime.value.modelDir
   }
   let data: Buffer
   try {
@@ -228,6 +234,9 @@ async function runImport(
   const routedPages = new Set<number>()
   const skippedPages: number[] = []
   let chunkNo = 0
+  // P1.2 直提空书判定：本轮是否实际提取过、是否见过非空文字
+  let ranExtraction = false
+  let sawText = false
   const totalChunks = Math.ceil(plannedTotal / chunkSize)
   for (let start = 1; start <= plannedTotal; start += chunkSize) {
     const end = Math.min(plannedTotal, start + chunkSize - 1)
@@ -251,10 +260,12 @@ async function runImport(
     }
     try {
       chunk = await mod.processPdfWithOcr(data, {
-        mode: mod.OcrMode.Auto,
+        // P1.2：直提档只做原生提取（Spike 已证：无需 modelDirectory，routed 为空）；
+        // modelDirectory 缺省即不传，napi 侧为 None
+        mode: preferNative ? mod.OcrMode.Off : mod.OcrMode.Auto,
         pageNumbers: rangePages,
         dpi,
-        modelDirectory: runtime.value.modelDir,
+        modelDirectory: modelDir,
         offline: true,
         minimumConfidence: 0.3,
       })
@@ -264,6 +275,15 @@ async function runImport(
       return err({ code: 'OCR_FAILED', message })
     }
     const chunkPages = [...chunk.pages].sort((a, b) => a.pageNumber - b.pageNumber)
+    ranExtraction = true
+    if (!sawText) {
+      for (const page of chunkPages) {
+        if ((page.markdown ?? '').trim()) {
+          sawText = true
+          break
+        }
+      }
+    }
     const chunkSpans = new Map<number, InspectorSpanLike[]>()
     for (const page of chunkPages) {
       chunkSpans.set(page.pageNumber, page.spans ?? [])
@@ -312,6 +332,13 @@ async function runImport(
   const ocrPages = routedPages.size + countPagesWithBbox(db, bookId, skippedPages)
   const chapters = index.toc.filter((entry) => entry.level <= 1).length
   const blocks = countBookBlocks(db, bookId)
+  // P1.2：直提档本轮实际提取过、且库内仍零块、且全轮无字 → 明确报错，
+  // 禁止静默建成空索引；用户要 OCR 请走扫描书路径（或以后按页 OCR）。
+  // 续跑复用（库已有块）与扫描档不受此门限影响。
+  if (preferNative && ranExtraction && !sawText && blocks === 0) {
+    log('import failed: 本书未提取到原生文字')
+    return err({ code: 'OCR_FAILED', message: '本书未提取到原生文字，请确认是否为文字版 PDF' })
+  }
   log(
     `import done: ${title} ${chapters}章 ${blocks}块 ` +
       `原生${plannedTotal - ocrPages}/扫描${ocrPages} 总耗时${((Date.now() - t0) / 1000).toFixed(0)}s`,

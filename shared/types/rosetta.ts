@@ -21,6 +21,10 @@ export interface RosettaImportPayload {
   /** 总页数（渲染端 pdf.js 已知，主进程不再为此全量解析一次）；分段规划用 */
   pageCount: number
   toc: RosettaTocEntryInput[]
+  /**
+   * P1.2 pure-text fast path: true skips the OCR runtime (no ensureRuntime, no model download) and extracts native text with OcrMode.Off. Absent/false keeps the legacy path (ensureRuntime + Auto). Set only by PdfViewer as !isScannedPdf && !isMixedPdf; never by Agent/MCP.
+   */
+  preferNative?: boolean
 }
 
 export interface RosettaImportStats {

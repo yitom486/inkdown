@@ -123,6 +123,7 @@ import {
   clearWindowSelection,
 } from '@/lib/reader/reader-selection-dismiss'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
+import { resolvePreferNativeImport } from '@/lib/reader/pdf-import-mode'
 import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf-agent-search-gate'
 import { reportAppError } from '@/lib/workspace/report-error'
 import {
@@ -1714,8 +1715,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       scale: pdfOcrScale,
       pageCount: numPages,
       toc,
+      // P1.2：纯文字书直提，跳过 OCR 运行时；混合书仍走 OCR
+      preferNative: resolvePreferNativeImport({ isScannedPdf, isMixedPdf }),
     })
-  }, [filePath, numPages, ocrTocEntries, outlineUnits, pdfOcrScale, rosettaImport, tocPageOffset])
+  }, [filePath, numPages, ocrTocEntries, outlineUnits, pdfOcrScale, rosettaImport, tocPageOffset, isScannedPdf, isMixedPdf])
 
   /** 当前 OCR 目录签名（纯本地计算，与库内 toc_signature 同一规范化） */
   const currentRosettaTocSignature = useMemo(

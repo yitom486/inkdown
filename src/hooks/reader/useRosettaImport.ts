@@ -17,6 +17,8 @@ export interface RosettaImportStartArgs {
   /** 总页数（pdf.js 已知，主进程不再为此全量解析一次） */
   pageCount: number
   toc: RosettaTocEntryInput[]
+  /** P1.2：纯文字书直提（跳过 OCR 运行时），由 PdfViewer 按 !isScannedPdf && !isMixedPdf 设置 */
+  preferNative?: boolean
 }
 
 /**
