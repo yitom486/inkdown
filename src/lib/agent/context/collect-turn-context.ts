@@ -1,11 +1,38 @@
 import { getDocumentKind } from '@shared/types/document'
 import { resolveWebDocDocumentId, resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
+import type { ReaderFormat } from '@/lib/reader/reader-navigation-sync'
 import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
 
 export const TOC_TOP_LEVEL_LIMIT = 10
 export const TOC_TOP_LEVEL_LABEL_MAX = 40
+
+/**
+ * T2 阅读位置键（纯函数）：PDF 用页码（同章内 19→20 也变键，不用 flatIndex）；
+ * 其他已就绪格式（epub / web，MOBI 在 store 里也是 epub）用 flatIndex；
+ * 否则 null。不含 URL、路径、文件名。
+ */
+export function resolveReaderLocationKey(
+  format: ReaderFormat | null,
+  pageNum: number | null,
+  flatIndex: number,
+): string | null {
+  if (format === 'pdf') {
+    return typeof pageNum === 'number' && pageNum >= 1 ? `pdf:${pageNum}` : null
+  }
+  if (format === 'epub' || format === 'web') {
+    return flatIndex >= 0 ? `${format}:${flatIndex}` : null
+  }
+  return null
+}
+
+/** 从 navigation store 读 format/pageNum/flatIndex，供 buildInkdownPromptPrefix 使用 */
+export function collectReaderLocationKey(): string | null {
+  const reader = useReaderNavigationStore.getState()
+  if (!reader.ready) return null
+  return resolveReaderLocationKey(reader.format, reader.pageNum, reader.nav.flatIndex)
+}
 
 export function baseName(filePath: string): string {
   const index = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))

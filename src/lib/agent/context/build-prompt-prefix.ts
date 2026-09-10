@@ -1,5 +1,5 @@
 import type { AcpContentBlock } from '@shared/types/acp'
-import { collectActiveDocument, collectReadingState, collectTocTopLevelForDocument } from './collect-turn-context'
+import { collectActiveDocument, collectReaderLocationKey, collectReadingState, collectTocTopLevelForDocument } from './collect-turn-context'
 import { INKDOWN_STATIC_SKILL } from './inkdown-static-skill'
 import { beginPromptSelectionCycle } from './reader-selection-registry'
 import { takeTurnContextDecision } from './should-attach-turn-context'
@@ -20,6 +20,7 @@ export function buildInkdownPromptPrefix(threadId: string): AcpContentBlock[] {
     documentKey(activeDocument),
     undefined,
     hasSelection,
+    collectReaderLocationKey(),
   )
   if (!decision.attach) return blocks
 

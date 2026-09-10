@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { collectReadingState, collectTocTopLevel, TOC_TOP_LEVEL_LIMIT } from './collect-turn-context'
+import {
+  collectReadingState,
+  collectTocTopLevel,
+  resolveReaderLocationKey,
+  TOC_TOP_LEVEL_LIMIT,
+} from './collect-turn-context'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 
 describe('collectTocTopLevel', () => {
@@ -71,5 +76,27 @@ describe('collectReadingState', () => {
       collectReadingState({ path: '/book/a.pdf', kind: 'pdf', name: 'a.pdf' }),
     ).toBeUndefined()
     useReaderNavigationStore.setState({ ready: true })
+  })
+})
+
+describe('resolveReaderLocationKey', () => {
+  it('PDF 用页码不用 flatIndex（同章 19→20 变键）', () => {
+    expect(resolveReaderLocationKey('pdf', 19, 3)).toBe('pdf:19')
+    expect(resolveReaderLocationKey('pdf', 20, 3)).toBe('pdf:20')
+    expect(resolveReaderLocationKey('pdf', 0, 0)).toBeNull()
+    expect(resolveReaderLocationKey('pdf', null, 0)).toBeNull()
+  })
+
+  it('EPUB/web 用 flatIndex，无 pageNum 也可定位', () => {
+    expect(resolveReaderLocationKey('epub', null, 0)).toBe('epub:0')
+    expect(resolveReaderLocationKey('epub', null, 1)).toBe('epub:1')
+    expect(resolveReaderLocationKey('web', null, 2)).toBe('web:2')
+    expect(resolveReaderLocationKey('epub', null, -1)).toBeNull()
+  })
+
+  it('未就绪为 null，不含路径文件名', () => {
+    expect(resolveReaderLocationKey(null, 36, 0)).toBeNull()
+    expect(resolveReaderLocationKey('mobi', null, 0)).toBeNull()
+    expect(resolveReaderLocationKey('pdf', 36, 0)).not.toContain('/book')
   })
 })

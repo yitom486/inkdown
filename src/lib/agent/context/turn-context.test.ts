@@ -130,6 +130,13 @@ describe('INKDOWN_STATIC_SKILL', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('inkdown_read(scope=viewport)')
   })
 
+  it('T2：位置变化重贴，滞后句已删除', () => {
+    expect(INKDOWN_STATIC_SKILL).toContain('PDF page / reader location change')
+    expect(INKDOWN_STATIC_SKILL).not.toContain('not re-attached on every page turn')
+    expect(INKDOWN_STATIC_SKILL).toContain('reading.page')
+    expect(INKDOWN_STATIC_SKILL).toContain('inkdown_read(scope=viewport)')
+  })
+
   it('S1.3：已入库只读库口径与代码一致，不再教整书 OCR', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('Indexed PDFs')
     expect(INKDOWN_STATIC_SKILL).toContain('compass index already built')

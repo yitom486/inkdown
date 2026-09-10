@@ -8,6 +8,8 @@ export interface TurnContextTrackerState {
   lastDocumentKey: string | null
   /** 是否已经附加过至少一次 */
   attachedOnce: boolean
+  /** T2：上次附加时的位置键（翻页/换章即变，触发重贴） */
+  lastLocationKey: string | null
 }
 
 export interface TurnContextDecision {
@@ -17,7 +19,7 @@ export interface TurnContextDecision {
 }
 
 export function createTurnContextTrackerState(): TurnContextTrackerState {
-  return { turnsSinceAttach: 0, lastDocumentKey: null, attachedOnce: false }
+  return { turnsSinceAttach: 0, lastDocumentKey: null, attachedOnce: false, lastLocationKey: null }
 }
 
 /**
@@ -27,6 +29,8 @@ export function createTurnContextTrackerState(): TurnContextTrackerState {
  * 1. 打开的文档发生变化（含首次打开、关闭文档）；
  * 2. 距离上次附加已达 `interval` 轮；
  * 3. 本轮有**新的**用户选区待通知（仅带 hasSelection 一次；正文走工具，下轮默认不再带）。
+ * 4. T2：已附加过，且阅读位置键变化（含 null→有值、有值→null、页/章切换）；
+ *    快照仍是位置不是正文，documentChanged 不因此置 true。
  *
  * 附加后计数清零，避免每轮都拼装、把上下文撑满。
  */
@@ -35,13 +39,15 @@ export function decideTurnContext(
   currentDocumentKey: string | null,
   interval = TURN_CONTEXT_INTERVAL,
   hasSelection = false,
+  locationKey: string | null = null,
 ): TurnContextDecision {
   const documentChanged = state.attachedOnce
     ? currentDocumentKey !== state.lastDocumentKey
     : currentDocumentKey !== null
 
   const intervalReached = state.attachedOnce && state.turnsSinceAttach + 1 >= interval
-  const attach = documentChanged || intervalReached || hasSelection
+  const locationChanged = state.attachedOnce && locationKey !== state.lastLocationKey
+  const attach = documentChanged || intervalReached || hasSelection || locationChanged
 
   if (!attach) {
     return {
@@ -58,6 +64,7 @@ export function decideTurnContext(
       turnsSinceAttach: 0,
       lastDocumentKey: currentDocumentKey,
       attachedOnce: true,
+      lastLocationKey: locationKey,
     },
   }
 }
@@ -70,9 +77,10 @@ export function takeTurnContextDecision(
   currentDocumentKey: string | null,
   interval = TURN_CONTEXT_INTERVAL,
   hasSelection = false,
+  locationKey: string | null = null,
 ): TurnContextDecision {
   const state = trackerByThread.get(threadId) ?? createTurnContextTrackerState()
-  const decision = decideTurnContext(state, currentDocumentKey, interval, hasSelection)
+  const decision = decideTurnContext(state, currentDocumentKey, interval, hasSelection, locationKey)
   trackerByThread.set(threadId, decision.next)
   return decision
 }
