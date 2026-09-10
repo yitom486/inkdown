@@ -20,9 +20,12 @@ export type InkdownSnapshotResource =
   | 'suggest-chapters'
   | 'toc-draft-read'
   | 'toc-draft-write'
+  | 'content-audit'
 
 export interface InkdownSnapshotArgs {
   query?: string
+  /** content-audit：展示条数 1–10，缺省 10（非法值由审计服务报 INVALID_ARGUMENT） */
+  limit?: number
   flatIndex?: number
   title?: string
   note?: string

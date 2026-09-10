@@ -26,6 +26,7 @@ import {
 } from './toc-draft'
 import { readSelectionWithContext } from './read-selection-context'
 import { searchReaderContent } from './search-reader-content'
+import { inspectIndexedContentForAgent } from './inspect-indexed-content'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'
 
 function parseMarkProposalArgs(args?: InkdownSnapshotArgs): MarkProposalPayload {
@@ -160,6 +161,8 @@ export async function resolveInkdownSnapshot(
       return await readViewportText()
     case 'search':
       return JSON.stringify(await searchReaderContent(args?.query ?? ''), null, 2)
+    case 'content-audit':
+      return inspectIndexedContentForAgent(args?.query ?? '', args?.limit)
     case 'selection':
       return JSON.stringify(await readSelectionWithContext(), null, 2)
     case 'chapter':

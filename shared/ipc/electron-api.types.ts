@@ -93,6 +93,8 @@ import type {
   RosettaImportPayload,
   RosettaImportStats,
   RosettaImportStatus,
+  RosettaInspectContentPayload,
+  RosettaInspectContentResult,
   RosettaQuery,
   RosettaQueryResult,
   RosettaTocRebuildPayload,
@@ -210,6 +212,10 @@ export interface ElectronAPI {
   applyBodyWatermark: (
     payload: RosettaBodyWatermarkApplyPayload,
   ) => Promise<Result<RosettaBodyWatermarkApplyResult, AppError>>
+  /** 已入库内容只读取证（指纹由渲染端绑定当前文档，调用方不得自带） */
+  inspectRosettaContent: (
+    payload: RosettaInspectContentPayload,
+  ) => Promise<Result<RosettaInspectContentResult, AppError>>
   /** 探测本机 Bun 运行时是否可用 */
   getBunRuntimeStatus: () => Promise<Result<BunRuntimeStatus, AppError>>
   /** 安装 / 确保 Bun 运行时 */

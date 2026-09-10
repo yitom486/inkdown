@@ -15,7 +15,7 @@
 | `web-doc-api.ts` | 在线文档：抓取页面、发现目录 |
 | `bun-api.ts` | Bun 运行时状态查询与一键安装 |
 | `ocr-api.ts` | OCR 组件状态、单页识别、目录识别与目录页范围探测（只建议范围） |
-| `rosetta-api.ts` | 罗盘索引：扫描书一键导入、进度订阅、书信息、统一读查询、纯本地目录重建、正文水印只读预览、备份并应用正文水印（二次确认后调用，空计划 noop） |
+| `rosetta-api.ts` | 罗盘索引：扫描书一键导入、进度订阅、书信息、统一读查询、纯本地目录重建、正文水印只读预览、备份并应用正文水印（二次确认后调用，空计划 noop）、已入库内容只读取证 |
 | `pdf-inspect-api.ts` | pdf-inspector 主进程分类与整档 Markdown |
 | `query-keys.ts` | TanStack Query key 工厂 |
 | `query-keys.ts` | TanStack Query key 工厂 |

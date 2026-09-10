@@ -9,7 +9,7 @@ import type { ElectronAPI } from '@shared/ipc/electron-api.types'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
 import type { DetectPdfTocPagesPayload, GetPdfOcrTocPayload, GetPdfOcrPagePayload, ListPdfOcrPagesPayload, RecognizePdfPagePayload, RecognizePdfTocPayload, SavePdfOcrTocPayload } from '@shared/types/ocr'
 import type { ClassifyPdfDocumentPayload, ExtractPdfBookMarkdownPayload } from '@shared/types/pdf-inspect'
-import type { RosettaActiveImport, RosettaBodyWatermarkApplyPayload, RosettaBodyWatermarkPreviewPayload, RosettaImportPayload, RosettaImportStatus, RosettaQuery, RosettaTocRebuildPayload } from '@shared/types/rosetta'
+import type { RosettaActiveImport, RosettaBodyWatermarkApplyPayload, RosettaBodyWatermarkPreviewPayload, RosettaImportPayload, RosettaImportStatus, RosettaInspectContentPayload, RosettaQuery, RosettaTocRebuildPayload } from '@shared/types/rosetta'
 import type { QuizSessionRecord } from '@shared/types/quiz'
 
 const windowInit = ipcRenderer.sendSync(IPC.APP_GET_WINDOW_INIT) as WindowInit
@@ -115,6 +115,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke(IPC.ROSETTA_PREVIEW_BODY_WATERMARK, payload),
   applyBodyWatermark: (payload: RosettaBodyWatermarkApplyPayload) =>
     ipcRenderer.invoke(IPC.ROSETTA_APPLY_BODY_WATERMARK, payload),
+  inspectRosettaContent: (payload: RosettaInspectContentPayload) =>
+    ipcRenderer.invoke(IPC.ROSETTA_INSPECT_CONTENT, payload),
   getBunRuntimeStatus: () => ipcRenderer.invoke(IPC.BUN_GET_STATUS),
   installBunRuntime: () => ipcRenderer.invoke(IPC.BUN_INSTALL),
   toggleDevTools: () => {

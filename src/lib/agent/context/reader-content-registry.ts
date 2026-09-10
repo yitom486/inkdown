@@ -13,6 +13,12 @@ export interface ReaderUnitText {
 export interface ReaderContentProvider {
   /** provider 所属文件，切档时用于校验，避免返回上一本书的内容 */
   filePath: string
+  /**
+   * 罗盘指纹（`路径|字节数`，与 PdfViewer 的 fileFingerprint 同源）。
+   * 仅已入库链路需要的 Viewer 设置；缺省表示该文档不支持库审计，
+   * 快照侧据此拒绝而非编造指纹。
+   */
+  fileFingerprint?: string
   /** 当前章节 / 页的纯文本；EPUB/MOBI 取 iframe DOM，PDF 取 textContent，MD 取编辑器内容 */
   getCurrentText: () => Promise<string> | string
   /**

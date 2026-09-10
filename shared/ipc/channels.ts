@@ -181,6 +181,8 @@ export const IPC = {
   ROSETTA_PREVIEW_BODY_WATERMARK: 'rosetta:preview-body-watermark',
   /** invoke：备份并应用正文水印清洗（先备份校验，再单事务条件写，需二次确认后调用） */
   ROSETTA_APPLY_BODY_WATERMARK: 'rosetta:apply-body-watermark',
+  /** invoke：已入库内容只读取证（readOnly + query_only，不写库；指纹由渲染端绑定当前文档） */
+  ROSETTA_INSPECT_CONTENT: 'rosetta:inspect-content',
   /** main→renderer：OCR 组件下载/就绪状态推送 */
   OCR_COMPONENT_STATUS: 'ocr:component-status',
   /** invoke：追加保存测验记录到 JSONL */

@@ -25,7 +25,7 @@ describe('handleInkdownMcpRpc', () => {
     expect(response.result.protocolVersion).toBe('2025-06-18')
   })
 
-  it('tools/list 暴露合并后的 5 个工具', async () => {
+  it('tools/list 暴露合并后的 6 个工具', async () => {
     const response = (await handleInkdownMcpRpc(
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
       context(),
@@ -33,6 +33,7 @@ describe('handleInkdownMcpRpc', () => {
     const names = response.result.tools.map((t) => t.name)
     expect(names).toEqual([
       'inkdown_read',
+      'inkdown_inspect_content',
       'inkdown_get_selection',
       'inkdown_list_marks',
       'inkdown_suggest_chapters',

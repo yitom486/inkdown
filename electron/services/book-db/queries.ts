@@ -66,6 +66,23 @@ export function searchBookBlocks(
   return rows.map((row) => toHit(row, ''))
 }
 
+/**
+ * 全书全文搜索精确总数（与 searchBookBlocks 同一 MATCH + book 过滤；
+ * limit 只截断展示，total 必须精确，调用方不得用展示数冒充）。
+ */
+export function countSearchBookBlocks(db: DatabaseSync, bookId: number, keyword: string): number {
+  if (!keyword.trim()) return 0
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS total
+       FROM block_fts
+       JOIN blocks ON blocks.id = block_fts.rowid
+       WHERE block_fts MATCH ? AND blocks.book_id = ?`,
+    )
+    .get(escapeFtsQuery(keyword), bookId) as { total?: unknown } | undefined
+  return typeof row?.total === 'number' ? row.total : 0
+}
+
 /** 按章顺序读块：AI “第 N 章讲了什么”的直接数据源 */
 export function getChapterBlocks(
   db: DatabaseSync,

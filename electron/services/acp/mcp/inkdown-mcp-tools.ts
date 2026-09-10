@@ -62,6 +62,31 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
     },
   },
   {
+    name: 'inkdown_inspect_content',
+    description:
+      '块级取证：只针对当前打开且已入库的 PDF，按字面关键词返回至多 10 条 block 证据 ' +
+      '（PDF 页码、章节标题、block id、受限原文、命中位置 start/end/middle/multiple、精确总数与截断标记）。' +
+      '专供审计残留命中（如清洗后是否还有「王道计」、命中是正文还是水印碎片）；章节级阅读仍用 inkdown_read。' +
+      '只读，不建库、不 OCR；未入库或参数错误会直接报错。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '字面检索词，至少 3 个字符',
+        },
+        limit: {
+          type: 'number',
+          description: '展示条数 1–10，默认 10（只截断展示，不影响总数）',
+          minimum: 1,
+          maximum: 10,
+        },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'inkdown_get_selection',
     description:
       '获取用户当前选中的文本（高频独立工具）。若选区较短（≤30 字），仅向前后各补约 30 字作为 excerpt。' +
@@ -285,6 +310,29 @@ export async function callInkdownMcpTool(
       return callInkdownRead(context, 'chapter', args)
     case 'inkdown_search':
       return callInkdownRead(context, 'search', args)
+    case 'inkdown_inspect_content': {
+      const query = args?.query
+      if (typeof query !== 'string' || !query.trim()) {
+        return {
+          content: [{ type: 'text', text: 'inkdown_inspect_content 需要非空的 query 参数' }],
+          isError: true,
+        }
+      }
+      const limit = args?.limit
+      if (limit !== undefined && (typeof limit !== 'number' || !Number.isFinite(limit))) {
+        return {
+          content: [{ type: 'text', text: 'inkdown_inspect_content 的 limit 须为数字（1–10）' }],
+          isError: true,
+        }
+      }
+      // 隔离：只透传 query/limit；即使模型附带 fingerprint/路径/SQL 也一律丢弃，
+      // 查询绑定由渲染端快照侧完成
+      const text = await context.readSnapshot('content-audit', {
+        query,
+        ...(limit === undefined ? {} : { limit }),
+      })
+      return { content: [{ type: 'text', text }] }
+    }
     case 'inkdown_get_selection': {
       const text = await context.readSnapshot('selection')
       return { content: [{ type: 'text', text }] }

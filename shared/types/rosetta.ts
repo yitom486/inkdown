@@ -1,3 +1,4 @@
+import type { ContentAuditResult } from '../agent/content-audit'
 import type { BookDbBlockHit } from './book-db'
 
 /**
@@ -184,3 +185,16 @@ export interface RosettaBodyWatermarkApplyResult {
   blocksBefore: number
   blocksAfter: number
 }
+
+/**
+ * 已入库内容审计请求（P0，只读取证）：调用方传当前打开文档指纹 + 字面检索词；
+ * 不接受 book id、路径、SQL、正则。limit 缺省 10（1–10）。
+ */
+export interface RosettaInspectContentPayload {
+  fingerprint: string
+  query: string
+  limit?: number
+}
+
+/** 已入库内容审计结果：精确总数 + 至多 limit 条 block 证据（见 ContentAuditResult） */
+export type RosettaInspectContentResult = ContentAuditResult

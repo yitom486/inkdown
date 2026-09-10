@@ -10,6 +10,8 @@ import type {
   RosettaImportPayload,
   RosettaImportStats,
   RosettaImportStatus,
+  RosettaInspectContentPayload,
+  RosettaInspectContentResult,
   RosettaQuery,
   RosettaQueryResult,
   RosettaTocRebuildPayload,
@@ -97,5 +99,19 @@ export const rosettaApi = {
       return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
     }
     return api.applyBodyWatermark(payload)
+  },
+
+  /**
+   * 已入库内容只读取证（指纹须为当前打开文档，调用方不得自带任意指纹）。
+   * 未入库/参数错误返回错误，不建库、不迁移、不 OCR。
+   */
+  async inspectContent(
+    payload: RosettaInspectContentPayload,
+  ): Promise<Result<RosettaInspectContentResult, AppError>> {
+    const api = getElectronAPI()
+    if (!api?.inspectRosettaContent) {
+      return err({ code: 'API_UNAVAILABLE', message: '罗盘查询 API 不可用' })
+    }
+    return api.inspectRosettaContent(payload)
   },
 }

@@ -91,6 +91,7 @@ import {
   importScannedBookToDb,
 } from '../services/book-db/import-service'
 import { getRosettaBookInfo, queryRosettaBook } from '../services/book-db/query-service'
+import { inspectIndexedContentFile } from '../services/book-db/content-audit'
 import { getBookRecord } from '../services/book-db/queries'
 import { openBookDb } from '../services/book-db/open-book-db'
 import { previewBodyWatermarkFile } from '../services/book-db/body-watermark-preview'
@@ -101,6 +102,7 @@ import type {
   RosettaBodyWatermarkPreviewPayload,
   RosettaImportPayload,
   RosettaImportStatus,
+  RosettaInspectContentPayload,
   RosettaQuery,
   RosettaTocRebuildPayload,
 } from '@shared/types/rosetta'
@@ -731,6 +733,32 @@ export function registerIpcHandlers(): void {
         return err({
           code: 'UNKNOWN',
           message: cause instanceof Error ? cause.message : '正文水印应用失败',
+        })
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IPC.ROSETTA_INSPECT_CONTENT,
+    (_event, payload: RosettaInspectContentPayload) => {
+      try {
+        const fingerprint =
+          typeof payload?.fingerprint === 'string' ? payload.fingerprint.trim() : ''
+        if (!fingerprint) {
+          return err({ code: 'INVALID_ARGUMENT', message: '缺少文件指纹' })
+        }
+        // 只读取证：指纹由渲染端绑定当前打开文档；服务内判存在、不建库、
+        // readOnly + query_only 打开，不调 OCR/导入/迁移/清洗/写缓存
+        return inspectIndexedContentFile(
+          app.getPath('userData'),
+          fingerprint,
+          payload?.query,
+          payload?.limit,
+        )
+      } catch (cause) {
+        return err({
+          code: 'UNKNOWN',
+          message: cause instanceof Error ? cause.message : '内容审计失败',
         })
       }
     },

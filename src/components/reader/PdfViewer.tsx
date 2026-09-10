@@ -1043,6 +1043,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     const agentAutoOcr = () => useAppSettingsStore.getState().pdfOcrAgentAutoOcr
     return registerReaderContent({
       filePath,
+      // 罗盘指纹与 PdfViewer 同源：审计快照用它绑定当前文档，Agent 不可自带
+      fileFingerprint: fileFingerprint || undefined,
       getCurrentText: () => readAgentPageText(pageNumRef.current),
       // PDF 一页 ≈ 视口；多页同时露边时仍以当前页为主
       getViewportText: () => readAgentPageText(pageNumRef.current),
@@ -1115,7 +1117,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         }
       },
     })
-  }, [filePath, isScannedPdf, readAgentPageText, readPageText, readRosettaUnitText])
+  }, [filePath, fileFingerprint, isScannedPdf, readAgentPageText, readPageText, readRosettaUnitText])
 
   useEffect(() => {
     if (typeof window === 'undefined' || window.electronAPI?.e2ePdfStructure !== true) return
