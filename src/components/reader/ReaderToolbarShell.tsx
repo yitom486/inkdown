@@ -65,7 +65,7 @@ export function ReaderToolbarShell({
       ) : null}
       <span className="ml-2 min-w-0 truncate text-xs text-muted-foreground">{currentTitle}</span>
       {center ? <div className="flex min-w-0 flex-1 items-center justify-center gap-1">{center}</div> : null}
-      {trailing ? <div className="ml-auto flex items-center gap-2">{trailing}</div> : null}
+      {trailing ? <div className="ml-auto flex shrink-0 items-center gap-2">{trailing}</div> : null}
     </div>
   )
 }

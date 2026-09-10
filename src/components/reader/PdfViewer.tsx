@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { ChevronLeft, ChevronRight, Database, Loader2, Minus, Plus, ScanText, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Database, Loader2, ScanText, X } from 'lucide-react'
 import type { PDFDocumentProxy, PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
@@ -88,6 +88,11 @@ declare global {
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import { PdfOcrTocEditor } from '@/components/reader/PdfOcrTocEditor'
 import { PdfBookSearch } from '@/components/reader/PdfBookSearch'
+import {
+  PdfToolbarMoreMenu,
+  resolvePdfIndexBadge,
+  type PdfToolbarMenuItem,
+} from '@/components/reader/PdfToolbarMoreMenu'
 import { BodyWatermarkPreviewDialog } from '@/components/reader/BodyWatermarkPreviewDialog'
 import { TocAiPolishControl } from '@/components/reader/TocAiPolishControl'
 import type { OcrTocEntry } from '@shared/types/ocr'
@@ -1751,6 +1756,65 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     }
   }, [numPages, outlineUnits, ocrTocEntries, tocPageOffset, rosettaImport, rosettaRebuilding])
 
+  /**
+   * 工具栏状态徽章（纯函数判定，单测锁定）：未入库提示仅扫描版才有；
+   * 其他格式不提示，是否入库由用户自己选择。低频操作收进 moreMenuItems。
+   */
+  const indexBadge = resolvePdfIndexBadge({
+    hasFingerprint: Boolean(fileFingerprint),
+    importRunning: rosettaImport.state === 'running',
+    indexed: Boolean(rosettaImport.info),
+    tocStale: rosettaTocStatus === 'stale',
+    isScannedPdf,
+  })
+  const moreMenuItems: PdfToolbarMenuItem[] = []
+  if (fileFingerprint && !rosettaImport.info && rosettaImport.state !== 'running') {
+    moreMenuItems.push({
+      key: 'rosetta-import',
+      label: '建立罗盘索引',
+      title: '全书解析后建章节块索引并落盘（原生页直提、扫描页识别），之后 AI 直接读库不再现场识别',
+      onSelect: () => void handleRosettaImport(),
+    })
+  }
+  if (indexBadge === 'ready') {
+    moreMenuItems.push({
+      key: 'preview-watermark',
+      label: '预览正文水印清洗',
+      title: '只读统计正文水印清洗影响，不修改数据库',
+      onSelect: () => setBodyWatermarkPreviewOpen(true),
+    })
+  }
+  moreMenuItems.push(
+    { key: 'zoom-out', label: '缩小', onSelect: () => setScale((value) => Math.max(0.5, value - 0.1)) },
+    { key: 'zoom-in', label: '放大', onSelect: () => setScale((value) => Math.min(3, value + 0.1)) },
+    { key: 'fit-width', label: '适合宽度', onSelect: () => fitWidth() },
+  )
+  if (isScannedPdf) {
+    moreMenuItems.push({
+      key: 'recognize-page',
+      label: currentPageOcrBusy ? '识别中' : currentPageOcrReady ? '重新识别本页' : '识别本页',
+      title: '仅识别当前页文本层，不建全书索引',
+      disabled: !ready || currentPageOcrBusy,
+      onSelect: () => void handleRecognizePage(),
+    })
+  }
+  if (ocrTocAvailable && outlineSource === 'ocr') {
+    moreMenuItems.push({
+      key: 're-recognize-toc',
+      label: '重新识别目录',
+      disabled: ocrRecognizing || tocDetecting,
+      onSelect: () => setOcrTocEditorOpen(true),
+    })
+  }
+  if (ocrTocAvailable && (ocrRecognizedCount > 0 || outlineSource === 'ocr')) {
+    moreMenuItems.push({
+      key: 'clear-cache',
+      label: '清除缓存',
+      title: '清除本页/目录 OCR 缓存（不碰罗盘库）',
+      onSelect: () => void handleClearOcrCache(),
+    })
+  }
+
   let rosettaExtraAction: ReactNode | null = null
   if (fileFingerprint) {
     if (rosettaImport.state === 'running') {
@@ -1781,24 +1845,12 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       )
     } else if (rosettaImport.info && rosettaTocStatus === 'ready') {
       rosettaExtraAction = (
-        <span className="flex items-center gap-1">
-          <span
-            className="flex items-center gap-1 text-xs text-muted-foreground"
-            title={`罗盘索引：${rosettaImport.info.chapters} 章 / ${rosettaImport.info.blocks} 块，AI 直接读库`}
-          >
-            <Database className="size-3.5" aria-hidden />
-            ✓
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1 text-xs text-muted-foreground"
-            title="只读统计正文水印清洗影响，不修改数据库"
-            onClick={() => setBodyWatermarkPreviewOpen(true)}
-          >
-            预览正文水印清洗
-          </Button>
+        <span
+          className="flex items-center gap-1 text-xs text-muted-foreground"
+          title={`罗盘索引：${rosettaImport.info.chapters} 章 / ${rosettaImport.info.blocks} 块，AI 直接读库`}
+        >
+          <Database className="size-3.5" aria-hidden />
+          已入库
         </span>
       )
     } else if (rosettaImport.info && rosettaTocStatus === 'stale') {
@@ -1817,23 +1869,21 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           ) : (
             <Database className="size-3.5" aria-hidden />
           )}
-          更新罗盘目录
+          目录待更新
         </Button>
       )
     } else {
-      rosettaExtraAction = (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 gap-1 text-xs text-muted-foreground"
-          title="全书解析后建章节块索引并落盘（原生页直提、扫描页识别），之后 AI 直接读库不再现场识别"
-          onClick={() => void handleRosettaImport()}
-        >
-          <Database className="size-3.5" aria-hidden />
-          罗盘
-        </Button>
-      )
+      // 未入库只保留文字提示（不给建立按钮，动作在“更多工具”里）；
+      // 且仅扫描版才提示，其他格式是否入库由用户自己选择
+      rosettaExtraAction =
+        indexBadge === 'unindexed-scanned' ? (
+          <span
+            className="text-xs text-muted-foreground"
+            title="扫描版 PDF 尚未建立罗盘索引，AI 读库与正文搜索不可用；可在“更多工具”中建立"
+          >
+            未入库
+          </span>
+        ) : null
     }
   }
 
@@ -1935,68 +1985,6 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             <Button variant="ghost" size="icon-sm" disabled={pageNum >= numPages} onClick={goNext}>
               <ChevronRight className="size-4" />
             </Button>
-            <div className="mx-2 h-4 w-px bg-border/60" />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setScale((value) => Math.max(0.5, value - 0.1))}
-            >
-              <Minus className="size-4" />
-            </Button>
-            <span className="w-12 text-center text-xs text-muted-foreground">
-              {Math.round(scale * 100)}%
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setScale((value) => Math.min(3, value + 0.1))}
-            >
-              <Plus className="size-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="ml-1 h-7 text-xs" onClick={fitWidth}>
-              适合宽度
-            </Button>
-            {isScannedPdf ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-1 h-7 text-xs"
-                disabled={!ready || currentPageOcrBusy}
-                onClick={() => void handleRecognizePage()}
-              >
-                {currentPageOcrBusy ? (
-                  <>
-                    <Loader2 className="mr-1 size-3.5 animate-spin" />
-                    识别中
-                  </>
-                ) : currentPageOcrReady ? (
-                  '重新识别本页'
-                ) : (
-                  '识别本页'
-                )}
-              </Button>
-            ) : null}
-            {ocrTocAvailable && outlineSource === 'ocr' ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-1 h-7 text-xs"
-                disabled={ocrRecognizing || tocDetecting}
-                onClick={() => setOcrTocEditorOpen(true)}
-              >
-                重新识别目录
-              </Button>
-            ) : null}
-            {ocrTocAvailable && (ocrRecognizedCount > 0 || outlineSource === 'ocr') ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-1 h-7 text-xs text-muted-foreground"
-                onClick={() => void handleClearOcrCache()}
-              >
-                清除缓存
-              </Button>
-            ) : null}
           </>
         }
         trailing={
@@ -2009,6 +1997,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
               onJumpToPage={(page) => jumpToPage(page)}
             />
           ) : null}
+          <PdfToolbarMoreMenu items={moreMenuItems} />
           {isLoading ? (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           ) : isScannedPdf ? (
