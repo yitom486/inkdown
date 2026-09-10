@@ -5,13 +5,13 @@ export function isReaderSelectionToolbarTarget(target: EventTarget | null): bool
   )
 }
 
-/** 批注对话框、Radix 浮层等：点击时不应清掉阅读器选区高亮 */
+/** 批注对话框、Radix 浮层、Agent 面板等：点击时不应清掉阅读器选区高亮 */
 export function isReaderOverlayUiTarget(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
     Boolean(
       target.closest(
-        '[role="dialog"], [data-radix-popper-content-wrapper], [data-radix-select-content], [data-sonner-toaster]',
+        '[role="dialog"], [data-radix-popper-content-wrapper], [data-radix-select-content], [data-sonner-toaster], [data-keep-reader-selection]',
       ),
     )
   )

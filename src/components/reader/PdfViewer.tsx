@@ -118,6 +118,7 @@ import {
 import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
 import { waitForDom } from '@/lib/reader/wait-for-dom'
 import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
+import { focusAgentComposerOnReaderSelection } from '@/lib/agent/context/focus-agent-composer'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
@@ -251,6 +252,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setSelectionToolbarPos(getSelectionToolbarPosition(snapshot))
     // 原生 Selection 在此结束生命周期；SVG 临时选区接管视觉状态。
     clearWindowSelection(window)
+    // 与 Foliate/WebDoc 同口径：面板已打开时聚焦输入框（未打开不强制开）
+    focusAgentComposerOnReaderSelection()
   }, [filePath])
 
   const fileFingerprint = data

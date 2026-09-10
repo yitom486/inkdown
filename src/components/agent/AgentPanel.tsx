@@ -398,6 +398,7 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
       role="region"
       aria-label="Agent 聊天"
       data-testid="agent-panel"
+      data-keep-reader-selection
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/50 px-3">
         <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
