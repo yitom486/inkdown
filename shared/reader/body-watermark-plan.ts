@@ -4,13 +4,17 @@ import { normalizeWatermarkText } from './ocr-watermark'
 /**
  * 正文水印补丁规划器（纯函数，只产出提案，不碰库）。
  *
- * 安全边界（Phase 2.1 冻结）：
+ * 安全边界（Phase 2.1 冻结，P0.3 追加一条窄规则）：
  * - 绝不复用 cleanOcrWatermarks / expandWatermarkFragments：自动碎片扩展会把单字
  *   “王”收进水印集合并允许 token 修剪，本模块禁止这种行为。
- * - 两类显式规则，无“母体包含子串”“家族模糊匹配”“单字/双字自动扩展”：
+ * - 显式规则，无“母体包含子串”“家族模糊匹配”“单字/双字自动扩展”：
  *   1. wholeBlockOnly：整个 block 归一化后完全相等才删除（单字“王”只删独立块，
  *      “王 DMA 方式”不动）。
  *   2. trimEligible：归一化长度 ≥3 的显式 token，只修空白分隔的首尾。
+ *   3. attached-start:早机教育（P0.3，P0.2 审计结论 60/60 同形态才立项）：
+ *      非 table 块去前导空白后精确以“早机教育”开头，删恰好 4 字，
+ *      剩余 trim 非空；不碰结尾/中间/其他词。仅当前两者未命中才尝试，
+ *      同一 block 至多一条补丁。
  * - type=table 永不产出补丁；输出只含 { id, action, before, after?, reason, pageNumber }，
  *   不携带、不修改 id/坐标/章节归属/type/confidence。
  */
@@ -96,6 +100,32 @@ function splitTokenSpans(content: string): TokenSpan[] {
   return spans
 }
 
+/**
+ * P0.3 窄规则 attached-start:早机教育（P0.2 审计结论 60/60 同形态才立项）。
+ * 仅在 whole / 空白分隔修剪均未命中时调用（fallback 顺序），以此保证
+ * 同一 block 至多一条补丁、既有行为逐字不变。
+ * 条件（缺一即 null）：非 table（入口已保证）；去原始前导空白后精确以
+ * “早机教育”开头（字面量，不归一化、不家族扩展）；删恰好 4 字，其后一切
+ * 原样保留；剩余 trim() 非空。不碰结尾/中间/其他词。
+ */
+const NARROW_ATTACHED_START_PREFIX = '早机教育'
+
+function planAttachedStart(block: BodyBlockInput): BodyWatermarkPatch | null {
+  const leading = /^\s*/.exec(block.content)?.[0] ?? ''
+  const rest = block.content.slice(leading.length)
+  if (!rest.startsWith(NARROW_ATTACHED_START_PREFIX)) return null
+  const after = leading + rest.slice(NARROW_ATTACHED_START_PREFIX.length)
+  if (after === block.content || after.trim().length === 0) return null
+  return {
+    id: block.id,
+    action: 'update',
+    before: block.content,
+    after,
+    reason: `attached-start:${NARROW_ATTACHED_START_PREFIX}`,
+    pageNumber: block.pageNumber,
+  }
+}
+
 function planOne(block: BodyBlockInput): BodyWatermarkPatch | null {
   if (block.type === 'table') return null
   if (block.content.trim().length === 0) return null
@@ -127,7 +157,7 @@ function planOne(block: BodyBlockInput): BodyWatermarkPatch | null {
     stripped.push(key)
     end -= 1
   }
-  if (stripped.length === 0) return null
+  if (stripped.length === 0) return planAttachedStart(block)
   if (start >= end) {
     // 整块全由水印 token 组成（如“王道计 王道计 机教育 机教育”）：删块，不留空串
     return {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computeBodyWatermarkPlanSignature,
   planBodyWatermarkPatches,
   TRIM_ELIGIBLE_WATERMARKS,
   WHOLE_BLOCK_ONLY_WATERMARKS,
@@ -92,5 +93,78 @@ describe('body-watermark-plan', () => {
     expect(Object.keys(patches[0] ?? {}).sort()).toEqual(
       ['action', 'before', 'id', 'pageNumber', 'reason'].sort(),
     )
+  })
+
+  it('P0.3 窄规则：块首黏连早机教育删恰好 4 字', () => {
+    const patches = planBodyWatermarkPatches([
+      block({ id: 1, content: '早机教育4.2.1 指令寻址' }),
+      block({ id: 2, content: '早机教育二、综合应用题' }),
+    ])
+    expect(patches).toHaveLength(2)
+    expect(patches[0]).toMatchObject({
+      id: 1,
+      action: 'update',
+      before: '早机教育4.2.1 指令寻址',
+      after: '4.2.1 指令寻址',
+      reason: 'attached-start:早机教育',
+    })
+    expect(patches[1]).toMatchObject({
+      id: 2,
+      action: 'update',
+      after: '二、综合应用题',
+      reason: 'attached-start:早机教育',
+    })
+  })
+
+  it('P0.3：前导空白保留，余空白不补丁（整块规则优先）', () => {
+    const patches = planBodyWatermarkPatches([
+      block({ id: 3, content: '  早机教育正文' }),
+      // 纯水印块归整块删除，不走窄规则（同一 block 至多一条补丁）
+      block({ id: 4, content: '早机教育   ' }),
+    ])
+    expect(patches).toHaveLength(2)
+    expect(patches[0]).toMatchObject({ id: 3, action: 'update', after: '  正文' })
+    expect(patches[1]).toMatchObject({ id: 4, action: 'delete', reason: 'whole-block:早机教育' })
+  })
+
+  it('P0.3：中间/结尾黏连、table、王道计开头一律不动', () => {
+    const patches = planBodyWatermarkPatches([
+      block({ id: 5, content: '正文早机教育正文' }),
+      block({ id: 6, content: '正文早机教育残留' }),
+      block({ id: 7, type: 'table', content: '早机教育表格' }),
+      block({ id: 8, content: '王道计早机教育' }),
+      block({ id: 9, content: '机教育早机教育' }),
+    ])
+    expect(patches).toEqual([])
+  })
+
+  it('P0.3：与既有规则共存，单块单补丁，签名稳定', () => {
+    const inputs = [
+      block({ id: 10, content: '王道计' }),
+      block({ id: 11, content: '输入/输出系统 王道计' }),
+      block({ id: 12, content: '早机教育09. D' }),
+      block({ id: 13, content: '王 DMA 方式' }),
+      // 空格分隔的尾随早机教育仍走既有 trim（冻结行为不变），不进窄规则
+      block({ id: 14, content: '正文 早机教育' }),
+    ]
+    const patches = planBodyWatermarkPatches(inputs)
+    expect(patches).toHaveLength(4)
+    expect(new Set(patches.map((p) => p.id)).size).toBe(4)
+    expect(patches.find((p) => p.id === 10)?.action).toBe('delete')
+    expect(patches.find((p) => p.id === 11)).toMatchObject({ action: 'update', after: '输入/输出系统' })
+    expect(patches.find((p) => p.id === 12)).toMatchObject({
+      action: 'update',
+      after: '09. D',
+      reason: 'attached-start:早机教育',
+    })
+    expect(patches.find((p) => p.id === 14)).toMatchObject({
+      action: 'update',
+      after: '正文',
+      reason: 'trim-edge:早机教育',
+    })
+    const forward = computeBodyWatermarkPlanSignature(patches)
+    const reversed = computeBodyWatermarkPlanSignature([...patches].reverse())
+    expect(forward).toBe(reversed)
+    expect(forward).toMatch(/^[0-9a-f]{64}$/)
   })
 })

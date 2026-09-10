@@ -328,4 +328,34 @@ describe('body-watermark-preview 只读预览', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('P0.3 窄规则：attached-start 只 update、无 delete、无重复补丁', () => {
+    const db = openMemDb()
+    try {
+      seedBook(db, 'preview-fp-narrow', [
+        { content: '早机教育4.2.1 指令寻址', pageNumber: 10 },
+        { content: '早机教育二、综合应用题', pageNumber: 103 },
+        { content: '王道计', pageNumber: 36 },
+        { content: '普通正文，无水印', pageNumber: 37 },
+      ])
+      const result = previewBodyWatermarkInDb(db, 'preview-fp-narrow')
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.totalPatches).toBe(3)
+      expect(result.value.deleteCount).toBe(1)
+      expect(result.value.updateCount).toBe(2)
+      const reasons = Object.keys(result.value.reasonCounts)
+      expect(reasons).toContain('attached-start:早机教育')
+      expect(result.value.reasonCounts['attached-start:早机教育']).toBe(2)
+      // 同一 block 至多一条补丁：样例 id 无重复
+      const ids = result.value.samples.map((sample) => sample.id)
+      expect(new Set(ids).size).toBe(ids.length)
+      const narrow = result.value.samples.find((sample) =>
+        sample.before.startsWith('早机教育4.2.1'),
+      )
+      expect(narrow?.after).toBe('4.2.1 指令寻址')
+    } finally {
+      db.close()
+    }
+  })
 })
