@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { ok } from '@shared/core/result'
 import { migrateBookDb } from './schema'
 import { countBookBlocks } from './queries'
-import { isRosettaImportActive, importScannedBookToDb, type RosettaImportDeps } from './import-service'
+import { isRosettaImportActive, importScannedBookToDb, ROSETTA_CLEAN_VERSION, type RosettaImportDeps } from './import-service'
 
 // 最小 fake：3 页书，每页回固定标题行 + 正文行 + span
 type FakeLoader = NonNullable<RosettaImportDeps['loadInspector']>
@@ -136,6 +136,51 @@ describe('importScannedBookToDb', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('INVALID_ARGUMENT')
     expect(calls).toEqual([])
+  })
+
+  it('P1.1 混合路由：扫描页 ocr、文字页 native，版本落盘', async () => {
+    const memDb = openMemDb()
+    const mixedLoader = (async () => ({
+      OcrMode: { Auto: 'Auto' },
+      processPdfWithOcr: async (_data: unknown, options: { pageNumbers?: number[] }) => {
+        const pageNumbers = options.pageNumbers ?? [1, 2, 3]
+        return {
+          pagesRoutedToOcr: [1, 3],
+          pages: pageNumbers.map((page) =>
+            page === 2
+              ? { pageNumber: page, markdown: `# P${page} 标题\n\nP${page} 原生正文`, spans: [] }
+              : {
+                  pageNumber: page,
+                  markdown: `# P${page} 标题\n\nP${page} 正文第一段`,
+                  spans: [
+                    { text: `P${page} 正文第一段`, confidence: 0.9, x: 1, y: 2, width: 3, height: 4 },
+                  ],
+                },
+          ),
+        }
+      },
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb('unused-user-data', basePayload, undefined, {
+      loadInspector: mixedLoader,
+      ensureRuntime: async () => ok({ modelDir: 'models' }),
+      readPdf: async () => Buffer.from('pdf'),
+      openDb: () => memDb,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      memDb.close()
+      return
+    }
+    expect(result.value).toMatchObject({ ocrPages: 2, nativePages: 1 })
+    const rows = memDb
+      .prepare('SELECT page_number AS p, source AS s, extract_version AS v FROM blocks ORDER BY id')
+      .all() as { p: number; s: string; v: string }[]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row.v).toBe(ROSETTA_CLEAN_VERSION)
+      expect(row.s).toBe(row.p === 2 ? 'native' : 'ocr')
+    }
+    memDb.close()
   })
 
   it('取消后重进只做剩余块（续跑）', async () => {

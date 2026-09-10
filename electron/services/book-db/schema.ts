@@ -6,7 +6,7 @@ import type { DatabaseSync } from 'node:sqlite'
  * FTS 外部内容表才能用 content_rowid 挂接。
  */
 
-export const BOOK_DB_SCHEMA_VERSION = 3
+export const BOOK_DB_SCHEMA_VERSION = 4
 
 const MIGRATION_V1 = `
 CREATE TABLE IF NOT EXISTS books (
@@ -81,6 +81,12 @@ CREATE TABLE IF NOT EXISTS toc_entries (
   UNIQUE (book_id, toc_index)
 );
 CREATE INDEX IF NOT EXISTS idx_toc_entries_book ON toc_entries (book_id, toc_index);`,
+  // v4：blocks.source（native/ocr/unknown）+ extract_version（提取管线版本）。
+  // 旧行回填启发式：有 bbox 即有过 span 对齐 → ocr，否则 native。
+  // 注意：bbox 为空的表格块会被标 native（旧库无法区分，属已知近似；新行写入时准确）。
+  4: `ALTER TABLE blocks ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE blocks ADD COLUMN extract_version TEXT NOT NULL DEFAULT '';
+UPDATE blocks SET source = CASE WHEN bbox IS NULL THEN 'native' ELSE 'ocr' END;`,
 }
 
 export function getBookDbVersion(db: DatabaseSync): number {

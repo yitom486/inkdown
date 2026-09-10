@@ -6,6 +6,12 @@
 
 export type BookBlockType = 'heading' | 'paragraph' | 'table' | 'list'
 
+/**
+ * 块文本来源（P1.1，v4）：native=原生文字层直提，ocr=OCR 识别，
+ * unknown=未知（v4 前旧库回填失败时的兜底，正常流程不应出现）。
+ */
+export type BookBlockSource = 'native' | 'ocr' | 'unknown'
+
 export interface BookDbBlockBBox {
   /** PDF 点坐标，与 inspector span 同帧（左、下、宽、高，y-up） */
   x: number
@@ -24,4 +30,8 @@ export interface BookDbBlockHit {
   blockIndex: number
   /** FTS 高亮片段（无命中高亮时回退正文前 60 字） */
   snippet: string
+  /** P1.1：块文本来源；旧库缺列时查询层回退 'unknown' */
+  source: BookBlockSource
+  /** P1.1：提取管线版本（ROSETTA_CLEAN_VERSION）；旧库缺列时回退 '' */
+  extractVersion: string
 }

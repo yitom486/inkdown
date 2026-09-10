@@ -50,6 +50,29 @@ describe('searchBookBlocks', () => {
     const { db, bookId } = seedDb()
     expect(searchBookBlocks(db, bookId, '"流水线" OR 1=1 --')).toEqual([])
   })
+
+  it('命中带来源与版本（P1.1 新行写入）', () => {
+    const { db, bookId } = seedDb()
+    const hits = searchBookBlocks(db, bookId, '流水线')
+    expect(hits).toHaveLength(1)
+    // seedDb 经 importBookPages：有 spans 的页记 ocr（cleanVersion 由调用方给 'v3'）
+    expect(hits[0]).toMatchObject({ source: 'ocr', extractVersion: 'v3' })
+  })
+
+  it('v3 旧库无来源列时退化返回，source 回 unknown', () => {
+    const { db, bookId } = seedDb()
+    db.exec('ALTER TABLE blocks DROP COLUMN source')
+    db.exec('ALTER TABLE blocks DROP COLUMN extract_version')
+    const hits = searchBookBlocks(db, bookId, '流水线')
+    expect(hits).toHaveLength(1)
+    expect(hits[0]).toMatchObject({
+      pageNumber: 1,
+      chapterTitle: '第1章 概述',
+      source: 'unknown',
+      extractVersion: '',
+    })
+    expect(hits[0]?.snippet).toContain('流水线')
+  })
 })
 
 describe('getChapterBlocks / getBlockContext / locateBlock', () => {

@@ -16,6 +16,7 @@ import {
   type BodyWatermarkPatch,
 } from '@shared/reader/body-watermark-plan'
 import { getBookDbPath } from './open-book-db'
+import { migrateBookDb } from './schema'
 import { getBookRecord } from './queries'
 
 /**
@@ -465,6 +466,8 @@ export function applyBodyWatermarkFile(
   let db: DatabaseSync | undefined
   try {
     db = new DatabaseSync(dbPath)
+    // 写前与其他写路径一致先迁移（v4 加来源列；已迁移则空操作）
+    migrateBookDb(db)
     return applyBodyWatermarkInDb(
       db,
       fp,

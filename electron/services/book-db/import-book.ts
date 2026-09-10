@@ -168,6 +168,7 @@ export function importBookPages(db: DatabaseSync, args: ImportBookArgs): ImportB
     index,
     pages: args.pages.filter((p) => Number.isInteger(p.page) && p.page >= 1 && p.page <= args.pageCount),
     spansByPage: args.spansByPage,
+    extractVersion: args.cleanVersion,
   })
   return {
     bookId,
@@ -300,11 +301,53 @@ export interface ImportChunkInput {
   index: BookIndex
   pages: readonly ImportBookPageInput[]
   spansByPage?: ReadonlyMap<number, readonly InspectorSpanLike[]>
+  /**
+   * P1.1：本轮路由进 OCR 的页（import-service 按 chunk.pagesRoutedToOcr 给）。
+   * 显式集合优先；缺省时按有无可用 spans 推断（有 spans→ocr，否则 native）。
+   */
+  ocrPages?: ReadonlySet<number>
+  /** P1.1：写入块的 extract_version（调用方传清洗管线版本；缺省 ''） */
+  extractVersion?: string
+}
+
+/** 本页来源：显式路由集合优先，否则有可用 spans 即 ocr */
+function resolvePageSource(
+  page: number,
+  spans: readonly InspectorSpanLike[],
+  ocrPages: ReadonlySet<number> | undefined,
+): 'native' | 'ocr' {
+  if (ocrPages) return ocrPages.has(page) ? 'ocr' : 'native'
+  return spans.length > 0 ? 'ocr' : 'native'
+}
+
+/**
+ * 该页已有 ocr 块时，本轮 native 结果不得覆盖（续跑保护）。
+ * v4 前旧库无 source 列时查不到，视为空集（调用方均先迁移）。
+ */
+function findProtectedPages(db: DatabaseSync, bookId: number, pages: readonly number[]): Set<number> {
+  const fenced = new Set<number>()
+  if (pages.length === 0) return fenced
+  try {
+    const placeholders = pages.map(() => '?').join(',')
+    const rows = db
+      .prepare(
+        `SELECT DISTINCT page_number AS page FROM blocks
+         WHERE book_id = ? AND source = 'ocr' AND page_number IN (${placeholders})`,
+      )
+      .all(bookId, ...pages) as { page?: unknown }[]
+    for (const row of rows) {
+      if (typeof row?.page === 'number') fenced.add(row.page)
+    }
+  } catch {
+    // 旧库无 source 列：无保护信息，按原流程走（调用方均先 migrateBookDb）
+  }
+  return fenced
 }
 
 /**
  * 单块导入（单事务，原子）：先删该页范围旧块再插，重复执行幂等；
  * 章内序号从库中现有计数续排，跨块连续。空页只记进度不插块。
+ * P1.1：native 页已有 ocr 块时整页跳过（不删不插，保护已有 OCR 结果）。
  */
 export function importBookChunk(
   db: DatabaseSync,
@@ -315,12 +358,26 @@ export function importBookChunk(
   )
   if (validPages.length === 0) return { blocks: 0 }
   const chapterEntries = input.index.toc.filter((entry) => entry.level <= 1)
+  const extractVersion = typeof input.extractVersion === 'string' ? input.extractVersion : ''
+  // 先算每页来源：native 撞上已有 ocr 块的页整页跳过
+  const spansByPage = input.spansByPage
+  const incomingSource = new Map<number, 'native' | 'ocr'>()
+  for (const page of validPages) {
+    incomingSource.set(
+      page,
+      resolvePageSource(page, spansByPage?.get(page) ?? [], input.ocrPages),
+    )
+  }
+  const nativePages = validPages.filter((page) => incomingSource.get(page) === 'native')
+  const fenced = findProtectedPages(db, input.bookId, nativePages)
+  const writablePages = validPages.filter((page) => !fenced.has(page))
+  if (writablePages.length === 0) return { blocks: 0 }
   db.exec('BEGIN IMMEDIATE')
   try {
-    const placeholders = validPages.map(() => '?').join(',')
+    const placeholders = writablePages.map(() => '?').join(',')
     db.prepare(
       `DELETE FROM blocks WHERE book_id = ? AND page_number IN (${placeholders})`,
-    ).run(input.bookId, ...validPages)
+    ).run(input.bookId, ...writablePages)
 
     const chapterIdRows = db
       .prepare('SELECT chapter_index AS c, id FROM chapters WHERE book_id = ?')
@@ -339,12 +396,12 @@ export function importBookChunk(
 
     const insertBlock = db.prepare(
       `INSERT INTO blocks
-        (book_id, chapter_id, chapter_index, block_index, type, content, page_number, bbox, confidence)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (book_id, chapter_id, chapter_index, block_index, type, content, page_number, bbox, confidence, source, extract_version)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     let blocks = 0
     const orderedPages = [...input.pages]
-      .filter((p) => validPages.includes(p.page))
+      .filter((p) => writablePages.includes(p.page))
       .sort((a, b) => a.page - b.page)
     for (const { page, markdown } of orderedPages) {
       const classified = classifyMarkdownLines(markdown.split('\n'))
@@ -353,6 +410,7 @@ export function importBookChunk(
       const chapterIndex = chapter ? chapterEntries.indexOf(chapter) : -1
       const chapterId = chapterIndex >= 0 ? (chapterIdByIndex.get(chapterIndex) ?? null) : null
       const spans = input.spansByPage?.get(page) ?? []
+      const pageSource = incomingSource.get(page) ?? 'native'
       for (const block of classified) {
         const blockIndex = counters.get(chapterIndex) ?? 0
         counters.set(chapterIndex, blockIndex + 1)
@@ -367,6 +425,8 @@ export function importBookChunk(
           page,
           aligned ? JSON.stringify(aligned.bbox) : null,
           aligned ? aligned.confidence : null,
+          pageSource,
+          extractVersion,
         )
         blocks += 1
       }

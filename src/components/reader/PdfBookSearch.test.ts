@@ -25,6 +25,8 @@ function hit(over: Partial<BookDbBlockHit> = {}): BookDbBlockHit {
     chapterTitle: '第2章',
     blockIndex: 0,
     snippet: '',
+    source: 'ocr',
+    extractVersion: '',
     ...over,
   }
 }

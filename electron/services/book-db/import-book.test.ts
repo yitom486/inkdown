@@ -191,6 +191,74 @@ describe('importBookChunk', () => {
     const total = (db.prepare('SELECT COUNT(*) AS n FROM blocks').get() as { n: number }).n
     expect(total).toBe(4)
   })
+
+  it('P1.1：路由/spans 页记 ocr，其余记 native，extract_version 落盘', () => {
+    const { db, bookId, index } = setupChunkDb()
+    importBookChunk(db, {
+      bookId,
+      index,
+      pages: pageInput,
+      spansByPage: spans,
+      ocrPages: new Set([2]),
+      extractVersion: 'ocr-watermark-v3',
+    })
+    const rows = db
+      .prepare(
+        'SELECT page_number AS p, source AS s, extract_version AS v FROM blocks ORDER BY id',
+      )
+      .all() as { p: number; s: string; v: string }[]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row.v).toBe('ocr-watermark-v3')
+      expect(row.s).toBe(row.p === 2 ? 'ocr' : 'native')
+    }
+  })
+
+  it('P1.1：显式路由集合优先于 spans 推断', () => {
+    const { db, bookId, index } = setupChunkDb()
+    importBookChunk(db, {
+      bookId,
+      index,
+      pages: pageInput.slice(1, 2),
+      spansByPage: spans,
+      ocrPages: new Set<number>(),
+      extractVersion: 'ocr-watermark-v3',
+    })
+    const rows = db
+      .prepare('SELECT source AS s FROM blocks WHERE page_number = 2')
+      .all() as { s: string }[]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) expect(row.s).toBe('native')
+  })
+
+  it('P1.1 续跑保护：native 重跑不得覆盖已有 ocr 块', () => {
+    const { db, bookId, index } = setupChunkDb()
+    importBookChunk(db, {
+      bookId,
+      index,
+      pages: pageInput.slice(1, 2),
+      spansByPage: spans,
+      ocrPages: new Set([2]),
+      extractVersion: 'ocr-watermark-v3',
+    })
+    const readPage = () =>
+      db
+        .prepare('SELECT content AS c, source AS s FROM blocks WHERE page_number = 2 ORDER BY id')
+        .all() as { c: string; s: string }[]
+    const before = readPage()
+    expect(before.length).toBeGreaterThan(0)
+    expect(before.every((row) => row.s === 'ocr')).toBe(true)
+    // 同页以 native 重跑（无 spans、未路由）：整页跳过，内容与来源逐字不变
+    const retry = importBookChunk(db, {
+      bookId,
+      index,
+      pages: pageInput.slice(1, 2),
+      ocrPages: new Set<number>(),
+      extractVersion: 'ocr-watermark-v3',
+    })
+    expect(retry.blocks).toBe(0)
+    expect(readPage()).toEqual(before)
+  })
 })
 
 describe('ensureImportBookRow / getCompletedPages / markPagesCompleted', () => {

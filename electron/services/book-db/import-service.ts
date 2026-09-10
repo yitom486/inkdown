@@ -277,6 +277,13 @@ async function runImport(
           index,
           pages: chunkPages.map((page) => ({ page: page.pageNumber, markdown: page.markdown ?? '' })),
           spansByPage: chunkSpans,
+          // P1.1：本轮路由集合决定来源；extract_version 记当前清洗管线版本
+          ocrPages: new Set(
+            (Array.isArray(chunk.pagesRoutedToOcr) ? chunk.pagesRoutedToOcr : []).filter(
+              (page): page is number => Number.isInteger(page),
+            ),
+          ),
+          extractVersion: ROSETTA_CLEAN_VERSION,
         },
       ).blocks
     } catch (cause) {

@@ -11,6 +11,8 @@ function hit(partial: Partial<BookDbBlockHit> & { content: string }): BookDbBloc
     chapterTitle: null,
     blockIndex: 0,
     snippet: '',
+    source: 'unknown',
+    extractVersion: '',
     ...partial,
   }
 }

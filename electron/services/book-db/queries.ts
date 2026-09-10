@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { BookBlockType, BookDbBlockHit } from '@shared/types/book-db'
+import type { BookBlockSource, BookBlockType, BookDbBlockHit } from '@shared/types/book-db'
 
 /** FTS5 查询转义：包成双引号短语，防 `*`/`"`/OR 等语法字符炸查询 */
 export function escapeFtsQuery(keyword: string): string {
@@ -15,6 +15,12 @@ interface BlockRow {
   chapter_title?: unknown
   block_index?: unknown
   snippet?: unknown
+  source?: unknown
+  extract_version?: unknown
+}
+
+function toBlockSource(value: unknown): BookBlockSource {
+  return value === 'native' || value === 'ocr' ? value : 'unknown'
 }
 
 function toHit(row: BlockRow, fallbackContent: string): BookDbBlockHit {
@@ -31,6 +37,8 @@ function toHit(row: BlockRow, fallbackContent: string): BookDbBlockHit {
       typeof row.snippet === 'string' && row.snippet.length > 0
         ? row.snippet
         : content.slice(0, 60),
+    source: toBlockSource(row.source),
+    extractVersion: typeof row.extract_version === 'string' ? row.extract_version : '',
   }
 }
 
@@ -45,25 +53,36 @@ export function searchBookBlocks(
   limit = 20,
 ): BookDbBlockHit[] {
   if (!keyword.trim() || limit <= 0) return []
-  const rows = db
-    .prepare(
-      `SELECT
+  const selectList = (extra: string): string => `SELECT
         blocks.id AS id,
         blocks.type AS type,
         blocks.content AS content,
         blocks.page_number AS page_number,
         blocks.chapter_index AS chapter_index,
         chapters.title AS chapter_title,
-        blocks.block_index AS block_index,
+        blocks.block_index AS block_index${extra},
         snippet(block_fts, 0, '«', '»', '…', 12) AS snippet
       FROM block_fts
       JOIN blocks ON blocks.id = block_fts.rowid
       LEFT JOIN chapters ON chapters.id = blocks.chapter_id
       WHERE block_fts MATCH ? AND blocks.book_id = ?
-      LIMIT ?`,
-    )
-    .all(escapeFtsQuery(keyword), bookId, Math.floor(limit)) as BlockRow[]
-  return rows.map((row) => toHit(row, ''))
+      LIMIT ?`
+  const run = (extra: string): BlockRow[] =>
+    db
+      .prepare(selectList(extra))
+      .all(escapeFtsQuery(keyword), bookId, Math.floor(limit)) as BlockRow[]
+  try {
+    return run(`,
+        blocks.source AS source,
+        blocks.extract_version AS extract_version`).map((row) => toHit(row, ''))
+  } catch (cause) {
+    // v4 前旧库无 source 列（审计等只读路径不迁移）：退化 legacy 列，
+    // source 回 'unknown'；其他错误原样抛出
+    if (cause instanceof Error && /no such column/i.test(cause.message)) {
+      return run('').map((row) => toHit(row, ''))
+    }
+    throw cause
+  }
 }
 
 /**
@@ -99,6 +118,8 @@ export function getChapterBlocks(
         blocks.chapter_index AS chapter_index,
         chapters.title AS chapter_title,
         blocks.block_index AS block_index,
+        blocks.source AS source,
+        blocks.extract_version AS extract_version,
         '' AS snippet
       FROM blocks
       LEFT JOIN chapters ON chapters.id = blocks.chapter_id
@@ -122,6 +143,8 @@ export function getPageBlocks(db: DatabaseSync, bookId: number, page: number): B
         blocks.chapter_index AS chapter_index,
         chapters.title AS chapter_title,
         blocks.block_index AS block_index,
+        blocks.source AS source,
+        blocks.extract_version AS extract_version,
         '' AS snippet
       FROM blocks
       LEFT JOIN chapters ON chapters.id = blocks.chapter_id
@@ -151,6 +174,8 @@ export function getBlockContext(
         blocks.chapter_index AS chapter_index,
         chapters.title AS chapter_title,
         blocks.block_index AS block_index,
+        blocks.source AS source,
+        blocks.extract_version AS extract_version,
         '' AS snippet
       FROM blocks
       LEFT JOIN chapters ON chapters.id = blocks.chapter_id
@@ -280,6 +305,8 @@ export function getTocRangeBlocks(
         blocks.chapter_index AS chapter_index,
         chapters.title AS chapter_title,
         blocks.block_index AS block_index,
+        blocks.source AS source,
+        blocks.extract_version AS extract_version,
         '' AS snippet
       FROM blocks
       LEFT JOIN chapters ON chapters.id = blocks.chapter_id
