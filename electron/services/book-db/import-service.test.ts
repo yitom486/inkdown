@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { ok } from '@shared/core/result'
 import { migrateBookDb } from './schema'
 import { countBookBlocks } from './queries'
-import { isRosettaImportActive, importScannedBookToDb, ROSETTA_CLEAN_VERSION, type RosettaImportDeps } from './import-service'
+import { isRosettaImportActive, importScannedBookToDb, formatRosettaImportDoneMessage, ROSETTA_CLEAN_VERSION, type RosettaImportDeps } from './import-service'
 
 // 最小 fake：3 页书，每页回固定标题行 + 正文行 + span
 type FakeLoader = NonNullable<RosettaImportDeps['loadInspector']>
@@ -225,7 +225,7 @@ describe('importScannedBookToDb', () => {
     expect(seenOptions).toHaveLength(1)
     expect(seenOptions[0]?.mode).toBe('Off')
     expect(seenOptions[0]?.modelDirectory).toBeUndefined()
-    expect(result.value).toMatchObject({ ocrPages: 0, nativePages: 3 })
+    expect(result.value).toMatchObject({ ocrPages: 0, nativePages: 3, ocrSuggestedPages: [] })
     const rows = memDb
       .prepare('SELECT source AS s, extract_version AS v FROM blocks')
       .all() as { s: string; v: string }[]
@@ -446,5 +446,52 @@ describe('importScannedBookToDb', () => {
     if (!second.ok) expect(second.error.code).toBe('INVALID_STATE')
     await first
     expect(isRosettaImportActive()).toBe(false)
+  })
+
+  it('P1.3 preferNative 差页只标记不 OCR，完成文案带建议数', async () => {
+    const memDb = openMemDb()
+    let runtimeCalls = 0
+    const seenModes: unknown[] = []
+    const nativeLoader = (async () => ({
+      OcrMode: { Auto: 'Auto', Off: 'Off' },
+      processPdfWithOcr: async (_data: unknown, options: Record<string, unknown>) => {
+        seenModes.push(options.mode)
+        return {
+          pagesRoutedToOcr: [],
+          pages: [
+            { pageNumber: 1, markdown: '流水线技术通过重叠执行指令提升吞吐率', spans: [] },
+            { pageNumber: 2, markdown: '', spans: [] },
+            { pageNumber: 3, markdown: '(cid:11)(cid:12)(cid:13)(cid:14)', spans: [] },
+          ],
+        }
+      },
+    })) as unknown as FakeLoader
+    const result = await importScannedBookToDb(
+      'unused-user-data',
+      { ...basePayload, preferNative: true },
+      undefined,
+      {
+        loadInspector: nativeLoader,
+        ensureRuntime: async () => {
+          runtimeCalls += 1
+          return ok({ modelDir: 'models' })
+        },
+        readPdf: async () => Buffer.from('pdf'),
+        openDb: () => memDb,
+      },
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      memDb.close()
+      return
+    }
+    expect(runtimeCalls).toBe(0)
+    expect(seenModes).toEqual(['Off'])
+    expect(result.value.ocrSuggestedPages).toEqual([2, 3])
+    expect(result.value.ocrPages).toBe(0)
+    expect(
+      formatRosettaImportDoneMessage(result.value),
+    ).toContain('2 页原生质量较差可手动识别')
+    memDb.close()
   })
 })

@@ -8,3 +8,14 @@ export function resolvePreferNativeImport(input: {
 }): boolean {
   return !input.isScannedPdf && !input.isMixedPdf
 }
+
+/**
+ * P1.3：扫描版沿用「识别本页」；已入库且当前页被标为原生质量差时也露出入口。
+ * 不得在导入时自动 OCR。
+ */
+export function shouldOfferPageOcr(input: {
+  isScannedPdf: boolean
+  currentPageOcrSuggested: boolean
+}): boolean {
+  return input.isScannedPdf || input.currentPageOcrSuggested
+}

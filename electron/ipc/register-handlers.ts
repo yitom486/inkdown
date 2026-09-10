@@ -89,6 +89,7 @@ import { createWindow, getWindowInitByWebContents } from '../window/create-windo
 import { pendingExternalFiles } from '../window/external-file'
 import {
   cancelRosettaImport,
+  formatRosettaImportDoneMessage,
   getActiveRosettaImport,
   importScannedBookToDb,
 } from '../services/book-db/import-service'
@@ -647,7 +648,7 @@ export function registerIpcHandlers(): void {
           state: 'done',
           donePages: stats.pages,
           totalPages: stats.pages,
-          message: `原生 ${stats.nativePages} 页直提，扫描 ${stats.ocrPages} 页识别，${stats.blocks} 块入库`,
+          message: formatRosettaImportDoneMessage(stats),
         })
       } else {
         push({

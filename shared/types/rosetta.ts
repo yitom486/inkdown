@@ -36,6 +36,11 @@ export interface RosettaImportStats {
   ocrPages: number
   /** 原生直提的页数 */
   nativePages: number
+  /**
+   * P1.3：原生提取为空或乱码、建议手动「识别本页」的页码（1-indexed，至多 100）。
+   * 仅标记，导入时不得据此自动 OCR。
+   */
+  ocrSuggestedPages: number[]
 }
 
 export type RosettaImportState = 'idle' | 'running' | 'done' | 'error' | 'cancelled'
@@ -73,6 +78,11 @@ export interface RosettaBookInfo {
   tocSignature: string
   /** toc_entries 行数（v3+；旧库为 0） */
   tocEntries: number
+  /**
+   * P1.3：原生质量较差、可手动识别本页的页码（1-indexed，至多 100）。
+   * 已有 ocr 块的页不会出现。空数组表示无需标记。
+   */
+  ocrSuggestedPages: number[]
 }
 
 export interface RosettaChapterInfo {

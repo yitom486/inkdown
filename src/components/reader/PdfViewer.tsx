@@ -123,7 +123,7 @@ import {
   clearWindowSelection,
 } from '@/lib/reader/reader-selection-dismiss'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
-import { resolvePreferNativeImport } from '@/lib/reader/pdf-import-mode'
+import { resolvePreferNativeImport, shouldOfferPageOcr } from '@/lib/reader/pdf-import-mode'
 import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf-agent-search-gate'
 import { reportAppError } from '@/lib/workspace/report-error'
 import {
@@ -1792,11 +1792,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     { key: 'zoom-in', label: '放大', onSelect: () => setScale((value) => Math.min(3, value + 0.1)) },
     { key: 'fit-width', label: '适合宽度', onSelect: () => fitWidth() },
   )
-  if (isScannedPdf) {
+  const currentPageOcrSuggested = Boolean(rosettaImport.info?.ocrSuggestedPages?.includes(pageNum))
+  if (shouldOfferPageOcr({ isScannedPdf, currentPageOcrSuggested })) {
     moreMenuItems.push({
       key: 'recognize-page',
       label: currentPageOcrBusy ? '识别中' : currentPageOcrReady ? '重新识别本页' : '识别本页',
-      title: '仅识别当前页文本层，不建全书索引',
+      title: currentPageOcrSuggested
+        ? '本页原生文字质量较差，可识别本页（不整书 OCR）'
+        : '仅识别当前页文本层，不建全书索引',
       disabled: !ready || currentPageOcrBusy,
       onSelect: () => void handleRecognizePage(),
     })

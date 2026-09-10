@@ -20,7 +20,7 @@ import {
   importBookChunk,
   markPagesCompleted,
 } from './import-book'
-import { countBookBlocks, countPagesWithBbox } from './queries'
+import { countBookBlocks, countPagesWithBbox, listOcrSuggestedPages } from './queries'
 
 /** 罗盘入库清洗管线版本；ocr-watermark 语义变更时同步 +1 */
 export const ROSETTA_CLEAN_VERSION = 'ocr-watermark-v3'
@@ -67,6 +67,14 @@ function cancelledError(donePages: number, totalPages: number): Result<never, Ap
     code: 'CANCELLED',
     message: `已取消罗盘导入，已入库 ${donePages}/${totalPages} 页，下次继续`,
   })
+}
+
+/** 导入完成文案：统计 + 可选的原生差页提示（不触发 OCR） */
+export function formatRosettaImportDoneMessage(stats: RosettaImportStats): string {
+  const base = `原生 ${stats.nativePages} 页直提，扫描 ${stats.ocrPages} 页识别，${stats.blocks} 块入库`
+  const suggested = stats.ocrSuggestedPages.length
+  if (suggested <= 0) return base
+  return `${base}，${suggested} 页原生质量较差可手动识别`
 }
 
 /**
@@ -222,6 +230,7 @@ async function runImport(
       pages: plannedTotal,
       ocrPages,
       nativePages: plannedTotal - ocrPages,
+      ocrSuggestedPages: listOcrSuggestedPages(db, bookId),
     })
   }
   if (done.size > 0) log(`续跑：跳过已入库 ${done.size} 页`)
@@ -350,5 +359,6 @@ async function runImport(
     pages: plannedTotal,
     ocrPages,
     nativePages: plannedTotal - ocrPages,
+    ocrSuggestedPages: listOcrSuggestedPages(db, bookId),
   })
 }

@@ -1,5 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite'
+import {
+  assessNativePageText,
+  NATIVE_PAGE_QUALITY_SUGGEST_OCR,
+  OCR_SUGGESTED_PAGES_CAP,
+} from '@shared/reader/native-page-quality'
 import type { BookBlockSource, BookBlockType, BookDbBlockHit } from '@shared/types/book-db'
+import { getCompletedPages } from './import-book'
 
 /** FTS5 查询转义：包成双引号短语，防 `*`/`"`/OR 等语法字符炸查询 */
 export function escapeFtsQuery(keyword: string): string {
@@ -390,4 +396,42 @@ export function getBookRecord(db: DatabaseSync, fingerprint: string): BookRecord
     tocSignature,
     tocEntries,
   }
+}
+
+/**
+ * P1.3：已入库且仅有原生/空文本的页中，质量差（空或乱码）者建议手动 OCR。
+ * 已有 ocr 块的页永不列入；未完成入库的页不列入。只读，不触发 OCR。
+ */
+export function listOcrSuggestedPages(db: DatabaseSync, bookId: number): number[] {
+  const ocrPages = new Set<number>()
+  const nativeParts = new Map<number, string[]>()
+  const rows = db
+    .prepare(
+      `SELECT page_number AS p, source AS s, content AS c FROM blocks WHERE book_id = ?`,
+    )
+    .all(bookId) as { p?: unknown; s?: unknown; c?: unknown }[]
+  for (const row of rows) {
+    if (typeof row.p !== 'number' || !Number.isInteger(row.p) || row.p < 1) continue
+    if (row.s === 'ocr') {
+      ocrPages.add(row.p)
+      continue
+    }
+    const parts = nativeParts.get(row.p) ?? []
+    parts.push(typeof row.c === 'string' ? row.c : '')
+    nativeParts.set(row.p, parts)
+  }
+  const completed = getCompletedPages(db, bookId)
+  const pages =
+    completed.size > 0
+      ? [...completed].sort((a, b) => a - b)
+      : [...nativeParts.keys()].sort((a, b) => a - b)
+  const suggested: number[] = []
+  for (const page of pages) {
+    if (ocrPages.has(page)) continue
+    const text = (nativeParts.get(page) ?? []).join('\n')
+    if (assessNativePageText(text) !== NATIVE_PAGE_QUALITY_SUGGEST_OCR) continue
+    suggested.push(page)
+    if (suggested.length >= OCR_SUGGESTED_PAGES_CAP) break
+  }
+  return suggested
 }

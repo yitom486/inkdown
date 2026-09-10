@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { migrateBookDb } from './schema'
-import { importBookPages } from './import-book'
-import { countBookBlocks, getBlockContext, getChapterBlocks, getPageBlocks, locateBlock, searchBookBlocks } from './queries'
+import { importBookPages, markPagesCompleted } from './import-book'
+import { countBookBlocks, getBlockContext, getChapterBlocks, getPageBlocks, listOcrSuggestedPages, locateBlock, searchBookBlocks } from './queries'
 
 function seedDb(): { db: DatabaseSync; bookId: number } {
   const db = new DatabaseSync(':memory:')
@@ -110,5 +110,34 @@ describe('getChapterBlocks / getBlockContext / locateBlock', () => {
     // 无 bbox 的块只回页码
     const plain = getChapterBlocks(db, bookId, 1)[1] as { id: number }
     expect(locateBlock(db, plain.id)).toEqual({ pageNumber: 3, bbox: null })
+  })
+})
+
+describe('listOcrSuggestedPages', () => {
+  it('P1.3 空页与乱码 native 列入，ocr 页与正常 native 不列入', () => {
+    const db = new DatabaseSync(':memory:')
+    migrateBookDb(db)
+    const result = importBookPages(db, {
+      fingerprint: 'quality-book-1',
+      title: '质量书',
+      sourcePath: 'D:/book/q.pdf',
+      format: 'pdf',
+      pageCount: 4,
+      pageOffset: 0,
+      cleanVersion: 'v3',
+      printedToc: [{ title: '第1章', printedPage: 1, level: 1 }],
+      pages: [
+        { page: 1, markdown: '流水线技术通过重叠执行指令提升吞吐率' },
+        { page: 2, markdown: '' },
+        { page: 3, markdown: '(cid:11)(cid:12)(cid:13)(cid:14)' },
+        { page: 4, markdown: 'OCR 页也有字' },
+      ],
+      spansByPage: new Map([
+        [4, [{ text: 'OCR 页也有字', confidence: 0.9, x: 1, y: 2, width: 3, height: 4 }]],
+      ]),
+    })
+    markPagesCompleted(db, result.bookId, [1, 2, 3, 4])
+    expect(listOcrSuggestedPages(db, result.bookId)).toEqual([2, 3])
+    db.close()
   })
 })

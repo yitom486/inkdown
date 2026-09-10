@@ -10,6 +10,7 @@ import {
   getTocEntry,
   getTocRangeBlocks,
   listBookChapters,
+  listOcrSuggestedPages,
   listTocEntries,
   searchBookBlocks,
 } from './queries'
@@ -124,7 +125,8 @@ export function getRosettaBookInfo(
   if (!fingerprint.trim()) {
     return err({ code: 'INVALID_ARGUMENT', message: '缺少文件指纹' })
   }
-  const record = getBookRecord(openBookDb(userDataDir, fingerprint.trim()), fingerprint.trim())
+  const db = openBookDb(userDataDir, fingerprint.trim())
+  const record = getBookRecord(db, fingerprint.trim())
   if (!record) return ok(null)
   return ok({
     fingerprint: fingerprint.trim(),
@@ -137,5 +139,6 @@ export function getRosettaBookInfo(
     cleanVersion: record.cleanVersion,
     tocSignature: record.tocSignature,
     tocEntries: record.tocEntries,
+    ocrSuggestedPages: listOcrSuggestedPages(db, record.bookId),
   })
 }
