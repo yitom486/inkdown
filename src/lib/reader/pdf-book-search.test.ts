@@ -1,25 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import { err, ok, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
-import type { BookDbBlockHit } from '@shared/types/book-db'
 import {
   BOOK_SEARCH_LIMIT,
   BookSearchSession,
   formatBookSearchHeading,
   summarizeBookSearchHit,
   toBookSearchKeyword,
+  type BookSearchItem,
 } from './pdf-book-search'
 
-function hit(over: Partial<BookDbBlockHit> = {}): BookDbBlockHit {
+function item(over: Partial<BookSearchItem> = {}): BookSearchItem {
   return {
-    id: 1,
-    type: 'paragraph',
-    content: '正文',
-    pageNumber: 36,
-    chapterIndex: 1,
-    chapterTitle: '第2章',
-    blockIndex: 0,
-    snippet: '',
+    key: 'p36-first',
+    heading: '第2章 · 第 36 页',
+    excerpt: '移码表示法用于阶码',
+    jump: { kind: 'page', pageNumber: 36 },
     ...over,
   }
 }
@@ -86,8 +82,8 @@ describe('BookSearchSession', () => {
     expect(query).not.toHaveBeenCalled()
   })
 
-  it('合法搜索传参正确，结果带章节页码摘要', async () => {
-    const query = vi.fn(async () => ok([hit({ id: 7, content: '移码表示法用于阶码' })]))
+  it('合法搜索传参正确，结果原样采用调用方映射', async () => {
+    const query = vi.fn(async () => ok([item({ key: 'p36-7', excerpt: '移码表示法用于阶码' })]))
     const session = new BookSearchSession(query)
     session.bind('fp-1')
     expect(session.search('移码表示法')).toEqual({ accepted: true, tip: '' })
@@ -98,7 +94,7 @@ describe('BookSearchSession', () => {
     const state = session.getState()
     expect(state.status).toBe('done')
     expect(state.items).toHaveLength(1)
-    expect(state.items[0]).toMatchObject({ blockId: 7, pageNumber: 36, chapterTitle: '第2章' })
+    expect(state.items[0]).toMatchObject({ key: 'p36-7', heading: '第2章 · 第 36 页' })
     expect(state.items[0]?.excerpt).toContain('移码表示法')
   })
 
@@ -119,10 +115,10 @@ describe('BookSearchSession', () => {
   })
 
   it('后发覆盖先发：旧异步回写被丢弃', async () => {
-    const first = deferred<Result<BookDbBlockHit[], AppError>>()
-    const second = deferred<Result<BookDbBlockHit[], AppError>>()
+    const first = deferred<Result<BookSearchItem[], AppError>>()
+    const second = deferred<Result<BookSearchItem[], AppError>>()
     const query = vi
-      .fn<() => Promise<Result<BookDbBlockHit[], AppError>>>()
+      .fn<() => Promise<Result<BookSearchItem[], AppError>>>()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
     const session = new BookSearchSession(query)
@@ -130,31 +126,31 @@ describe('BookSearchSession', () => {
     session.search('移码表示法')
     session.search('补码加法器')
     expect(session.getState().status).toBe('loading')
-    first.resolve(ok([hit({ id: 1, content: '移码表示法旧结果' })]))
+    first.resolve(ok([item({ key: 'old', excerpt: '移码表示法旧结果' })]))
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
     // 旧结果不得覆盖：仍在等新请求
     expect(session.getState().status).toBe('loading')
-    second.resolve(ok([hit({ id: 2, content: '补码加法器新结果' })]))
+    second.resolve(ok([item({ key: 'new', excerpt: '补码加法器新结果' })]))
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
     const state = session.getState()
     expect(state.status).toBe('done')
-    expect(state.items[0]?.blockId).toBe(2)
+    expect(state.items[0]?.key).toBe('new')
     expect(state.keyword).toBe('补码加法器')
   })
 
   it('文件切换清空一切且旧回写失效', async () => {
-    const gate = deferred<Result<BookDbBlockHit[], AppError>>()
+    const gate = deferred<Result<BookSearchItem[], AppError>>()
     const query = vi.fn(() => gate.promise)
     const session = new BookSearchSession(query)
     session.bind('fp-1')
     session.search('移码表示法')
     session.bind('fp-2')
     expect(session.getState()).toMatchObject({ status: 'idle', keyword: '', items: [] })
-    gate.resolve(ok([hit({ id: 9, content: '移码表示法旧文件结果' })]))
+    gate.resolve(ok([item({ key: 'old', excerpt: '移码表示法旧文件结果' })]))
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
@@ -162,9 +158,29 @@ describe('BookSearchSession', () => {
     expect(session.getState().items).toEqual([])
   })
 
+  it('label 跳转的 items 同样走截断与后发覆盖', async () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      item({
+        key: `ch-${i + 1}`,
+        heading: `第${i + 1}章`,
+        excerpt: `第${i + 1}处移码表示法`,
+        jump: { kind: 'label', label: `第${i + 1}章` },
+      }),
+    )
+    const query = vi.fn(async () => ok(many))
+    const session = new BookSearchSession(query)
+    session.bind('epub-1')
+    session.search('移码表示法')
+    await Promise.resolve()
+    await Promise.resolve()
+    const state = session.getState()
+    expect(state.items).toHaveLength(BOOK_SEARCH_LIMIT)
+    expect(state.items[0]).toMatchObject({ jump: { kind: 'label' } })
+  })
+
   it('展示截断 20 条，不冒充总数', async () => {
     const many = Array.from({ length: 25 }, (_, i) =>
-      hit({ id: i + 1, content: `第${i + 1}处移码表示法` }),
+      item({ key: `p-${i + 1}`, excerpt: `第${i + 1}处移码表示法` }),
     )
     const query = vi.fn(async () => ok(many))
     const session = new BookSearchSession(query)

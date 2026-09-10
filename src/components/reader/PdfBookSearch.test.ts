@@ -11,6 +11,7 @@ vi.mock('@/api/rosetta-api', () => ({
 }))
 
 import { PdfBookSearch } from './PdfBookSearch'
+import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 
 ;(globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -32,8 +33,16 @@ function searchOk(blocks: BookDbBlockHit[]) {
   return { ok: true as const, value: { kind: 'search' as const, blocks } }
 }
 
-async function renderSearch(props: { fingerprint?: string; indexed?: boolean; onJump?: (page: number) => void }) {
+async function renderSearch(props: {
+  fingerprint?: string
+  indexed?: boolean
+  onJump?: (page: number) => void
+  backend?: 'index' | 'memory'
+  docKey?: string
+  onJumpToLabel?: (label: string) => void
+}) {
   const onJumpToPage = props.onJump ?? vi.fn()
+  const onJumpToLabel = props.onJumpToLabel ?? vi.fn()
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -42,6 +51,9 @@ async function renderSearch(props: { fingerprint?: string; indexed?: boolean; on
       fingerprint: nextFingerprint,
       indexed: props.indexed ?? true,
       onJumpToPage,
+      backend: props.backend,
+      docKey: props.docKey,
+      onJumpToLabel,
     })
   await act(async () => {
     root.render(renderProps(props.fingerprint ?? 'fp-1'))
@@ -49,6 +61,7 @@ async function renderSearch(props: { fingerprint?: string; indexed?: boolean; on
   return {
     container,
     onJumpToPage: onJumpToPage as ReturnType<typeof vi.fn>,
+    onJumpToLabel: onJumpToLabel as ReturnType<typeof vi.fn>,
     unmount: async () => {
       await act(async () => {
         root.unmount()
@@ -244,5 +257,74 @@ describe('PdfBookSearch', () => {
     expect(keywordInput(view.container)).toBeNull()
     expect(view.container.textContent).not.toContain('最多显示 20 条')
     await view.unmount()
+  })
+
+  it('memory：不调 queryBook，标题是章节名，点击走 onJumpToLabel', async () => {
+    const unregister = registerReaderContent({
+      filePath: '/book/demo.epub',
+      getCurrentText: () => '',
+      iterateUnits: async function* () {
+        yield { label: '第一章 概述', text: '本章讲述移码表示法的定义' }
+        yield { label: '第二章 运算', text: '与检索词无关的正文' }
+      },
+    })
+    try {
+      const view = await renderSearch({ backend: 'memory', docKey: '/book/demo.epub' })
+      await act(async () => {
+        trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      })
+      await act(async () => {
+        typeInto(keywordInput(view.container), '移码表示法')
+      })
+      await act(async () => {
+        submitButton(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      })
+      await flush()
+      expect(mockQueryBook).not.toHaveBeenCalled()
+      expect(view.container.textContent).toContain('第一章 概述')
+      expect(view.container.textContent).not.toContain('第 0 页')
+      const item = view.container.querySelector('button.block') as HTMLButtonElement
+      await act(async () => {
+        item.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      })
+      expect(view.onJumpToLabel).toHaveBeenCalledWith('第一章 概述')
+      expect(view.onJumpToPage).not.toHaveBeenCalled()
+      expect(keywordInput(view.container)).toBeNull()
+      await view.unmount()
+    } finally {
+      unregister()
+    }
+  })
+
+  it('memory：改输入清旧结果', async () => {
+    const unregister = registerReaderContent({
+      filePath: '/book/demo.epub',
+      getCurrentText: () => '',
+      iterateUnits: async function* () {
+        yield { label: '第一章', text: '移码表示法正文' }
+      },
+    })
+    try {
+      const view = await renderSearch({ backend: 'memory', docKey: '/book/demo.epub' })
+      await act(async () => {
+        trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      })
+      await act(async () => {
+        typeInto(keywordInput(view.container), '移码表示法')
+      })
+      await act(async () => {
+        submitButton(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      })
+      await flush()
+      expect(view.container.textContent).toContain('第一章')
+      await act(async () => {
+        typeInto(keywordInput(view.container), '王道')
+      })
+      expect(view.container.textContent).not.toContain('第一章')
+      expect(view.container.textContent).toContain('至少输入 3 个字符')
+      await view.unmount()
+    } finally {
+      unregister()
+    }
   })
 })

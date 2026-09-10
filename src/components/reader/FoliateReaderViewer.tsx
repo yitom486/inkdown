@@ -4,6 +4,7 @@ import { PaneErrorBoundary } from '@/components/shared/PaneErrorBoundary'
 import { AnnotationNoteDialog } from '@/components/reader/AnnotationNoteDialog'
 import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
+import { PdfBookSearch } from '@/components/reader/PdfBookSearch'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
@@ -331,6 +332,20 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       scrollFoliateSectionToFragment(target.doc, fragment)
     })().catch(() => undefined)
   }, [])
+
+  /**
+   * 手动搜索跳章：按章节 label 精确找第一处；找不到不乱跳。
+   * 同名章节跳第一处（接受，不做模糊匹配）。
+   */
+  const handleJumpToLabel = useCallback(
+    (label: string) => {
+      const index = chaptersRef.current.findIndex((chapter) => chapter.label === label)
+      if (index < 0) return
+      const chapter = chaptersRef.current[index]
+      if (chapter) goToChapter(chapter, index)
+    },
+    [goToChapter],
+  )
 
   const applyDocTheme = useCallback((doc: Document) => {
     try {
@@ -1242,6 +1257,12 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         onAddBookmark={() => void addBookmarkAtCurrent()}
         trailing={
           <>
+            <PdfBookSearch
+              fingerprint={filePath}
+              backend="memory"
+              docKey={filePath}
+              onJumpToLabel={handleJumpToLabel}
+            />
             <ReaderTypographyControls disabled={!ready} />
             {ready ? (
               <div className="relative text-muted-foreground">

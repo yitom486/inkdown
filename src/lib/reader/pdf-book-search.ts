@@ -1,12 +1,13 @@
 import { isOk, type Result } from '@shared/core/result'
 import type { AppError } from '@shared/core/errors'
-import type { BookDbBlockHit } from '@shared/types/book-db'
 
 /**
- * 阅读器手动正文搜索逻辑（P0.1，框架无关；React 组件只做渲染接线）。
+ * 阅读器手动正文搜索逻辑（P0.1/S3，框架无关；React 组件只做渲染接线）。
  *
- * 边界：只读复用 `queryBook(kind='search')`；短词不请求；后发覆盖先发；
- * 文件切换即失效旧状态；展示数（≤20）永不冒充全书精确总数。
+ * 边界：短词不请求；后发覆盖先发；文件切换即失效旧状态；
+ * 展示数（≤20）永不冒充全书精确总数。命中映射由调用方做：
+ * index 后端把库块映射成 item，memory 后端把内存命中映射成 item，
+ * 会话层不伪造 blockId/pageNumber。
  */
 
 /** 检索词至少有效字符数（与 FTS trigram 短词下限、P0 审计一致） */
@@ -25,11 +26,13 @@ export function toBookSearchKeyword(value: unknown): string | null {
 }
 
 export interface BookSearchItem {
-  blockId: number
-  pageNumber: number
-  chapterTitle: string | null
-  chapterIndex: number
+  /** React key，全局唯一即可（如 `p36-b7`、`label:第一章`） */
+  key: string
+  /** 展示标题：index 用“章节 · 第 N 页”，memory 直接用章节 label */
+  heading: string
   excerpt: string
+  /** 跳转目标：index 按页跳，memory 按章节 label 跳 */
+  jump: { kind: 'page'; pageNumber: number } | { kind: 'label'; label: string }
 }
 
 /**
@@ -84,7 +87,7 @@ const IDLE_STATE: BookSearchState = { status: 'idle', keyword: '', items: [], er
 export type BookSearchQuery = (
   fingerprint: string,
   keyword: string,
-) => Promise<Result<BookDbBlockHit[], AppError>>
+) => Promise<Result<BookSearchItem[], AppError>>
 
 /**
  * 搜索会话：持有 fingerprint + 代际计数，后发覆盖先发，文件切换即 reset。
@@ -150,13 +153,7 @@ export class BookSearchSession {
           this.emit({ status: 'error', keyword, items: [], error: result.error.message || '搜索失败', tip: '' })
           return
         }
-        const items = result.value.slice(0, BOOK_SEARCH_LIMIT).map((block) => ({
-          blockId: block.id,
-          pageNumber: block.pageNumber,
-          chapterTitle: block.chapterTitle,
-          chapterIndex: block.chapterIndex,
-          excerpt: summarizeBookSearchHit(block.content, keyword),
-        }))
+        const items = result.value.slice(0, BOOK_SEARCH_LIMIT)
         this.emit({
           status: items.length === 0 ? 'empty' : 'done',
           keyword,
