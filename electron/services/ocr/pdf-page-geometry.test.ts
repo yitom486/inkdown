@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readPdfPageSizes } from './pdf-page-geometry'
+import { copyPdfBytesForPdfJs, readPdfPageSizes } from './pdf-page-geometry'
 
 const MINIMAL_PDF = Buffer.from(
   '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
@@ -30,5 +30,41 @@ describe('readPdfPageSizes', () => {
 
   it('空页表直接返回空（不解析）', async () => {
     await expect(readPdfPageSizes(MINIMAL_PDF, [])).resolves.toEqual(new Map())
+  })
+
+  it('同一 Buffer 连续两次仍能读到尺寸', async () => {
+    const data = Buffer.from(MINIMAL_PDF)
+    const first = await readPdfPageSizes(data, [1])
+    const second = await readPdfPageSizes(data, [1])
+    expect(data.byteLength).toBe(MINIMAL_PDF.byteLength)
+    expect(first.get(1)).toEqual({ width: 612, height: 792 })
+    expect(second.get(1)).toEqual({ width: 612, height: 792 })
+  })
+})
+
+describe('copyPdfBytesForPdfJs', () => {
+  it('独立 backing：transfer 掏空拷贝不影响原 Buffer', async () => {
+    const slab = Buffer.alloc(MINIMAL_PDF.byteLength + 64)
+    MINIMAL_PDF.copy(slab, 32)
+    const data = slab.subarray(32, 32 + MINIMAL_PDF.byteLength)
+    const copy = copyPdfBytesForPdfJs(data)
+
+    expect(copy.buffer).not.toBe(data.buffer)
+    expect(copy.byteOffset).toBe(0)
+    expect(copy.byteLength).toBe(data.byteLength)
+    expect(Buffer.from(copy)).toEqual(MINIMAL_PDF)
+
+    const { port1, port2 } = new MessageChannel()
+    const received = new Promise<MessageEvent>((resolve) => {
+      port2.onmessage = resolve
+    })
+    port1.postMessage(copy.buffer, [copy.buffer])
+    await received
+
+    expect(copy.byteLength).toBe(0)
+    expect(data.byteLength).toBe(MINIMAL_PDF.byteLength)
+    expect(Buffer.compare(Buffer.from(data), MINIMAL_PDF)).toBe(0)
+    port1.close()
+    port2.close()
   })
 })

@@ -33,6 +33,17 @@ export interface PdfPageSizePt {
 }
 
 /**
+ * 拷进独立 ArrayBuffer 再交给 pdf.js。getDocument({ data: TypedArray }) 会把
+ * ArrayBuffer transfer 到 worker 并接管内存；导入四块 OCR 共用同一份 Buffer，
+ * 若传入视图（含 Node Buffer 与 slab 共享 backing），transfer 后原
+ * Buffer.byteLength 变成 0，下一块 processPdfWithOcr 报 file is empty。
+ * 禁止 `new Uint8Array(data.buffer, data.byteOffset, data.byteLength)`。
+ */
+export function copyPdfBytesForPdfJs(data: Buffer): Uint8Array {
+  return Uint8Array.from(data)
+}
+
+/**
  * 只读取给定页的用户空间尺寸（scale=1 viewport）。输入非法/解析失败一律
  * 返回空表（不抛错，调用方跳过该页缓存；上游 SQLite 已入库不受影响）。
  */
@@ -49,7 +60,7 @@ export async function readPdfPageSizes(
     const mod = await import('pdfjs-dist/legacy/build/pdf.mjs')
     const doc = await mod
       .getDocument({
-        data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+        data: copyPdfBytesForPdfJs(data),
         isEvalSupported: false,
         useSystemFonts: true,
       })
