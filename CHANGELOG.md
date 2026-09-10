@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.3.0] - 2026-09-10
+
 ### 扫描 PDF：打开就能划，全书建议先入库
 
 - **当前页静默识别**：无文字层的页面打开后自动认这一页，不必先等全书入库即可划词、划重点、写批注；失败不弹框，工具栏「识别本页」仍可手动重试
@@ -256,7 +260,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.2.9...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/yitom486/inkdown/compare/v0.2.9...v0.3.0
 [0.2.9]: https://github.com/yitom486/inkdown/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/yitom486/inkdown/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/yitom486/inkdown/compare/v0.2.6...v0.2.7
