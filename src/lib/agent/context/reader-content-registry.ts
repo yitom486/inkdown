@@ -19,6 +19,12 @@ export interface ReaderContentProvider {
    * 快照侧据此拒绝而非编造指纹。
    */
   fileFingerprint?: string
+  /**
+   * S1 搜索闸门：仅 PDF Viewer 在扫描/混合未入库时赋值；
+   * searchReaderContent 见到它直接抛错，不进入 iterateUnits（防整书 OCR）。
+   * Foliate / WebDoc 不要设这个字段。
+   */
+  searchBlockedReason?: string
   /** 当前章节 / 页的纯文本；EPUB/MOBI 取 iframe DOM，PDF 取 textContent，MD 取编辑器内容 */
   getCurrentText: () => Promise<string> | string
   /**

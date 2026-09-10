@@ -55,6 +55,9 @@ export async function searchReaderContent(rawQuery: string): Promise<ReaderSearc
 
   const provider = getReaderContentProvider()
   if (!provider) throw new Error('当前没有打开的文档')
+  // S1 闸门：扫描/混合未入库 PDF 在此直接失败，禁止进入 iterateUnits，
+  // 禁止触发任何 OCR（含已有缓存页的遍历都不开始），禁止返回空结果冒充
+  if (provider.searchBlockedReason) throw new Error(provider.searchBlockedReason)
   if (!provider.iterateUnits) throw new Error('当前文档格式暂不支持全文检索')
 
   const hits: ReaderSearchHit[] = []

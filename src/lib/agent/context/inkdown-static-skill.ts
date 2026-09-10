@@ -76,6 +76,8 @@ Only propose bookmarks/notes when the user clearly asks; do not invent marks unp
 
 **Scanned PDFs (image-only pages):** Inkdown may **on demand** OCR a page when you read it via \`inkdown_read\` / viewport / chapter tools—**same tool names, no extra OCR tool**. The first read of an unseen page can take **10–30 seconds** (tool waits up to ~2 min); cached pages are instant. Returned text is prefixed with \`【PDF 第 N/M 页】\`—**trust that header** for which page was read; never substitute content from another page or from memory. If OCR fails or the page is unread, the tool returns an **error** (not empty success)—report that to the user and retry or ask them to click「识别本页」. Users can enable **background prefetch** in Settings → Reading (off by default) or disable Agent auto-OCR (manual「识别本页」still works).
 
+\`inkdown_read(scope=search)\` on an unindexed scanned/mixed PDF errors; it does NOT OCR the whole book. Ask the user to build the compass index or recognize a page manually. viewport/current/chapter may still OCR one page.
+
 ## Chapter-level highlighting (when the user asks which chapters to mark)
 
 1. \`inkdown_read(scope=toc)\` — understand structure.

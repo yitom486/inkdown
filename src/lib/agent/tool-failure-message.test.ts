@@ -27,4 +27,13 @@ describe('explainToolFailure', () => {
     const r = explainToolFailure('Error: ECONNRESET at Socket.emit')
     expect(r.body).not.toMatch(/ECONNRESET|Socket\.emit/)
   })
+
+  it('未入库扫描书搜索拦截 → 建索引引导（不被关键词规则误伤）', () => {
+    const r = explainToolFailure(
+      '先建立罗盘索引，或手动单页识别',
+      'mcp.inkdown.inkdown_read',
+    )
+    expect(r.headline).toContain('罗盘索引')
+    expect(r.body).toMatch(/建立罗盘索引|识别本页/)
+  })
 })
