@@ -92,4 +92,19 @@ describe('INKDOWN_STATIC_SKILL', () => {
     expect(INKDOWN_STATIC_SKILL).toContain('Match the **language of the user')
     expect(INKDOWN_STATIC_SKILL).not.toContain('默认使用简体中文')
   })
+
+  it('S1.3：已入库只读库口径与代码一致，不再教整书 OCR', () => {
+    expect(INKDOWN_STATIC_SKILL).toContain('Indexed PDFs')
+    expect(INKDOWN_STATIC_SKILL).toContain('compass index already built')
+    expect(INKDOWN_STATIC_SKILL).toContain('all read **only** the compass index')
+    expect(INKDOWN_STATIC_SKILL).toContain('do NOT retry the same tool hoping OCR will fill it in')
+    expect(INKDOWN_STATIC_SKILL).toContain('do NOT invent that page')
+    // 旧句必须消失：已入库 viewport/current/chapter 不再 OCR
+    expect(INKDOWN_STATIC_SKILL).not.toContain('viewport/current/chapter may still OCR one page')
+  })
+
+  it('S1.3：未入库口径保留（search 不整书 OCR，页眉可信）', () => {
+    expect(INKDOWN_STATIC_SKILL).toContain('instead of OCRing the whole book')
+    expect(INKDOWN_STATIC_SKILL).toContain('【PDF 第 N/M 页】')
+  })
 })
