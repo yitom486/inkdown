@@ -1353,6 +1353,8 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           y={selectionToolbarPos.y}
           readOnly
           onCopy={selectionActions.handleCopy}
+          hasSelectionForCopy={Boolean(selectionSnapshot?.text?.trim())}
+          keyEventDocs={getRenderedDocs().map((item) => item.doc)}
           onAnnotate={selectionActions.handleAnnotate}
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}

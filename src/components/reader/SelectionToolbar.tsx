@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { BotMessageSquare, ClipboardPaste, Copy, MessageSquarePlus, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { isMarkdownEditorFocused } from '@/lib/editor/editor-focus'
+import { shouldHandleReaderCopyShortcut } from '@/lib/reader/reader-copy-shortcut'
 import {
   HIGHLIGHT_COLORS,
   type HighlightColorId,
@@ -11,6 +13,10 @@ export interface SelectionToolbarProps {
   y: number
   readOnly?: boolean
   onCopy: () => void
+  /** 快捷键复制门：无阅读选区时不拦截（Electron editMenu 保底） */
+  hasSelectionForCopy?: boolean
+  /** iframe 阅读器（Foliate/WebDoc）额外监听其 contentDocument，PDF 不传 */
+  keyEventDocs?: Document[]
   onAnnotate: () => void
   /** 打开 Agent 面板并带着当前选区去提问 */
   onAskAgent?: () => void
@@ -26,6 +32,8 @@ export function SelectionToolbar({
   y,
   readOnly = true,
   onCopy,
+  hasSelectionForCopy = false,
+  keyEventDocs,
   onAnnotate,
   onAskAgent,
   onAddToChat,
@@ -34,11 +42,27 @@ export function SelectionToolbar({
 }: SelectionToolbarProps) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onDismiss()
+      if (event.key === 'Escape') {
+        onDismiss()
+        return
+      }
+      // Markdown 编辑器内划词走原生复制，不抢
+      if (isMarkdownEditorFocused()) return
+      if (shouldHandleReaderCopyShortcut(event, event.target, hasSelectionForCopy)) {
+        // 对齐系统 Ctrl+C：复制后保留选区与工具条，不清
+        event.preventDefault()
+        onCopy()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onDismiss])
+    // iframe 内按键冒泡不到主窗口：Foliate/WebDoc 把同一监听挂到内容文档
+    const docs = [...new Set((keyEventDocs ?? []).filter((doc) => doc && doc !== document))]
+    for (const doc of docs) doc.addEventListener('keydown', onKeyDown as EventListener)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      for (const doc of docs) doc.removeEventListener('keydown', onKeyDown as EventListener)
+    }
+  }, [onDismiss, onCopy, hasSelectionForCopy, keyEventDocs])
 
   return (
     <div

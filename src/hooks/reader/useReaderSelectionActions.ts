@@ -53,12 +53,12 @@ export function useReaderSelectionActions(
     onHighlightError,
   } = options
 
+  // 对齐系统 Ctrl+C：复制后保留选区与工具条（Escape / 点空白仍清）
   const handleCopy = useCallback(() => {
     void copyTextToClipboard(snapshotText ?? '').then((ok) => {
       if (ok) toast.success('已复制')
     })
-    dimTextSelection()
-  }, [snapshotText, dimTextSelection])
+  }, [snapshotText])
 
   const handleAnnotate = useCallback(() => {
     if (hasSelection && !hasSelection()) {

@@ -982,6 +982,10 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           y={selectionToolbarPos.y}
           readOnly
           onCopy={selectionActions.handleCopy}
+          hasSelectionForCopy={Boolean(selectionSnapshot?.text?.trim())}
+          keyEventDocs={
+            iframeRef.current?.contentDocument ? [iframeRef.current.contentDocument] : []
+          }
           onAnnotate={selectionActions.handleAnnotate}
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}

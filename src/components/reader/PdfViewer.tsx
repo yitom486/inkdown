@@ -2337,6 +2337,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           y={selectionToolbarPos.y}
           readOnly
           onCopy={selectionActions.handleCopy}
+          hasSelectionForCopy={Boolean(selectionSnapshot?.text?.trim())}
           onAnnotate={selectionActions.handleAnnotate}
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
