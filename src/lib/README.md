@@ -61,7 +61,7 @@
 | `reading-mark-passages` / `export-reading-notes` / `export-anki-cards` / `flashcard-review` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、Anki 导出（纯文本 Flashcard → HTML）、闪卡复习纯函数、侧栏类型筛选 |
 | `epub-*` | EPUB 目录导航、主题样式、选区快照（渲染内核已迁 foliate 统一后端） |
 | `reader-adapter` / `foliate-*` | 统一阅读后端契约与 foliate 实现（EPUB+MOBI/KF8，MOBI 旧链已删） |
-| `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js） |
+| `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js）；`pdf-book-search` 为已入库书手动正文搜索逻辑（只读 search + 会话防旧写回，跳页由调用方接线） |
 | `toc-ai` / `toc-offset` | 目录 AI 整理 Prompt 构造与 JSON 校验；目录偏移多标题锚定共识 |
 | `rosetta-*` | 罗盘索引：目录归一（rosetta-toc）、块转 Agent 文本（rosetta-agent-text）、目录签名与健康状态（rosetta-toc-status） |
 | `ocr-toc-*` | OCR 目录缓存状态：独立提示与校正/重识入口落点（ocr-toc-notice）、校正目录条目决议（pdf-ocr-toc-cache）、探测/识别/保存三取一租约锁＋文档世代（ocr-toc-op，防 ABA 与切文件旧写回）、探测反馈状态机（ocr-toc-detect-feedback，只填范围）；分级评估见 shared/reader/ocr-toc-assess，可用性门控见 pdf-ocr-toc-gate，范围评分见 shared/reader/toc-page-detect |

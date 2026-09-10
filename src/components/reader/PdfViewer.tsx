@@ -87,6 +87,7 @@ declare global {
 }
 import { PdfOcrBanner } from '@/components/reader/PdfOcrBanner'
 import { PdfOcrTocEditor } from '@/components/reader/PdfOcrTocEditor'
+import { PdfBookSearch } from '@/components/reader/PdfBookSearch'
 import { BodyWatermarkPreviewDialog } from '@/components/reader/BodyWatermarkPreviewDialog'
 import { TocAiPolishControl } from '@/components/reader/TocAiPolishControl'
 import type { OcrTocEntry } from '@shared/types/ocr'
@@ -1991,6 +1992,13 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         trailing={
           <>
           {rosettaExtraAction}
+          {fileFingerprint ? (
+            <PdfBookSearch
+              fingerprint={fileFingerprint}
+              indexed={Boolean(rosettaImport.info)}
+              onJumpToPage={(page) => jumpToPage(page)}
+            />
+          ) : null}
           {isLoading ? (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           ) : isScannedPdf ? (
