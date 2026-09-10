@@ -12,7 +12,7 @@ vi.mock('@/api/rosetta-api', () => ({
 
 import { PdfBookSearch } from './PdfBookSearch'
 
-(globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
+;(globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
 
 function hit(over: Partial<BookDbBlockHit> = {}): BookDbBlockHit {
   return {
@@ -77,38 +77,108 @@ async function flush(): Promise<void> {
   })
 }
 
+function trigger(container: ParentNode): HTMLButtonElement {
+  return container.querySelector('button[aria-label="搜索正文"]') as HTMLButtonElement
+}
+
+function keywordInput(container: ParentNode): HTMLInputElement {
+  return container.querySelector('input[aria-label="搜索正文关键词"]') as HTMLInputElement
+}
+
+function submitButton(container: ParentNode): HTMLButtonElement {
+  return container.querySelector('button[title*="至少 3 个字符"]') as HTMLButtonElement
+}
+
 afterEach(() => {
   mockQueryBook.mockReset()
   document.body.innerHTML = ''
 })
 
 describe('PdfBookSearch', () => {
-  it('短词禁用按钮，Enter 不请求并提示', async () => {
+  it('工具栏只占一个紧凑触发按钮，点击才展开浮层', async () => {
     const view = await renderSearch({})
-    const input = view.container.querySelector('input') as HTMLInputElement
-    const button = view.container.querySelector('button[title*="搜索正文"]') as HTMLButtonElement
+    expect(trigger(view.container)).not.toBeNull()
+    // 未展开时没有输入框，不挤占工具栏
+    expect(keywordInput(view.container)).toBeNull()
     await act(async () => {
-      typeInto(input, '王道')
+      trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })
-    expect(button.disabled).toBe(true)
+    expect(keywordInput(view.container)).not.toBeNull()
+    await view.unmount()
+  })
+
+  it('短词禁用提交，Enter 不请求并提示', async () => {
+    const view = await renderSearch({})
+    await act(async () => {
+      trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      typeInto(keywordInput(view.container), '王道')
+    })
+    expect(submitButton(view.container).disabled).toBe(true)
     expect(view.container.textContent).toContain('至少输入 3 个字符')
     await act(async () => {
-      input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      keywordInput(view.container).dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
     })
     expect(mockQueryBook).not.toHaveBeenCalled()
     await view.unmount()
   })
 
-  it('按钮搜索传参正确，点击结果跳页并关闭面板', async () => {
-    mockQueryBook.mockResolvedValue(searchOk([hit({ id: 7, pageNumber: 36 })]))
+  it('改输入立即清空旧结果：旧词结果不伪装成新词结果', async () => {
+    mockQueryBook.mockResolvedValue(searchOk([hit({ id: 7, pageNumber: 36, content: '王道计是出版社' })]))
     const view = await renderSearch({})
-    const input = view.container.querySelector('input') as HTMLInputElement
-    const button = view.container.querySelector('button[title*="搜索正文"]') as HTMLButtonElement
     await act(async () => {
-      typeInto(input, '移码表示法')
+      trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
-      button.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      typeInto(keywordInput(view.container), '王道计')
+    })
+    await act(async () => {
+      submitButton(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    expect(view.container.textContent).toContain('王道计是出版社')
+    // 改成短词：旧结果立即消失，只剩提示，不发新请求
+    await act(async () => {
+      typeInto(keywordInput(view.container), '王道')
+    })
+    expect(view.container.textContent).not.toContain('王道计是出版社')
+    expect(view.container.textContent).toContain('至少输入 3 个字符')
+    expect(mockQueryBook).toHaveBeenCalledTimes(1)
+    await view.unmount()
+  })
+
+  it('无章节标题时页码只显示一次', async () => {
+    mockQueryBook.mockResolvedValue(searchOk([hit({ id: 9, pageNumber: 3, chapterTitle: null, content: '王道计算机教育' })]))
+    const view = await renderSearch({})
+    await act(async () => {
+      trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      typeInto(keywordInput(view.container), '王道计')
+    })
+    await act(async () => {
+      submitButton(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    const occurrences = (view.container.textContent ?? '').split('第 3 页').length - 1
+    expect(occurrences).toBe(1)
+    await view.unmount()
+  })
+
+  it('按钮搜索传参正确，点击结果跳页并关闭浮层', async () => {
+    mockQueryBook.mockResolvedValue(searchOk([hit({ id: 7, pageNumber: 36 })]))
+    const view = await renderSearch({})
+    await act(async () => {
+      trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      typeInto(keywordInput(view.container), '移码表示法')
+    })
+    await act(async () => {
+      submitButton(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })
     expect(mockQueryBook).toHaveBeenCalledTimes(1)
     expect(mockQueryBook).toHaveBeenCalledWith({
@@ -119,25 +189,29 @@ describe('PdfBookSearch', () => {
     })
     await flush()
     expect(view.container.textContent).toContain('最多显示 20 条')
-    expect(view.container.textContent).toContain('第2章')
+    expect(view.container.textContent).toContain('第2章 · 第 36 页')
     const item = view.container.querySelector('button.block') as HTMLButtonElement
     await act(async () => {
       item.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })
     expect(view.onJumpToPage).toHaveBeenCalledWith(36)
-    expect(view.container.textContent).not.toContain('最多显示 20 条')
+    expect(keywordInput(view.container)).toBeNull()
     await view.unmount()
   })
 
   it('Enter 同样触发搜索', async () => {
     mockQueryBook.mockResolvedValue(searchOk([]))
     const view = await renderSearch({})
-    const input = view.container.querySelector('input') as HTMLInputElement
     await act(async () => {
-      typeInto(input, '补码加法器')
+      trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
-      input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      typeInto(keywordInput(view.container), '补码加法器')
+    })
+    await act(async () => {
+      keywordInput(view.container).dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
     })
     expect(mockQueryBook).toHaveBeenCalledTimes(1)
     await flush()
@@ -147,9 +221,7 @@ describe('PdfBookSearch', () => {
 
   it('未索引禁用入口并提示，不请求', async () => {
     const view = await renderSearch({ indexed: false })
-    const input = view.container.querySelector('input') as HTMLInputElement
-    expect(input.disabled).toBe(true)
-    expect(view.container.textContent).toContain('先建立罗盘索引')
+    expect(trigger(view.container).disabled).toBe(true)
     expect(mockQueryBook).not.toHaveBeenCalled()
     await view.unmount()
   })
@@ -157,18 +229,19 @@ describe('PdfBookSearch', () => {
   it('文件切换清空旧结果', async () => {
     mockQueryBook.mockResolvedValue(searchOk([hit()]))
     const view = await renderSearch({ fingerprint: 'fp-1' })
-    const input = view.container.querySelector('input') as HTMLInputElement
     await act(async () => {
-      typeInto(input, '移码表示法')
+      trigger(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })
-    const button = view.container.querySelector('button[title*="搜索正文"]') as HTMLButtonElement
     await act(async () => {
-      button.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      typeInto(keywordInput(view.container), '移码表示法')
+    })
+    await act(async () => {
+      submitButton(view.container).dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })
     await flush()
     expect(view.container.textContent).toContain('最多显示 20 条')
     await view.rerender('fp-2')
-    expect((view.container.querySelector('input') as HTMLInputElement).value).toBe('')
+    expect(keywordInput(view.container)).toBeNull()
     expect(view.container.textContent).not.toContain('最多显示 20 条')
     await view.unmount()
   })

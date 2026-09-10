@@ -5,6 +5,7 @@ import type { BookDbBlockHit } from '@shared/types/book-db'
 import {
   BOOK_SEARCH_LIMIT,
   BookSearchSession,
+  formatBookSearchHeading,
   summarizeBookSearchHit,
   toBookSearchKeyword,
 } from './pdf-book-search'
@@ -54,6 +55,17 @@ describe('summarizeBookSearchHit', () => {
     expect(excerpt.length).toBeLessThanOrEqual(122)
     expect(excerpt).toMatch(/^….*…$/)
     expect(excerpt).not.toContain('<')
+  })
+})
+
+describe('formatBookSearchHeading', () => {
+  it('无标题或标题即页码时只显示一次', () => {
+    expect(formatBookSearchHeading(null, 3)).toBe('第 3 页')
+    expect(formatBookSearchHeading('第 3 页', 3)).toBe('第 3 页')
+  })
+
+  it('真实标题展示“章节 · 第 N 页”', () => {
+    expect(formatBookSearchHeading('第2章', 36)).toBe('第2章 · 第 36 页')
   })
 })
 

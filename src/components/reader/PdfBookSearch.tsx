@@ -7,14 +7,16 @@ import { Input } from '@/components/ui/input'
 import {
   BOOK_SEARCH_LIMIT,
   BookSearchSession,
+  formatBookSearchHeading,
   toBookSearchKeyword,
 } from '@/lib/reader/pdf-book-search'
 
 /**
- * PDF 正文词语搜索（P0.1）：当前已入库书的手动检索入口。
+ * PDF 正文词语搜索（P0.1）：工具栏紧凑触发按钮 + 独立浮层。
  *
- * 只读复用 `queryBook(kind='search')`；短词不请求；后发覆盖先发；
- * 展示数（≤20）不冒充全书总数；点击结果跳页并关闭面板。
+ * 只读复用 `queryBook(kind='search')`；短词不请求；输入改变立即清空旧结果
+ * （旧词结果不得伪装成新词结果）；后发覆盖先发；展示数（≤20）不冒充总数；
+ * 点击结果跳页并关闭浮层。
  */
 export function PdfBookSearch({
   fingerprint,
@@ -60,11 +62,24 @@ export function PdfBookSearch({
   const keywordValid = toBookSearchKeyword(input) !== null
   const disabled = !indexed
 
+  const close = (): void => {
+    session.reset()
+    setOpen(false)
+  }
+
   const submit = (): void => {
     if (disabled) return
-    const { accepted } = session.search(input)
-    // 短词拒绝不请求：面板保持关闭，输入框下方给出提示
-    setOpen(accepted)
+    // 短词拒绝不请求；面板保持打开，原地展示“至少输入 3 个字符”
+    session.search(input)
+  }
+
+  const handleInputChange = (value: string): void => {
+    setInput(value)
+    // 输入一变就清旧结果（面板保持打开）：旧词结果不得伪装成新词结果，
+    // pending 一并作废；idle 时无旧状态可清，直接返回
+    if (session.getState().status !== 'idle') {
+      session.reset()
+    }
   }
 
   const hint = useMemo(() => {
@@ -74,79 +89,84 @@ export function PdfBookSearch({
   }, [disabled, keywordValid, input])
 
   return (
-    <span className="relative flex items-center gap-1">
-      <Input
-        value={input}
-        disabled={disabled}
-        placeholder="搜索正文"
-        aria-label="搜索正文"
-        className="h-7 w-36 text-xs"
-        onChange={(event) => setInput(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') submit()
-        }}
-      />
+    <span className="relative flex items-center">
       <Button
         type="button"
-        size="sm"
+        size="icon-sm"
         variant="ghost"
-        className="h-7 gap-1 text-xs"
-        disabled={disabled || !keywordValid}
-        title={disabled ? '先建立罗盘索引' : '搜索正文（至少 3 个字符）'}
-        onClick={submit}
+        disabled={disabled}
+        title={disabled ? '先建立罗盘索引' : '搜索正文'}
+        aria-label="搜索正文"
+        onClick={() => setOpen((value) => !value)}
       >
-        {state.status === 'loading' ? (
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-        ) : (
-          <Search className="size-3.5" aria-hidden />
-        )}
-        搜索
+        <Search className="size-4" aria-hidden />
       </Button>
-      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
       {open && !disabled ? (
-        <div className="absolute right-0 top-8 z-50 max-h-80 w-96 overflow-auto rounded-md border bg-popover p-2 shadow-md">
-          <div className="flex items-center justify-between px-1 pb-1 text-xs text-muted-foreground">
-            <span>最多显示 {BOOK_SEARCH_LIMIT} 条</span>
+        <div className="absolute right-0 top-8 z-50 w-96 rounded-md border bg-popover p-2 shadow-md">
+          <div className="flex items-center gap-1">
+            <Input
+              value={input}
+              placeholder="搜索正文"
+              aria-label="搜索正文关键词"
+              className="h-7 text-xs"
+              autoFocus
+              onChange={(event) => handleInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') submit()
+                if (event.key === 'Escape') close()
+              }}
+            />
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              className="h-6 text-xs"
-              onClick={() => {
-                session.reset()
-                setOpen(false)
-              }}
+              className="h-7 shrink-0 gap-1 text-xs"
+              disabled={!keywordValid}
+              title="搜索正文（至少 3 个字符）"
+              onClick={submit}
+            >
+              {state.status === 'loading' ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : null}
+              搜索
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 shrink-0 text-xs"
+              onClick={close}
             >
               关闭
             </Button>
           </div>
-          {state.status === 'loading' ? <p className="px-1 py-2 text-xs">搜索中…</p> : null}
-          {state.status === 'empty' ? <p className="px-1 py-2 text-xs">未命中</p> : null}
-          {state.status === 'error' ? (
-            <p className="px-1 py-2 text-xs text-destructive">{state.error || '搜索失败'}</p>
-          ) : null}
-          {state.status === 'done'
-            ? state.items.map((item) => (
-                <button
-                  key={item.blockId}
-                  type="button"
-                  className="block w-full rounded px-1 py-1.5 text-left hover:bg-accent"
-                  onClick={() => {
-                    onJumpToPage(item.pageNumber)
-                    session.reset()
-                    setOpen(false)
-                  }}
-                >
-                  <span className="block text-xs font-medium">
-                    {item.chapterTitle ?? `第 ${item.pageNumber} 页`}
-                    <span className="ml-1 font-normal text-muted-foreground">
-                      第 {item.pageNumber} 页
+          {hint ? <p className="px-1 pt-1 text-xs text-muted-foreground">{hint}</p> : null}
+          <div className="max-h-80 overflow-auto pt-1">
+            <p className="px-1 pb-1 text-xs text-muted-foreground">最多显示 {BOOK_SEARCH_LIMIT} 条</p>
+            {state.status === 'loading' ? <p className="px-1 py-2 text-xs">搜索中…</p> : null}
+            {state.status === 'empty' ? <p className="px-1 py-2 text-xs">未命中</p> : null}
+            {state.status === 'error' ? (
+              <p className="px-1 py-2 text-xs text-destructive">{state.error || '搜索失败'}</p>
+            ) : null}
+            {state.status === 'done'
+              ? state.items.map((item) => (
+                  <button
+                    key={item.blockId}
+                    type="button"
+                    className="block w-full rounded px-1 py-1.5 text-left hover:bg-accent"
+                    onClick={() => {
+                      onJumpToPage(item.pageNumber)
+                      close()
+                    }}
+                  >
+                    <span className="block text-xs font-medium">
+                      {formatBookSearchHeading(item.chapterTitle, item.pageNumber)}
                     </span>
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">{item.excerpt}</span>
-                </button>
-              ))
-            : null}
+                    <span className="block truncate text-xs text-muted-foreground">{item.excerpt}</span>
+                  </button>
+                ))
+              : null}
+          </div>
         </div>
       ) : null}
     </span>

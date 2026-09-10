@@ -58,6 +58,16 @@ export function summarizeBookSearchHit(
 
 export type BookSearchStatus = 'idle' | 'loading' | 'done' | 'empty' | 'error'
 
+/**
+ * 结果标题：有真实章节标题展示“章节 · 第 N 页”；无标题或标题恰为页码
+ * fallback（`第 N 页`）时只显示一次“第 N 页”（防“第 3 页 第 3 页”式重复）。
+ */
+export function formatBookSearchHeading(chapterTitle: string | null, pageNumber: number): string {
+  const fallback = `第 ${pageNumber} 页`
+  if (!chapterTitle || chapterTitle === fallback) return fallback
+  return `${chapterTitle} · ${fallback}`
+}
+
 export interface BookSearchState {
   status: BookSearchStatus
   /** 本轮关键词（展示用）；idle 时为 '' */
