@@ -125,6 +125,7 @@ import {
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
 import { resolvePreferNativeImport, shouldOfferPageOcr } from '@/lib/reader/pdf-import-mode'
 import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf-agent-search-gate'
+import { iterateRosettaChapterUnits } from '@/lib/agent/context/rosetta-chapter-units'
 import { reportAppError } from '@/lib/workspace/report-error'
 import {
   resolvePdfChapter,
@@ -1067,32 +1068,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       getViewportText: () => readAgentPageText(pageNumRef.current),
       iterateUnits: async function* () {
         const total = pdfDocRef.current?.numPages ?? 0
-        // 罗盘优先：按章整章产出，AI 全书检索不再逐页现场 OCR
+        // 已入库：只走罗盘章节；chapters 失败/空/零产出直接抛错，
+        // 禁止回退逐页 readPageText（S1.1：默认开 auto-OCR 会整书重识别）
         if (fileFingerprint && rosettaInfoRef.current) {
-          try {
-            const chaptersResult = await rosettaApi.queryBook({ kind: 'chapters', fingerprint: fileFingerprint })
-            if (isOk(chaptersResult) && chaptersResult.value.kind === 'chapters' && chaptersResult.value.chapters.length > 0) {
-              let yielded = 0
-              for (const chapter of chaptersResult.value.chapters) {
-                const blocksResult = await rosettaApi.queryBook({
-                  kind: 'chapter',
-                  fingerprint: fileFingerprint,
-                  chapterIndex: chapter.index,
-                })
-                if (!isOk(blocksResult) || blocksResult.value.kind !== 'chapter' || blocksResult.value.blocks.length === 0) {
-                  continue
-                }
-                yielded += 1
-                yield {
-                  label: chapter.title,
-                  text: `【${chapter.title} · 第 ${chapter.startPage}-${chapter.endPage} 页】\n${formatRosettaBlocksForAgent(blocksResult.value.blocks)}`,
-                }
-              }
-              if (yielded > 0) return
-            }
-          } catch {
-            // 回退逐页旧链路
-          }
+          yield* iterateRosettaChapterUnits(fileFingerprint)
+          return
         }
         for (let page = 1; page <= total; page += 1) {
           try {

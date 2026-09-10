@@ -92,4 +92,21 @@ describe('searchReaderContent', () => {
       unregister()
     }
   })
+
+  it('iterateUnits 抛错向上传递为工具错误，不冒充空成功', async () => {
+    const unregister = registerReaderContent({
+      filePath: '/book/indexed.pdf',
+      fileFingerprint: '/book/indexed.pdf|9',
+      getCurrentText: () => '',
+      iterateUnits: async function* () {
+        throw new Error('罗盘索引无法读取章节，请重建索引或手动识别本页')
+        yield { label: '永不到达', text: '' }
+      },
+    })
+    try {
+      await expect(searchReaderContent('王道计')).rejects.toThrow('罗盘索引无法读取章节')
+    } finally {
+      unregister()
+    }
+  })
 })
