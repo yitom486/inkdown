@@ -18,6 +18,16 @@ describe('inkdown_inspect_content schema', () => {
     const props = (tool?.inputSchema as { properties: Record<string, unknown> }).properties
     expect(Object.keys(props).sort()).toEqual(['limit', 'query'])
   })
+
+  it('P3.1 描述覆盖三来源且 schema 仍只有 query/limit', async () => {
+    const response = (await handleInkdownMcpRpc(
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+      context(),
+    )) as { result: { tools: Array<{ name: string; description: string }> } }
+    const tool = response.result.tools.find((t) => t.name === 'inkdown_inspect_content')
+    expect(tool?.description).toContain('EPUB/MOBI')
+    expect(tool?.description).not.toContain('只针对当前打开且已入库的 PDF')
+  })
 })
 
 describe('inkdown_inspect_content 参数校验与隔离', () => {

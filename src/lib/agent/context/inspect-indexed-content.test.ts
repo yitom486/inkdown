@@ -137,6 +137,119 @@ describe('inspectIndexedContentForAgent', () => {
     await expect(inspectIndexedContentForAgent('王道计', 10, d)).rejects.toThrow('不支持内容审计')
   })
 
+  it('P3.1 epub：章节取证，source 与定位正确，无页码无路径', async () => {
+    async function* units() {
+      yield { label: '第一章 概述', text: '王道计是出版社\n普通行' }
+      yield { label: '第二章 运算', text: '无关正文' }
+    }
+    const getEbookUnits = vi.fn(() => units())
+    const searchWorkspace = vi.fn()
+    const d = deps({ getFingerprint: () => '', getEbookUnits, searchWorkspace })
+    const parsed = JSON.parse(await inspectIndexedContentForAgent('王道计', 10, d)) as {
+      total: number
+      truncated: boolean
+      hits: Array<{ source: string; locator: Record<string, unknown>; text: string }>
+    }
+    expect(parsed.total).toBe(1)
+    expect(parsed.truncated).toBe(false)
+    expect(parsed.hits[0]?.source).toBe('ebook-section')
+    expect(parsed.hits[0]?.locator).toEqual({ chapterTitle: '第一章 概述', lineStart: 1 })
+    expect(parsed.hits[0]).not.toHaveProperty('pageNumber')
+    expect(parsed.hits[0]).not.toHaveProperty('filePath')
+    expect(searchWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('P3.1 limit 截断但 total 含未展示行；零命中合法', async () => {
+    async function* units() {
+      yield { label: '第一章', text: '王道计甲\n王道计乙' }
+      yield { label: '第二章', text: '王道计丙' }
+    }
+    const d = deps({ getFingerprint: () => '', getEbookUnits: () => units() })
+    const parsed = JSON.parse(await inspectIndexedContentForAgent('王道计', 2, d)) as {
+      total: number
+      truncated: boolean
+      limit: number
+      hits: unknown[]
+    }
+    expect(parsed.total).toBe(3)
+    expect(parsed.truncated).toBe(true)
+    expect(parsed.limit).toBe(2)
+    expect(parsed.hits).toHaveLength(2)
+    async function* empty() {
+      yield { label: '空章', text: '纯正文' }
+    }
+    const zero = JSON.parse(
+      await inspectIndexedContentForAgent('王道计', 10, deps({ getFingerprint: () => '', getEbookUnits: () => empty() })),
+    ) as { total: number; hits: unknown[]; truncated: boolean }
+    expect(zero).toMatchObject({ total: 0, hits: [], truncated: false })
+  })
+
+  it('P3.1 指纹路径零 iterateUnits、零工作区搜索', async () => {
+    const getEbookUnits = vi.fn(() => null)
+    const searchWorkspace = vi.fn()
+    const d = deps({ getEbookUnits, searchWorkspace })
+    await inspectIndexedContentForAgent('王道计', 10, d)
+    expect(getEbookUnits).not.toHaveBeenCalled()
+    expect(searchWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('P3.1 PDF 无指纹拒绝且不拉 iterateUnits；markdown 不拉 iterateUnits', async () => {
+    let pulls = 0
+    async function* counting() {
+      pulls += 1
+      yield { label: '第一章', text: '王道计正文' }
+    }
+    // PDF 无指纹：kind 门直接拒绝，生成器函数体一次都不执行
+    useActiveDocumentStore.setState({ filePath: '/book/scan.pdf' })
+    const unregisterPdf = registerReaderContent({
+      filePath: '/book/scan.pdf',
+      getCurrentText: () => '',
+      iterateUnits: counting,
+    })
+    try {
+      await expect(
+        inspectIndexedContentForAgent('王道计', 10, { getFingerprint: () => '' }),
+      ).rejects.toThrow('不支持内容审计')
+      expect(pulls).toBe(0)
+    } finally {
+      unregisterPdf()
+    }
+    // markdown：走 buffer，同样不拉 iterateUnits
+    useActiveDocumentStore.setState({ filePath: '/doc/note.md' })
+    const unregisterMd = registerReaderContent({
+      filePath: '/doc/note.md',
+      getCurrentText: () => '内存王道计文本',
+      iterateUnits: counting,
+    })
+    try {
+      const parsed = JSON.parse(
+        await inspectIndexedContentForAgent('王道计', 10, { getFingerprint: () => '' }),
+      ) as { total: number; hits: Array<{ source: string }> }
+      expect(parsed.total).toBe(1)
+      expect(parsed.hits[0]?.source).toBe('editor-buffer')
+      expect(pulls).toBe(0)
+    } finally {
+      unregisterMd()
+      useActiveDocumentStore.setState({ filePath: null })
+    }
+  })
+
+  it('P3.1 无 iterateUnits 的 epub 形态拒绝', async () => {
+    useActiveDocumentStore.setState({ filePath: '/book/demo.epub' })
+    const unregister = registerReaderContent({
+      filePath: '/book/demo.epub',
+      getCurrentText: () => '内存王道计文本',
+    })
+    try {
+      await expect(
+        inspectIndexedContentForAgent('王道计', 10, { getFingerprint: () => '' }),
+      ).rejects.toThrow('不支持内容审计')
+    } finally {
+      unregister()
+      useActiveDocumentStore.setState({ filePath: null })
+    }
+  })
+
   it('P2.2 合并：buffer 在前、workspace 在后，total 精确相加', async () => {
     const d = deps({
       getFingerprint: () => '',

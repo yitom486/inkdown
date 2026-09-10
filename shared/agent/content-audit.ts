@@ -6,20 +6,30 @@
  */
 
 /** 命中来源；P0 只返回 'book-index'，不得伪造其他来源 */
-export type ContentAuditSource = 'book-index' | 'pdf-native' | 'editor-buffer' | 'workspace-file'
+export type ContentAuditSource =
+  | 'book-index'
+  | 'pdf-native'
+  | 'editor-buffer'
+  | 'workspace-file'
+  | 'ebook-section'
 
 export type ContentAuditMatchPosition = 'start' | 'end' | 'middle' | 'multiple'
 
 export interface ContentAuditHit {
   source: ContentAuditSource
   locator: {
-    /** PDF 页码（1-indexed）；editor-buffer 不返回，不得伪造 */
+    /** PDF 页码（1-indexed）；editor-buffer / ebook-section 不返回，不得伪造 */
     pageNumber?: number
     /** 章节标题；块无归属时为 null，不得编造 */
     chapterTitle?: string | null
-    /** blocks.id；editor-buffer 不返回 */
+    /** blocks.id；editor-buffer / ebook-section 不返回 */
     blockId?: number
-    /** editor-buffer：命中所在行（1-based）；filePath 永不返回 */
+    /**
+     * workspace-file 才返回相对路径，editor-buffer / ebook-section 不得返回。
+     * 永不返回绝对路径与盘符。
+     */
+    filePath?: string
+    /** editor-buffer / ebook-section：命中所在行（1-based） */
     lineStart?: number
   }
   text: string

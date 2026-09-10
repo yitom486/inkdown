@@ -66,8 +66,10 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_inspect_content',
     description:
-      '块级取证：只针对当前打开且已入库的 PDF，按字面关键词返回至多 10 条 block 证据 ' +
-      '（PDF 页码、章节标题、block id、受限原文、命中位置 start/end/middle/multiple、精确总数与截断标记）。' +
+      '块级取证：按字面关键词返回至多 10 条内容证据（原文、命中位置 start/end/middle/multiple、精确总数与截断标记）。' +
+      '覆盖：当前打开且已入库的 PDF（book-index：PDF 页码、章节标题、block id）、' +
+      '当前 md（editor-buffer：行号，有文件夹时兼 workspace-file 相对路径）、' +
+      '当前 EPUB/MOBI（ebook-section：章节标题定位）。' +
       '专供审计残留命中（如清洗后是否还有「王道计」、命中是正文还是水印碎片）；章节级阅读仍用 inkdown_read。' +
       '只读，不建库、不 OCR；未入库或参数错误会直接报错。',
     inputSchema: {
