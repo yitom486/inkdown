@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.3.1] - 2026-09-11
+
 - **首次 OCR 安装**：补全检测模型被截断的 SHA256，哈希失败不再空转重试，报错会标明文件名与字节数
 
 ---
@@ -262,7 +266,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.0...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/yitom486/inkdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yitom486/inkdown/compare/v0.2.9...v0.3.0
 [0.2.9]: https://github.com/yitom486/inkdown/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/yitom486/inkdown/compare/v0.2.7...v0.2.8
