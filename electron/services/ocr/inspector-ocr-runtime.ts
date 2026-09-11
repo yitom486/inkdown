@@ -83,7 +83,69 @@ async function downloadToFile(
   expectedSize?: number,
   timeoutMs = 180000,
   signal?: AbortSignal,
+  resourceName?: string,
 ): Promise<void> {
+  return downloadResourceToFile({
+    url,
+    dest,
+    expectedSha256,
+    expectedSize,
+    timeoutMs,
+    signal,
+    resourceName,
+  })
+}
+
+/** 验签确定性失败：字节已收齐（size 相符或无 size 约束）但哈希不对，重试纯浪费 */
+export class HashMismatchError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'HashMismatchError'
+  }
+}
+
+function shortHash(hash: string): string {
+  return hash.slice(0, 12)
+}
+
+function urlHostPath(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.host}${parsed.pathname}`
+  } catch {
+    return url
+  }
+}
+
+export interface DownloadResourceInput {
+  url: string
+  dest: string
+  expectedSha256: string
+  expectedSize?: number
+  timeoutMs?: number
+  signal?: AbortSignal
+  /** 资源名（pdfium.dll / onnxruntime.dll / 模型文件名）：报错定位用 */
+  resourceName?: string
+}
+
+/**
+ * 带验签的下载：写盘只发生在哈希通过之后（失败=未安装、未写入）。
+ * 哈希失败（size 相符或无 size 约束）直接抛 HashMismatchError，不按网络抖动重试；
+ * HTTP 5xx、断流、size 不符仍重试（1s/2s，最多 3 次）。
+ * 导出仅供单测（见 inspector-ocr-runtime.test.ts），生产经 downloadToFile 调用。
+ */
+export async function downloadResourceToFile(input: DownloadResourceInput): Promise<void> {
+  const {
+    url,
+    dest,
+    expectedSha256,
+    expectedSize,
+    timeoutMs = 180000,
+    signal,
+    resourceName,
+  } = input
+  const label = resourceName ?? urlHostPath(url)
+  const where = urlHostPath(url)
   const maxAttempts = 3
   let lastCause: unknown = null
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -96,21 +158,27 @@ async function downloadToFile(
       const response = await fetch(url, { signal: combined })
       if (!response.ok) {
         if (response.status >= 400 && response.status < 500) {
-          throw new Error(`资源不存在（HTTP ${response.status}）：${url}`)
+          throw new Error(`[${label}] 资源不存在（HTTP ${response.status}）：${where}`)
         }
-        throw new Error(`下载临时失败（HTTP ${response.status}）`)
+        throw new Error(`[${label}] 下载临时失败（HTTP ${response.status}）：${where}`)
       }
       const buffer = Buffer.from(await response.arrayBuffer())
       if (expectedSize !== undefined && buffer.length !== expectedSize) {
-        throw new Error(`文件大小不符（期望 ${expectedSize}，实际 ${buffer.length}）`)
+        throw new Error(
+          `[${label}] 文件大小不符（期望 ${expectedSize}，实际 ${buffer.length}）：${where}`,
+        )
       }
       const actual = createHash('sha256').update(buffer).digest('hex')
       if (actual !== expectedSha256.toLowerCase()) {
-        throw new Error('SHA256 校验失败（可能下载损坏或被篡改），已拒绝安装')
+        throw new HashMismatchError(
+          `[${label}] SHA256 校验失败（期望 ${shortHash(expectedSha256)}…，实际 ${shortHash(actual)}…，${buffer.length} 字节，${where}），已拒绝安装、未写入任何文件`,
+        )
       }
       await writeFile(dest, buffer)
       return
     } catch (cause) {
+      // 验签确定性失败：重试无意义，直接失败（不计"已重试 N 次"）
+      if (cause instanceof HashMismatchError) throw cause
       lastCause = cause
       // 用户取消不重试，直接失败
       if (signal?.aborted) {
@@ -122,7 +190,7 @@ async function downloadToFile(
     }
   }
   throw new Error(
-    `下载失败（已重试 ${maxAttempts - 1} 次）：${lastCause instanceof Error ? lastCause.message : '网络异常'}`,
+    `[${label}] 下载失败（已重试 ${maxAttempts - 1} 次）：${lastCause instanceof Error ? lastCause.message : '网络异常'}`,
   )
 }
 
@@ -137,7 +205,7 @@ async function installNativeLib(
   const archiveExt = lib.url.endsWith('.zip') ? '.zip' : '.tgz'
   const archivePath = join(tempDir, `lib${archiveExt}`)
   onProgress?.(`正在下载识别引擎组件…`, 5)
-  await downloadToFile(lib.url, archivePath, lib.sha256, undefined, 180000, signal)
+  await downloadToFile(lib.url, archivePath, lib.sha256, undefined, 180000, signal, lib.libFile)
   const staging = join(tempDir, 'staging')
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
@@ -253,7 +321,15 @@ export async function ensureInspectorOcrRuntime(
       const ortEntry = INSPECTOR_ORT[platform]
       const ortArchive = join(tempDir, `ort${ortEntry.url.endsWith('.zip') ? '.zip' : '.tgz'}`)
       onProgress?.('正在下载推理库…', 30)
-      await downloadToFile(ortEntry.url, ortArchive, ortEntry.sha256, undefined, 180000, signal)
+      await downloadToFile(
+        ortEntry.url,
+        ortArchive,
+        ortEntry.sha256,
+        undefined,
+        180000,
+        signal,
+        ortEntry.libFile,
+      )
       const ortExtract = join(tempDir, 'ort-staging')
       await rm(ortExtract, { recursive: true, force: true })
       await mkdir(ortExtract, { recursive: true })
@@ -285,6 +361,7 @@ export async function ensureInspectorOcrRuntime(
           model.size,
           180000,
           signal,
+          model.file,
         )
       }
 

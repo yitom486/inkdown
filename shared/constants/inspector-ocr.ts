@@ -76,7 +76,7 @@ export interface InspectorModelFile {
 export const INSPECTOR_MODELS: InspectorModelFile[] = [
   {
     url: 'https://github.com/GreatV/oar-ocr/releases/download/v0.7.0/pp-ocrv6_small_det.onnx',
-    sha256: 'd73e0058b7a8086bb7f5d10b8bcd4ff95363f67e06e2762b5e814fe9c9410e',
+    sha256: 'd73e0058b7a8086bbd57f3d10b8bcd4ff95363f67e06e2762b5e814fe9c9410e',
     size: 9880512,
     file: 'pp-ocrv6_small_det.onnx',
   },
