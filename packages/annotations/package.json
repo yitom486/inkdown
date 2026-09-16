@@ -1,0 +1,14 @@
+{
+  "name": "@inkdown/annotations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@inkdown/contracts": "workspace:*",
+    "@inkdown/reader-core": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  }
+}

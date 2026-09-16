@@ -1,6 +1,6 @@
 import type { WebDocSiteId } from '@inkdown/contracts'
-import { isHrttNewsHost } from '@shared/web-doc/hrtt'
-import { isPeopleDailyPaperHost, resolvePeopleDailyEditionUrl } from '@shared/web-doc/people-daily'
+import { isHrttNewsHost } from './hrtt'
+import { isPeopleDailyPaperHost, resolvePeopleDailyEditionUrl } from './people-daily'
 
 /**
  * 仅人民日报纸媒与华人头条保留站点 id（版面 DOM 特殊）。

@@ -1,5 +1,5 @@
 import { getDocumentKind } from '@inkdown/contracts'
-import { resolveWebDocDocumentId, resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
+import { resolveWebDocDocumentId, resolveWebDocSiteId } from '@inkdown/web-doc'
 import type { ReaderFormat } from '@inkdown/reader-core'
 import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'

@@ -10,14 +10,14 @@ import type {
 import {
   extractGenericWebDocToc,
   extractSameOriginDocLinks,
-} from './web-doc/extract-toc-links'
+} from '@inkdown/web-doc'
 import {
   extractLlmsTxtToc,
   looksLikeDocsIndexCandidate,
   resolveLlmsTxtUrl,
-} from './web-doc/extract-llms-toc'
+} from '@inkdown/web-doc'
 import { tryFetchE2eWebDocFixture } from './web-doc/e2e-fixture'
-import { extractPeopleDailyToc } from './web-doc/adapters/people-daily-toc'
+import { extractPeopleDailyToc } from '@inkdown/web-doc'
 import { resolveWebDocSiteId } from './web-doc/site-registry'
 import { assertWebDocUrlAllowed, normalizeWebDocUrl } from './web-doc/url-policy'
 

@@ -20,6 +20,8 @@ const workspaceAlias = {
   '@inkdown/pdf': resolve('packages/pdf/src/index.ts'),
   '@inkdown/ocr-core': resolve('packages/ocr-core/src/index.ts'),
   '@inkdown/acp': resolve('packages/acp/src/index.ts'),
+  '@inkdown/annotations': resolve('packages/annotations/src/index.ts'),
+  '@inkdown/web-doc': resolve('packages/web-doc/src/index.ts'),
 }
 
 /** file:// 协议下 crossorigin 会导致 JS/CSS 静默加载失败（生产黑屏） */

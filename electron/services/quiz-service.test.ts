@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseQuizJsonl, serializeQuizSession } from './quiz-service'
+import { parseQuizJsonl, serializeQuizSession } from '@inkdown/contracts'
 import type { QuizSessionRecord } from '@inkdown/contracts'
 
 describe('quiz-service JSONL serialization', () => {

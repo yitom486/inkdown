@@ -13,7 +13,7 @@ import type {
 import { WebDavStorageAdapter } from './webdav-adapter'
 import { readSyncConfig } from './sync-config-service'
 import { readMarksStore, writeMarksStore } from '../reading-marks-service'
-import { mergeReadingMarks, type SyncMarksPayload } from './mergers/marks-merger'
+import { mergeReadingMarks, type SyncMarksPayload } from '@inkdown/annotations'
 import { readLocalProgress, writeLocalProgress } from './reading-progress-sync'
 import { mergeReadingProgress, type ReadingProgressSnapshot } from './mergers/progress-merger'
 import { getQuizFilePath } from '../quiz-service'

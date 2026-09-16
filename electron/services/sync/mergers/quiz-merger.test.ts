@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { mergeQuizSessions } from './quiz-merger'
 import type { QuizSessionRecord } from '@inkdown/contracts'
-import { serializeQuizSession } from '../../quiz-service'
+import { serializeQuizSession } from '@inkdown/contracts'
 
 describe('quiz-merger', () => {
   const session1: QuizSessionRecord = {

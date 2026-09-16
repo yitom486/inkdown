@@ -2,8 +2,11 @@ import { appendFile, mkdir, readFile } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
 import { toAppError, type AppError } from '@inkdown/contracts'
-import { err, ok, type Result } from '@inkdown/contracts'
+import { err, ok, parseQuizJsonl, serializeQuizSession, type Result } from '@inkdown/contracts'
 import type { QuizSessionRecord } from '@inkdown/contracts'
+
+// 兼容再导出：纯函数已下沉 contracts，旧测试仍从本模块引入，保持可用
+export { parseQuizJsonl, serializeQuizSession } from '@inkdown/contracts'
 
 export function getQuizFilePath(): string {
   return join(app.getPath('userData'), 'quiz-records.jsonl')
@@ -15,36 +18,6 @@ function normalizeFilePath(filePath: string): string {
     return trimmed.toLowerCase()
   }
   return trimmed
-}
-
-/**
- * 序列化单条测验记录为单行 JSON
- */
-export function serializeQuizSession(session: QuizSessionRecord): string {
-  return `${JSON.stringify(session)}\n`
-}
-
-/**
- * 解析 JSONL 文本为 QuizSessionRecord 列表（容错跳过损坏行）
- */
-export function parseQuizJsonl(raw: string): QuizSessionRecord[] {
-  const lines = raw.split('\n')
-  const records: QuizSessionRecord[] = []
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    try {
-      const parsed = JSON.parse(trimmed) as QuizSessionRecord
-      if (parsed && typeof parsed === 'object' && parsed.id && Array.isArray(parsed.questions)) {
-        records.push(parsed)
-      }
-    } catch {
-      // 容错跳过损坏行
-    }
-  }
-
-  return records
 }
 
 /**

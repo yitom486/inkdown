@@ -6,10 +6,16 @@ import { toAppError, type AppError } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type {
   CreateReadingMarkPayload,
-  ReadingAnchor,
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '@inkdown/contracts'
+import {
+  applyReadingMarkDelete,
+  applyReadingMarkUpdate,
+  buildReadingMark,
+  normalizeMarkFilePath as normalizeMarkFilePathCore,
+  validateReadingAnchor,
+} from '@inkdown/annotations'
 
 export interface ReadingMarksFile {
   marks: ReadingMark[]
@@ -56,24 +62,7 @@ async function writeStore(store: ReadingMarksFile): Promise<void> {
 }
 
 function normalizeMarkFilePath(filePath: string): string {
-  const trimmed = filePath.trim()
-  if (process.platform === 'win32') {
-    return trimmed.toLowerCase()
-  }
-  return trimmed
-}
-
-function validateReadingAnchor(anchor: ReadingAnchor): string | null {
-  if (anchor.format !== 'web') return null
-  try {
-    const url = new URL(anchor.url)
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      return '在线文档 URL 无效'
-    }
-  } catch {
-    return '在线文档 URL 无效'
-  }
-  return null
+  return normalizeMarkFilePathCore(filePath, process.platform)
 }
 
 export async function listReadingMarks(
@@ -108,19 +97,11 @@ export async function createReadingMark(
     }
 
     const now = Date.now()
-    const mark: ReadingMark = {
+    const mark: ReadingMark = buildReadingMark({
       id: randomUUID(),
-      filePath,
-      fileFingerprint: payload.fileFingerprint,
-      kind: payload.kind,
-      anchor: payload.anchor,
-      label: payload.label?.trim() || undefined,
-      note: payload.note?.trim() || undefined,
-      excerpt: payload.excerpt?.trim() || undefined,
-      color: payload.color,
-      createdAt: now,
-      updatedAt: now,
-    }
+      now,
+      payload,
+    })
 
     const store = await readStore()
     store.marks.push(mark)
@@ -142,17 +123,7 @@ export async function updateReadingMark(
     }
 
     const current = store.marks[index]!
-    const next: ReadingMark = {
-      ...current,
-      kind: payload.kind ?? current.kind,
-      label: payload.label !== undefined ? payload.label.trim() || undefined : current.label,
-      note: payload.note !== undefined ? payload.note.trim() || undefined : current.note,
-      color: payload.color ?? current.color,
-      updatedAt: Date.now(),
-    }
-    if (payload.note !== undefined && !payload.note.trim() && payload.kind === undefined) {
-      next.kind = next.kind === 'note' ? 'highlight' : next.kind
-    }
+    const next: ReadingMark = applyReadingMarkUpdate(current, payload, Date.now())
     store.marks[index] = next
     await writeStore(store)
     return ok(next)
@@ -164,15 +135,11 @@ export async function updateReadingMark(
 export async function deleteReadingMark(id: string): Promise<Result<void, AppError>> {
   try {
     const store = await readStore()
-    const nextMarks = store.marks.filter((mark) => mark.id !== id)
-    if (nextMarks.length === store.marks.length) {
+    const applied = applyReadingMarkDelete(store.marks, store.tombstones, id, Date.now())
+    if (!applied) {
       return err({ code: 'FILE_NOT_FOUND', message: '书签不存在' })
     }
-    const tombstones = {
-      ...(store.tombstones ?? {}),
-      [id]: Date.now(),
-    }
-    await writeStore({ marks: nextMarks, tombstones })
+    await writeStore({ marks: applied.marks, tombstones: applied.tombstones })
     return ok(undefined)
   } catch (error) {
     return err(toAppError(error, '删除书签失败'))

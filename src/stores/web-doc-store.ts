@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { normalizeWebDocInputUrl } from '@/lib/reader/web-doc-site'
+import { normalizeWebDocInputUrl } from '@inkdown/web-doc'
 
 const MAX_RECENT = 12
 

@@ -65,12 +65,48 @@
         "vitest": "^4.1.11",
       },
     },
+    "packages/acp": {
+      "name": "@inkdown/acp",
+      "version": "0.0.0",
+      "dependencies": {
+        "@inkdown/contracts": "workspace:*",
+      },
+    },
+    "packages/annotations": {
+      "name": "@inkdown/annotations",
+      "version": "0.0.0",
+      "dependencies": {
+        "@inkdown/contracts": "workspace:*",
+        "@inkdown/reader-core": "workspace:*",
+      },
+    },
     "packages/contracts": {
       "name": "@inkdown/contracts",
       "version": "0.0.0",
     },
+    "packages/ocr-core": {
+      "name": "@inkdown/ocr-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@inkdown/contracts": "workspace:*",
+      },
+    },
+    "packages/pdf": {
+      "name": "@inkdown/pdf",
+      "version": "0.0.0",
+      "dependencies": {
+        "@inkdown/contracts": "workspace:*",
+      },
+    },
     "packages/reader-core": {
       "name": "@inkdown/reader-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@inkdown/contracts": "workspace:*",
+      },
+    },
+    "packages/web-doc": {
+      "name": "@inkdown/web-doc",
       "version": "0.0.0",
       "dependencies": {
         "@inkdown/contracts": "workspace:*",
@@ -286,9 +322,19 @@
 
     "@iconify/utils": ["@iconify/utils@3.1.4", "", { "dependencies": { "@antfu/install-pkg": "^1.1.0", "@iconify/types": "^2.0.0", "import-meta-resolve": "^4.2.0" } }, "sha512-b1S7B1k9ohZ+iNTi2ATxbRYG9fTrJmUT0rc46bvVnNxqNRGW7dyo/vRREwyniI5IRN2RSJHDcm+s3BjWrSAjHw=="],
 
+    "@inkdown/acp": ["@inkdown/acp@workspace:packages/acp"],
+
+    "@inkdown/annotations": ["@inkdown/annotations@workspace:packages/annotations"],
+
     "@inkdown/contracts": ["@inkdown/contracts@workspace:packages/contracts"],
 
+    "@inkdown/ocr-core": ["@inkdown/ocr-core@workspace:packages/ocr-core"],
+
+    "@inkdown/pdf": ["@inkdown/pdf@workspace:packages/pdf"],
+
     "@inkdown/reader-core": ["@inkdown/reader-core@workspace:packages/reader-core"],
+
+    "@inkdown/web-doc": ["@inkdown/web-doc@workspace:packages/web-doc"],
 
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
 

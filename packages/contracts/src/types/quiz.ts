@@ -41,3 +41,33 @@ export function calculateQuizGrade(score: number): QuizGrade {
   if (score >= 60) return 'C'
   return 'D'
 }
+
+/**
+ * 序列化单条测验记录为单行 JSON
+ */
+export function serializeQuizSession(session: QuizSessionRecord): string {
+  return `${JSON.stringify(session)}\n`
+}
+
+/**
+ * 解析 JSONL 文本为 QuizSessionRecord 列表（容错跳过损坏行）
+ */
+export function parseQuizJsonl(raw: string): QuizSessionRecord[] {
+  const lines = raw.split('\n')
+  const records: QuizSessionRecord[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      const parsed = JSON.parse(trimmed) as QuizSessionRecord
+      if (parsed && typeof parsed === 'object' && parsed.id && Array.isArray(parsed.questions)) {
+        records.push(parsed)
+      }
+    } catch {
+      // 容错跳过损坏行
+    }
+  }
+
+  return records
+}

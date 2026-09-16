@@ -3,7 +3,7 @@ import { htmlToText } from '@/lib/agent/context/extract-dom-text'
 import { buildWebDocPageContent } from '@/lib/reader/web-doc-html'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import { normalizeWebDocNavUrl } from '@inkdown/reader-core'
-import { resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
+import { resolveWebDocSiteId } from '@inkdown/web-doc'
 import { isOk } from '@inkdown/contracts'
 import type { ReaderUnitText } from '@/lib/agent/context/reader-content-registry'
 

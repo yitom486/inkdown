@@ -8,12 +8,12 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { Flashcard } from '@shared/types/flashcard'
+import type { Flashcard } from '@inkdown/annotations'
 import {
   calculateReviewStats,
   parseClozeContent,
   type FlashcardReviewRating,
-} from '@/lib/reader/flashcard-review'
+} from '@inkdown/annotations'
 import {
   BookOpen,
   RotateCcw,

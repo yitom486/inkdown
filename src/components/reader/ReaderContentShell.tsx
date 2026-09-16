@@ -6,7 +6,7 @@ import { FlashcardReviewDialog } from '@/components/reader/FlashcardReviewDialog
 import { AiQuizDialog } from '@/components/quiz/AiQuizDialog'
 import { QuizHistoryDialog } from '@/components/quiz/QuizHistoryDialog'
 import { buildAnkiCardsExport } from '@/lib/reader/export-anki-cards'
-import type { Flashcard } from '@shared/types/flashcard'
+import type { Flashcard } from '@inkdown/annotations'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   findCurrentChapterRef,

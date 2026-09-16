@@ -50,7 +50,7 @@ import {
   resolveWebDocDocumentId,
   resolveWebDocSiteId,
   resolveWebDocTocDiscoveryUrl,
-} from '@/lib/reader/web-doc-site'
+} from '@inkdown/web-doc'
 import { resolveWebDocClickHref, shouldNavigateWebDocInApp, isWebDocNavigationTarget, detectWebDocIframeEscape, isCrossOriginIframeEscape } from '@/lib/reader/web-doc-link'
 import { logWebDoc } from '@/lib/reader/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@inkdown/reader-core'

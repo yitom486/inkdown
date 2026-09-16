@@ -11,8 +11,8 @@
  * 真机大书翻页 FPS/内存仍需手工压测（见 .plan 阶段 2.4）。
  */
 import { shouldRenderPdfPage, PDF_PAGE_RENDER_BUFFER } from '../src/lib/reader/pdf-window'
-import { mergeReadingMarks } from '../electron/services/sync/mergers/marks-merger'
-import type { ReadingMark } from '../shared/types/reading-mark'
+import { mergeReadingMarks } from '@inkdown/annotations'
+import type { ReadingMark } from '@inkdown/contracts'
 
 const FAILURES: string[] = []
 
