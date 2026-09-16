@@ -12,9 +12,9 @@ import type {
   RosettaImportPhase,
   RosettaImportStats,
 } from '@inkdown/contracts'
-import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
-import { filterOcrHitLayerWords, normalizeInspectorSpans } from '@shared/reader/ocr-page-words'
-import { discoverWatermarksByPosition, isDiagonalStampSpan } from '@shared/reader/ocr-watermark'
+import type { InspectorSpanLike } from '@inkdown/ocr-core'
+import { filterOcrHitLayerWords, normalizeInspectorSpans } from '@inkdown/ocr-core'
+import { discoverWatermarksByPosition, isDiagonalStampSpan } from '@inkdown/ocr-core'
 import { ensureInspectorOcrRuntime } from '../ocr/inspector-ocr-runtime'
 import { deleteAllPdfOcrPageCaches, writePdfOcrPageCache } from '../ocr/ocr-page-cache'
 import { deletePdfOcrTocCache } from '../ocr/ocr-toc-cache'

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type { AppError } from '@inkdown/contracts'
-import { normalizeInspectorSpans } from '@shared/reader/ocr-page-words'
+import { normalizeInspectorSpans } from '@inkdown/ocr-core'
 import type { PdfOcrPageCache, PdfOcrScale, RecognizePdfPagePayload } from '@inkdown/contracts'
 import { DEFAULT_PDF_OCR_SCALE } from '@inkdown/contracts'
 import { writePdfOcrPageCache } from './ocr-page-cache'

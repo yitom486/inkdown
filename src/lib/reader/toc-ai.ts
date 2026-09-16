@@ -5,8 +5,8 @@ import {
   isWatermarkTocEntry,
   normalizeOcrChinese,
   sortTocEntriesForDisplay,
-} from '@shared/reader/ocr-toc-extractor'
-import { sectionOfHeading } from '@shared/reader/directory-reassemble'
+} from '@inkdown/ocr-core'
+import { sectionOfHeading } from '@inkdown/ocr-core'
 
 /**
  * 目录 AI 整理：把目录页 OCR 原文发给大模型做结构化抽取，

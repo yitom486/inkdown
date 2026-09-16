@@ -64,7 +64,7 @@
 | `pdf-*` | `pdf-outline` / `pdf-page-metrics` / `pdf-selection` 已迁 `@inkdown/reader-core`；其余 PDF 打开/渲染/目录/选区/批注 overlay 仍在本目录；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js）；`pdf-book-search` 为手动正文搜索逻辑（只读 search + 会话防旧写回，库命中按页跳、内存命中按 label 跳章，跳页由调用方接线）；`pdf-agent-search-gate` 为 Agent 全书搜索闸门（未入库扫描/混合 PDF 直接报错，防整书 OCR） |
 | `toc-ai` / `toc-offset` | `toc-offset`（及 `toc-signature` / `book-index`）已迁 `@inkdown/reader-core`；`toc-ai` 仍在本目录（目录 AI 整理 Prompt 构造与 JSON 校验；目录偏移多标题锚定共识） |
 | `rosetta-*` | 罗盘索引：目录归一（rosetta-toc）、块转 Agent 文本（rosetta-agent-text）、目录签名与健康状态（rosetta-toc-status） |
-| `ocr-toc-*` | OCR 目录缓存状态：独立提示与校正/重识入口落点（ocr-toc-notice）、校正目录条目决议（pdf-ocr-toc-cache）、探测/识别/保存三取一租约锁＋文档世代（ocr-toc-op，防 ABA 与切文件旧写回）、探测反馈状态机（ocr-toc-detect-feedback，只填范围）；分级评估见 shared/reader/ocr-toc-assess，可用性门控见 pdf-ocr-toc-gate，范围评分见 shared/reader/toc-page-detect |
+| `ocr-toc-*` | OCR 目录缓存状态：独立提示与校正/重识入口落点（ocr-toc-notice）、校正目录条目决议（pdf-ocr-toc-cache）、探测/识别/保存三取一租约锁＋文档世代（ocr-toc-op，防 ABA 与切文件旧写回）、探测反馈状态机（ocr-toc-detect-feedback，只填范围）；分级评估见 `@inkdown/ocr-core`（ocr-toc-assess），可用性门控见 pdf-ocr-toc-gate，范围评分见 `@inkdown/ocr-core`（toc-page-detect） |
 | `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | `web-doc-toc` 已迁 `@inkdown/reader-core`；其余仍在本目录（在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe） |
 
 ## workspace/

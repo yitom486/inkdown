@@ -3,7 +3,7 @@ import {
   assessNativePageText,
   NATIVE_PAGE_QUALITY_SUGGEST_OCR,
   OCR_SUGGESTED_PAGES_CAP,
-} from '@shared/reader/native-page-quality'
+} from '@inkdown/ocr-core'
 import type { BookBlockSource, BookBlockType, BookDbBlockHit } from '@inkdown/contracts'
 import { getCompletedPages } from './import-book'
 

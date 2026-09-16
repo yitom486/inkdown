@@ -6,9 +6,9 @@ import {
   type BookIndex,
   type PrintedTocEntry,
 } from '@inkdown/reader-core'
-import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
+import type { InspectorSpanLike } from '@inkdown/ocr-core'
 // 复用同一套归一化做 span 对齐（空格/标点/全角折叠），保证入库匹配与清洗一致
-import { normalizeWatermarkText } from '@shared/reader/ocr-watermark'
+import { normalizeWatermarkText } from '@inkdown/ocr-core'
 import type { BookBlockType, BookDbBlockBBox } from '@inkdown/contracts'
 import { computeTocSignature } from '@inkdown/reader-core'
 import { migrateBookDb } from './schema'

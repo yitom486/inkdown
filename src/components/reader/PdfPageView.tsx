@@ -11,7 +11,7 @@ import {
   type PdfTextLayerBuilderInstance,
 } from '@/lib/reader/pdf-text-layer-builder'
 import { mountOcrTextLayer } from '@/lib/reader/pdf-ocr-text-layer'
-import { pageHasNativeText } from '@shared/reader/ocr-page-words'
+import { pageHasNativeText } from '@inkdown/ocr-core'
 import type { PdfOcrPageCache } from '@inkdown/contracts'
 import {
   PdfTextLayerMappingSink,

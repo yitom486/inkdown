@@ -5,9 +5,9 @@ import {
   defaultPdfPageOffset,
   extractOcrTocFromText,
   ocrTocToReaderUnits,
-} from '@shared/reader/ocr-toc-extractor'
-import { cleanOcrWatermarks } from '@shared/reader/ocr-watermark'
-import { buildSectionPageMap } from '@shared/reader/toc-geometry'
+} from '@inkdown/ocr-core'
+import { cleanOcrWatermarks } from '@inkdown/ocr-core'
+import { buildSectionPageMap } from '@inkdown/ocr-core'
 import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@inkdown/contracts'
 import { DEFAULT_PDF_TOC_SCALE } from '@inkdown/contracts'
 import { writePdfOcrTocCache } from './ocr-toc-cache'

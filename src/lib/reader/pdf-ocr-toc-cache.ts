@@ -1,4 +1,4 @@
-import { ocrTocToReaderUnits } from '@shared/reader/ocr-toc-extractor'
+import { ocrTocToReaderUnits } from '@inkdown/ocr-core'
 import type { OcrTocEntry, PdfOcrTocCache, ReaderTocUnit } from '@inkdown/contracts'
 
 export function buildPdfOcrTocCache(params: {

@@ -1,5 +1,5 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { pageHasNativeText } from '@shared/reader/ocr-page-words'
+import { pageHasNativeText } from '@inkdown/ocr-core'
 import type { PdfOcrPageCache } from '@inkdown/contracts'
 
 export async function readPdfPageNativeText(

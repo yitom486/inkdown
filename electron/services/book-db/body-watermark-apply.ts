@@ -14,7 +14,7 @@ import {
   planBodyWatermarkPatches,
   type BodyBlockInput,
   type BodyWatermarkPatch,
-} from '@shared/reader/body-watermark-plan'
+} from '@inkdown/ocr-core'
 import { getBookDbPath } from './open-book-db'
 import { migrateBookDb } from './schema'
 import { getBookRecord } from './queries'

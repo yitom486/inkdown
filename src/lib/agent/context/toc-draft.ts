@@ -2,7 +2,7 @@ import {
   backfillMissingPages,
   isBareChapterTitle,
   isWatermarkTocEntry,
-} from '@shared/reader/ocr-toc-extractor'
+} from '@inkdown/ocr-core'
 import type { OcrTocEntrySource } from '@inkdown/contracts'
 
 /**

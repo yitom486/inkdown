@@ -19,7 +19,7 @@ import {
   planBodyWatermarkPatches,
   sha256HexAscii,
   type BodyWatermarkPatch,
-} from '@shared/reader/body-watermark-plan'
+} from '@inkdown/ocr-core'
 import type { BookBlockType } from '@inkdown/contracts'
 import { getBookDbPath } from './open-book-db'
 import { migrateBookDb } from './schema'

@@ -9,7 +9,7 @@ import {
   isWatermarkTocEntry,
   normalizeOcrChinese,
   splitStuckSections,
-} from '@shared/reader/ocr-toc-extractor'
+} from './ocr-toc-extractor'
 
 describe('ocr-toc-extractor', () => {
   it('normalizeOcrChinese 合并汉字间空格', () => {

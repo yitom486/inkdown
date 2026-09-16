@@ -5,9 +5,10 @@
       "@shared/*": ["./shared/*"],
       "@inkdown/contracts": ["./packages/contracts/src/index.ts"],
       "@inkdown/reader-core": ["./packages/reader-core/src/index.ts"],
-      "@inkdown/pdf": ["./packages/pdf/src/index.ts"]
+      "@inkdown/pdf": ["./packages/pdf/src/index.ts"],
+      "@inkdown/ocr-core": ["./packages/ocr-core/src/index.ts"]
     },
     "types": ["electron-vite/node"]
   },
-  "include": ["electron/**/*", "shared/**/*", "electron.vite.config.ts", "packages/contracts/src/**/*", "packages/reader-core/src/**/*", "packages/pdf/src/**/*"]
+  "include": ["electron/**/*", "shared/**/*", "electron.vite.config.ts", "packages/contracts/src/**/*", "packages/reader-core/src/**/*", "packages/pdf/src/**/*", "packages/ocr-core/src/**/*"]
 }

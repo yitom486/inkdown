@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { copyPdfBytesForPdfJs, readPdfPageSizes } from './pdf-page-geometry'
+import { copyPdfBytesForPdfJs } from '@inkdown/ocr-core'
+import { readPdfPageSizes } from './pdf-page-geometry'
 
 const MINIMAL_PDF = Buffer.from(
   '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +

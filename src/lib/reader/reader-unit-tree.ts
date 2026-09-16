@@ -1,5 +1,5 @@
 import type { ReaderUnit } from '@inkdown/reader-core'
-import { sectionOfHeading } from '@shared/reader/directory-reassemble'
+import { sectionOfHeading } from '@inkdown/ocr-core'
 
 export interface ReaderUnitTreeNode {
   unit: ReaderUnit

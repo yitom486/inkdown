@@ -1,4 +1,4 @@
-import type { OcrTocCacheAssessment } from '@shared/reader/ocr-toc-assess'
+import type { OcrTocCacheAssessment } from '@inkdown/ocr-core'
 
 /**
  * OCR 目录缓存状态的独立 UI 状态（不复用普通 outlineNotice）。

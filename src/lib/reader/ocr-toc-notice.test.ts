@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OcrTocCacheAssessment } from '@shared/reader/ocr-toc-assess'
+import type { OcrTocCacheAssessment } from '@inkdown/ocr-core'
 import {
   noticeForFreshRecognize,
   noticeForRestoredCache,

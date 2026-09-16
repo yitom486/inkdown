@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { rosettaApi } from '@/api/rosetta-api'
 import { isOk } from '@inkdown/contracts'
-import { validateCustomEdgeToken } from '@shared/reader/body-watermark-plan'
+import { validateCustomEdgeToken } from '@inkdown/ocr-core'
 import type {
   RosettaBodyWatermarkApplyResult,
   RosettaBodyWatermarkPreviewResult,

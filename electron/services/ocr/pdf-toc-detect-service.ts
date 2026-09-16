@@ -7,7 +7,7 @@ import {
   resolveDetectWindow,
   scoreTocPageMarkdown,
   selectTocPageRange,
-} from '@shared/reader/toc-page-detect'
+} from '@inkdown/ocr-core'
 import { ensureInspectorOcrRuntime } from './inspector-ocr-runtime'
 
 async function loadPdfInspector() {

@@ -18,7 +18,9 @@
 
 | 文件 | 功能 |
 |------|------|
-| `pdf-inspector-service.ts` | 主进程 PDF 分类与按页 Markdown 抽取（Node 绑定，页码对外 1-indexed；OCR 运行时另起任务） |
+| `pdf-inspector-service.ts` | 主进程 PDF 分类与按页 Markdown 抽取（薄封装：页码归一/分类映射/正文拼装走 `@inkdown/pdf`；页码对外 1-indexed；OCR 运行时另起任务） |
+
+页码归一/分类映射/整档拼装（normalize/models/ports）见 `packages/pdf/`（`@inkdown/pdf`，PDF 原生结果归一与拼装）。
 
 ## 阅读标记与测验
 

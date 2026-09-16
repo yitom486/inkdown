@@ -35,15 +35,15 @@ import {
   type OcrTocOperation,
   type TocOpLease,
 } from '@/lib/reader/ocr-toc-op'
-import { resolveDetectApply } from '@shared/reader/toc-page-detect'
+import { resolveDetectApply } from '@inkdown/ocr-core'
 import {
   noticeForFreshRecognize,
   noticeForRestoredCache,
   placeOcrTocNotice,
   type OcrTocNotice,
 } from '@/lib/reader/ocr-toc-notice'
-import { assessPdfOcrTocCache } from '@shared/reader/ocr-toc-assess'
-import { reassembleDirectoryText } from '@shared/reader/directory-reassemble'
+import { assessPdfOcrTocCache } from '@inkdown/ocr-core'
+import { reassembleDirectoryText } from '@inkdown/ocr-core'
 import { ACP_MAX_IMAGE_BYTES, blobToBase64 } from '@/lib/agent/acp-composer'
 import type { TocPromptImage } from '@/lib/agent/toc-ai-session'
 import { renderPdfPagesToPng } from '@/lib/reader/pdf-page-image'
