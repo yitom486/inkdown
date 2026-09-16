@@ -5,7 +5,7 @@ publish:
   owner: yitom486
   repo: inkdown
 directories:
-  buildResources: resources
+  buildResources: apps/desktop/resources
   output: release
 # 主进程仅包含运行时必需依赖（updater 与 PDF OCR 图片转换），渲染端由 Vite 打进 out/
 files:
@@ -35,7 +35,7 @@ electronLanguages:
   - en-US
 
 win:
-  icon: resources/icon.ico
+  icon: apps/desktop/resources/icon.ico
   target:
     - nsis
 
@@ -61,7 +61,7 @@ nsis:
   deleteAppDataOnUninstall: false
 
 mac:
-  icon: resources/icon.png
+  icon: apps/desktop/resources/icon.png
   category: public.app-category.productivity
   # 无 Apple 开发者证书时跳过公证；用户需在「隐私与安全性」中允许打开
   hardenedRuntime: false
@@ -77,7 +77,7 @@ mac:
         - arm64
 
 linux:
-  icon: resources/icon.png
+  icon: apps/desktop/resources/icon.png
   category: Office
   maintainer: yitom486 <yitom486@gmail.com>
   desktop:
