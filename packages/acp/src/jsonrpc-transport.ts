@@ -1,4 +1,4 @@
-import type { Readable, Writable } from 'node:stream'
+import type { Readable, Writable } from 'node:stream' // check-deps:allow node:stream - ACP stdio
 
 export type JsonRpcId = number | string
 

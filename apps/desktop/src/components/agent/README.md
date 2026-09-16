@@ -19,3 +19,5 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。
 | `AgentBunInstallBanner` | 缺 Bun 运行时提示与一键安装横幅 |
 
 会话状态机：`src/hooks/agent/useAcpSession`；UI 状态：`acp-ui-store`。
+
+协议/传输/认证/MCP 纯逻辑见 `@inkdown/acp`（`packages/acp/`）；标记提议模型见 `@inkdown/annotations`（`mark-proposal` 单条·批量、`chapter-mark-plan` 章级建议）。

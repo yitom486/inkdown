@@ -29,6 +29,9 @@ jobs:
       - name: 文档清单检查
         run: bun run lint:docs
 
+      - name: 依赖边界检查
+        run: bun run lint:deps
+
       - name: 单元与集成测试
         run: bun run test
 

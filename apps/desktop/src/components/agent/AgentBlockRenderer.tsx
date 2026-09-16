@@ -5,7 +5,7 @@ import { dismissProposedMark } from '@/lib/agent/context/propose-mark'
 
 export type ResolveMarkProposal = (
   proposalId: string,
-  status: Exclude<import('@shared/types/mark-proposal').MarkProposalStatus, 'pending'>,
+  status: Exclude<import('@inkdown/annotations').MarkProposalStatus, 'pending'>,
 ) => void
 
 export interface AgentBlockRendererProps {

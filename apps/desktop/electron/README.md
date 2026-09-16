@@ -1,7 +1,9 @@
 # electron
 
 **主进程**源码。入口：`main.ts`；渲染进程通过 `preload.ts` 的 `contextBridge` 调 IPC。  
-渲染进程在 [`src/`](../src/README.md)；跨进程契约在 `packages/contracts/`（`@inkdown/contracts`，原 `shared/` 核心/IPC/类型；`shared/` 仅残留未迁移模块）。
+渲染进程在 [`src/`](../src/README.md)；跨进程契约在 `packages/contracts/`（`@inkdown/contracts`，原 `shared/` 核心/IPC/类型；`shared/` 已清空，阶段 10 删除）。
+
+门禁：`bun run lint:docs`（`scripts/lint-docs.ts`）+ `bun run lint:deps`（`scripts/check-deps.ts`，R1–R6 依赖边界）。
 
 | 目录 / 文件 | 职责 |
 |-------------|------|

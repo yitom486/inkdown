@@ -1,8 +1,14 @@
 import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { useErrorLogStore } from '@/stores/error-log-store'
-import { isAppError, reportAppError } from '@/lib/workspace/report-error'
+import { isAppError, isCancelled, type AppError } from '@inkdown/contracts'
 import type { RendererErrorPayload } from '@inkdown/contracts'
+
+/** 非 CANCELLED 错误统一以 Sonner Toast 提示（A2：自 report-error.ts 搬入以断循环） */
+export function reportAppError(error: AppError): void {
+  if (isCancelled(error)) return
+  toast.error('操作失败', { description: error.message })
+}
 
 export interface RuntimeErrorContext {
   source: string

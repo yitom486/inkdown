@@ -2,7 +2,7 @@ import {
   CHAPTER_MARK_PLAN_MAX,
   type ChapterMarkPlanInput,
   type ChapterMarkPlanToolResult,
-} from '@shared/types/chapter-mark-plan'
+} from '@inkdown/annotations'
 import { collectActiveDocument } from '@/lib/agent/context/collect-turn-context'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 

@@ -9,10 +9,6 @@ import { copyPdfjsAssetsPlugin } from './electron/vite-plugins/copy-pdfjs-assets
 
 const appDir = fileURLToPath(new URL('.', import.meta.url))
 
-const sharedAlias = {
-  '@shared': resolve(appDir, '../../shared'),
-}
-
 const foliateAlias = {
   '@foliate': resolve(appDir, '../../third-party/foliate-js'),
 }
@@ -42,7 +38,7 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     resolve: {
-      alias: { ...sharedAlias, ...workspaceAlias },
+      alias: { ...workspaceAlias },
     },
     build: {
       lib: {
@@ -53,7 +49,7 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     resolve: {
-      alias: { ...sharedAlias, ...workspaceAlias },
+      alias: { ...workspaceAlias },
     },
     build: {
       lib: {
@@ -84,7 +80,6 @@ export default defineConfig({
     resolve: {
       alias: {
         '@': resolve(appDir, 'src'),
-        ...sharedAlias,
         ...foliateAlias,
         ...workspaceAlias,
       },

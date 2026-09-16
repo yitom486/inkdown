@@ -2,7 +2,6 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@shared/*": ["./shared/*"],
       "@inkdown/contracts": ["./packages/contracts/src/index.ts"],
       "@inkdown/reader-core": ["./packages/reader-core/src/index.ts"],
       "@inkdown/pdf": ["./packages/pdf/src/index.ts"],
@@ -13,5 +12,5 @@
     },
     "types": ["electron-vite/node"]
   },
-  "include": ["apps/desktop/electron/**/*", "shared/**/*", "apps/desktop/electron.vite.config.ts", "packages/contracts/src/**/*", "packages/reader-core/src/**/*", "packages/pdf/src/**/*", "packages/ocr-core/src/**/*", "packages/acp/src/**/*", "packages/annotations/src/**/*", "packages/web-doc/src/**/*"]
+  "include": ["apps/desktop/electron/**/*", "apps/desktop/electron.vite.config.ts", "packages/contracts/src/**/*", "packages/reader-core/src/**/*", "packages/pdf/src/**/*", "packages/ocr-core/src/**/*", "packages/acp/src/**/*", "packages/annotations/src/**/*", "packages/web-doc/src/**/*"]
 }

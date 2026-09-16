@@ -30,8 +30,8 @@ import {
   type PdfOcrScale,
 } from '@/stores/app-settings-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
-import type { AppTheme } from '@shared/types/editor'
-import type { EditorViewMode } from '@shared/types/editor'
+import type { AppTheme } from '@/stores/editor-ui-store'
+import type { EditorViewMode } from '@/stores/editor-ui-store'
 import { cn } from '@/lib/utils'
 import { appApi } from '@/api/app-api'
 import { clearAllPdfOcrCache } from '@/api/ocr-api'

@@ -10,7 +10,7 @@ import { parseAcpPlanEntries, summarizePlanProgress } from '@/lib/agent/acp-plan
 import { enrichAcpToolMessage } from '@/lib/agent/enrich-tool-message'
 import { promoteMarkProposalsToLastAgent, resolveMarkProposalOnMessages } from '@/lib/agent/promote-mark-proposals'
 import { extractAnnotationDraft } from '@/lib/agent/annotation-note-prompts'
-import type { MarkProposalStatus } from '@shared/types/mark-proposal'
+import type { MarkProposalStatus } from '@inkdown/annotations'
 
 function messageId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`

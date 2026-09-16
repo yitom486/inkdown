@@ -45,7 +45,7 @@ import {
   isProposeMarkToolTitle,
   parseMarkProposalsFromTool,
 } from '@/lib/agent/parse-mark-proposal'
-import type { MarkProposalStatus } from '@shared/types/mark-proposal'
+import type { MarkProposalStatus } from '@inkdown/annotations'
 
 export interface AcpPendingPermission {
   requestId: number

@@ -21,7 +21,7 @@ import {
   INSPECTOR_PDFIUM,
   resolveInspectorPlatform,
   type InspectorNativeLib,
-} from '@shared/constants/inspector-ocr'
+} from '@inkdown/ocr-core'
 
 /**
  * pdf-inspector OCR 外部运行时分发（PDFium + ONNX Runtime + PP-OCRv6 Small）。

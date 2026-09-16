@@ -12,7 +12,7 @@
 | `reader/` | EPUB / PDF / MOBI / **在线文档 HTML** 渲染端专属逻辑（导航/选区/标记/排版等 27 模块已迁 `@inkdown/reader-core`，见下） |
 | `quiz/` | AI 伴读考官出题、自动判卷打分、JSONL 知识库与仓储抽象（`parse`/`serialize` 已下沉 `@inkdown/contracts`） |
 | `workspace/` | 文件树、对话框路径、全局错误上报 |
-| `agent/` | ACP 会话辅助；`context/` 为 Inkdown 注入 Agent 的 Skill / 快照 / 选区 |
+| `agent/` | ACP 会话辅助；`context/` 为 Inkdown 注入 Agent 的 Skill / 快照 / 选区（协议/传输/认证/MCP 纯逻辑见 `@inkdown/acp`） |
 
 ---
 

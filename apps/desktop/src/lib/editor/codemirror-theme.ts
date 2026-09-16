@@ -1,7 +1,7 @@
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
-import type { AppTheme } from '@shared/types/editor'
+import type { AppTheme } from '@/stores/editor-ui-store'
 
 export function buildThemeExtensions(theme: AppTheme, fontSize: number) {
   const isDark = theme === 'dark'

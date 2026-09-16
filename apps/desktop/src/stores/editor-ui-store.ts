@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
-import type { AppTheme, EditorViewMode } from '@shared/types/editor'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 
-export type { AppTheme, EditorViewMode }
+/** 编辑区布局：仅源码 / 仅预览 / 左右分栏 */
+export type EditorViewMode = 'editor' | 'preview' | 'split'
+
+/** 应用外观；与 next-themes 等持久化主题对齐 */
+export type AppTheme = 'dark' | 'light'
 
 export interface FileUiState {
   viewMode: EditorViewMode

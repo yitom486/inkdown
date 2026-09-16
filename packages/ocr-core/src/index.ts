@@ -13,3 +13,5 @@ export * from './native-page-quality'
 // 基础与端口
 export * from './pdf-bytes'
 export * from './ports'
+// 外部运行时 pin（A2：shared/constants/inspector-ocr 入包改名）
+export * from './inspector-pins'

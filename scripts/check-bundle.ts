@@ -106,7 +106,6 @@ function collectTsFiles(dir: string, out: string[] = []): string[] {
 function toPackageName(specifier: string): string | null {
   if (specifier.startsWith('.') || specifier.startsWith('@/') || specifier.startsWith('~/')) return null
   // 路径别名（electron.vite.config.ts / vitest.config.ts）与 Electron 运行时内置模块
-  if (specifier === '@shared' || specifier.startsWith('@shared/')) return null
   // Monorepo workspace 包经 electron.vite.config.ts workspaceAlias 直接打进 bundle，
   // 主进程产物无运行时 require（已验 out/main 无 @inkdown 引用），不进 files 白名单
   if (specifier === '@inkdown/contracts' || specifier.startsWith('@inkdown/')) return null

@@ -25,7 +25,7 @@ import { groupAgentMessages } from '@/components/agent/AgentActivityGroup'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
 import { AgentScrollToBottomButton } from '@/components/agent/AgentScrollToBottomButton'
 import { useStickToBottomScroll } from '@/hooks/agent/useStickToBottomScroll'
-import { toProposedMark } from '@shared/types/mark-proposal'
+import { toProposedMark } from '@inkdown/annotations'
 import { toast } from 'sonner'
 
 interface AnnotationNoteDialogProps {

@@ -7,11 +7,11 @@ import type {
   MarkProposalToolResult,
   ProposedMark,
   ProposedMarkSource,
-} from '@shared/types/mark-proposal'
+} from '@inkdown/annotations'
 import {
   MARK_PROPOSAL_BATCH_MAX,
   toProposedMark,
-} from '@shared/types/mark-proposal'
+} from '@inkdown/annotations'
 import { getReaderMarksProvider } from '@/lib/agent/context/reader-marks-registry'
 import { resolveMarkTarget } from '@/lib/agent/context/resolve-mark-target'
 import {

@@ -26,7 +26,7 @@
 
 | 文件 | 功能 |
 |------|------|
-| `reading-marks-service.ts` | 书签 / 高亮 / 批注 JSON 文件 adapter（`userData`；纯核见 `@inkdown/annotations`：`marks-core`） |
+| `reading-marks-service.ts` | 书签 / 高亮 / 批注 JSON 文件 adapter（`userData`；纯核见 `@inkdown/annotations`：`marks-core`；提议模型同包：`mark-proposal` 单条·批量、`chapter-mark-plan` 章级建议） |
 | `quiz-service.ts` | AI 测验与答题打分记录 JSONL 文件 adapter（`userData`；`parse`/`serialize` 已下沉 `@inkdown/contracts`，本模块兼容再导出） |
 
 ## 结构化索引（SQLite 罗盘，单书一库）

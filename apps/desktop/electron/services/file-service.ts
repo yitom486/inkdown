@@ -1,14 +1,7 @@
 import { dialog, BrowserWindow } from 'electron'
 import { dirname, extname, join } from 'path'
 import { mkdir, readFile, writeFile } from 'fs/promises'
-import { DEFAULT_SAVE_FILENAME } from '@inkdown/contracts'
-import {
-  DOCUMENT_DIALOG_FILTERS,
-  HTML_DIALOG_FILTERS,
-  MARKDOWN_DIALOG_FILTERS,
-  PASTED_IMAGE_ASSETS_DIR,
-  PDF_DIALOG_FILTERS,
-} from '@shared/constants/dialog-filters'
+import { ALL_DOCUMENT_EXTENSIONS, DEFAULT_SAVE_FILENAME, MARKDOWN_EXTENSIONS } from '@inkdown/contracts'
 import { getDocumentKind } from '@inkdown/contracts'
 import { IMAGE_EXTENSION_BY_MIME, IMAGE_MIME_BY_EXTENSION } from '@inkdown/contracts'
 import { toAppError, type AppError } from '@inkdown/contracts'
@@ -30,6 +23,29 @@ import type {
 } from '@inkdown/contracts'
 import { scanWorkspace } from './workspace'
 import { resolveExportSavePath } from './export-save-path'
+
+/** Electron 文件对话框过滤器 */
+export const MARKDOWN_DIALOG_FILTERS = [
+  { name: 'Markdown', extensions: [...MARKDOWN_EXTENSIONS] },
+  { name: 'All Files', extensions: ['*'] },
+]
+
+/** 打开文件对话框：Markdown + 电子书 */
+export const DOCUMENT_DIALOG_FILTERS = [
+  { name: '所有支持格式', extensions: [...ALL_DOCUMENT_EXTENSIONS] },
+  { name: 'Markdown', extensions: [...MARKDOWN_EXTENSIONS] },
+  { name: 'PDF', extensions: ['pdf'] },
+  { name: 'EPUB', extensions: ['epub'] },
+  { name: 'MOBI / Kindle', extensions: ['mobi', 'azw3', 'azw'] },
+  { name: 'All Files', extensions: ['*'] },
+]
+
+export const HTML_DIALOG_FILTERS = [{ name: 'HTML', extensions: ['html', 'htm'] }]
+
+export const PDF_DIALOG_FILTERS = [{ name: 'PDF', extensions: ['pdf'] }]
+
+/** 粘贴图片默认保存到 Markdown 文件同级的 assets 目录 */
+export const PASTED_IMAGE_ASSETS_DIR = 'assets'
 
 const markdownFilters = MARKDOWN_DIALOG_FILTERS
 

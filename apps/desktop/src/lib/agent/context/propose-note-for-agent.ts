@@ -6,7 +6,7 @@ export {
 } from '@/lib/agent/context/propose-mark'
 
 import { proposeMarksUnifiedForAgent } from '@/lib/agent/context/propose-mark'
-import type { MarkProposalPayload } from '@shared/types/mark-proposal'
+import type { MarkProposalPayload } from '@inkdown/annotations'
 
 function normalizePayload(payload: MarkProposalPayload): MarkProposalPayload {
   return payload

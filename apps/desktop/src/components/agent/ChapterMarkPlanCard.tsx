@@ -5,7 +5,7 @@ import {
   AgentChatItemBody,
 } from '@/components/agent/AgentChatItem'
 import { cn } from '@/lib/utils'
-import type { ChapterMarkPlanEntry } from '@shared/types/chapter-mark-plan'
+import type { ChapterMarkPlanEntry } from '@inkdown/annotations'
 
 export interface ChapterMarkPlanSelectPayload {
   entry: ChapterMarkPlanEntry

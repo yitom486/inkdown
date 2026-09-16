@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { reportAppError, isAppError } from './report-error'
+import { isAppError } from '@inkdown/contracts'
+import { reportAppError } from './report-error'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn() },

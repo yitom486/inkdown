@@ -35,7 +35,7 @@ import {
   placeholder,
 } from '@codemirror/view'
 import { applyScrollRatio, scrollRatio } from '@/lib/editor/markdown-headings'
-import type { AppTheme } from '@shared/types/editor'
+import type { AppTheme } from '@/stores/editor-ui-store'
 import {
   forwardRef,
   useEffect,

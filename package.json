@@ -27,6 +27,7 @@
     "test:all": "bun run typecheck && bun run test && bun run build && bun run test:e2e",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "lint:docs": "bun run scripts/lint-docs.ts",
+    "lint:deps": "bun run scripts/check-deps.ts",
     "check:bundle": "bun run scripts/check-bundle.ts",
     "release": "bun run scripts/release.ts",
     "release:push": "bun run scripts/release.ts -- --push",

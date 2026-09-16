@@ -9,7 +9,7 @@
 | `preview/` | 预览 DOM 增强：代码块复制、hljs 主题、Mermaid（预览与 Agent 气泡共用） |
 | `reader/` | EPUB / PDF / MOBI：二进制加载、侧栏、书签批注、高亮浮层 |
 | `workspace/` | 工作区壳：打开/保存文件、文件树、侧栏折叠、全局错误 |
-| `agent/` | ACP Agent 会话 |
+| `agent/` | ACP Agent 会话（协议/传输/认证/MCP 纯逻辑见 `@inkdown/acp`） |
 
 ---
 

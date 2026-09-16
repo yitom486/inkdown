@@ -1,4 +1,4 @@
-import type { MarkProposalPayload } from '@shared/types/mark-proposal'
+import type { MarkProposalPayload } from '@inkdown/annotations'
 import { excerptAppearsIn, findExcerptInText } from '@/lib/reader/excerpt-text-match'
 import {
   markProposalDevLog,

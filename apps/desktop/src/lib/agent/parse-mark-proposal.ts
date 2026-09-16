@@ -2,8 +2,8 @@ import type {
   MarkProposalBatchToolResult,
   MarkProposalToolResult,
   ProposedMark,
-} from '@shared/types/mark-proposal'
-import { toProposedMark } from '@shared/types/mark-proposal'
+} from '@inkdown/annotations'
+import { toProposedMark } from '@inkdown/annotations'
 
 const PROPOSE_TOOL_PATTERN =
   /inkdown_(?:propose_note|create_note|propose_mark|create_mark)|propose.?note|create.?note|提议批注|批注草稿/i
@@ -117,10 +117,10 @@ export function enrichToolMessageWithMarkProposal<
     toolStatus?: string
     streaming?: boolean
     markProposal?: ProposedMark
-    markProposalStatus?: import('@shared/types/mark-proposal').MarkProposalStatus
+    markProposalStatus?: import('@inkdown/annotations').MarkProposalStatus
     markProposals?: Array<{
       proposal: ProposedMark
-      status: import('@shared/types/mark-proposal').MarkProposalStatus
+      status: import('@inkdown/annotations').MarkProposalStatus
     }>
   },
 >(message: T, isActiveStatus: (status: string | undefined) => boolean): T {

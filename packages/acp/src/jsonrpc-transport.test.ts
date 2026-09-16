@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream'
+import { PassThrough } from 'node:stream' // check-deps:allow node:stream - ACP stdio
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   encodeJsonRpcMessage,

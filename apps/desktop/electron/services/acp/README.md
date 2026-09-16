@@ -16,3 +16,5 @@ ACP Agent 主进程侧 wiring：拉起 `codex-acp`、连接生命周期、权限
 | MCP | `mcp/inkdown-mcp-server.ts` 留守（HTTP 挂载）；工具表与 RPC 已迁 `@inkdown/acp` | 进程内 HTTP MCP（`inkdown_*` 工具）；随连接起停 |
 
 `mcp/` 仅留传输挂载，不必再单独维护一份长 README；工具列表以 `@inkdown/acp`（`packages/acp/src/inkdown-mcp-tools.ts`，含 RPC `packages/acp/src/inkdown-mcp-rpc.ts`）与 Skill 为准；目录副会话专用表见 `@inkdown/acp`（`packages/acp/src/inkdown-mcp-toc-tools.ts`，`toc_*`，独立端点，仅 `toolScope: 'toc'` 的会话挂载）。
+
+标记提议模型 `mark-proposal`（单条·批量）与章级建议 `chapter-mark-plan` 已归 `@inkdown/annotations`（与渲染 `ChapterMarkPlanCard` / `ProposeMarkCard` 对接），不在本包。

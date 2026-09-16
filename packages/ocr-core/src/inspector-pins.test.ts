@@ -4,7 +4,7 @@ import {
   INSPECTOR_ORT,
   INSPECTOR_PDFIUM,
   type InspectorOcrPlatform,
-} from './inspector-ocr'
+} from './inspector-pins'
 
 const SHA256_HEX = /^[0-9a-f]{64}$/
 

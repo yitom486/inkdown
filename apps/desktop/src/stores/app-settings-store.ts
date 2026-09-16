@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { EditorViewMode } from '@shared/types/editor'
+import type { EditorViewMode } from '@/stores/editor-ui-store'
 import {
   DEFAULT_READER_TYPOGRAPHY,
   type ReaderFontSize,

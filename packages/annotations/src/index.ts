@@ -33,3 +33,9 @@ export * from "./marks-core";
 
 // ── 导出 ──
 export * from "./anki-cards";
+
+// ── 阅读标记提议（A2：shared/types/mark-proposal 入包） ──
+export * from "./mark-proposal";
+
+// ── 章级划重点建议（D片改判：与 mark-proposal 同族、renderer 安全，归 annotations） ──
+export * from "./chapter-mark-plan";

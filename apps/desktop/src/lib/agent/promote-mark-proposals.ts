@@ -1,5 +1,5 @@
-import { toProposedMark } from '@shared/types/mark-proposal'
-import type { MarkProposalStatus, ProposedMark } from '@shared/types/mark-proposal'
+import { toProposedMark } from '@inkdown/annotations'
+import type { MarkProposalStatus, ProposedMark } from '@inkdown/annotations'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { useAnnotationAgentStore } from '@/stores/annotation-agent-store'
 

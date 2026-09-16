@@ -19,3 +19,5 @@ Selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand-selecto
 | `acp-ui-store.ts` | Agent 线程、消息、连接状态、权限与配置偏好 |
 | `annotation-agent-store.ts` | 批注 AI 助手：按书线程、独立 agentSessionId、pendingDraft |
 | `acp-chat-types.ts` | Agent 聊天消息结构与解析辅助（非独立 store） |
+
+协议/传输/认证纯逻辑见 `@inkdown/acp`（`packages/acp/`）；本目录仅存 UI 与会话展示状态，不放 IPC 数据。

@@ -31,6 +31,16 @@ export function isCancelled(error: AppError): boolean {
   return error.code === 'CANCELLED'
 }
 
+export function isAppError(value: unknown): value is AppError {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'code' in value &&
+    'message' in value &&
+    typeof (value as AppError).message === 'string'
+  )
+}
+
 export function toAppError(error: unknown, fallbackMessage: string): AppError {
   if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
     return error as AppError

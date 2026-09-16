@@ -1,5 +1,5 @@
-import type { ChapterMarkPlanEntry, ChapterMarkPlanToolResult } from '@shared/types/chapter-mark-plan'
-import { toChapterMarkPlanEntry } from '@shared/types/chapter-mark-plan'
+import type { ChapterMarkPlanEntry, ChapterMarkPlanToolResult } from '@inkdown/annotations'
+import { toChapterMarkPlanEntry } from '@inkdown/annotations'
 
 const SUGGEST_CHAPTERS_TOOL_PATTERN =
   /inkdown_suggest_chapters|suggest.?chapters|章级建议|chapter.?plan/i

@@ -1,11 +1,13 @@
 import { readdir } from 'fs/promises'
 import { join, extname } from 'path'
-import {
-  WORKSPACE_IGNORED_DIR_NAMES,
-  WORKSPACE_MAX_DEPTH,
-} from '@shared/constants/workspace'
 import { getDocumentKind, isWorkspaceFileExtension } from '@inkdown/contracts'
 import type { FileTreeNode } from '@inkdown/contracts'
+
+/** 工作区目录树最大递归深度 */
+export const WORKSPACE_MAX_DEPTH = 6
+
+/** 工作区扫描时跳过的目录名 */
+export const WORKSPACE_IGNORED_DIR_NAMES = new Set(['node_modules'])
 
 /** 移除不含支持文档的空目录，便于侧栏发现有效文件 */
 export function pruneEmptyDirectories(nodes: FileTreeNode[]): FileTreeNode[] {

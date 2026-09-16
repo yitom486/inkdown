@@ -1,6 +1,6 @@
 import type { AcpToolCallKind, AcpToolCallStatus } from '@inkdown/contracts'
-import type { ChapterMarkPlanEntry } from '@shared/types/chapter-mark-plan'
-import type { MarkProposalStatus, ProposedMark } from '@shared/types/mark-proposal'
+import type { ChapterMarkPlanEntry } from '@inkdown/annotations'
+import type { MarkProposalStatus, ProposedMark } from '@inkdown/annotations'
 import type { AcpPlanEntry } from '@/lib/agent/acp-plan'
 import type { AcpMessageAttachment } from '@/lib/agent/acp-composer'
 

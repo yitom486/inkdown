@@ -2,7 +2,7 @@ import type {
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
 } from '@inkdown/contracts'
-import type { MarkProposalItem, MarkProposalKind, MarkProposalPayload } from '@shared/types/mark-proposal'
+import type { MarkProposalItem, MarkProposalKind, MarkProposalPayload } from '@inkdown/annotations'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { collectActiveDocument, collectReadingState } from './collect-turn-context'
 import {
