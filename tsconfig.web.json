@@ -1,19 +1,15 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "target": "ESNext",
     "jsx": "react-jsx",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["./shared/*"],
-      "@foliate/*": ["./third-party/foliate-js/*"]
+      "@foliate/*": ["./third-party/foliate-js/*"],
+      "@inkdown/contracts": ["./packages/contracts/src/index.ts"],
+      "@inkdown/reader-core": ["./packages/reader-core/src/index.ts"]
     },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*", "shared/**/*"]
+  "include": ["src/**/*", "shared/**/*", "packages/contracts/src/**/*", "packages/reader-core/src/**/*"]
 }

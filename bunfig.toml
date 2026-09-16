@@ -1,0 +1,3 @@
+[install]
+# Monorepo workspace 下保持 hoisted：Windows 长路径 + @firecrawl/pdf-inspector tgz 原生包在 isolated 下 ENAMETOOLONG，stable 基线即 hoisted 布局
+linker = "hoisted"

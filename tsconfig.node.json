@@ -1,16 +1,12 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "target": "ESNext",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "paths": {
-      "@shared/*": ["./shared/*"]
+      "@shared/*": ["./shared/*"],
+      "@inkdown/contracts": ["./packages/contracts/src/index.ts"],
+      "@inkdown/reader-core": ["./packages/reader-core/src/index.ts"]
     },
     "types": ["electron-vite/node"]
   },
-  "include": ["electron/**/*", "shared/**/*", "electron.vite.config.ts"]
+  "include": ["electron/**/*", "shared/**/*", "electron.vite.config.ts", "packages/contracts/src/**/*", "packages/reader-core/src/**/*"]
 }

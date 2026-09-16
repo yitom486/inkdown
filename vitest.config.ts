@@ -7,6 +7,8 @@ export default defineConfig({
       '@': resolve('src'),
       '@shared': resolve('shared'),
       '@foliate': resolve('third-party/foliate-js'),
+      '@inkdown/contracts': resolve('packages/contracts/src/index'),
+      '@inkdown/reader-core': resolve('packages/reader-core/src/index'),
     },
   },
   test: {
@@ -16,6 +18,7 @@ export default defineConfig({
       'electron/**/*.test.ts',
       'shared/**/*.test.ts',
       'scripts/**/*.test.ts',
+      'packages/**/*.test.ts',
     ],
   },
 })

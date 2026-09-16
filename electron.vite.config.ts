@@ -14,6 +14,11 @@ const foliateAlias = {
   '@foliate': resolve('third-party/foliate-js'),
 }
 
+const workspaceAlias = {
+  '@inkdown/contracts': resolve('packages/contracts/src/index.ts'),
+  '@inkdown/reader-core': resolve('packages/reader-core/src/index.ts'),
+}
+
 /** file:// 协议下 crossorigin 会导致 JS/CSS 静默加载失败（生产黑屏） */
 function removeCrossOriginPlugin(): Plugin {
   return {
@@ -29,7 +34,7 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     resolve: {
-      alias: sharedAlias,
+      alias: { ...sharedAlias, ...workspaceAlias },
     },
     build: {
       lib: {
@@ -40,7 +45,7 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     resolve: {
-      alias: sharedAlias,
+      alias: { ...sharedAlias, ...workspaceAlias },
     },
     build: {
       lib: {
@@ -73,6 +78,7 @@ export default defineConfig({
         '@': resolve('src'),
         ...sharedAlias,
         ...foliateAlias,
+        ...workspaceAlias,
       },
     },
     plugins: [react(), tailwindcss(), removeCrossOriginPlugin(), copyPdfjsAssetsPlugin()],
