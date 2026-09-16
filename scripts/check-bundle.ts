@@ -4,8 +4,8 @@
  *
  * 6.2 体积：首屏 index chunk 与 out/ 总量设上限，阅读器懒 chunk 必须独立存在
  *     （防止某次改动把 PdfViewer/EpubViewer 打回主包而无人察觉）。
- * 6.3 白名单：electron/（不含单测与构建期 vite-plugins）引用的裸包，必须出现在
- *     electron-builder.yml 的 files node_modules 白名单里——主进程构建默认
+ * 6.3 白名单：apps/desktop/electron/（不含单测与构建期 vite-plugins）引用的裸包，必须出现在
+ *     apps/desktop/electron-builder.yml 的 files node_modules 白名单里——主进程构建默认
  *     externalize，漏配的包在打包版运行时 require 即崩溃。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -87,7 +87,7 @@ if (total.bytes > OUT_TOTAL_BUDGET_BYTES) {
 }
 
 // ---- 6.3 主进程依赖白名单 ----
-const SCAN_ROOT = join(root, 'electron')
+const SCAN_ROOT = join(root, 'apps/desktop', 'electron')
 const SKIP_DIRS = new Set(['vite-plugins'])
 const BUILTINS = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)])
 
@@ -140,7 +140,7 @@ for (const file of collectTsFiles(SCAN_ROOT)) {
   }
 }
 
-const yml = readFileSync(join(root, 'electron-builder.yml'), 'utf-8')
+const yml = readFileSync(join(root, 'apps/desktop', 'electron-builder.yml'), 'utf-8')
 const whitelisted = new Set<string>()
 for (const match of yml.matchAll(/node_modules\/(@[^/\s*]+\/[^/\s*]+|[^/\s*]+)/g)) {
   whitelisted.add(match[1] ?? '')

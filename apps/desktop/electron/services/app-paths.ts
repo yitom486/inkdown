@@ -8,8 +8,8 @@ export function resolveAppIconPath(): string | undefined {
   const candidates = app.isPackaged
     ? [join(process.resourcesPath, fileName), join(process.resourcesPath, 'icon.png')]
     : [
-        join(process.cwd(), 'resources', fileName),
-        join(process.cwd(), 'resources', 'icon.png'),
+        join(process.cwd(), 'apps/desktop', 'resources', fileName), join(process.cwd(), 'apps/desktop', 'resources', 'icon.png'),
+        join(process.cwd(), 'resources', fileName), join(process.cwd(), 'resources', 'icon.png'),
       ]
 
   return candidates.find((path) => existsSync(path))

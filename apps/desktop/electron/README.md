@@ -14,4 +14,4 @@
 
 `webPreferences`：preload + `contextIsolation: true` + `nodeIntegration: false`。渲染端禁止 Node / `@electron/remote`。
 
-新增能力顺序见 [AGENTS.md](../AGENTS.md)：`packages/contracts`（`@inkdown/contracts`，原 `shared/`）→ **本目录 services** → ipc → `electron-api.types`（已迁 contracts）→ preload → `src/api` → hooks。
+新增能力顺序见 [AGENTS.md](../../AGENTS.md)：`packages/contracts`（`@inkdown/contracts`，原 `shared/`）→ **本目录 services** → ipc → `electron-api.types`（已迁 contracts）→ preload → `apps/desktop/src/api` → hooks。

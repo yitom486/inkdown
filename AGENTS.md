@@ -27,32 +27,40 @@ bun run test:e2e       # 需先 build
 bunx shadcn@latest add <component>
 ```
 
+根命令已自带 `--config apps/desktop/...`（`dev`/`build`/`preview` → `apps/desktop/electron.vite.config.ts`；`pack*` → `apps/desktop/electron-builder.yml`；`test:e2e*` → `apps/desktop/playwright.config.ts`）：直接跑根命令即可，勿另传 `--config`。
+
 锁文件：`bun.lock`。
 
 ## 目录要点
 
 ```
-shared/          # 跨进程契约（ipc / types / core Result）
-electron/        # 主进程：main、preload、ipc、window、services（见 electron/README.md）
-src/api/         # 渲染端 IPC 封装（见该目录 README）
-src/hooks/       # 渲染端 Hook：editor | preview | reader | workspace | agent（见 README）
-src/lib/         # 渲染端纯逻辑：同上五域；根上仅 utils.ts（见 README）
-src/stores/      # Zustand（见 README）
-src/components/  # ui | editor | preview | reader | layout | shared | agent | markdown（见 README）
-src/providers/   # Query / Theme（见 README）
-src/styles/      # 全局与阅读器 CSS（见 README）
+apps/desktop/electron/   # 主进程：main、preload、ipc、window、services（见 apps/desktop/electron/README.md）
+apps/desktop/src/api/    # 渲染端 IPC 封装（见该目录 README）
+apps/desktop/src/hooks/  # 渲染端 Hook：editor | preview | reader | workspace | agent（见 README）
+apps/desktop/src/lib/    # 渲染端纯逻辑：同上五域；根上仅 utils.ts（见 README）
+apps/desktop/src/stores/ # Zustand（见 README）
+apps/desktop/src/components/  # ui | editor | preview | reader | layout | shared | agent | markdown（见 README）
+apps/desktop/src/providers/   # Query / Theme（见 README）
+apps/desktop/src/styles/      # 全局与阅读器 CSS（见 README）
+apps/desktop/e2e/        # Playwright E2E（见该目录 README）
+apps/desktop/resources/  # 图标等构建资源（`icon.png`/`icon.ico`）
+apps/desktop/electron.vite.config.ts | electron-builder.yml | playwright.config.ts  # 三配置已搬入 apps/desktop/，根命令经 --config 引用
+shared/          # 留守根：未迁移残留（agent / constants / core / ipc / reader / types / utils / web-doc）
+packages/        # 留守根：@inkdown/*（contracts / acp / reader-core / pdf / ocr-core / annotations / web-doc）
+scripts/ | third-party/  # 留守根
+out/             # 留守根：构建输出（main / preload / renderer）；release/ 亦落根
 .plan/           # 本地计划（已 gitignore，不提交）
 .cursor/rules/   # Agent 强制细则
 ```
 
-渲染进程总览：[`src/README.md`](./src/README.md)。主进程：[`electron/README.md`](./electron/README.md)。
+渲染进程总览：[`apps/desktop/src/README.md`](./apps/desktop/src/README.md)。主进程：[`apps/desktop/electron/README.md`](./apps/desktop/electron/README.md)。
 
-ACP（阶段 A/B/C）：主进程 `electron/services/acp/` + `src/api/acp-api.ts` + `AgentPanel`；协议 v1，默认 `codex-acp`。  
+ACP（阶段 A/B/C）：主进程 `apps/desktop/electron/services/acp/` + `apps/desktop/src/api/acp-api.ts` + `AgentPanel`；协议 v1，默认 `codex-acp`。  
 UI：**壳自研、皮复用**（shadcn + 可选开源消息渲染）；认证：**复用 `~/.codex` / ACP authMethods**（对齐 VS Code / Zed）。细则见本地 `.plan/`（若有）。
 
-路径别名：`@/` → `src/`，`@shared/` → `shared/`。
+路径别名：`@/` → `apps/desktop/src/`，`@shared/` → `shared/`（留根）。
 
-**子目录 README**：`src/`、`electron/` 及其子目录等凡有 `README.md` 的目录，增删文件或改文件名后必须同步更新其中的列表与路径引用（叶目录若写「见上级 README」，则改上级清单）。`acp/mcp/` 等更底层实现以代码与上级 README 为准，不必层层铺文档。避免文档与目录脱节。
+**子目录 README**：`apps/desktop/src/`、`apps/desktop/electron/` 及其子目录等凡有 `README.md` 的目录，增删文件或改文件名后必须同步更新其中的列表与路径引用（叶目录若写「见上级 README」，则改上级清单）。`acp/mcp/` 等更底层实现以代码与上级 README 为准，不必层层铺文档。避免文档与目录脱节。
 
 ## Electron / IPC
 
@@ -65,11 +73,11 @@ webPreferences: {
   preload: path.join(__dirname, '../preload/preload.cjs'),
   contextIsolation: true,
   nodeIntegration: false,
-  sandbox: true, // 沙盒开启；preload 须为 CJS（见 electron.vite.config.ts）
+  sandbox: true, // 沙盒开启；preload 须为 CJS（见 apps/desktop/electron.vite.config.ts）
 }
 ```
 
-新增能力顺序：`shared` 类型/错误 → `electron/services` → `ipc/register-handlers` → `electron-api.types` → `preload` → `src/api` → hooks。
+新增能力顺序：`packages/contracts`（原 `shared/`，`@inkdown/contracts`；`shared/` 仅残留未迁移）类型/错误 → `apps/desktop/electron/services` → `ipc/register-handlers` → `electron-api.types`（已迁 contracts） → `preload` → `apps/desktop/src/api` → hooks。
 
 有返回值的 IPC 一律 `Result<T, AppError>`；用户取消用 `CANCELLED`（不弹错误）。
 
@@ -77,7 +85,7 @@ webPreferences: {
 
 | 类型 | 工具 |
 |------|------|
-| IPC / 服务端数据 | TanStack Query（`src/api/query-keys.ts`） |
+| IPC / 服务端数据 | TanStack Query（`apps/desktop/src/api/query-keys.ts`） |
 | 本地 UI 偏好 | Zustand + persist |
 | 阅读器导航 | `reader-navigation-store`（详见 rule） |
 | 编辑器正文 / dirty | `useState` |
@@ -88,7 +96,7 @@ Zustand selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand
 ## UI / 代码风格
 
 - 函数组件；组件 `PascalCase.tsx`，Hook `use*.ts`
-- shadcn 组件落在 `src/components/ui/`；用 `cn()`；勿改 ui 核心逻辑
+- shadcn 组件落在 `apps/desktop/src/components/ui/`；用 `cn()`；勿改 ui 核心逻辑
 - 严格 TypeScript；`async/await`；注释只写非显而易见逻辑
 
 ## Git 与 Agent

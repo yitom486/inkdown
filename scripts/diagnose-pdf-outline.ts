@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import path from 'node:path'
-import { loadPdfOutlineUnits } from '../src/lib/reader/pdf-outline'
+import { loadPdfOutlineUnits } from '@inkdown/reader-core'
 
 const pdfPath =
   process.argv[2] ?? 'D:/book/2027计算机组成原理_高清带书签版.pdf'

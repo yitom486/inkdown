@@ -20,7 +20,7 @@ bun run test:e2e:web-doc  # 仅在线文档 fixture 冒烟
 | `reader-foliate-marks.spec.ts` | foliate 标注链路：划重点/批注/检查器/删除（EPUB+MOBI） |
 | `reader-smoke.spec.ts` | Markdown 预览（Mermaid/公式/高亮）+ PDF 画布文字层（自研最小 fixture） |
 | `reader-pdf-structure.spec.ts` | PDF 结构化 WASM：生产包真加载（非回退）+ Agent 正文走结构化（`E2E_PDF_STRUCTURE` 门控测试钩子） |
-| `reader-pdf-ocr.spec.ts` | 扫描版 PDF 单页 OCR：「更多工具 → 识别本页」落缓存 + 文字层可读（当前页无文字层会自动识别；`e2e/fixtures/ocr/scanned-hello.pdf`） |
+| `reader-pdf-ocr.spec.ts` | 扫描版 PDF 单页 OCR：「更多工具 → 识别本页」落缓存 + 文字层可读（当前页无文字层会自动识别；`apps/desktop/e2e/fixtures/ocr/scanned-hello.pdf`） |
 | `sync-webdav.spec.ts` | 本地内存 WebDAV stub → 设置页测试连接 + 一次同步落数 |
 | `web-doc-smoke.spec.ts` | 在线文档：打开、地址栏换页、目录跳转 |
 | `web-doc-xss.spec.ts` | 在线文档 XSS 回归（真浏览器）：恶意载荷不执行、正文完好 |
@@ -30,19 +30,19 @@ bun run test:e2e:web-doc  # 仅在线文档 fixture 冒烟
 不依赖外网。主进程在设置 `E2E_WEB_DOC_FIXTURE_DIR` 时，对 `e2e.inkdown.test` 域名从本地 HTML 返回页面：
 
 ```
-e2e/fixtures/web-doc/
+apps/desktop/e2e/fixtures/web-doc/
   manifest.json      # URL → 文件名映射
   start.html
   installation.html
   xss.html           # XSS 回归载荷（script / javascript: / 事件处理器）
 ```
 
-实现：`electron/services/web-doc/e2e-fixture.ts`（由 `fetchWebDocPage` 优先读取）。
+实现：`apps/desktop/electron/services/web-doc/e2e-fixture.ts`（由 `fetchWebDocPage` 优先读取）。
 
 ## OCR Fixture
 
 ```
-e2e/fixtures/ocr/
+apps/desktop/e2e/fixtures/ocr/
   scanned-hello.pdf  # 无文字层单页（Hello Inkdown OCR），供 OCR 链冒烟只验链路不验精度
 ```
 

@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   resolve: {
     alias: {
-      '@': resolve('src'),
+      '@': resolve('apps/desktop/src'),
       '@shared': resolve('shared'),
       '@foliate': resolve('third-party/foliate-js'),
       '@inkdown/contracts': resolve('packages/contracts/src/index'),
@@ -19,8 +19,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
-      'src/**/*.test.ts',
-      'electron/**/*.test.ts',
+      'apps/desktop/src/**/*.test.ts',
+      'apps/desktop/electron/**/*.test.ts',
       'shared/**/*.test.ts',
       'scripts/**/*.test.ts',
       'packages/**/*.test.ts',

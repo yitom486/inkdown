@@ -1,6 +1,9 @@
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 const PDFJS_ASSET_DIRS = ['cmaps', 'standard_fonts', 'wasm', 'iccs'] as const
 
@@ -10,8 +13,8 @@ const PDFJS_ASSET_DIRS = ['cmaps', 'standard_fonts', 'wasm', 'iccs'] as const
  */
 export function copyPdfjsAssetsPlugin(): Plugin {
   const copy = () => {
-    const pkgRoot = resolve('node_modules/pdfjs-dist')
-    const destRoot = resolve('src/public/pdfjs')
+    const pkgRoot = resolve(__dirname, '../../../../node_modules/pdfjs-dist')
+    const destRoot = resolve(__dirname, '../../src/public/pdfjs')
 
     if (!existsSync(pkgRoot)) {
       console.warn('[copy-pdfjs-assets] pdfjs-dist not found, skip')

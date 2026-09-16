@@ -2,7 +2,7 @@
  * 子目录 README 与实际文件一致性检查（AGENTS.md「子目录 README」规则的机器版本）。
  * Run: bun run lint:docs [repoRoot]
  *
- * 两项检查（仅扫描 src/ 与 electron/，与规则范围一致）：
+ * 两项检查（仅扫描 apps/desktop/src/ 与 apps/desktop/electron/，与规则范围一致）：
  * A. 显式引用必须存在：README 中带源码/资源后缀的 `token`（如 `file-service.ts`）
  *    必须能解析到真实文件（README 所在目录优先，其次仓库根）。失败 → error。
  * B. 源码文件必须被收录：目录顶层 *.ts/*.tsx（不含 *.test.* 与 *.d.ts）须被同目录
@@ -15,7 +15,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 
 const root = resolve(process.argv[2] ?? join(import.meta.dir, '..'))
-const SCAN_SUBTREES = ['src', 'electron']
+const SCAN_SUBTREES = ['apps/desktop/src', 'apps/desktop/electron']
 const SOURCE_EXTS = new Set(['.ts', '.tsx'])
 const EXPLICIT_EXTS = ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.yml', '.yaml', '.ps1', '.css', '.html', '.md']
 const SKIP_FILES = new Set(['README.md'])

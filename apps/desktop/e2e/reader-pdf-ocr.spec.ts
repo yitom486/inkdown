@@ -1,5 +1,6 @@
 import { copyFile, mkdtemp } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { test, expect, type Page } from '@playwright/test'
 import { launchBuiltApp } from './helpers/launch-app'
@@ -19,6 +20,8 @@ const INSPECTOR_ENV_KEYS = [
   'PDF_INSPECTOR_MODEL_CACHE',
 ] as const
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
 async function openViaQuickOpen(window: Page, fileName: string, query: string): Promise<void> {
   await window.keyboard.press('Control+p')
   const dialog = window.getByRole('dialog', { name: '快速打开文件' })
@@ -34,7 +37,7 @@ test.describe('扫描版 PDF 单页 OCR', () => {
     test.setTimeout(300_000)
     const workspace = await mkdtemp(join(tmpdir(), 'inkdown-e2e-pdf-ocr-'))
     await copyFile(
-      join(process.cwd(), 'e2e', 'fixtures', 'ocr', 'scanned-hello.pdf'),
+      join(__dirname, 'fixtures', 'ocr', 'scanned-hello.pdf'),
       join(workspace, 'scanned-hello.pdf'),
     )
     const extraEnv: Record<string, string> = { E2E_AUTO_OPEN_PATH: workspace }

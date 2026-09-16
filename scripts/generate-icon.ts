@@ -5,10 +5,10 @@ import { createCanvas } from '@napi-rs/canvas'
 import pngToIco from 'png-to-ico'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const resourcesDir = join(root, 'resources')
+const resourcesDir = join(root, 'apps/desktop', 'resources')
 const pngPath = join(resourcesDir, 'icon.png')
 const icoPath = join(resourcesDir, 'icon.ico')
-const faviconPath = join(root, 'src', 'public', 'icon.png')
+const faviconPath = join(root, 'apps/desktop', 'src', 'public', 'icon.png')
 
 /**
  * 跨平台绘制应用图标（此前为 Windows 专属 generate-icon.ps1）。

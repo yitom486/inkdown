@@ -3,7 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./src/*"],
+      "@/*": ["./apps/desktop/src/*"],
       "@shared/*": ["./shared/*"],
       "@foliate/*": ["./third-party/foliate-js/*"],
       "@inkdown/contracts": ["./packages/contracts/src/index.ts"],
@@ -16,5 +16,5 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*", "shared/**/*", "packages/contracts/src/**/*", "packages/reader-core/src/**/*", "packages/pdf/src/**/*", "packages/ocr-core/src/**/*", "packages/annotations/src/**/*", "packages/web-doc/src/**/*"]
+  "include": ["apps/desktop/src/**/*", "shared/**/*", "packages/contracts/src/**/*", "packages/reader-core/src/**/*", "packages/pdf/src/**/*", "packages/ocr-core/src/**/*", "packages/annotations/src/**/*", "packages/web-doc/src/**/*"]
 }

@@ -52,7 +52,7 @@
 
 ## reader/
 
-通用导航/选区/标记/排版等 27 模块已迁 `@inkdown/reader-core`（`packages/reader-core/src/`，见该包 `index.ts` 分组注释）；本目录仅留 PDF/OCR/Anki 等渲染端专属逻辑。按前缀找文件即可，不逐条列举：
+通用导航/选区/标记/排版等 27 模块已迁 `@inkdown/reader-core`（`packages/reader-core/src/`，见该包 `packages/reader-core/src/index.ts` 分组注释）；本目录仅留 PDF/OCR/Anki 等渲染端专属逻辑。按前缀找文件即可，不逐条列举：
 
 | 前缀 | 功能 |
 |------|------|

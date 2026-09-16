@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./resources/icon.png" alt="Inkdown Logo" width="100" height="100" />
+<img src="./apps/desktop/resources/icon.png" alt="Inkdown Logo" width="100" height="100" />
 
 # Inkdown
 

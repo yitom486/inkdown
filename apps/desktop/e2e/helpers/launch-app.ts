@@ -1,9 +1,11 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { _electron as electron, type ElectronApplication } from '@playwright/test'
 
-const MAIN_ENTRY = path.join(process.cwd(), 'out/main/main.js')
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const MAIN_ENTRY = path.join(__dirname, '../../../../out/main/main.js')
 
 export async function launchBuiltApp(
   extraEnv: Record<string, string> = {},

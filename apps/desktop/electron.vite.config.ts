@@ -1,4 +1,5 @@
 import { resolve } from 'path'
+import { fileURLToPath } from 'node:url'
 import { builtinModules } from 'node:module'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
@@ -6,22 +7,24 @@ import tailwindcss from '@tailwindcss/vite'
 import type { Plugin } from 'vite'
 import { copyPdfjsAssetsPlugin } from './electron/vite-plugins/copy-pdfjs-assets'
 
+const appDir = fileURLToPath(new URL('.', import.meta.url))
+
 const sharedAlias = {
-  '@shared': resolve('shared'),
+  '@shared': resolve(appDir, '../../shared'),
 }
 
 const foliateAlias = {
-  '@foliate': resolve('third-party/foliate-js'),
+  '@foliate': resolve(appDir, '../../third-party/foliate-js'),
 }
 
 const workspaceAlias = {
-  '@inkdown/contracts': resolve('packages/contracts/src/index.ts'),
-  '@inkdown/reader-core': resolve('packages/reader-core/src/index.ts'),
-  '@inkdown/pdf': resolve('packages/pdf/src/index.ts'),
-  '@inkdown/ocr-core': resolve('packages/ocr-core/src/index.ts'),
-  '@inkdown/acp': resolve('packages/acp/src/index.ts'),
-  '@inkdown/annotations': resolve('packages/annotations/src/index.ts'),
-  '@inkdown/web-doc': resolve('packages/web-doc/src/index.ts'),
+  '@inkdown/contracts': resolve(appDir, '../../packages/contracts/src/index.ts'),
+  '@inkdown/reader-core': resolve(appDir, '../../packages/reader-core/src/index.ts'),
+  '@inkdown/pdf': resolve(appDir, '../../packages/pdf/src/index.ts'),
+  '@inkdown/ocr-core': resolve(appDir, '../../packages/ocr-core/src/index.ts'),
+  '@inkdown/acp': resolve(appDir, '../../packages/acp/src/index.ts'),
+  '@inkdown/annotations': resolve(appDir, '../../packages/annotations/src/index.ts'),
+  '@inkdown/web-doc': resolve(appDir, '../../packages/web-doc/src/index.ts'),
 }
 
 /** file:// 协议下 crossorigin 会导致 JS/CSS 静默加载失败（生产黑屏） */
@@ -43,7 +46,7 @@ export default defineConfig({
     },
     build: {
       lib: {
-        entry: resolve('electron/main.ts'),
+        entry: resolve(appDir, 'electron/main.ts'),
       },
     },
   },
@@ -54,7 +57,7 @@ export default defineConfig({
     },
     build: {
       lib: {
-        entry: resolve('electron/preload.ts'),
+        entry: resolve(appDir, 'electron/preload.ts'),
         // 沙盒渲染器只能加载 CJS preload（ESM import 会报 Cannot use import statement）
         formats: ['cjs'],
       },
@@ -70,17 +73,17 @@ export default defineConfig({
     },
   },
   renderer: {
-    root: resolve('src'),
+    root: resolve(appDir, 'src'),
     base: './',
     build: {
       modulePreload: { polyfill: false },
       rollupOptions: {
-        input: resolve('src/index.html'),
+        input: resolve(appDir, 'src/index.html'),
       },
     },
     resolve: {
       alias: {
-        '@': resolve('src'),
+        '@': resolve(appDir, 'src'),
         ...sharedAlias,
         ...foliateAlias,
         ...workspaceAlias,
