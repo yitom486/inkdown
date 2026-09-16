@@ -7,9 +7,10 @@
       "@shared/*": ["./shared/*"],
       "@foliate/*": ["./third-party/foliate-js/*"],
       "@inkdown/contracts": ["./packages/contracts/src/index.ts"],
-      "@inkdown/reader-core": ["./packages/reader-core/src/index.ts"]
+      "@inkdown/reader-core": ["./packages/reader-core/src/index.ts"],
+      "@inkdown/pdf": ["./packages/pdf/src/index.ts"]
     },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*", "shared/**/*", "packages/contracts/src/**/*", "packages/reader-core/src/**/*"]
+  "include": ["src/**/*", "shared/**/*", "packages/contracts/src/**/*", "packages/reader-core/src/**/*", "packages/pdf/src/**/*"]
 }

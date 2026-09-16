@@ -17,6 +17,7 @@ const foliateAlias = {
 const workspaceAlias = {
   '@inkdown/contracts': resolve('packages/contracts/src/index.ts'),
   '@inkdown/reader-core': resolve('packages/reader-core/src/index.ts'),
+  '@inkdown/pdf': resolve('packages/pdf/src/index.ts'),
 }
 
 /** file:// 协议下 crossorigin 会导致 JS/CSS 静默加载失败（生产黑屏） */

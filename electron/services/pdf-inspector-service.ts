@@ -5,6 +5,15 @@ import type {
   InspectorBookMarkdown,
   InspectorPdfClassification,
 } from '@inkdown/contracts'
+import type {
+  InspectorPagesMarkdown,
+} from '@inkdown/pdf'
+import {
+  assembleBookMarkdown,
+  mapClassification,
+  mapPagesMarkdown,
+  toZeroIndexed,
+} from '@inkdown/pdf'
 
 /**
  * pdf-inspector 主进程封装（分类 + 原生抽取；_loading 纯抽取，不碰 OCR 运行时）。
@@ -14,25 +23,6 @@ import type {
 
 async function loadPdfInspector() {
   return await import('@firecrawl/pdf-inspector')
-}
-
-export type InspectorPdfType = 'TextBased' | 'Scanned' | 'ImageBased' | 'Mixed'
-
-export interface InspectorPageMarkdown {
-  /** 1-indexed */
-  page: number
-  markdown: string
-}
-
-export interface InspectorPagesMarkdown {
-  pages: InspectorPageMarkdown[]
-  /** 1-indexed */
-  pagesWithTables: number[]
-  /** 1-indexed */
-  pagesWithColumns: number[]
-  /** 1-indexed */
-  pagesNeedingOcr: number[]
-  isComplex: boolean
 }
 
 function toServiceError(cause: unknown, fallback: string): Result<never, AppError> {
@@ -47,12 +37,6 @@ function toServiceError(cause: unknown, fallback: string): Result<never, AppErro
   return err(toAppError(cause, fallback))
 }
 
-function toOneIndexed(pages: readonly number[]): number[] {
-  return pages
-    .filter((page) => Number.isFinite(page) && page >= 0)
-    .map((page) => Math.floor(page) + 1)
-}
-
 export async function classifyPdfDocument(
   filePath: string,
 ): Promise<Result<InspectorPdfClassification, AppError>> {
@@ -60,12 +44,7 @@ export async function classifyPdfDocument(
     const data = await readFile(filePath)
     const mod = await loadPdfInspector()
     const result = await mod.classifyPdfAsync(data)
-    return ok({
-      pdfType: result.pdfType,
-      pageCount: result.pageCount,
-      pagesNeedingOcr: toOneIndexed(result.pagesNeedingOcr),
-      confidence: result.confidence,
-    })
+    return ok(mapClassification(result))
   } catch (cause) {
     return toServiceError(cause, 'PDF 分类失败')
   }
@@ -82,20 +61,9 @@ export async function extractPdfPagesMarkdown(
   try {
     const data = await readFile(filePath)
     const mod = await loadPdfInspector()
-    const zeroIndexed = pages
-      ?.filter((page) => Number.isFinite(page) && page >= 1)
-      .map((page) => Math.floor(page) - 1)
+    const zeroIndexed = toZeroIndexed(pages)
     const result = await mod.extractPagesMarkdownAsync(data, zeroIndexed)
-    return ok({
-      pages: result.pages.map((page) => ({
-        page: Math.floor(page.page) + 1,
-        markdown: page.markdown ?? '',
-      })),
-      pagesWithTables: result.pagesWithTables,
-      pagesWithColumns: result.pagesWithColumns,
-      pagesNeedingOcr: result.pagesNeedingOcr,
-      isComplex: result.isComplex,
-    })
+    return ok(mapPagesMarkdown(result))
   } catch (cause) {
     return toServiceError(cause, 'PDF 正文抽取失败')
   }
@@ -112,22 +80,7 @@ export async function extractPdfBookMarkdown(
     const data = await readFile(filePath)
     const mod = await loadPdfInspector()
     const result = await mod.extractPagesMarkdownAsync(data)
-    const ordered = [...result.pages].sort((a, b) => a.page - b.page)
-    const parts: string[] = []
-    for (const page of ordered) {
-      const pageNum = Math.floor(page.page) + 1
-      const body = page.markdown ?? ''
-      if (parts.length === 0) {
-        parts.push(body)
-      } else {
-        parts.push(`<!-- Page ${pageNum} -->\n${body}`)
-      }
-    }
-    return ok({
-      markdown: parts.join('\n'),
-      pageCount: ordered.length,
-      pagesWithTables: result.pagesWithTables,
-    })
+    return ok(assembleBookMarkdown(result))
   } catch (cause) {
     return toServiceError(cause, 'PDF 整档解析失败')
   }

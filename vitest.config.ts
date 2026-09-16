@@ -9,6 +9,7 @@ export default defineConfig({
       '@foliate': resolve('third-party/foliate-js'),
       '@inkdown/contracts': resolve('packages/contracts/src/index'),
       '@inkdown/reader-core': resolve('packages/reader-core/src/index'),
+      '@inkdown/pdf': resolve('packages/pdf/src/index'),
     },
   },
   test: {
