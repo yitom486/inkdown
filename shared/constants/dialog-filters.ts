@@ -1,4 +1,4 @@
-import { ALL_DOCUMENT_EXTENSIONS, MARKDOWN_EXTENSIONS } from '@shared/constants/extensions'
+import { ALL_DOCUMENT_EXTENSIONS, MARKDOWN_EXTENSIONS } from '@inkdown/contracts'
 
 /** Electron 文件对话框过滤器 */
 export const MARKDOWN_DIALOG_FILTERS = [

@@ -1,5 +1,5 @@
-import { err, ok, type Result } from '@shared/core/result'
-import { toAppError, type AppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@inkdown/contracts'
+import { toAppError, type AppError } from '@inkdown/contracts'
 import type { ISyncStorageAdapter, StatResult } from './storage-adapter'
 
 export interface WebDavAdapterOptions {

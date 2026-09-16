@@ -1,6 +1,6 @@
 import { acpApi } from '@/api/acp-api'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { extractTextFromContent } from '@/stores/acp-chat-types'
 

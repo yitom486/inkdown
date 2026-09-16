@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
-import { DEFAULT_ACP_RUNTIME_ID } from '@shared/constants/acp-agents'
-import type { AppErrorCode } from '@shared/core/errors'
+import { DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import type { AppErrorCode } from '@inkdown/contracts'
 import type {
   AcpConfigOption,
   AcpConnectionStatus,
   AcpPromptCapabilities,
-} from '@shared/types/acp'
+} from '@inkdown/contracts'
 import {
   type AcpChatMessage,
   type AcpChatRole,

@@ -1,7 +1,7 @@
 import type {
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
-} from '@shared/agent/inkdown-snapshot'
+} from '@inkdown/contracts'
 
 export interface InkdownMcpToolContext {
   /** 复用 ACP 快照回路：向渲染进程要内存快照 */

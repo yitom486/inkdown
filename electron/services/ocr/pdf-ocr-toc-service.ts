@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
 import {
   defaultPdfPageOffset,
   extractOcrTocFromText,
@@ -8,8 +8,8 @@ import {
 } from '@shared/reader/ocr-toc-extractor'
 import { cleanOcrWatermarks } from '@shared/reader/ocr-watermark'
 import { buildSectionPageMap } from '@shared/reader/toc-geometry'
-import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@shared/types/ocr'
-import { DEFAULT_PDF_TOC_SCALE } from '@shared/types/ocr'
+import type { PdfOcrTocCache, RecognizePdfTocPayload } from '@inkdown/contracts'
+import { DEFAULT_PDF_TOC_SCALE } from '@inkdown/contracts'
 import { writePdfOcrTocCache } from './ocr-toc-cache'
 import { ensureInspectorOcrRuntime } from './inspector-ocr-runtime'
 

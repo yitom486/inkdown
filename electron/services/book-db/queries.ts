@@ -4,7 +4,7 @@ import {
   NATIVE_PAGE_QUALITY_SUGGEST_OCR,
   OCR_SUGGESTED_PAGES_CAP,
 } from '@shared/reader/native-page-quality'
-import type { BookBlockSource, BookBlockType, BookDbBlockHit } from '@shared/types/book-db'
+import type { BookBlockSource, BookBlockType, BookDbBlockHit } from '@inkdown/contracts'
 import { getCompletedPages } from './import-book'
 
 /** FTS5 查询转义：包成双引号短语，防 `*`/`"`/OR 等语法字符炸查询 */

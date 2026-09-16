@@ -6,7 +6,7 @@ import {
   readPdfPageNativeText,
 } from './pdf-page-text'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
 
 describe('pdf-page-text', () => {
   it('pdfPageNeedsOcr 无嵌入文字时为 true', () => {

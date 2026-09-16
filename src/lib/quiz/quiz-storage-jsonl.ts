@@ -1,8 +1,8 @@
 import type { IQuizRepository } from './quiz-repository'
-import type { QuizSessionRecord } from '@shared/types/quiz'
+import type { QuizSessionRecord } from '@inkdown/contracts'
 import { quizApi } from '@/api/quiz-api'
-import { isOk, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
+import { isOk, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
 
 export class JsonlQuizRepository implements IQuizRepository {
   async appendSession(session: QuizSessionRecord): Promise<Result<void, AppError>> {

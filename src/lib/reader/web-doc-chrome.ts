@@ -1,4 +1,4 @@
-import type { WebDocSiteId } from '@shared/types/web-doc'
+import type { WebDocSiteId } from '@inkdown/contracts'
 import { stripDisallowedWebDocEmbeds } from '@/lib/reader/web-doc-embeds'
 import { stripHrttChrome } from '@/lib/reader/web-doc/hrtt-extract'
 

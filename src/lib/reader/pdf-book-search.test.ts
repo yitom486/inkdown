@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
 import {
   BOOK_SEARCH_LIMIT,
   BookSearchSession,

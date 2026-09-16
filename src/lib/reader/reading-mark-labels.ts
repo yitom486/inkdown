@@ -1,4 +1,4 @@
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 
 export function getReadingMarkLabel(mark: ReadingMark): string {
   if (mark.label?.trim()) return mark.label.trim()

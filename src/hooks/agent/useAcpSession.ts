@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import type {
   AcpAuthMethod,
   AcpConfigOption,
   AcpConnectReadyResult,
   AcpContentBlock,
-} from '@shared/types/acp'
+} from '@inkdown/contracts'
 import type { AcpMessageAttachment } from '@/lib/agent/acp-composer'
 import { acpApi } from '@/api/acp-api'
 import { buildInkdownPromptPrefix } from '@/lib/agent/context/build-prompt-prefix'

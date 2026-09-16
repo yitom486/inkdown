@@ -18,7 +18,7 @@ import {
   Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { QuizSessionRecord } from '@shared/types/quiz'
+import type { QuizSessionRecord } from '@inkdown/contracts'
 import { defaultQuizRepository } from '@/lib/quiz/quiz-storage-jsonl'
 
 export interface QuizHistoryDialogProps {

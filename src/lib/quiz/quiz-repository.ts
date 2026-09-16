@@ -1,6 +1,6 @@
-import type { QuizSessionRecord } from '@shared/types/quiz'
-import type { Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
+import type { QuizSessionRecord } from '@inkdown/contracts'
+import type { Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
 
 export interface IQuizRepository {
   appendSession(session: QuizSessionRecord): Promise<Result<void, AppError>>

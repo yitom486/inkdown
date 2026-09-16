@@ -1,4 +1,4 @@
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import type { Flashcard } from '@shared/types/flashcard'
 import {
   highlightSortKey,
@@ -12,7 +12,7 @@ import {
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
 import { fileApi } from '@/api/file-api'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { buildDeepLinkUrl } from '@/lib/editor/deep-link'
 import { toast } from 'sonner'

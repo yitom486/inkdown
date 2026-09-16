@@ -2,7 +2,7 @@
  * 文件 / 工作区 / 导出 IPC DTO。
  * 打开结果用 kind 判别：Markdown 带正文，电子书只给路径（内容在阅读器里读）。
  */
-import type { DocumentKind } from '@shared/types/document'
+import type { DocumentKind } from './document'
 
 /** 按路径读文本（已知是 Markdown/纯文本） */
 export interface OpenFileResult {

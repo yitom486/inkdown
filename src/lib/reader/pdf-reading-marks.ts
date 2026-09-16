@@ -1,5 +1,5 @@
 import type { PageViewport } from 'pdfjs-dist'
-import type { PdfTextQuad, PdfTextRect, ReadingMark } from '@shared/types/reading-mark'
+import type { PdfTextQuad, PdfTextRect, ReadingMark } from '@inkdown/contracts'
 import {
   LIVE_SELECTION_BACKGROUND,
   highlightFill,

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import type { OcrTocEntry } from '@shared/types/ocr'
+import type { OcrTocEntry } from '@inkdown/contracts'
 import { buildTocAiPrompt, mergeTocAiDraft, parseTocAiEntries } from './toc-ai'
 
 describe('toc-ai', () => {

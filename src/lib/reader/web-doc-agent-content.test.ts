@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import {
   clearWebDocAgentTextCache,
   fetchWebDocPlainText,

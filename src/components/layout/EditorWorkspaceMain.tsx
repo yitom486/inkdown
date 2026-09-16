@@ -35,7 +35,7 @@ import {
 } from '@/lib/editor/markdown-headings'
 import { useEditorUiStore, useFileUiState, type EditorViewMode } from '@/stores/editor-ui-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
-import type { FileTreeNode } from '@shared/types/file'
+import type { FileTreeNode } from '@inkdown/contracts'
 import { flattenFileTree } from '@/lib/workspace/quick-open'
 import type { WikilinkCandidate } from '@/lib/editor/wikilink-completion'
 

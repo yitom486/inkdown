@@ -1,10 +1,10 @@
 import { acpApi } from '@/api/acp-api'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { buildAcpPromptBlocks, type ComposerAttachment } from '@/lib/agent/acp-composer'
 import { extractTextFromContent } from '@/stores/acp-chat-types'
-import type { AcpConfigOption } from '@shared/types/acp'
+import type { AcpConfigOption } from '@inkdown/contracts'
 
 /** 目录页原图（渲染端离屏渲染，供模型识图；无图片能力时自动退化纯文本） */
 export interface TocPromptImage {

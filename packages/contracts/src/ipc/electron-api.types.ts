@@ -21,16 +21,16 @@ import type {
   WorkspaceFsRenamePayload,
   WorkspaceSearchMarkdownPayload,
   WorkspaceSearchMarkdownResult,
-} from '@shared/types/file'
-import type { AppError } from '@shared/core/errors'
-import type { RendererErrorPayload } from '@shared/types/error-log'
-import type { Result } from '@shared/core/result'
+} from '../types/file'
+import type { AppError } from '../core/errors'
+import type { RendererErrorPayload } from '../types/error-log'
+import type { Result } from '../core/result'
 import type {
   CreateReadingMarkPayload,
   ReadingMark,
   UpdateReadingMarkPayload,
-} from '@shared/types/reading-mark'
-import type { QuizSessionRecord } from '@shared/types/quiz'
+} from '../types/reading-mark'
+import type { QuizSessionRecord } from '../types/quiz'
 import type {
   AcpAuthPreflightResult,
   AcpAuthenticatePayload,
@@ -51,13 +51,13 @@ import type {
   AcpSetConfigOptionPayload,
   AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
-} from '@shared/types/acp'
+} from '../types/acp'
 import type {
   WebDocDiscoverTocPayload,
   WebDocDiscoverTocResult,
   WebDocFetchPayload,
   WebDocFetchResult,
-} from '@shared/types/web-doc'
+} from '../types/web-doc'
 import type {
   DetectPdfTocPagesPayload,
   DetectPdfTocPagesResult,
@@ -70,21 +70,21 @@ import type {
   RecognizePdfPagePayload,
   RecognizePdfTocPayload,
   SavePdfOcrTocPayload,
-} from '@shared/types/ocr'
+} from '../types/ocr'
 import type {
   ClassifyPdfDocumentPayload,
   ExtractPdfBookMarkdownPayload,
   InspectorBookMarkdown,
   InspectorPdfClassification,
-} from '@shared/types/pdf-inspect'
-import type { AppUpdateStatus } from '@shared/types/app-update'
-import type { BunRuntimeStatus } from '@shared/types/bun'
+} from '../types/pdf-inspect'
+import type { AppUpdateStatus } from '../types/app-update'
+import type { BunRuntimeStatus } from '../types/bun'
 import type {
   SyncConfig,
   SyncStatus,
   TestConnectionResult,
   SyncExecuteResult,
-} from '@shared/types/sync'
+} from '../types/sync'
 import type {
   RosettaActiveImport,
   RosettaBodyWatermarkApplyPayload,
@@ -101,7 +101,7 @@ import type {
   RosettaQueryResult,
   RosettaTocRebuildPayload,
   RosettaTocRebuildResult,
-} from '@shared/types/rosetta'
+} from '../types/rosetta'
 
 /**
  * preload `contextBridge` 暴露给渲染进程的 API（`window.electronAPI`）。

@@ -1,5 +1,5 @@
 import { ocrTocToReaderUnits } from '@shared/reader/ocr-toc-extractor'
-import type { OcrTocEntry, PdfOcrTocCache, ReaderTocUnit } from '@shared/types/ocr'
+import type { OcrTocEntry, PdfOcrTocCache, ReaderTocUnit } from '@inkdown/contracts'
 
 export function buildPdfOcrTocCache(params: {
   fileFingerprint: string

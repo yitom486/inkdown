@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { toAppError, type AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
+import { toAppError, type AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
 
 export function getAppVersion(): Result<string, AppError> {
   try {

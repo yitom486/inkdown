@@ -9,7 +9,7 @@ import {
   reassembleDirectoryText,
   type DirectoryReassembleStats,
 } from './directory-reassemble'
-import type { OcrTocEntrySource } from '@shared/types/ocr'
+import type { OcrTocEntrySource } from '@inkdown/contracts'
 
 export interface OcrTocEntry {
   title: string

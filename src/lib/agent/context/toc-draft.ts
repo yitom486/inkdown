@@ -3,7 +3,7 @@ import {
   isBareChapterTitle,
   isWatermarkTocEntry,
 } from '@shared/reader/ocr-toc-extractor'
-import type { OcrTocEntrySource } from '@shared/types/ocr'
+import type { OcrTocEntrySource } from '@inkdown/contracts'
 
 /**
  * 目录 Agent 草稿本（渲染进程内存单例）。

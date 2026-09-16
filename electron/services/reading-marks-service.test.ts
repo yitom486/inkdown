@@ -17,7 +17,7 @@ import {
   listReadingMarks,
   updateReadingMark,
 } from './reading-marks-service'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 
 describe('reading-marks-service', () => {
   beforeEach(async () => {

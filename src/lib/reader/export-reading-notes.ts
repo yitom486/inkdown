@@ -1,5 +1,5 @@
-import type { ReadingMark } from '@shared/types/reading-mark'
-import { isWebDocumentPath } from '@shared/types/document'
+import type { ReadingMark } from '@inkdown/contracts'
+import { isWebDocumentPath } from '@inkdown/contracts'
 import { normalizeLoadKey } from '@/lib/reader/reader-viewport-nav'
 import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'
 import {

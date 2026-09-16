@@ -13,7 +13,7 @@ import {
   type QuickOpenFileItem,
   type QuickOpenMatchResult,
 } from '@/lib/workspace/quick-open'
-import type { FileTreeNode } from '@shared/types/file'
+import type { FileTreeNode } from '@inkdown/contracts'
 import { Book, BookOpen, Clock, FileCode, FileText, Search } from 'lucide-react'
 
 interface QuickOpenDialogProps {

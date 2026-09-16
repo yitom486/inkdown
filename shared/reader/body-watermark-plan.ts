@@ -1,4 +1,4 @@
-import type { BookBlockType } from '../types/book-db'
+import type { BookBlockType } from '@inkdown/contracts'
 import { normalizeWatermarkText } from './ocr-watermark'
 
 /**

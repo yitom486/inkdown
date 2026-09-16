@@ -1,4 +1,4 @@
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
 
 export interface OcrPageCacheHydrateDeps {
   listPages: () => Promise<number[]>

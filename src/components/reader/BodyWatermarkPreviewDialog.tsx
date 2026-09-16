@@ -10,12 +10,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { rosettaApi } from '@/api/rosetta-api'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import { validateCustomEdgeToken } from '@shared/reader/body-watermark-plan'
 import type {
   RosettaBodyWatermarkApplyResult,
   RosettaBodyWatermarkPreviewResult,
-} from '@shared/types/rosetta'
+} from '@inkdown/contracts'
 
 interface BodyWatermarkPreviewDialogProps {
   open: boolean

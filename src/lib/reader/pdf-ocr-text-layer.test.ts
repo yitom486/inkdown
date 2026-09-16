@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
-import type { OcrPageWord } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
+import type { OcrPageWord } from '@inkdown/contracts'
 import { mountOcrTextLayer } from './pdf-ocr-text-layer'
 
 const w = (text: string, x0: number, y0: number, x1: number, y1: number): OcrPageWord => ({

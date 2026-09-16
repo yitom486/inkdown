@@ -1,4 +1,4 @@
-import type { WebDocTocEntry } from '@shared/types/web-doc'
+import type { WebDocTocEntry } from '@inkdown/contracts'
 
 function decodeHtmlEntities(text: string): string {
   return text

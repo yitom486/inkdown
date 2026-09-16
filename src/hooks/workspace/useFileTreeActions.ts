@@ -14,9 +14,9 @@ import {
 } from '@/lib/workspace/file-tree-ops'
 import { buildExportHtml, getSuggestedExportName } from '@/lib/editor/export-document'
 import { reportAppError } from '@/lib/workspace/report-error'
-import { isOk } from '@shared/core/result'
-import type { FileTreeNode } from '@shared/types/file'
-import { getDocumentKind } from '@shared/types/document'
+import { isOk } from '@inkdown/contracts'
+import type { FileTreeNode } from '@inkdown/contracts'
+import { getDocumentKind } from '@inkdown/contracts'
 
 interface UseFileTreeActionsOptions {
   workspaceRoot?: string

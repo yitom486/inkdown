@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { APP_GITHUB_REPO, APP_TAGLINE, APP_TITLE } from '@shared/constants/app'
+import { APP_GITHUB_REPO, APP_TAGLINE, APP_TITLE } from '@inkdown/contracts'
 import { useAppUpdate } from '@/hooks/workspace/useAppUpdate'
 import { appApi } from '@/api/app-api'
 import { cn } from '@/lib/utils'

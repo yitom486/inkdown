@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mergeQuizSessions } from './quiz-merger'
-import type { QuizSessionRecord } from '@shared/types/quiz'
+import type { QuizSessionRecord } from '@inkdown/contracts'
 import { serializeQuizSession } from '../../quiz-service'
 
 describe('quiz-merger', () => {

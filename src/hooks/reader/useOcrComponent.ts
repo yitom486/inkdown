@@ -5,7 +5,7 @@ import {
   getOcrComponentStatus,
   onOcrComponentStatus,
 } from '@/api/ocr-api'
-import type { OcrComponentStatus } from '@shared/types/ocr'
+import type { OcrComponentStatus } from '@inkdown/contracts'
 
 const DEFAULT_STATUS: OcrComponentStatus = {
   phase: 'not-ready',

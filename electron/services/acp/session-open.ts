@@ -1,4 +1,4 @@
-import type { AcpSessionRestoreAttempt, AcpSessionRestoreMethod } from '@shared/types/acp'
+import type { AcpSessionRestoreAttempt, AcpSessionRestoreMethod } from '@inkdown/contracts'
 
 export type AcpRpcRequest = (method: string, params?: unknown) => Promise<unknown>
 

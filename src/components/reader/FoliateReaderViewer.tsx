@@ -28,9 +28,9 @@ import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
 import { cn } from '@/lib/utils'
-import type { AppError } from '@shared/core/errors'
-import type { ReadingMark } from '@shared/types/reading-mark'
-import { isOk } from '@shared/core/result'
+import type { AppError } from '@inkdown/contracts'
+import type { ReadingMark } from '@inkdown/contracts'
+import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/foliate-book-adapter'
@@ -254,7 +254,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     // E2E 可观测性先行：门控开启时把当前节纯文本挂到容器（独立于下方同步决策）
     if (
       typeof window !== 'undefined' &&
-      window.electronAPI?.e2eFoliateReader === true &&
+      appApi.isE2EFoliateReader() &&
       containerRef.current
     ) {
       const host = containerRef.current
@@ -831,11 +831,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         const flat = chaptersRef.current.findIndex(
           (unit) => unit.href.toLowerCase() === tocHref.toLowerCase(),
         )
-        if (
-          typeof window !== 'undefined' &&
-          window.electronAPI?.e2eFoliateReader === true &&
-          containerRef.current
-        ) {
+          if (
+            typeof window !== 'undefined' &&
+            appApi.isE2EFoliateReader() &&
+            containerRef.current
+          ) {
           containerRef.current.dataset.e2eFlatIndex = String(flat)
         }
         if (flat >= 0 && !isNavIntentLocked(useReaderNavigationStore.getState().navIntent)) {
@@ -1138,7 +1138,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   // E2E 专用：closed shadow DOM 无法做 DOM 级选区/点击，钩子走同一管线
   //（findTextRangeInRoot → snapshot → toolbar；toRange → inspector）。
   useEffect(() => {
-    if (typeof window === 'undefined' || window.electronAPI?.e2eFoliateReader !== true) return
+    if (typeof window === 'undefined' || !appApi.isE2EFoliateReader()) return
     window.__inkdownE2eReader = {
       listMarks: () =>
         marksRef.current.map((mark) => ({ id: mark.id, kind: mark.kind, excerpt: mark.excerpt })),

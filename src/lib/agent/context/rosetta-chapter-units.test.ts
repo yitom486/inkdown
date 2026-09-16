@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { err, ok } from '@shared/core/result'
+import { err, ok } from '@inkdown/contracts'
 import {
   iterateRosettaChapterUnits,
   ROSETTA_UNITS_UNAVAILABLE,

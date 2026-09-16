@@ -20,7 +20,7 @@ import {
   sha256HexAscii,
   type BodyWatermarkPatch,
 } from '@shared/reader/body-watermark-plan'
-import type { BookBlockType } from '@shared/types/book-db'
+import type { BookBlockType } from '@inkdown/contracts'
 import { getBookDbPath } from './open-book-db'
 import { migrateBookDb } from './schema'
 import { getBookRecord, searchBookBlocks } from './queries'

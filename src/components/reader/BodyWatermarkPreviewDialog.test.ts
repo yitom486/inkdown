@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RosettaBodyWatermarkPreviewResult } from '@shared/types/rosetta'
+import type { RosettaBodyWatermarkPreviewResult } from '@inkdown/contracts'
 
 const { mockPreview } = vi.hoisted(() => ({ mockPreview: vi.fn() }))
 

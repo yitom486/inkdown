@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { syncApi } from '@/api/sync-api'
 import { appApi } from '@/api/app-api'
-import type { SyncConfig, SyncStatus, SyncProviderType } from '@shared/types/sync'
+import type { SyncConfig, SyncStatus, SyncProviderType } from '@inkdown/contracts'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 

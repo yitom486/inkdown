@@ -1,4 +1,4 @@
-import type { OcrTocEntry, OcrTocEntrySource } from '@shared/types/ocr'
+import type { OcrTocEntry, OcrTocEntrySource } from '@inkdown/contracts'
 import {
   cleanupOcrTocTitle,
   inferLevel,

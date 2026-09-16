@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DetectPdfTocPagesResult } from '@shared/types/ocr'
+import type { DetectPdfTocPagesResult } from '@inkdown/contracts'
 import {
   feedbackForDetection,
   reduceDetectFeedback,

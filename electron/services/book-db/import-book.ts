@@ -9,7 +9,7 @@ import {
 import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
 // 复用同一套归一化做 span 对齐（空格/标点/全角折叠），保证入库匹配与清洗一致
 import { normalizeWatermarkText } from '@shared/reader/ocr-watermark'
-import type { BookBlockType, BookDbBlockBBox } from '@shared/types/book-db'
+import type { BookBlockType, BookDbBlockBBox } from '@inkdown/contracts'
 import { computeTocSignature } from '@shared/reader/toc-signature'
 import { migrateBookDb } from './schema'
 

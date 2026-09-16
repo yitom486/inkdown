@@ -1,4 +1,4 @@
-import type { DetectPdfTocPagesResult } from '@shared/types/ocr'
+import type { DetectPdfTocPagesResult } from '@inkdown/contracts'
 
 /**
  * 目录探测反馈的轻量状态模型（纯函数，PdfViewer 只做薄 dispatch）。

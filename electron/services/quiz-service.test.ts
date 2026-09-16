@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseQuizJsonl, serializeQuizSession } from './quiz-service'
-import type { QuizSessionRecord } from '@shared/types/quiz'
+import type { QuizSessionRecord } from '@inkdown/contracts'
 
 describe('quiz-service JSONL serialization', () => {
   const sampleRecord: QuizSessionRecord = {

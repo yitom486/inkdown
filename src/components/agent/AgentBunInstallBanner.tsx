@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getBunRuntimeStatus, installBunRuntime } from '@/api/bun-api'
 import { appApi } from '@/api/app-api'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
 
 interface AgentBunInstallBannerProps {

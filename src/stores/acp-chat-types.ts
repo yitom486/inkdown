@@ -1,4 +1,4 @@
-import type { AcpToolCallKind, AcpToolCallStatus } from '@shared/types/acp'
+import type { AcpToolCallKind, AcpToolCallStatus } from '@inkdown/contracts'
 import type { ChapterMarkPlanEntry } from '@shared/types/chapter-mark-plan'
 import type { MarkProposalStatus, ProposedMark } from '@shared/types/mark-proposal'
 import type { AcpPlanEntry } from '@/lib/agent/acp-plan'

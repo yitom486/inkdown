@@ -1,4 +1,4 @@
-import { getDocumentKind } from '@shared/types/document'
+import { getDocumentKind } from '@inkdown/contracts'
 import { resolveWebDocDocumentId, resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
 import type { ReaderFormat } from '@/lib/reader/reader-navigation-sync'
 import { useActiveDocumentStore } from '@/stores/active-document-store'

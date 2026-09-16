@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { IPC } from '@shared/ipc/channels'
+import { IPC } from '@inkdown/contracts'
 import type {
   ExportDocumentPayload,
   ExportMarkdownPayload,
@@ -13,12 +13,12 @@ import type {
   WorkspaceFsMovePayload,
   WorkspaceFsRenamePayload,
   WorkspaceSearchMarkdownPayload,
-} from '@shared/types/file'
-import type { RendererErrorPayload } from '@shared/types/error-log'
+} from '@inkdown/contracts'
+import type { RendererErrorPayload } from '@inkdown/contracts'
 import type {
   CreateReadingMarkPayload,
   UpdateReadingMarkPayload,
-} from '@shared/types/reading-mark'
+} from '@inkdown/contracts'
 import type {
   AcpAuthenticatePayload,
   AcpCancelPayload,
@@ -29,9 +29,9 @@ import type {
   AcpSessionNewPayload,
   AcpSetConfigOptionPayload,
   AcpSnapshotResponsePayload,
-} from '@shared/types/acp'
-import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@shared/types/web-doc'
-import { resolveSnapshotTimeoutMs } from '@shared/agent/inkdown-snapshot'
+} from '@inkdown/contracts'
+import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@inkdown/contracts'
+import { resolveSnapshotTimeoutMs } from '@inkdown/contracts'
 import type {
   DetectPdfTocPagesPayload,
   GetPdfOcrTocPayload,
@@ -40,17 +40,17 @@ import type {
   RecognizePdfPagePayload,
   RecognizePdfTocPayload,
   SavePdfOcrTocPayload,
-} from '@shared/types/ocr'
+} from '@inkdown/contracts'
 import type {
   ClassifyPdfDocumentPayload,
   ExtractPdfBookMarkdownPayload,
-} from '@shared/types/pdf-inspect'
+} from '@inkdown/contracts'
 import {
   classifyPdfDocument,
   extractPdfBookMarkdown,
 } from '../services/pdf-inspector-service'
-import { ok, err } from '@shared/core/result'
-import type { SyncConfig } from '@shared/types/sync'
+import { ok, err } from '@inkdown/contracts'
+import type { SyncConfig } from '@inkdown/contracts'
 import { syncManager } from '../services/sync/sync-manager'
 import { readSyncConfig, writeSyncConfig } from '../services/sync/sync-config-service'
 import { writeLocalProgress } from '../services/sync/reading-progress-sync'
@@ -108,7 +108,7 @@ import type {
   RosettaInspectContentPayload,
   RosettaQuery,
   RosettaTocRebuildPayload,
-} from '@shared/types/rosetta'
+} from '@inkdown/contracts'
 import { applyWindowTitle } from '../window/window-title'
 import { setVerboseRendererLogs } from '../services/runtime-state'
 import {
@@ -122,7 +122,7 @@ import {
   readAllQuizSessions,
   readQuizSessionsByFile,
 } from '../services/quiz-service'
-import type { QuizSessionRecord } from '@shared/types/quiz'
+import type { QuizSessionRecord } from '@inkdown/contracts'
 import {
   discoverWebDocToc,
   fetchWebDocPage,

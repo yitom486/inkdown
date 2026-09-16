@@ -1,7 +1,7 @@
 import { dialog, BrowserWindow } from 'electron'
 import { dirname, extname, join } from 'path'
 import { mkdir, readFile, writeFile } from 'fs/promises'
-import { DEFAULT_SAVE_FILENAME } from '@shared/constants/app'
+import { DEFAULT_SAVE_FILENAME } from '@inkdown/contracts'
 import {
   DOCUMENT_DIALOG_FILTERS,
   HTML_DIALOG_FILTERS,
@@ -9,10 +9,10 @@ import {
   PASTED_IMAGE_ASSETS_DIR,
   PDF_DIALOG_FILTERS,
 } from '@shared/constants/dialog-filters'
-import { getDocumentKind } from '@shared/types/document'
-import { IMAGE_EXTENSION_BY_MIME, IMAGE_MIME_BY_EXTENSION } from '@shared/constants/images'
-import { toAppError, type AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
+import { getDocumentKind } from '@inkdown/contracts'
+import { IMAGE_EXTENSION_BY_MIME, IMAGE_MIME_BY_EXTENSION } from '@inkdown/contracts'
+import { toAppError, type AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
@@ -27,7 +27,7 @@ import type {
   SaveFileResult,
   SavePastedImagePayload,
   SavePastedImageResult,
-} from '@shared/types/file'
+} from '@inkdown/contracts'
 import { scanWorkspace } from './workspace'
 import { resolveExportSavePath } from './export-save-path'
 

@@ -1,4 +1,4 @@
-import type { WebDocSiteId } from '@shared/types/web-doc'
+import type { WebDocSiteId } from '@inkdown/contracts'
 import { isHrttNewsHost } from '@shared/web-doc/hrtt'
 import { isPeopleDailyPaperHost, resolvePeopleDailyEditionUrl } from '@shared/web-doc/people-daily'
 

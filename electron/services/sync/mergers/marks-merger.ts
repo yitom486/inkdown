@@ -1,4 +1,4 @@
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 
 export interface SyncMarksPayload {
   marks: ReadingMark[]

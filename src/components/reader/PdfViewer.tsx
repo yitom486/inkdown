@@ -48,7 +48,7 @@ import { ACP_MAX_IMAGE_BYTES, blobToBase64 } from '@/lib/agent/acp-composer'
 import type { TocPromptImage } from '@/lib/agent/toc-ai-session'
 import { renderPdfPagesToPng } from '@/lib/reader/pdf-page-image'
 import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta-agent-text'
-import type { RosettaBookInfo, RosettaImportState } from '@shared/types/rosetta'
+import type { RosettaBookInfo, RosettaImportState } from '@inkdown/contracts'
 import { usePdfPageOcr } from '@/hooks/reader/usePdfPageOcr'
 import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
@@ -96,7 +96,7 @@ import {
 } from '@/components/reader/PdfToolbarMoreMenu'
 import { BodyWatermarkPreviewDialog } from '@/components/reader/BodyWatermarkPreviewDialog'
 import { TocAiPolishControl } from '@/components/reader/TocAiPolishControl'
-import type { OcrTocEntry } from '@shared/types/ocr'
+import type { OcrTocEntry } from '@inkdown/contracts'
 import {
   PDF_JUMP_SYNC_HOLD_MS,
   PDF_PAGE_GAP_PX,
@@ -142,10 +142,11 @@ import { suggestTocPageOffset } from '@/lib/reader/toc-offset'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'
-import type { AppError } from '@shared/core/errors'
-import type { ReadingMark } from '@shared/types/reading-mark'
-import { isOk } from '@shared/core/result'
+import type { AppError } from '@inkdown/contracts'
+import type { ReadingMark } from '@inkdown/contracts'
+import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
+import { appApi } from '@/api/app-api'
 import '@/styles/pdf-viewer.css'
 
 interface PdfViewerProps {
@@ -1237,7 +1238,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
   }, [filePath, fileFingerprint, isScannedPdf, isMixedPdf, readAgentPageText, readPageText, readRosettaUnitText, rosettaImport.info])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || window.electronAPI?.e2ePdfStructure !== true) return
+    if (typeof window === 'undefined' || !appApi.isE2EPdfStructure()) return
     window.__inkdownE2ePdfStructure = {
       readCurrentPage: async () => {
         const result = await readAgentPageTextWithSourceRef.current(pageNumRef.current)

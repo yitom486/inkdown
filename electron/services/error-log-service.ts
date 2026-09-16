@@ -1,7 +1,7 @@
 import { appendFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
-import type { RendererErrorPayload } from '@shared/types/error-log'
+import type { RendererErrorPayload } from '@inkdown/contracts'
 
 function getLogDirectory(): string {
   return join(app.getPath('userData'), 'logs')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FileTreeNode } from '@shared/types/file'
+import type { FileTreeNode } from '@inkdown/contracts'
 import {
   flattenFileTree,
   scoreFuzzyMatch,

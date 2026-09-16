@@ -1,9 +1,9 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { err, ok, type Result } from '@shared/core/result'
-import { toAppError, type AppError } from '@shared/core/errors'
-import type { SyncConfig } from '@shared/types/sync'
+import { err, ok, type Result } from '@inkdown/contracts'
+import { toAppError, type AppError } from '@inkdown/contracts'
+import type { SyncConfig } from '@inkdown/contracts'
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
   enabled: false,

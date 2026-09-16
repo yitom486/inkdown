@@ -5,7 +5,7 @@ import {
   windowContentAuditText,
   type ContentAuditHit,
   type ContentAuditResult,
-} from '@shared/agent/content-audit'
+} from '@inkdown/contracts'
 import type { ReaderUnitText } from './reader-content-registry'
 
 /**

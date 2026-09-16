@@ -1,5 +1,5 @@
 import { fileApi } from '@/api/file-api'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import { reportAppError } from '@/lib/workspace/report-error'
 import {
   bookTitleFromPath,
@@ -8,7 +8,7 @@ import {
   type ReadingNotesContentKind,
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import { toast } from 'sonner'
 
 export async function saveReadingNotesExport(options: {

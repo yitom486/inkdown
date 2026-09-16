@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import { acpApi } from '@/api/acp-api'
 import { buildInkdownPromptPrefix } from '@/lib/agent/context/build-prompt-prefix'
 import { proposeMarkForAgent } from '@/lib/agent/context/propose-mark'

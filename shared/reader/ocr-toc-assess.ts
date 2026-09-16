@@ -1,4 +1,4 @@
-import { PDF_OCR_TOC_CACHE_VERSION, type ReaderTocUnit } from '@shared/types/ocr'
+import { PDF_OCR_TOC_CACHE_VERSION, type ReaderTocUnit } from '@inkdown/contracts'
 import { ocrTocToReaderUnits } from './ocr-toc-extractor'
 
 /**

@@ -1,7 +1,7 @@
-import { isOk, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import type { RosettaInspectContentResult } from '@shared/types/rosetta'
-import type { WorkspaceSearchMarkdownResult } from '@shared/types/file'
+import { isOk, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { RosettaInspectContentResult } from '@inkdown/contracts'
+import type { WorkspaceSearchMarkdownResult } from '@inkdown/contracts'
 import {
   CONTENT_AUDIT_HIT_TEXT_BUDGET,
   CONTENT_AUDIT_RESPONSE_TEXT_BUDGET,
@@ -10,7 +10,7 @@ import {
   resolveContentAuditMatchPosition,
   windowContentAuditText,
   type ContentAuditHit,
-} from '@shared/agent/content-audit'
+} from '@inkdown/contracts'
 import { rosettaApi } from '@/api/rosetta-api'
 import { fileApi } from '@/api/file-api'
 import { useAppSettingsStore } from '@/stores/app-settings-store'

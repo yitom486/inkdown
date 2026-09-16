@@ -13,7 +13,7 @@ import { useCollapsiblePanelSync } from '@/hooks/workspace/useSidebarPanelSync'
 import type { MarkdownHeading } from '@/lib/editor/markdown-headings'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
-import type { FileTreeNode } from '@shared/types/file'
+import type { FileTreeNode } from '@inkdown/contracts'
 import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 
 export interface WorkspaceShellProps {

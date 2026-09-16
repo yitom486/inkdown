@@ -1,5 +1,5 @@
-import type { AppError } from '@shared/core/errors'
-import { err, type Result } from '@shared/core/result'
+import type { AppError } from '@inkdown/contracts'
+import { err, type Result } from '@inkdown/contracts'
 import type {
   RosettaActiveImport,
   RosettaBodyWatermarkApplyPayload,
@@ -16,7 +16,7 @@ import type {
   RosettaQueryResult,
   RosettaTocRebuildPayload,
   RosettaTocRebuildResult,
-} from '@shared/types/rosetta'
+} from '@inkdown/contracts'
 
 function getElectronAPI() {
   return typeof window !== 'undefined' ? window.electronAPI : undefined

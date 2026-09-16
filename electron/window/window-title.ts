@@ -1,6 +1,6 @@
-import { basename } from '@shared/utils/path'
+import { basename } from '@inkdown/contracts'
 import type { BrowserWindow } from 'electron'
-import { APP_TITLE } from '@shared/constants/app'
+import { APP_TITLE } from '@inkdown/contracts'
 
 export function formatWindowTitle(
   filePath?: string,

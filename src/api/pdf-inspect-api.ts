@@ -3,9 +3,9 @@ import type {
   ExtractPdfBookMarkdownPayload,
   InspectorBookMarkdown,
   InspectorPdfClassification,
-} from '@shared/types/pdf-inspect'
-import type { AppError } from '@shared/core/errors'
-import type { Result } from '@shared/core/result'
+} from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { Result } from '@inkdown/contracts'
 
 function api() {
   if (!window.electronAPI) {

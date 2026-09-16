@@ -21,7 +21,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { QuizAnswerSubmission, QuizGrade, QuizQuestion, QuizSessionRecord } from '@shared/types/quiz'
+import type { QuizAnswerSubmission, QuizGrade, QuizQuestion, QuizSessionRecord } from '@inkdown/contracts'
 import {
   evaluateAnswersWithAi,
   generateQuestionsWithAi,

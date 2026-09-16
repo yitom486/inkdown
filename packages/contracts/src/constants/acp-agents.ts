@@ -1,4 +1,4 @@
-import type { AcpRuntimeInfo } from '@shared/types/acp'
+import type { AcpRuntimeInfo } from '../types/acp'
 
 /**
  * 默认 Codex ACP 适配器 npm 包。

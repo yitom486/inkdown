@@ -10,9 +10,9 @@ import type {
   RecognizePdfTocPayload,
   SavePdfOcrTocPayload,
   OcrComponentStatus,
-} from '@shared/types/ocr'
-import type { AppError } from '@shared/core/errors'
-import type { Result } from '@shared/core/result'
+} from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { Result } from '@inkdown/contracts'
 
 function api() {
   if (!window.electronAPI) {

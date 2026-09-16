@@ -1,4 +1,4 @@
-import type { AppError } from '@shared/core/errors'
+import type { AppError } from '@inkdown/contracts'
 import type {
   ExportDocumentPayload,
   ExportDocumentResult,
@@ -22,9 +22,9 @@ import type {
   WorkspaceFsRenamePayload,
   WorkspaceSearchMarkdownPayload,
   WorkspaceSearchMarkdownResult,
-} from '@shared/types/file'
-import { err, ok, type Result } from '@shared/core/result'
-import type { ElectronAPI } from '@shared/ipc/electron-api.types'
+} from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { ElectronAPI } from '@inkdown/contracts'
 
 function requireElectronAPI(): Result<ElectronAPI, AppError> {
   if (!window.electronAPI) {

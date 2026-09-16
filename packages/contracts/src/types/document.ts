@@ -1,4 +1,4 @@
-import { MARKDOWN_EXTENSION_SET, READER_EXTENSION_SET } from '@shared/constants/extensions'
+import { MARKDOWN_EXTENSION_SET, READER_EXTENSION_SET } from '../constants/extensions'
 
 /** 当前打开内容的种类；web 用 http(s) URL 当 path，不是磁盘扩展名 */
 export type DocumentKind = 'markdown' | 'pdf' | 'epub' | 'mobi' | 'web' | 'unknown'

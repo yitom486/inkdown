@@ -5,7 +5,7 @@ import {
   findMobiNoteMarkAtPoint,
   renderMobiMarkOverlays,
 } from './mobi-reading-marks'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 
 function createMark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'kind' | 'anchor'>): ReadingMark {
   return {

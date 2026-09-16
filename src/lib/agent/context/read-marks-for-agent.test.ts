@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import { collectHighlightPassages, isHighlightPassage } from './read-marks-for-agent'
 
 function mark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'id' | 'kind' | 'anchor'>): ReadingMark {

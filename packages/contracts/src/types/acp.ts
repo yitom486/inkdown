@@ -10,7 +10,7 @@
 import type {
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
-} from '@shared/agent/inkdown-snapshot'
+} from '../agent/inkdown-snapshot'
 
 /** 主进程单例连接状态；UI 按钮/指示灯跟这个走 */
 export type AcpConnectionStatus =

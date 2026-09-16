@@ -1,4 +1,4 @@
-import type { WebDocTocEntry } from '@shared/types/web-doc'
+import type { WebDocTocEntry } from '@inkdown/contracts'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import { resolveAdjacentFlatNav, type AdjacentFlatNavState } from '@/lib/reader/reader-chapter-nav'
 

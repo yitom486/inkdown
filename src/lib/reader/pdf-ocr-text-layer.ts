@@ -1,5 +1,5 @@
 import type { PageViewport } from 'pdfjs-dist'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
 import { filterOcrHitLayerWords, ocrPageCacheToTextContent } from '@shared/reader/ocr-page-words'
 import { registerPdfPageTextGeometry } from '@/lib/reader/pdf-selection'
 

@@ -3,11 +3,11 @@ import type {
   WebDocDiscoverTocResult,
   WebDocFetchPayload,
   WebDocFetchResult,
-} from '@shared/types/web-doc'
-import type { AppError } from '@shared/core/errors'
-import type { Result } from '@shared/core/result'
-import type { ElectronAPI } from '@shared/ipc/electron-api.types'
-import { err } from '@shared/core/result'
+} from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { Result } from '@inkdown/contracts'
+import type { ElectronAPI } from '@inkdown/contracts'
+import { err } from '@inkdown/contracts'
 
 function requireElectronAPI(): Result<ElectronAPI, AppError> {
   const api = typeof window !== 'undefined' ? window.electronAPI : undefined

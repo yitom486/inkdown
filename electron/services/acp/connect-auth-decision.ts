@@ -1,4 +1,4 @@
-import type { AcpAuthMethod } from '@shared/types/acp'
+import type { AcpAuthMethod } from '@inkdown/contracts'
 import type { CodexAuthPreflight } from './codex-auth-preflight'
 import { orderSilentAuthMethodIds, shouldPromptAuthWizard } from './auth-method-order'
 

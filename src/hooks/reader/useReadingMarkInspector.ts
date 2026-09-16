@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import { rankVisualMarks, uniqueMarksById } from '@/lib/reader/reading-mark-hit'
 
 export function useReadingMarkInspector(marks: ReadingMark[]) {

@@ -12,8 +12,8 @@ import {
 } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
 import {
   INSPECTOR_MODELS,
   INSPECTOR_OCR_REVISION,

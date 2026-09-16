@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises'
-import { err, ok, type Result } from '@shared/core/result'
-import { toAppError, type AppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@inkdown/contracts'
+import { toAppError, type AppError } from '@inkdown/contracts'
 import type {
   InspectorBookMarkdown,
   InspectorPdfClassification,
-} from '@shared/types/pdf-inspect'
+} from '@inkdown/contracts'
 
 /**
  * pdf-inspector 主进程封装（分类 + 原生抽取；_loading 纯抽取，不碰 OCR 运行时）。

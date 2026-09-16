@@ -1,7 +1,7 @@
-import { isReaderDocumentKind } from '@shared/types/document'
-import type { DocumentKind } from '@shared/types/document'
+import { isReaderDocumentKind } from '@inkdown/contracts'
+import type { DocumentKind } from '@inkdown/contracts'
 import { readingMarksApi } from '@/api/reading-marks-api'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import {
   collectHighlightPassages,
   serializeMarkPassage,

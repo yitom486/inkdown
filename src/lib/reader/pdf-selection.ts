@@ -5,7 +5,7 @@ import type {
   PdfTextQuad,
   PdfTextQuote,
   PdfTextRect,
-} from '@shared/types/reading-mark'
+} from '@inkdown/contracts'
 
 interface PdfPageTextGeometry {
   viewport: PageViewport

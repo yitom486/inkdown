@@ -1,5 +1,5 @@
-import type { AppError } from '@shared/core/errors'
-import type { Result } from '@shared/core/result'
+import type { AppError } from '@inkdown/contracts'
+import type { Result } from '@inkdown/contracts'
 
 export interface StatResult {
   exists: boolean

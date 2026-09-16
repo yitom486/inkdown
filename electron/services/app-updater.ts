@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { BrowserWindow, app } from 'electron'
-import { IPC } from '@shared/ipc/channels'
-import type { AppUpdateStatus } from '@shared/types/app-update'
+import { IPC } from '@inkdown/contracts'
+import type { AppUpdateStatus } from '@inkdown/contracts'
 
 const cjsRequire = createRequire(import.meta.url)
 

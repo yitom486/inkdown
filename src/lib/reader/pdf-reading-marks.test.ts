@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { findPdfMarksAtPoint, renderPdfMarkOverlays } from './pdf-reading-marks'
 import type { PdfSelectionSnapshot } from './pdf-selection'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import type { PageViewport } from 'pdfjs-dist'
 
 const viewport = {

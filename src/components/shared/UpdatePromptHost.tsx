@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
-import { APP_TITLE } from '@shared/constants/app'
-import type { AppUpdateStatus } from '@shared/types/app-update'
+import { APP_TITLE } from '@inkdown/contracts'
+import type { AppUpdateStatus } from '@inkdown/contracts'
 
 /** 启动后监听主进程更新事件，用 toast 提示并可一键下载 / 重启安装 */
 export function UpdatePromptHost() {

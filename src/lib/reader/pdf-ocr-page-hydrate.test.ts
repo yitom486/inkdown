@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
 import { loadPersistedOcrPageCaches } from './pdf-ocr-page-hydrate'
 
 const cacheFor = (page: number): PdfOcrPageCache => ({

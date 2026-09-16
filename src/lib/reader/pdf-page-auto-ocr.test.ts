@@ -4,7 +4,7 @@ import {
   mergeOcrPageCaches,
   shouldAutoOcrViewportPage,
 } from './pdf-page-auto-ocr'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
 
 const cacheFor = (page: number): PdfOcrPageCache => ({
   fileFingerprint: 'fp|1',

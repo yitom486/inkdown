@@ -1,4 +1,4 @@
-import { dirname } from '@shared/utils/path'
+import { dirname } from '@inkdown/contracts'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 
 /** 打开文件/文件夹对话框的起始目录 */

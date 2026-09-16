@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import {
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,

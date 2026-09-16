@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
 import { existsSync, statSync } from 'node:fs'
-import { IPC } from '../shared/ipc/channels'
+import { IPC } from '@inkdown/contracts'
 import { createWindow } from './window/create-window'
 import { extractExternalFilePaths, pendingExternalFiles } from './window/external-file'
 import { installAppMenu } from './window/app-menu'

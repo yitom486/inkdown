@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { APP_TITLE } from '@shared/constants/app'
-import type { AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
+import { APP_TITLE } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
 import type {
   AcpAuthMethod,
   AcpConnectResult,
@@ -13,11 +13,11 @@ import type {
   AcpSessionUpdateEvent,
   AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
-} from '@shared/types/acp'
+} from '@inkdown/contracts'
 import type {
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
-} from '@shared/agent/inkdown-snapshot'
+} from '@inkdown/contracts'
 import { getAcpRuntime } from './agent-registry'
 import { resolveAgentCwd } from './agent-sandbox-cwd'
 import { parseAcpConfigOptions } from './config-options'

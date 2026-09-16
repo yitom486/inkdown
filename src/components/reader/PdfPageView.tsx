@@ -12,14 +12,14 @@ import {
 } from '@/lib/reader/pdf-text-layer-builder'
 import { mountOcrTextLayer } from '@/lib/reader/pdf-ocr-text-layer'
 import { pageHasNativeText } from '@shared/reader/ocr-page-words'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
 import {
   PdfTextLayerMappingSink,
   registerPdfPageTextGeometry,
   type PdfSelectionSnapshot,
 } from '@/lib/reader/pdf-selection'
 import { reportAppError } from '@/lib/workspace/report-error'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 
 interface PdfPageViewProps {
   pdf: PDFDocumentProxy

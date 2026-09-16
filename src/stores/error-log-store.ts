@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { RendererErrorPayload } from '@shared/types/error-log'
+import type { RendererErrorPayload } from '@inkdown/contracts'
 
 const MAX_ENTRIES = 100
 

@@ -4,7 +4,7 @@ import {
   listPreferredConfigPatches,
   rememberPreferredConfig,
 } from './acp-config-preferences'
-import type { AcpConfigOption } from '@shared/types/acp'
+import type { AcpConfigOption } from '@inkdown/contracts'
 
 describe('acp-config-preferences', () => {
   it('remembers and reads preferred values per runtime', () => {

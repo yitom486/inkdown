@@ -1,8 +1,8 @@
 import {
   IMAGE_EXTENSION_BY_MIME,
   IMAGE_MIME_BY_EXTENSION,
-} from '@shared/constants/images'
-import type { AcpContentBlock, AcpPromptCapabilities } from '@shared/types/acp'
+} from '@inkdown/contracts'
+import type { AcpContentBlock, AcpPromptCapabilities } from '@inkdown/contracts'
 
 /** 侧栏 → Agent 输入区拖拽的自定义 MIME（JSON 绝对路径数组） */
 export const INKDOWN_WORKSPACE_PATHS_MIME = 'application/x-inkdown-workspace-paths'

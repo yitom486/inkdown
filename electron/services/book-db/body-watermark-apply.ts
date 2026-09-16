@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import type { BookBlockType } from '@shared/types/book-db'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { BookBlockType } from '@inkdown/contracts'
 import type {
   RosettaBodyWatermarkApplyPayload,
   RosettaBodyWatermarkApplyResult,
-} from '@shared/types/rosetta'
+} from '@inkdown/contracts'
 import {
   computeBodyWatermarkPlanSignature,
   planBodyWatermarkPatches,

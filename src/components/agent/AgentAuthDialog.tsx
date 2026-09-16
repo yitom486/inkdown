@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { AcpAuthMethod } from '@shared/types/acp'
+import type { AcpAuthMethod } from '@inkdown/contracts'
 
 interface AgentAuthDialogProps {
   open: boolean

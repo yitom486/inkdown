@@ -1,4 +1,4 @@
-import type { FileTreeNode } from '@shared/types/file'
+import type { FileTreeNode } from '@inkdown/contracts'
 import { flattenFileTree } from './quick-open'
 
 export interface WikilinkResolvedTarget {

@@ -1,4 +1,4 @@
-import type { PdfTextRect } from '@shared/types/reading-mark'
+import type { PdfTextRect } from '@inkdown/contracts'
 
 import {
   applyHighlightSurface,

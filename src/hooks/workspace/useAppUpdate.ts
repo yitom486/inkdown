@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { appApi } from '@/api/app-api'
-import type { AppUpdateStatus } from '@shared/types/app-update'
+import type { AppUpdateStatus } from '@inkdown/contracts'
 
 export function useAppUpdate() {
   const [status, setStatus] = useState<AppUpdateStatus>({ phase: 'idle' })

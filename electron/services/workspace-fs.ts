@@ -8,9 +8,9 @@ import {
   cp,
 } from 'node:fs/promises'
 import { basename, dirname, join, resolve, sep } from 'node:path'
-import type { AppError } from '@shared/core/errors'
-import { toAppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
+import type { AppError } from '@inkdown/contracts'
+import { toAppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
 import type {
   WorkspaceFsCopyPayload,
   WorkspaceFsCreateDirPayload,
@@ -19,7 +19,7 @@ import type {
   WorkspaceFsMovePayload,
   WorkspaceFsPathResult,
   WorkspaceFsRenamePayload,
-} from '@shared/types/file'
+} from '@inkdown/contracts'
 
 export function assertInsideWorkspace(filePath: string, workspaceRoot: string): string {
   const root = resolve(workspaceRoot)

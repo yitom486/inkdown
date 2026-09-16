@@ -2,14 +2,14 @@ import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { app } from 'electron'
-import { toAppError, type AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
+import { toAppError, type AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
 import type {
   CreateReadingMarkPayload,
   ReadingAnchor,
   ReadingMark,
   UpdateReadingMarkPayload,
-} from '@shared/types/reading-mark'
+} from '@inkdown/contracts'
 
 export interface ReadingMarksFile {
   marks: ReadingMark[]

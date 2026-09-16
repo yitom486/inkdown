@@ -1,4 +1,4 @@
-import type { QuizSessionRecord } from '@shared/types/quiz'
+import type { QuizSessionRecord } from '@inkdown/contracts'
 import { parseQuizJsonl, serializeQuizSession } from '../../quiz-service'
 
 export interface QuizMergeResult {

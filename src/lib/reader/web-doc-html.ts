@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify'
-import type { WebDocPageContent, WebDocSiteId } from '@shared/types/web-doc'
+import type { WebDocPageContent, WebDocSiteId } from '@inkdown/contracts'
 import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
 import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'

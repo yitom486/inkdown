@@ -1,4 +1,4 @@
-import type { AcpConfigOption, AcpConfigOptionValue } from '@shared/types/acp'
+import type { AcpConfigOption, AcpConfigOptionValue } from '@inkdown/contracts'
 
 export function parseAcpConfigOptions(raw: unknown): AcpConfigOption[] {
   if (!Array.isArray(raw)) return []

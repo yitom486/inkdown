@@ -1,17 +1,17 @@
 import { readFile, rm } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
 import { buildBookIndex } from '@shared/reader/book-index'
-import { DEFAULT_PDF_OCR_SCALE } from '@shared/types/ocr'
-import type { PdfOcrPageCache } from '@shared/types/ocr'
+import { DEFAULT_PDF_OCR_SCALE } from '@inkdown/contracts'
+import type { PdfOcrPageCache } from '@inkdown/contracts'
 import type {
   RosettaActiveImport,
   RosettaImportPayload,
   RosettaImportPhase,
   RosettaImportStats,
-} from '@shared/types/rosetta'
+} from '@inkdown/contracts'
 import type { InspectorSpanLike } from '@shared/reader/ocr-page-words'
 import { filterOcrHitLayerWords, normalizeInspectorSpans } from '@shared/reader/ocr-page-words'
 import { discoverWatermarksByPosition, isDiagonalStampSpan } from '@shared/reader/ocr-watermark'

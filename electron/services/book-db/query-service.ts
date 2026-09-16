@@ -1,6 +1,6 @@
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import type { RosettaBookInfo, RosettaQuery, RosettaQueryResult } from '@shared/types/rosetta'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { RosettaBookInfo, RosettaQuery, RosettaQueryResult } from '@inkdown/contracts'
 import { openBookDb } from './open-book-db'
 import {
   getBookRecord,

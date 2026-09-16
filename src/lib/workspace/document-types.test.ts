@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDocumentKind } from '@shared/types/document'
+import { getDocumentKind } from '@inkdown/contracts'
 
 describe('document-types', () => {
   it('识别 Markdown、PDF、EPUB、MOBI 与 Kindle AZW3', () => {

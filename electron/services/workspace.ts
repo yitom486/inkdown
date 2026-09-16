@@ -4,8 +4,8 @@ import {
   WORKSPACE_IGNORED_DIR_NAMES,
   WORKSPACE_MAX_DEPTH,
 } from '@shared/constants/workspace'
-import { getDocumentKind, isWorkspaceFileExtension } from '@shared/types/document'
-import type { FileTreeNode } from '@shared/types/file'
+import { getDocumentKind, isWorkspaceFileExtension } from '@inkdown/contracts'
+import type { FileTreeNode } from '@inkdown/contracts'
 
 /** 移除不含支持文档的空目录，便于侧栏发现有效文件 */
 export function pruneEmptyDirectories(nodes: FileTreeNode[]): FileTreeNode[] {

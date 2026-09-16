@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import { DEFAULT_PDF_TOC_DETECT_SCALE } from '@shared/types/ocr'
-import type { DetectPdfTocPagesPayload, DetectPdfTocPagesResult } from '@shared/types/ocr'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import { DEFAULT_PDF_TOC_DETECT_SCALE } from '@inkdown/contracts'
+import type { DetectPdfTocPagesPayload, DetectPdfTocPagesResult } from '@inkdown/contracts'
 import {
   resolveDetectWindow,
   scoreTocPageMarkdown,

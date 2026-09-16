@@ -1,4 +1,4 @@
-import type { AcpContentBlock } from '@shared/types/acp'
+import type { AcpContentBlock } from '@inkdown/contracts'
 import { collectActiveDocument, collectReaderLocationKey, collectReadingState, collectTocTopLevelForDocument } from './collect-turn-context'
 import { INKDOWN_STATIC_SKILL } from './inkdown-static-skill'
 import { beginPromptSelectionCycle } from './reader-selection-registry'

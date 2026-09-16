@@ -2,17 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { appApi, fileApi } from '@/api/file-api'
+import { appApi as appWindowApi } from '@/api/app-api'
 import { queryKeys } from '@/api/query-keys'
-import { isCancelled, type AppError } from '@shared/core/errors'
-import { DEFAULT_SAVE_FILENAME } from '@shared/constants/app'
+import { isCancelled, type AppError } from '@inkdown/contracts'
+import { DEFAULT_SAVE_FILENAME } from '@inkdown/contracts'
 import {
   getDocumentKind,
   isReaderDocumentKind,
   type ReaderDocumentKind,
-} from '@shared/types/document'
-import type { FileTreeNode, OpenDocumentResult, OpenFolderResult } from '@shared/types/file'
-import { dirname, joinPath } from '@shared/utils/path'
-import { err, isOk, ok, type Result } from '@shared/core/result'
+} from '@inkdown/contracts'
+import type { FileTreeNode, OpenDocumentResult, OpenFolderResult } from '@inkdown/contracts'
+import { dirname, joinPath } from '@inkdown/contracts'
+import { err, isOk, ok, type Result } from '@inkdown/contracts'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useWebDocStore } from '@/stores/web-doc-store'
 import { clearDraftForFile } from '@/hooks/editor/useDraftPersistence'
@@ -68,7 +69,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   )
 
   const syncTitle = useCallback((path?: string, dirty = false) => {
-    window.electronAPI?.updateTitle({ filePath: path, isDirty: dirty })
+    appWindowApi.updateTitle({ filePath: path, isDirty: dirty })
   }, [])
 
   const trackOpenedPath = useCallback((path: string) => {
@@ -272,7 +273,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
         await openExternalFileCore(action.dir, action.path)
         break
       case 'close-app':
-        window.electronAPI?.confirmClose('proceed')
+        appWindowApi.confirmClose('proceed')
         break
     }
   }, [openFileMutation, openPathMutation, openExternalFileCore])
@@ -358,7 +359,7 @@ export function useFileOperations(onError?: (error: AppError) => void) {
     const action = unsavedActionRef.current
     setUnsavedAction(null)
     if (action?.kind === 'close-app') {
-      window.electronAPI?.confirmClose('cancel')
+      appWindowApi.confirmClose('cancel')
     }
   }, [])
 
@@ -382,11 +383,11 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   }, [content, executeUnsavedAction, filePath, saveFileMutation])
 
   const quitApp = useCallback(() => {
-    window.electronAPI?.quit()
+    appWindowApi.quit()
   }, [])
 
   useEffect(() => {
-    if (window.electronAPI?.isFreshWindow) return
+    if (appWindowApi.isFreshWindow()) return
     void restoreWorkspaceOnStartup()
   }, [restoreWorkspaceOnStartup])
 
@@ -395,18 +396,18 @@ export function useFileOperations(onError?: (error: AppError) => void) {
 
   useEffect(() => {
     const rootPath = workspace?.rootPath
-    const api = window.electronAPI
-    if (!rootPath || !api?.watchWorkspace || !api.onWorkspaceChanged) return
+    if (!rootPath) return
 
-    api.watchWorkspace(rootPath)
-    const unsubscribe = api.onWorkspaceChanged((payload) => {
+    appWindowApi.watchWorkspace(rootPath)
+    const unsubscribe = appWindowApi.onWorkspaceChanged((payload) => {
       if (payload.rootPath !== rootPath) return
       void rescanWorkspaceRef.current(rootPath)
     })
+    if (!unsubscribe) return
 
     return () => {
       unsubscribe()
-      api.unwatchWorkspace?.()
+      appWindowApi.unwatchWorkspace()
     }
   }, [workspace?.rootPath])
 
@@ -415,16 +416,16 @@ export function useFileOperations(onError?: (error: AppError) => void) {
   }, [filePath, isDirty, syncTitle])
 
   useEffect(() => {
-    window.electronAPI?.setDirty(isDirty)
+    appWindowApi.setDirty(isDirty)
   }, [isDirty])
 
   useEffect(() => {
-    return window.electronAPI?.onRequestClose(() => {
+    return appWindowApi.onRequestClose(() => {
       if (isDirty) {
         setUnsavedAction({ kind: 'close-app' })
         return
       }
-      window.electronAPI?.confirmClose('proceed')
+      appWindowApi.confirmClose('proceed')
     })
   }, [isDirty])
 

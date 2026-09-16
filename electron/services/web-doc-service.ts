@@ -1,12 +1,12 @@
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import { toAppError } from '@shared/core/errors'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import { toAppError } from '@inkdown/contracts'
 import type {
   WebDocDiscoverTocPayload,
   WebDocDiscoverTocResult,
   WebDocFetchPayload,
   WebDocFetchResult,
-} from '@shared/types/web-doc'
+} from '@inkdown/contracts'
 import {
   extractGenericWebDocToc,
   extractSameOriginDocLinks,

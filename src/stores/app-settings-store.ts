@@ -10,12 +10,12 @@ import {
   DEFAULT_PDF_OCR_SCALE,
   PDF_OCR_SCALE_OPTION_LABELS,
   type PdfOcrScale,
-} from '@shared/types/ocr'
+} from '@inkdown/contracts'
 
 export {
   PDF_OCR_SCALE_OPTION_LABELS,
   type PdfOcrScale,
-} from '@shared/types/ocr'
+} from '@inkdown/contracts'
 
 export {
   READER_FONT_SIZE_OPTIONS,

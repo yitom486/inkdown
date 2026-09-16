@@ -2,9 +2,9 @@ import type {
   CreateReadingMarkPayload,
   ReadingMark,
   UpdateReadingMarkPayload,
-} from '@shared/types/reading-mark'
-import type { AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
+} from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
 
 function requireElectronAPI() {
   if (!window.electronAPI) {

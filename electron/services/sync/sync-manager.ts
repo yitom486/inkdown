@@ -1,15 +1,15 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { BrowserWindow, app } from 'electron'
-import { IPC } from '@shared/ipc/channels'
-import { err, ok, type Result } from '@shared/core/result'
-import { toAppError, type AppError } from '@shared/core/errors'
+import { IPC } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
+import { toAppError, type AppError } from '@inkdown/contracts'
 import type {
   SyncConfig,
   SyncStatus,
   SyncExecuteResult,
   TestConnectionResult,
   SyncStats,
-} from '@shared/types/sync'
+} from '@inkdown/contracts'
 import { WebDavStorageAdapter } from './webdav-adapter'
 import { readSyncConfig } from './sync-config-service'
 import { readMarksStore, writeMarksStore } from '../reading-marks-service'

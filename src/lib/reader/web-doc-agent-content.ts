@@ -4,7 +4,7 @@ import { buildWebDocPageContent } from '@/lib/reader/web-doc-html'
 import type { ReaderUnit } from '@/lib/reader/reader-navigation'
 import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'
 import { resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import type { ReaderUnitText } from '@/lib/agent/context/reader-content-registry'
 
 const WEB_DOC_TEXT_CACHE_LIMIT = 48

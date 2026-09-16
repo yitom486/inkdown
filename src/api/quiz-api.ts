@@ -1,6 +1,6 @@
-import type { QuizSessionRecord } from '@shared/types/quiz'
-import type { AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
+import type { QuizSessionRecord } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
 
 function requireElectronAPI() {
   if (!window.electronAPI) {

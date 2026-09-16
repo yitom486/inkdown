@@ -1,6 +1,6 @@
-import type { AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
-import type { ElectronAPI } from '@shared/ipc/electron-api.types'
+import type { AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { ElectronAPI } from '@inkdown/contracts'
 import type {
   AcpAuthPreflightResult,
   AcpAuthenticatePayload,
@@ -21,7 +21,7 @@ import type {
   AcpSetConfigOptionPayload,
   AcpSetConfigOptionResult,
   AcpStatusChangedEvent,
-} from '@shared/types/acp'
+} from '@inkdown/contracts'
 
 function requireElectronAPI(): Result<ElectronAPI, AppError> {
   if (!window.electronAPI) {

@@ -6,7 +6,7 @@ import {
   normalizeHighlightColor,
 } from '@/lib/reader/reading-mark-colors'
 import { getReadingMarkStatusLabel } from '@/lib/reader/reading-mark-labels'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import { cn } from '@/lib/utils'
 
 interface ReadingMarkPopoverProps {

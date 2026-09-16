@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import type { BunRuntimeStatus } from '@shared/types/bun'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { BunRuntimeStatus } from '@inkdown/contracts'
 import { bunNotInstalledMessage, isLikelyBunMissingMessage } from '@shared/agent/bun-runtime'
 
 const execFileAsync = promisify(execFile)

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { rosettaApi } from '@/api/rosetta-api'
-import { isOk } from '@shared/core/result'
+import { isOk } from '@inkdown/contracts'
 import type {
   RosettaBookInfo,
   RosettaImportPhase,
   RosettaImportState,
   RosettaTocEntryInput,
-} from '@shared/types/rosetta'
+} from '@inkdown/contracts'
 
 export interface RosettaImportStartArgs {
   filePath: string

@@ -1,5 +1,5 @@
-import { isOk } from '@shared/core/result'
-import type { BookDbBlockHit } from '@shared/types/book-db'
+import { isOk } from '@inkdown/contracts'
+import type { BookDbBlockHit } from '@inkdown/contracts'
 import { rosettaApi } from '@/api/rosetta-api'
 import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta-agent-text'
 import type { ReaderUnitText } from './reader-content-registry'

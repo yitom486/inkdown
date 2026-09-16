@@ -1,5 +1,5 @@
-import type { FileTreeNode } from '@shared/types/file'
-import { getFileExtension, getDocumentKind, type DocumentKind } from '@shared/types/document'
+import type { FileTreeNode } from '@inkdown/contracts'
+import { getFileExtension, getDocumentKind, type DocumentKind } from '@inkdown/contracts'
 
 export interface QuickOpenFileItem {
   path: string

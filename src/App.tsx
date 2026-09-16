@@ -32,6 +32,7 @@ import { reportAppError, reportUnknownError } from '@/lib/workspace/report-error
 import { resolveWikilinkTarget } from '@/lib/workspace/resolve-wikilink'
 import { parseDeepLinkUrl, isDeepLinkUrl } from '@/lib/editor/deep-link'
 import { appApi } from '@/api/app-api'
+import { fileApi } from '@/api/file-api'
 import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useDraftStore } from '@/stores/draft-store'
@@ -63,7 +64,7 @@ function App() {
   const lastWebDocUrl = useAppSettingsStore((state) => state.lastWebDocUrl)
   const { data: appMeta } = useAppMeta()
   const { recoveryDraftKey, dismissRecovery } = useDraftRecoveryPrompt({
-    enabled: !window.electronAPI?.isFreshWindow,
+    enabled: !appApi.isFreshWindow(),
   })
   const recoveryDraft = useDraftStore((state) =>
     recoveryDraftKey ? state.drafts[recoveryDraftKey] : null,
@@ -208,7 +209,7 @@ function App() {
   }, [drainPendingExternalFiles])
 
   useEffect(() => {
-    if (window.electronAPI?.isFreshWindow) return
+    if (appApi.isFreshWindow()) return
     if (startupRestoreDoneRef.current) return
     startupRestoreDoneRef.current = true
 
@@ -312,7 +313,7 @@ function App() {
         const notePath = `${workspaceRoot.replace(/\\/g, '/').replace(/\/+$/, '')}/${res.targetName}`
         const initialContent = `# ${res.targetName.replace(/\.md$/i, '')}\n\n`
 
-        const saveRes = await window.electronAPI?.saveFile({
+        const saveRes = await fileApi.saveFile({
           filePath: notePath,
           content: initialContent,
         })
@@ -330,7 +331,7 @@ function App() {
   )
 
   useEffect(() => {
-    return window.electronAPI?.onGlobalAction?.((action) => {
+    return appApi.onGlobalAction((action) => {
       if (action === 'quick-open') {
         handleToggleQuickOpen()
       } else if (action === 'find') {
@@ -431,7 +432,7 @@ function App() {
     [openWebDocument],
   )
 
-  if (!window.electronAPI) {
+  if (!appApi.isAvailable()) {
     const isElectron = navigator.userAgent.includes('Electron')
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 bg-background px-6 text-center text-foreground">

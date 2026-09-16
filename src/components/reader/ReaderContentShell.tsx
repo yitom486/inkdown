@@ -15,7 +15,7 @@ import {
   type ReadingNotesScope,
 } from '@/lib/reader/export-reading-notes'
 import { passageExcerpt } from '@/lib/reader/reading-mark-passages'
-import type { ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingMark } from '@inkdown/contracts'
 import { toast } from 'sonner'
 
 interface ReaderContentShellProps {

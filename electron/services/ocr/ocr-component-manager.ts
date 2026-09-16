@@ -1,8 +1,8 @@
 import { BrowserWindow } from 'electron'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import { IPC } from '@shared/ipc/channels'
-import type { OcrComponentStatus } from '@shared/types/ocr'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import { IPC } from '@inkdown/contracts'
+import type { OcrComponentStatus } from '@inkdown/contracts'
 import {
   ensureInspectorOcrRuntime,
   isInspectorOcrRuntimeInstalled,

@@ -3,9 +3,9 @@ import { webDocApi } from '@/api/web-doc-api'
 import { queryKeys } from '@/api/query-keys'
 import { buildWebDocPageContent } from '@/lib/reader/web-doc-html'
 import { resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
-import { isOk } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import type { WebDocPageContent } from '@shared/types/web-doc'
+import { isOk } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { WebDocPageContent } from '@inkdown/contracts'
 
 export interface WebDocPageData {
   pageUrl: string

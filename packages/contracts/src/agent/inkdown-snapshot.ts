@@ -1,4 +1,4 @@
-import type { InkdownVirtualResource } from './inkdown-virtual-fs'
+import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
 
 /**
  * 主进程能向渲染进程索取的内存快照。

@@ -1,9 +1,9 @@
 import { appendFile, mkdir, readFile } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
-import { toAppError, type AppError } from '@shared/core/errors'
-import { err, ok, type Result } from '@shared/core/result'
-import type { QuizSessionRecord } from '@shared/types/quiz'
+import { toAppError, type AppError } from '@inkdown/contracts'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { QuizSessionRecord } from '@inkdown/contracts'
 
 export function getQuizFilePath(): string {
   return join(app.getPath('userData'), 'quiz-records.jsonl')

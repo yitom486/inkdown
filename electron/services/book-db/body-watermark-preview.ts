@@ -1,12 +1,12 @@
 import { existsSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import type { BookBlockType } from '@shared/types/book-db'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { BookBlockType } from '@inkdown/contracts'
 import type {
   RosettaBodyWatermarkPreviewResult,
   RosettaBodyWatermarkPreviewSample,
-} from '@shared/types/rosetta'
+} from '@inkdown/contracts'
 import {
   computeBodyWatermarkPlanSignature,
   planBodyWatermarkPatches,

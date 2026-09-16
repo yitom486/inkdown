@@ -1,4 +1,4 @@
-import type { PdfTextRect, ReadingAnchor, ReadingMark } from '@shared/types/reading-mark'
+import type { PdfTextRect, ReadingAnchor, ReadingMark } from '@inkdown/contracts'
 import { applyHighlightSurface } from '@/lib/reader/reading-mark-colors'
 import { getMarkLayerMetrics, normalizeRectsInScrollDocument } from '@/lib/reader/reader-mark-geometry'
 import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'

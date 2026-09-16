@@ -1,7 +1,7 @@
-import type { RendererErrorPayload } from '@shared/types/error-log'
-import type { AppUpdateStatus } from '@shared/types/app-update'
-import { ok, err, isOk, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
+import type { RendererErrorPayload } from '@inkdown/contracts'
+import type { AppUpdateStatus } from '@inkdown/contracts'
+import { ok, err, isOk, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
 
 function getElectronAPI() {
   return typeof window !== 'undefined' ? window.electronAPI : undefined
@@ -78,5 +78,70 @@ export const appApi = {
 
   onAppUpdateStatus(callback: (status: AppUpdateStatus) => void): (() => void) | undefined {
     return getElectronAPI()?.onAppUpdateStatus(callback)
+  },
+
+  /** preload 是否已注入（渲染进程直调 window.electronAPI 的唯一判空出口） */
+  isAvailable(): boolean {
+    return getElectronAPI() !== undefined
+  },
+
+  /** 通过「新建窗口」打开时为 true，不恢复工作区/上次文件 */
+  isFreshWindow(): boolean {
+    return getElectronAPI()?.isFreshWindow ?? false
+  },
+
+  /** 根据路径/脏标记更新窗口标题 */
+  updateTitle(payload: { filePath?: string; isDirty: boolean }): void {
+    getElectronAPI()?.updateTitle(payload)
+  },
+
+  /** 同步文档是否未保存（关窗确认用） */
+  setDirty(dirty: boolean): void {
+    getElectronAPI()?.setDirty(dirty)
+  },
+
+  /** 回复主进程的关窗请求：继续关闭或取消 */
+  confirmClose(decision: 'proceed' | 'cancel'): void {
+    getElectronAPI()?.confirmClose(decision)
+  },
+
+  /** 退出应用 */
+  quit(): void {
+    getElectronAPI()?.quit()
+  },
+
+  /** 监听主进程「请关闭窗口」；返回取消订阅 */
+  onRequestClose(callback: () => void): (() => void) | undefined {
+    return getElectronAPI()?.onRequestClose(callback)
+  },
+
+  /** 监听主进程全局快捷键动作；返回取消订阅 */
+  onGlobalAction(callback: (action: string) => void): (() => void) | undefined {
+    return getElectronAPI()?.onGlobalAction?.(callback)
+  },
+
+  /** E2E 门控：foliate 统一阅读器（仅测试进程注入） */
+  isE2EFoliateReader(): boolean {
+    return getElectronAPI()?.e2eFoliateReader === true
+  },
+
+  /** E2E 门控：PDF 结构化解析 WASM 钩子（仅测试进程注入） */
+  isE2EPdfStructure(): boolean {
+    return getElectronAPI()?.e2ePdfStructure === true
+  },
+
+  /** 开始监听工作区磁盘变化 */
+  watchWorkspace(rootPath: string): void {
+    getElectronAPI()?.watchWorkspace(rootPath)
+  },
+
+  /** 停止监听工作区 */
+  unwatchWorkspace(): void {
+    getElectronAPI()?.unwatchWorkspace?.()
+  },
+
+  /** 工作区文件变化时回调；返回取消订阅 */
+  onWorkspaceChanged(callback: (payload: { rootPath: string }) => void): (() => void) | undefined {
+    return getElectronAPI()?.onWorkspaceChanged(callback)
   },
 }

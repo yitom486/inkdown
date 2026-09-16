@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { err, ok, type Result } from '@shared/core/result'
-import type { AppError } from '@shared/core/errors'
-import type { WebDocFetchResult } from '@shared/types/web-doc'
+import { err, ok, type Result } from '@inkdown/contracts'
+import type { AppError } from '@inkdown/contracts'
+import type { WebDocFetchResult } from '@inkdown/contracts'
 import { normalizeWebDocUrl } from './url-policy'
 
 export const E2E_WEB_DOC_FIXTURE_HOST = 'e2e.inkdown.test'

@@ -1,4 +1,4 @@
-import type { ReadingAnchor, ReadingMark } from '@shared/types/reading-mark'
+import type { ReadingAnchor, ReadingMark } from '@inkdown/contracts'
 import { getReadingMarkKindLabel, getReadingMarkLabel } from '@/lib/reader/reading-mark-labels'
 import { normalizeHighlightColor } from '@/lib/reader/reading-mark-colors'
 

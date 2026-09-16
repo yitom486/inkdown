@@ -50,9 +50,9 @@ import {
 } from '@/stores/acp-ui-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
-import { isOk } from '@shared/core/result'
-import { BUILTIN_ACP_RUNTIMES } from '@shared/constants/acp-agents'
-import type { AcpConfigOption } from '@shared/types/acp'
+import { isOk } from '@inkdown/contracts'
+import { BUILTIN_ACP_RUNTIMES } from '@inkdown/contracts'
+import type { AcpConfigOption } from '@inkdown/contracts'
 
 interface AgentPanelProps {
   workspaceRoot?: string

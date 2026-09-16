@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PdfOcrTocCache } from '@shared/types/ocr'
+import type { PdfOcrTocCache } from '@inkdown/contracts'
 import { assessPdfOcrTocCache } from './ocr-toc-assess'
 
 const PAGE_COUNT = 340
