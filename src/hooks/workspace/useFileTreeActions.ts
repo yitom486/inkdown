@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { fileApi } from '@/api/file-api'
 import {
@@ -250,19 +250,37 @@ export function useFileTreeActions({
     [tree, workspaceRoot],
   )
 
-  return {
-    clipboard,
-    copyFullPath,
-    copyRelativePath,
-    setCopy,
-    setCut,
-    pasteInto,
-    createFile,
-    createFolder,
-    rename,
-    remove,
-    exportMarkdownPdf,
-    defaultNewFileName,
-    defaultNewFolderName,
-  }
+  // useMemo 稳住容器对象 identity：调用方重渲染时 memo 子树 props 不变
+  return useMemo(
+    () => ({
+      clipboard,
+      copyFullPath,
+      copyRelativePath,
+      setCopy,
+      setCut,
+      pasteInto,
+      createFile,
+      createFolder,
+      rename,
+      remove,
+      exportMarkdownPdf,
+      defaultNewFileName,
+      defaultNewFolderName,
+    }),
+    [
+      clipboard,
+      copyFullPath,
+      copyRelativePath,
+      setCopy,
+      setCut,
+      pasteInto,
+      createFile,
+      createFolder,
+      rename,
+      remove,
+      exportMarkdownPdf,
+      defaultNewFileName,
+      defaultNewFolderName,
+    ],
+  )
 }

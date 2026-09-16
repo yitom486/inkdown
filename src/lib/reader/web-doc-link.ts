@@ -35,7 +35,14 @@ export function neutralizeWebDocNavigationLinks(bodyHtml: string, baseUrl: strin
     }
 
     const raw = anchor.getAttribute('href')?.trim()
-    if (!raw || !isNavigableHref(raw)) return
+    if (!raw) {
+      // 空 href 点击会导航到文档 base URL；srcdoc 下 base 就是应用自身，
+      // 子 frame 又拿不到 preload 桥，会渲染出“preload 未注入”fallback。直接置惰性。
+      anchor.removeAttribute('href')
+      anchor.removeAttribute('target')
+      return
+    }
+    if (!isNavigableHref(raw)) return
 
     const absolute = toAbsoluteNavUrl(raw, baseUrl)
     if (!absolute) {
@@ -95,7 +102,9 @@ export function resolveWebDocClickHref(
   }
 
   const anchor = target.closest('a')
-  if (!(anchor instanceof HTMLAnchorElement)) return null
+  // 不限定 HTMLAnchorElement：SVG/MathML 的 <a>（SVGAElement 等）同样可点击导航，
+  // 之前会被拦截逻辑漏掉而直接跳转。getAttribute 在各类 Element 上都可用。
+  if (!anchor) return null
 
   const href = readInkdownNavHref(anchor)
   if (!href) return null

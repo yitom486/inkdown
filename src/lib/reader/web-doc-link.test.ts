@@ -41,13 +41,42 @@ describe('web-doc-link', () => {
     expect(root.querySelectorAll('a')[1]?.getAttribute('href')).toBe('#top')
   })
 
-  it('detectWebDocIframeEscape 忽略宿主 origin（srcdoc 误报）', () => {
+  it('neutralize 将空 href 置为惰性（避免导航到 srcdoc base 即应用自身）', () => {
+    const root = document.createElement('div')
+    root.innerHTML = neutralizeWebDocNavigationLinks(
+      '<a href="">空</a><a href="   ">空白</a><a>无href</a>',
+      'https://bojieli.github.io/ai-infra-book/',
+    )
+    const links = root.querySelectorAll('a')
+    expect(links[0]?.getAttribute('href')).toBeNull()
+    expect(links[0]?.getAttribute(INKDOWN_NAV_HREF_ATTR)).toBeNull()
+    expect(links[1]?.getAttribute('href')).toBeNull()
+    expect(links[2]?.getAttribute('href')).toBeNull()
+    // 惰性链接不再是导航目标，点击走默认行为也不会离开 srcdoc
+    expect(isWebDocNavigationTarget(links[0], 'https://bojieli.github.io/ai-infra-book/')).toBe(false)
+  })
+
+  it('解析 SVG 命名空间的 a 链接（SVGAElement 同样可点击导航）', () => {
+    const svgAnchor = document.createElementNS('http://www.w3.org/2000/svg', 'a')
+    svgAnchor.setAttribute('href', '#')
+    svgAnchor.setAttribute(INKDOWN_NAV_HREF_ATTR, 'https://bojieli.github.io/ai-infra-book/manuscripts/00-x.html')
+    expect(svgAnchor instanceof HTMLAnchorElement).toBe(false)
+    expect(resolveWebDocClickHref(svgAnchor, 'https://bojieli.github.io/ai-infra-book/')).toBe(
+      'https://bojieli.github.io/ai-infra-book/manuscripts/00-x.html',
+    )
+    expect(isWebDocNavigationTarget(svgAnchor, 'https://bojieli.github.io/ai-infra-book/')).toBe(true)
+  })
+
+  it('detectWebDocIframeEscape 识别非宿主 URL（逃逸恢复触发条件）', () => {
     const iframe = document.createElement('iframe')
     Object.defineProperty(iframe, 'contentWindow', {
       value: { location: { href: 'http://localhost:5173/' } },
     })
+    // 与宿主同源 → 视为正常 srcdoc，不恢复
     expect(detectWebDocIframeEscape(iframe, 'http://localhost:5173')).toBeNull()
     expect(detectWebDocIframeEscape(iframe, 'http://localhost:5173/')).toBeNull()
+    // 与宿主不同源 → 逃逸，需要拉回 srcdoc
+    expect(detectWebDocIframeEscape(iframe, 'https://bojieli.github.io')).toBe('http://localhost:5173/')
   })
 
   it('解析 data-inkdown-href 链接', () => {

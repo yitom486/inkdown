@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { SUPPORTED_WORKSPACE_EXTENSION_LABEL } from '@shared/constants/extensions'
 import {
   BookMarked,
@@ -18,7 +18,7 @@ import {
 import type { FileTreeNode } from '@shared/types/file'
 import { Button } from '@/components/ui/button'
 import { writeWorkspacePathsToDataTransfer } from '@/lib/agent/acp-composer'
-import { getParentDir, isMarkdownPath } from '@/lib/workspace/file-tree-ops'
+import { getParentDir, isAncestorOrSelf, isAncestorPath, isMarkdownPath } from '@/lib/workspace/file-tree-ops'
 import { cn } from '@/lib/utils'
 import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 import { WebDocSidebarPanel } from '@/components/layout/WebDocSidebarPanel'
@@ -61,11 +61,11 @@ type MenuState =
   | null
 
 type InlineEdit =
-  | { mode: 'rename'; path: string; value: string }
-  | { mode: 'new-file' | 'new-folder'; parentDir: string; value: string }
+  | { mode: 'rename'; path: string; initial: string }
+  | { mode: 'new-file' | 'new-folder'; parentDir: string; initial: string }
   | null
 
-function FileIcon({ documentKind }: { documentKind?: FileTreeNode['documentKind'] }) {
+const FileIcon = memo(function FileIcon({ documentKind }: { documentKind?: FileTreeNode['documentKind'] }) {
   switch (documentKind) {
     case 'pdf':
       return <FileType className="size-3.5 shrink-0 text-red-500/90" />
@@ -78,7 +78,7 @@ function FileIcon({ documentKind }: { documentKind?: FileTreeNode['documentKind'
     default:
       return <FileText className="size-3.5 shrink-0" />
   }
-}
+})
 
 function MenuItem({
   label,
@@ -114,50 +114,104 @@ function MenuSeparator() {
   return <div className="my-1 h-px bg-border/70" />
 }
 
-function TreeNode({
+/**
+ * 内联重命名/新建输入框：输入态下沉到本组件内部。
+ * 键入只重渲染这一个 input，不再经 FileExplorer 顶层 setState 触发整树重渲染；
+ * doneRef 防止 Enter 提交后再触发 blur 导致重复提交。
+ */
+function InlineEditInput({
+  initialValue,
+  onCommit,
+  onCancel,
+}: {
+  initialValue: string
+  onCommit: (value: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(initialValue)
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const doneRef = useRef(false)
+
+  const commit = useCallback(() => {
+    if (doneRef.current) return
+    doneRef.current = true
+    onCommit(valueRef.current)
+  }, [onCommit])
+
+  const cancel = useCallback(() => {
+    if (doneRef.current) return
+    doneRef.current = true
+    onCancel()
+  }, [onCancel])
+
+  return (
+    <input
+      autoFocus
+      className="min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0.5 text-xs text-foreground outline-none"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit()
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          cancel()
+        }
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onFocus={(e) => e.currentTarget.select()}
+    />
+  )
+}
+
+const TreeNode = memo(function TreeNode({
   node,
   depth,
   activeFilePath,
+  revealPath,
   onSelectFile,
   onContextMenu,
-  inlineEdit,
-  onInlineChange,
+  renamePath,
+  renameInitial,
+  createParentDir,
+  createKind,
+  createInitial,
   onInlineCommit,
   onInlineCancel,
-  forceExpandPath,
 }: {
   node: FileTreeNode
   depth: number
   activeFilePath?: string
+  /** 新建目标父目录：其自身及祖先自动展开（仅展开不折叠） */
+  revealPath?: string | null
   onSelectFile: (path: string) => void
   onContextMenu: (event: ReactMouseEvent, node: FileTreeNode) => void
-  inlineEdit: InlineEdit
-  onInlineChange: (value: string) => void
-  onInlineCommit: () => void
+  renamePath: string | null
+  renameInitial: string
+  createParentDir: string | null
+  createKind: 'new-file' | 'new-folder' | null
+  createInitial: string
+  onInlineCommit: (value: string) => void
   onInlineCancel: () => void
-  forceExpandPath?: string | null
 }) {
   const [expanded, setExpanded] = useState(depth < 2)
   const isDirectory = node.type === 'directory'
   const isActive = node.path === activeFilePath
-  const renaming = inlineEdit?.mode === 'rename' && inlineEdit.path === node.path
-  const creatingHere =
-    (inlineEdit?.mode === 'new-file' || inlineEdit?.mode === 'new-folder') &&
-    inlineEdit.parentDir === node.path
+  const renaming = renamePath === node.path
+  const creatingHere = createParentDir === node.path
 
+  // 自动揭示：当前打开文件或新建目标落在本目录之下时展开；
+  // 只展开不折叠，手动折叠不受已挂载 effect 干扰（deps 未变不重触发）。
   useEffect(() => {
-    if (forceExpandPath && (forceExpandPath === node.path || forceExpandPath.startsWith(node.path))) {
+    if (!isDirectory) return
+    if (isAncestorPath(node.path, activeFilePath) || isAncestorOrSelf(node.path, revealPath)) {
       setExpanded(true)
     }
-  }, [forceExpandPath, node.path])
-
-  const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (renaming || creatingHere) {
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    }
-  }, [renaming, creatingHere])
+  }, [isDirectory, node.path, activeFilePath, revealPath])
 
   const rowPadding = { paddingLeft: `${depth * 12 + (isDirectory ? 8 : 24)}px` }
 
@@ -181,23 +235,10 @@ function TreeNode({
             )}
             <Folder className="size-3.5 shrink-0 text-amber-500/90" />
             {renaming ? (
-              <input
-                ref={inputRef}
-                className="min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0.5 text-xs text-foreground outline-none"
-                value={inlineEdit.value}
-                onChange={(e) => onInlineChange(e.target.value)}
-                onBlur={() => onInlineCommit()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    onInlineCommit()
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault()
-                    onInlineCancel()
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
+              <InlineEditInput
+                initialValue={renameInitial}
+                onCommit={onInlineCommit}
+                onCancel={onInlineCancel}
               />
             ) : (
               <span className="truncate">{node.name}</span>
@@ -206,32 +247,20 @@ function TreeNode({
         </div>
         {expanded ? (
           <div>
-            {creatingHere ? (
+            {creatingHere && createKind ? (
               <div
                 className="flex items-center gap-2 px-2 py-1"
                 style={{ paddingLeft: `${(depth + 1) * 12 + 24}px` }}
               >
-                {inlineEdit.mode === 'new-folder' ? (
+                {createKind === 'new-folder' ? (
                   <Folder className="size-3.5 shrink-0 text-amber-500/90" />
                 ) : (
                   <FileText className="size-3.5 shrink-0" />
                 )}
-                <input
-                  ref={inputRef}
-                  className="min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0.5 text-xs outline-none"
-                  value={inlineEdit.value}
-                  onChange={(e) => onInlineChange(e.target.value)}
-                  onBlur={() => onInlineCommit()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      onInlineCommit()
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      onInlineCancel()
-                    }
-                  }}
+                <InlineEditInput
+                  initialValue={createInitial}
+                  onCommit={onInlineCommit}
+                  onCancel={onInlineCancel}
                 />
               </div>
             ) : null}
@@ -241,13 +270,16 @@ function TreeNode({
                 node={child}
                 depth={depth + 1}
                 activeFilePath={activeFilePath}
+                revealPath={revealPath}
                 onSelectFile={onSelectFile}
                 onContextMenu={onContextMenu}
-                inlineEdit={inlineEdit}
-                onInlineChange={onInlineChange}
+                renamePath={renamePath}
+                renameInitial={renameInitial}
+                createParentDir={createParentDir}
+                createKind={createKind}
+                createInitial={createInitial}
                 onInlineCommit={onInlineCommit}
                 onInlineCancel={onInlineCancel}
-                forceExpandPath={forceExpandPath}
               />
             ))}
           </div>
@@ -291,30 +323,17 @@ function TreeNode({
     >
       <FileIcon documentKind={node.documentKind} />
       {renaming ? (
-        <input
-          ref={inputRef}
-          className="min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0.5 text-xs text-foreground outline-none"
-          value={inlineEdit.value}
-          onChange={(e) => onInlineChange(e.target.value)}
-          onBlur={() => onInlineCommit()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              onInlineCommit()
-            }
-            if (e.key === 'Escape') {
-              e.preventDefault()
-              onInlineCancel()
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
+        <InlineEditInput
+          initialValue={renameInitial}
+          onCommit={onInlineCommit}
+          onCancel={onInlineCancel}
         />
       ) : (
         <span className="truncate">{node.name}</span>
       )}
     </div>
   )
-}
+})
 
 export function FileExplorer({
   workspaceRoot,
@@ -335,8 +354,20 @@ export function FileExplorer({
   const recentOthers = recentWebUrls.filter((url) => url !== webPageUrl)
   const [menu, setMenu] = useState<MenuState>(null)
   const [inlineEdit, setInlineEdit] = useState<InlineEdit>(null)
-  const [forceExpandPath, setForceExpandPath] = useState<string | null>(null)
+  const [pinnedReveal, setPinnedReveal] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  // latest-ref：保持传给 memo 子树的回调恒稳，App 重渲染不打破 memo
+  const inlineEditRef = useRef(inlineEdit)
+  const treeActionsRef = useRef(treeActions)
+  const workspaceRootRef = useRef(workspaceRoot)
+  const onSelectFileRef = useRef(onSelectFile)
+
+  useEffect(() => {
+    inlineEditRef.current = inlineEdit
+    treeActionsRef.current = treeActions
+    workspaceRootRef.current = workspaceRoot
+    onSelectFileRef.current = onSelectFile
+  })
 
   useEffect(() => {
     if (!menu) return
@@ -355,14 +386,18 @@ export function FileExplorer({
     }
   }, [menu])
 
-  const openMenu = (event: ReactMouseEvent, target: FileTreeNode | 'root') => {
+  const openMenu = useCallback((event: ReactMouseEvent, target: FileTreeNode | 'root') => {
     event.preventDefault()
     event.stopPropagation()
     setMenu({ x: event.clientX, y: event.clientY, target })
-  }
+  }, [])
+
+  const handleSelectFile = useCallback((path: string) => {
+    onSelectFileRef.current(path)
+  }, [])
 
   const beginRename = (node: FileTreeNode) => {
-    setInlineEdit({ mode: 'rename', path: node.path, value: node.name })
+    setInlineEdit({ mode: 'rename', path: node.path, initial: node.name })
     setMenu(null)
   }
 
@@ -372,37 +407,55 @@ export function FileExplorer({
       mode === 'new-file'
         ? treeActions.defaultNewFileName(parentDir)
         : treeActions.defaultNewFolderName(parentDir)
-    setForceExpandPath(parentDir)
-    setInlineEdit({ mode, parentDir, value })
+    setPinnedReveal(parentDir)
+    setInlineEdit({ mode, parentDir, initial: value })
     setMenu(null)
   }
 
-  const commitInline = async () => {
-    if (!inlineEdit || !treeActions || !workspaceRoot) {
+  const handleInlineCancel = useCallback(() => {
+    setInlineEdit(null)
+    setPinnedReveal(null)
+  }, [])
+
+  const handleInlineCommit = useCallback((rawValue: string) => {
+    const current = inlineEditRef.current
+    const actions = treeActionsRef.current
+    const root = workspaceRootRef.current
+    if (!current || !actions || !root) {
       setInlineEdit(null)
+      setPinnedReveal(null)
       return
     }
-    const value = inlineEdit.value.trim()
+    const value = rawValue.trim()
     if (!value) {
       setInlineEdit(null)
+      setPinnedReveal(null)
       return
     }
-    if (inlineEdit.mode === 'rename') {
-      await treeActions.rename(inlineEdit.path, value)
-    } else if (inlineEdit.mode === 'new-file') {
-      await treeActions.createFile(inlineEdit.parentDir, value)
-    } else {
-      await treeActions.createFolder(inlineEdit.parentDir, value)
-    }
+    // 先收起输入框再发 IPC：感知更快；失败 toast 仍由 actions 内上报
     setInlineEdit(null)
-    setForceExpandPath(null)
-  }
+    setPinnedReveal(null)
+    if (current.mode === 'rename') {
+      void actions.rename(current.path, value)
+    } else if (current.mode === 'new-file') {
+      void actions.createFile(current.parentDir, value)
+    } else {
+      void actions.createFolder(current.parentDir, value)
+    }
+  }, [])
 
   const rootCreating =
     inlineEdit &&
     (inlineEdit.mode === 'new-file' || inlineEdit.mode === 'new-folder') &&
     workspaceRoot &&
     inlineEdit.parentDir === workspaceRoot
+
+  // 传给 memo 子树的全是原始值：键入时 descriptor 不变，子树不重渲染
+  const renamePath = inlineEdit?.mode === 'rename' ? inlineEdit.path : null
+  const renameInitial = inlineEdit?.mode === 'rename' ? inlineEdit.initial : ''
+  const createParentDir = inlineEdit && inlineEdit.mode !== 'rename' ? inlineEdit.parentDir : null
+  const createKind = inlineEdit && inlineEdit.mode !== 'rename' ? inlineEdit.mode : null
+  const createInitial = inlineEdit && inlineEdit.mode !== 'rename' ? inlineEdit.initial : ''
 
   const menuTarget = menu?.target
   const nodeTarget = menuTarget && menuTarget !== 'root' ? menuTarget : null
@@ -548,31 +601,17 @@ export function FileExplorer({
             >
               {rootName}
             </div>
-            {rootCreating ? (
+            {rootCreating && createKind ? (
               <div className="mb-1 flex items-center gap-2 px-2 py-1" style={{ paddingLeft: 24 }}>
-                {inlineEdit.mode === 'new-folder' ? (
+                {createKind === 'new-folder' ? (
                   <Folder className="size-3.5 shrink-0 text-amber-500/90" />
                 ) : (
                   <FileText className="size-3.5 shrink-0" />
                 )}
-                <input
-                  autoFocus
-                  className="min-w-0 flex-1 rounded border border-ring bg-background px-1 py-0.5 text-xs outline-none"
-                  value={inlineEdit.value}
-                  onChange={(e) =>
-                    setInlineEdit((prev) => (prev ? { ...prev, value: e.target.value } : prev))
-                  }
-                  onBlur={() => void commitInline()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void commitInline()
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      setInlineEdit(null)
-                    }
-                  }}
+                <InlineEditInput
+                  initialValue={createInitial}
+                  onCommit={handleInlineCommit}
+                  onCancel={handleInlineCancel}
                 />
               </div>
             ) : null}
@@ -591,15 +630,16 @@ export function FileExplorer({
                   node={node}
                   depth={0}
                   activeFilePath={activeFilePath}
-                  onSelectFile={onSelectFile}
+                  revealPath={pinnedReveal}
+                  onSelectFile={handleSelectFile}
                   onContextMenu={openMenu}
-                  inlineEdit={inlineEdit}
-                  onInlineChange={(value) =>
-                    setInlineEdit((prev) => (prev ? { ...prev, value } : prev))
-                  }
-                  onInlineCommit={() => void commitInline()}
-                  onInlineCancel={() => setInlineEdit(null)}
-                  forceExpandPath={forceExpandPath}
+                  renamePath={renamePath}
+                  renameInitial={renameInitial}
+                  createParentDir={createParentDir}
+                  createKind={createKind}
+                  createInitial={createInitial}
+                  onInlineCommit={handleInlineCommit}
+                  onInlineCancel={handleInlineCancel}
                 />
               ))
             )}

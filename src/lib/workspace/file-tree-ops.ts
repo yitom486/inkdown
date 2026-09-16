@@ -33,6 +33,23 @@ export function isMarkdownPath(filePath: string): boolean {
   return /\.(md|markdown|txt)$/i.test(filePath)
 }
 
+/**
+ * 按路径段判断祖先关系（大小写敏感，与树内路径同源比较）。
+ * 用分隔符边界避免 `/ws/a-b` 被误判为 `/ws/a` 的子级。
+ */
+export function isAncestorPath(ancestor: string, target?: string | null): boolean {
+  if (!ancestor || !target || target === ancestor) return false
+  const a = ancestor.replace(/\\/g, '/')
+  const t = target.replace(/\\/g, '/')
+  return t.startsWith(a.endsWith('/') ? a : `${a}/`)
+}
+
+export function isAncestorOrSelf(ancestor: string, target?: string | null): boolean {
+  if (!ancestor || !target) return false
+  if (target === ancestor) return true
+  return isAncestorPath(ancestor, target)
+}
+
 export type TreeClipboardMode = 'copy' | 'cut'
 
 export interface TreeClipboardEntry {

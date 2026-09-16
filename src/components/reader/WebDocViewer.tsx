@@ -51,7 +51,7 @@ import {
   resolveWebDocSiteId,
   resolveWebDocTocDiscoveryUrl,
 } from '@/lib/reader/web-doc-site'
-import { resolveWebDocClickHref, shouldNavigateWebDocInApp, isWebDocNavigationTarget } from '@/lib/reader/web-doc-link'
+import { resolveWebDocClickHref, shouldNavigateWebDocInApp, isWebDocNavigationTarget, detectWebDocIframeEscape, isCrossOriginIframeEscape } from '@/lib/reader/web-doc-link'
 import { logWebDoc } from '@/lib/reader/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
 import {
@@ -630,6 +630,24 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         tryInContentNavigate(href, win)
       }
 
+      // 键盘回车激活链接只触发 click、不经过 pointerdown；此处补齐同一套路由，
+      // 否则键盘操作的链接会走默认跳转导致 iframe 逃逸。鼠标左键已在 pointerdown
+      // 处理过，tryInContentNavigate 的 400ms 同 href 去重会吞掉重复这次。
+      const onClickCapture = (event: MouseEvent) => {
+        const href = resolveWebDocClickHref(event.target, pageUrlRef.current)
+        if (!href) return
+
+        event.preventDefault()
+        event.stopPropagation()
+
+        if (event.metaKey || event.ctrlKey || event.shiftKey) {
+          void appApi.openExternal(href)
+          return
+        }
+
+        tryInContentNavigate(href, win)
+      }
+
       const onSelectionChange = bindDocumentSelectionCollapse(doc, win, () => {
         setSelectionToolbarPos(null)
       })
@@ -665,6 +683,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       }
 
       doc.addEventListener('click', onCodeChromeClick)
+      doc.addEventListener('click', onClickCapture, true)
       doc.addEventListener('pointerdown', onPointerDownCapture, true)
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
@@ -675,6 +694,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
       frameCleanupRef.current = () => {
         doc.removeEventListener('click', onCodeChromeClick)
+        doc.removeEventListener('click', onClickCapture, true)
         doc.removeEventListener('pointerdown', onPointerDownCapture, true)
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
@@ -702,6 +722,10 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const bindIframeFrameRef = useRef(bindIframeFrame)
   bindIframeFrameRef.current = bindIframeFrame
+  const readerDocumentRef = useRef(readerDocument)
+  readerDocumentRef.current = readerDocument
+  const handleWebDocLinkRef = useRef(handleWebDocLink)
+  handleWebDocLinkRef.current = handleWebDocLink
 
   useEffect(() => {
     setIframeReady(false)
@@ -718,6 +742,34 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     }
 
     const onLoad = () => {
+      // 逃逸恢复：任何漏网的默认跳转（空 href、SVG 链接、键盘激活等）一旦让 iframe
+      // 离开 srcdoc，立刻拉回当前阅读文档，远端/应用自身内容永不占用阅读区。
+      // srcdoc 恢复后 load 会再触发一次，此时已是 srcdoc，不会循环。
+      const escaped = detectWebDocIframeEscape(iframe, window.location.origin)
+      if (escaped) {
+        let isAppSelf = false
+        if (!isCrossOriginIframeEscape(escaped)) {
+          try {
+            isAppSelf = new URL(escaped).origin === window.location.origin
+          } catch {
+            isAppSelf = false
+          }
+          // 应用自身 URL（空 href 点到 base 的情况）只恢复、不路由，
+          // 否则会把 dev server/file 地址丢给系统浏览器。
+          if (!isAppSelf) {
+            handleWebDocLinkRef.current(escaped)
+          }
+        }
+        logWebDoc('iframe-escape', {
+          pageUrl,
+          escaped: isCrossOriginIframeEscape(escaped) ? escaped : escaped.slice(0, 160),
+          isAppSelf,
+        })
+        if (readerDocumentRef.current) {
+          iframe.srcdoc = readerDocumentRef.current
+        }
+        return
+      }
       logWebDoc('iframe-load', {
         pageUrl,
         readerDocLen: readerDocument.length,

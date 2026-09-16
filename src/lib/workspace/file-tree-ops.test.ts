@@ -3,6 +3,8 @@ import {
   buildUniqueChildPath,
   getBaseName,
   getParentDir,
+  isAncestorOrSelf,
+  isAncestorPath,
   listChildNames,
   toRelativePath,
 } from './file-tree-ops'
@@ -33,5 +35,19 @@ describe('file-tree-ops', () => {
     ]
     expect([...listChildNames(tree, 'D:/ws', 'D:/ws')].sort()).toEqual(['docs', 'readme.md'])
     expect([...listChildNames(tree, 'D:/ws/docs', 'D:/ws')]).toEqual(['a.md'])
+  })
+
+  it('detects ancestor paths by segment boundary', () => {
+    expect(isAncestorPath('D:/ws/docs', 'D:/ws/docs/a.md')).toBe(true)
+    expect(isAncestorPath('D:/ws', 'D:/ws/docs/a.md')).toBe(true)
+    // 同前缀但非子级：不能误判
+    expect(isAncestorPath('D:/ws/a', 'D:/ws/a-b/c.md')).toBe(false)
+    expect(isAncestorPath('D:/ws/docs', 'D:/ws/docs')).toBe(false)
+    expect(isAncestorPath('D:/ws/docs', undefined)).toBe(false)
+    // 反斜杠分隔同样成立
+    expect(isAncestorPath('D:\\ws\\docs', 'D:\\ws\\docs\\a.md')).toBe(true)
+    expect(isAncestorOrSelf('D:/ws/docs', 'D:/ws/docs')).toBe(true)
+    expect(isAncestorOrSelf('D:/ws/docs', 'D:/ws/docs/a.md')).toBe(true)
+    expect(isAncestorOrSelf('D:/ws/a', 'D:/ws/a-b')).toBe(false)
   })
 })
