@@ -20,6 +20,7 @@ export * from "./types/pdf-inspect";
 export * from "./types/document";
 export * from "./types/window";
 export * from "./agent/inkdown-snapshot";
+export * from "./agent/inkdown-virtual-fs";
 export * from "./agent/content-audit";
 export * from "./constants/app";
 export * from "./constants/extensions";

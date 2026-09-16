@@ -144,7 +144,7 @@ import {
 } from '../services/ocr/ocr-component-manager'
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
-import { listAcpRuntimes } from '../services/acp/agent-registry'
+import { listAcpRuntimes } from '@inkdown/acp'
 import { probeCodexAuth } from '../services/acp/codex-auth-preflight'
 import {
   authenticateAcp,

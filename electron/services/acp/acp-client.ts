@@ -18,23 +18,23 @@ import type {
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
 } from '@inkdown/contracts'
-import { getAcpRuntime } from './agent-registry'
+import { getAcpRuntime } from '@inkdown/acp'
 import { resolveAgentCwd } from './agent-sandbox-cwd'
-import { parseAcpConfigOptions } from './config-options'
+import { parseAcpConfigOptions } from '@inkdown/acp'
 import {
   createAcpClientMethodRouter,
   pickAllowOptionId,
   type PermissionDecision,
 } from './client-handlers'
 import { probeCodexAuth } from './codex-auth-preflight'
-import { runConnectAuthGate } from './connect-auth-gate'
+import { runConnectAuthGate } from '@inkdown/acp'
 import { AcpTerminalManager } from './acp-terminal'
 import {
   parseLoadSessionSupported,
   parseMcpHttpSupported,
   parsePromptCapabilities,
   parseResumeSessionSupported,
-} from './session-capabilities'
+} from '@inkdown/acp'
 import {
   startInkdownMcpServer,
   startTocMcpServer,
@@ -46,7 +46,7 @@ import {
   isJsonRpcNotification,
   isJsonRpcRequest,
   JsonRpcTransport,
-} from './jsonrpc-transport'
+} from '@inkdown/acp'
 import { disposeAllAcpProcesses, spawnAcpProcess, type SpawnedAcpProcess } from './process-manager'
 import { ensureBunForCommand, mapSpawnErrorToAppError } from '../bun-runtime'
 

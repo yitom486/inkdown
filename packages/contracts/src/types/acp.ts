@@ -313,3 +313,10 @@ export interface AcpAuthPreflightResult {
   /** 有 auth 文件或 API Key 环境变量即视为粗略已登录 */
   looksLoggedIn: boolean
 }
+
+/**
+ * 历史别名：electron 留守 `codex-auth-preflight.ts` 与已迁入 packages/acp 的
+ * 三文件（auth-method-order / decision / gate）沿用此名。形状与
+ * AcpAuthPreflightResult 完全一致，单一源在此，勿另建 types 文件。
+ */
+export type CodexAuthPreflight = AcpAuthPreflightResult

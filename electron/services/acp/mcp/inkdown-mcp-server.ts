@@ -1,15 +1,15 @@
 import { randomBytes } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
-import { handleInkdownMcpRpc, type McpRpcMessage } from './inkdown-mcp-rpc'
+import { handleInkdownMcpRpc, type McpRpcMessage } from '@inkdown/acp'
 import type {
   InkdownMcpToolContext,
   InkdownMcpToolDefinition,
-} from './inkdown-mcp-tools'
-import { callInkdownMcpTool, INKDOWN_MCP_TOOLS } from './inkdown-mcp-tools'
+} from '@inkdown/acp'
+import { callInkdownMcpTool, INKDOWN_MCP_TOOLS } from '@inkdown/acp'
 import {
   callInkdownTocTool,
   INKDOWN_TOC_MCP_TOOLS,
-} from './inkdown-mcp-toc-tools'
+} from '@inkdown/acp'
 
 const MCP_ENDPOINT_PATH = '/mcp'
 const MAX_BODY_BYTES = 256 * 1024

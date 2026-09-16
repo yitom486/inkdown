@@ -3,8 +3,8 @@ import {
   isInkdownVirtualDirPath,
   parseInkdownVirtualPath,
   type InkdownVirtualResource,
-} from '@shared/agent/inkdown-virtual-fs'
-import type { JsonRpcId, JsonRpcRequest, JsonRpcTransport } from './jsonrpc-transport'
+} from '@inkdown/contracts'
+import type { JsonRpcId, JsonRpcRequest, JsonRpcTransport } from '@inkdown/acp'
 import { acpReadTextFile, acpWriteTextFile } from './acp-fs'
 import type { AcpTerminalManager } from './acp-terminal'
 

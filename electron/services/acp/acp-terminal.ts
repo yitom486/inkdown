@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { assertPathInsideWorkspace } from './acp-fs'
-import { appendTerminalOutput } from './terminal-output-buffer'
+import { appendTerminalOutput } from '@inkdown/acp'
 
 const DEFAULT_OUTPUT_BYTE_LIMIT = 1_048_576
 

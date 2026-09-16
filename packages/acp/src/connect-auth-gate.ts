@@ -1,5 +1,5 @@
 import type { AcpAuthMethod } from '@inkdown/contracts'
-import type { CodexAuthPreflight } from './codex-auth-preflight'
+import type { CodexAuthPreflight } from '@inkdown/contracts'
 import { decideConnectAuth } from './connect-auth-decision'
 
 export type ConnectAuthGateResult =

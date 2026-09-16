@@ -1,19 +1,9 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { CodexAuthPreflight } from '@inkdown/contracts'
 
-export interface CodexAuthPreflight {
-  /** CODEX_HOME 或默认 ~/.codex */
-  codexHome: string
-  /** 目录是否存在 */
-  hasCodexHome: boolean
-  /** auth.json 是否存在（不读内容） */
-  hasAuthFile: boolean
-  /** 进程环境是否已有 API Key（不回传值） */
-  hasApiKeyEnv: boolean
-  /** 粗判：像已登录，可直接尝试连接 */
-  looksLoggedIn: boolean
-}
+export type { CodexAuthPreflight }
 
 function resolveCodexHome(): string {
   const fromEnv = process.env.CODEX_HOME?.trim()

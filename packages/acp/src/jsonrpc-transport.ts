@@ -99,7 +99,7 @@ export interface JsonRpcTransportOptions {
 
 /**
  * 行分隔 JSON-RPC 2.0 传输（ACP stdio）。
- * 可读侧按 \\n 拆包；请求用 id 映射等待响应。
+ * 可读侧按 \n 拆包；请求用 id 映射等待响应。
  */
 export class JsonRpcTransport {
   private buffer = ''

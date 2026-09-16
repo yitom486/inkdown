@@ -6,9 +6,9 @@ import {
   encodeJsonRpcMessage,
   JsonRpcTransport,
   isJsonRpcRequest,
-} from './jsonrpc-transport'
+} from '@inkdown/acp'
 import { AcpTerminalManager } from './acp-terminal'
-import type { InkdownVirtualResource } from '@shared/agent/inkdown-virtual-fs'
+import type { InkdownVirtualResource } from '@inkdown/contracts'
 
 function testContext(
   workspaceRoot: string | null = null,

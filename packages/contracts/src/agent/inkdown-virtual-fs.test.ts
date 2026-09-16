@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isInkdownVirtualDirPath,
   parseInkdownVirtualPath,
-} from './inkdown-virtual-fs'
+} from '@inkdown/contracts'
 
 const ROOT = 'D:/books/workspace'
 
