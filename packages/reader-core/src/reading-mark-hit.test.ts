@@ -4,7 +4,7 @@ import {
   findMarkForSelection,
   isClickNotDrag,
   rankVisualMarks,
-} from './reading-mark-hit'
+} from '@inkdown/reader-core'
 
 function mark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'id' | 'kind' | 'anchor'>): ReadingMark {
   return {

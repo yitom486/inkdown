@@ -23,4 +23,4 @@
 | `ProposeMarkChatBlock`（经 Agent 气泡内嵌） | 正式 Agent / 批注助手会话内批注提议 |
 | `EpubMarkTooltip` / `ReadingProgressRing` | EPUB 批注提示、进度环 |
 
-导航状态在 `reader-navigation-store`；纯逻辑在 `src/lib/reader/`。
+导航状态在 `reader-navigation-store`；纯逻辑在 `src/lib/reader/` 与 `@inkdown/reader-core`（`packages/reader-core/src/`，导航/选区/标记/排版等 27 模块已迁入）。

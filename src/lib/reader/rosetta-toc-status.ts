@@ -1,4 +1,4 @@
-import { computeTocSignature } from '@shared/reader/toc-signature'
+import { computeTocSignature } from '@inkdown/reader-core'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
 
 /**

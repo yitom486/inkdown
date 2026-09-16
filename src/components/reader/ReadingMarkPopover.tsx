@@ -4,8 +4,8 @@ import {
   HIGHLIGHT_COLORS,
   type HighlightColorId,
   normalizeHighlightColor,
-} from '@/lib/reader/reading-mark-colors'
-import { getReadingMarkStatusLabel } from '@/lib/reader/reading-mark-labels'
+} from '@inkdown/reader-core'
+import { getReadingMarkStatusLabel } from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
 import { cn } from '@/lib/utils'
 

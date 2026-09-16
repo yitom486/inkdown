@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { buildBookIndex, findChapterForPage, modulePageRange } from '@shared/reader/book-index'
-import { computeTocSignature, normalizeTocTitle } from '@shared/reader/toc-signature'
+import { buildBookIndex, findChapterForPage, modulePageRange } from '@inkdown/reader-core'
+import { computeTocSignature, normalizeTocTitle } from '@inkdown/reader-core'
 import { migrateBookDb } from './schema'
 
 /**

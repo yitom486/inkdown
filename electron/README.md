@@ -1,7 +1,7 @@
 # electron
 
 **主进程**源码。入口：`main.ts`；渲染进程通过 `preload.ts` 的 `contextBridge` 调 IPC。  
-渲染进程在 [`src/`](../src/README.md)；跨进程契约在 `shared/`。
+渲染进程在 [`src/`](../src/README.md)；跨进程契约在 `packages/contracts/`（`@inkdown/contracts`，原 `shared/` 核心/IPC/类型；`shared/` 仅残留未迁移模块）。
 
 | 目录 / 文件 | 职责 |
 |-------------|------|
@@ -14,4 +14,4 @@
 
 `webPreferences`：preload + `contextIsolation: true` + `nodeIntegration: false`。渲染端禁止 Node / `@electron/remote`。
 
-新增能力顺序见 [AGENTS.md](../AGENTS.md)：`shared` → **本目录 services** → ipc → `electron-api.types` → preload → `src/api` → hooks。
+新增能力顺序见 [AGENTS.md](../AGENTS.md)：`packages/contracts`（`@inkdown/contracts`，原 `shared/`）→ **本目录 services** → ipc → `electron-api.types`（已迁 contracts）→ preload → `src/api` → hooks。

@@ -5,13 +5,13 @@ import {
   highlightFill,
   highlightSwatch,
   normalizeHighlightColor,
-} from '@/lib/reader/reading-mark-colors'
+} from '@inkdown/reader-core'
 import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
 import {
   buildPdfSnapshotFromRange,
   coalescePdfLineRects,
   type PdfSelectionSnapshot,
-} from '@/lib/reader/pdf-selection'
+} from '@inkdown/reader-core'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 

@@ -2,11 +2,11 @@ import { useEffect } from 'react'
 import { BotMessageSquare, ClipboardPaste, Copy, MessageSquarePlus, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isMarkdownEditorFocused } from '@/lib/editor/editor-focus'
-import { shouldHandleReaderCopyShortcut } from '@/lib/reader/reader-copy-shortcut'
+import { shouldHandleReaderCopyShortcut } from '@inkdown/reader-core'
 import {
   HIGHLIGHT_COLORS,
   type HighlightColorId,
-} from '@/lib/reader/reading-mark-colors'
+} from '@inkdown/reader-core'
 
 export interface SelectionToolbarProps {
   x: number

@@ -5,7 +5,7 @@ import {
   DEFAULT_READER_TYPOGRAPHY,
   type ReaderFontSize,
   type ReaderLineHeight,
-} from '@/lib/reader/reader-typography'
+} from '@inkdown/reader-core'
 import {
   DEFAULT_PDF_OCR_SCALE,
   PDF_OCR_SCALE_OPTION_LABELS,
@@ -23,7 +23,7 @@ export {
   READER_LINE_HEIGHT_OPTION_LABELS,
   type ReaderFontSize,
   type ReaderLineHeight,
-} from '@/lib/reader/reader-typography'
+} from '@inkdown/reader-core'
 
 export type AutoSaveIntervalMs = 15000 | 30000 | 60000
 export type PreviewDebounceMs = 150 | 300 | 500

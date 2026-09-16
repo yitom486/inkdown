@@ -7,7 +7,7 @@
 | 文件 | 功能 |
 |------|------|
 | `file-api.ts` | 打开/保存/读写文件、工作区、导出、粘贴图等 |
-| `app-api.ts` | 应用级：关于、日志开关等 |
+| `app-api.ts` | 应用级：窗口/标题/关闭确认、更新、外部文件与链接、日志、E2E 门控、工作区监听等 |
 | `acp-api.ts` | ACP Agent：连接、prompt、权限、配置 |
 | `reading-marks-api.ts` | 书签 / 高亮 / 批注 CRUD |
 | `quiz-api.ts` | AI 测验与答题打分记录持久化（JSONL） |
@@ -18,6 +18,5 @@
 | `rosetta-api.ts` | 罗盘索引：扫描书一键导入、进度订阅、书信息、统一读查询、纯本地目录重建、正文水印只读预览、备份并应用正文水印（二次确认后调用，空计划 noop）、已入库内容只读取证 |
 | `pdf-inspect-api.ts` | pdf-inspector 主进程分类与整档 Markdown |
 | `query-keys.ts` | TanStack Query key 工厂 |
-| `query-keys.ts` | TanStack Query key 工厂 |
 
-新增能力顺序（见 AGENTS.md）：`shared` → `electron/services` → IPC 注册 → preload → **本目录** → hooks。
+新增能力顺序（见 AGENTS.md）：`packages/contracts`（`@inkdown/contracts`，原 `shared/`）→ `electron/services` → IPC 注册 → preload → **本目录** → hooks。

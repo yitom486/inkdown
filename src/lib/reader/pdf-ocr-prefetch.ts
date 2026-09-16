@@ -1,4 +1,4 @@
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+import type { ReaderUnit } from '@inkdown/reader-core'
 
 export interface PdfOcrPrefetchRange {
   start: number

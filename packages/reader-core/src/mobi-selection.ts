@@ -2,8 +2,8 @@ import {
   getSelectionToolbarPosition,
   unionClientRects,
   type PdfSelectionSnapshot,
-} from '@/lib/reader/pdf-selection'
-import { normalizeRectsInScrollDocument } from '@/lib/reader/reader-mark-geometry'
+} from './pdf-selection'
+import { normalizeRectsInScrollDocument } from './reader-mark-geometry'
 
 export function readMobiSelection(doc: Document, win: Window): PdfSelectionSnapshot | null {
   const selection = win.getSelection()

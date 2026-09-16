@@ -15,7 +15,7 @@ import {
   tocFromMobiUnits,
   tocFromPdfUnits,
   tocFromWebUnits,
-} from './export-reading-notes'
+} from '@inkdown/reader-core'
 
 function mark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'id' | 'kind' | 'anchor'>): ReadingMark {
   return {

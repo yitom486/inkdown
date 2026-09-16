@@ -3,7 +3,7 @@ import { basename, dirname } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type { AppError } from '@inkdown/contracts'
-import { buildBookIndex } from '@shared/reader/book-index'
+import { buildBookIndex } from '@inkdown/reader-core'
 import { DEFAULT_PDF_OCR_SCALE } from '@inkdown/contracts'
 import type { PdfOcrPageCache } from '@inkdown/contracts'
 import type {

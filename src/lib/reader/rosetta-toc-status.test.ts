@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeTocSignature } from '@shared/reader/toc-signature'
+import { computeTocSignature } from '@inkdown/reader-core'
 import {
   getCurrentRosettaTocSignature,
   resolveRosettaIndexStatus,

@@ -17,7 +17,7 @@ import {
   PdfTextLayerMappingSink,
   registerPdfPageTextGeometry,
   type PdfSelectionSnapshot,
-} from '@/lib/reader/pdf-selection'
+} from '@inkdown/reader-core'
 import { reportAppError } from '@/lib/workspace/report-error'
 import type { ReadingMark } from '@inkdown/contracts'
 

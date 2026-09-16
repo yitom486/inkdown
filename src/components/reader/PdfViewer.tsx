@@ -54,9 +54,9 @@ import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
-import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@inkdown/reader-core'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
-import { loadPdfOutlineInfo, formatPdfOutlineNotice, type PdfOutlineSource } from '@/lib/reader/pdf-outline'
+import { loadPdfOutlineInfo, formatPdfOutlineNotice, type PdfOutlineSource } from '@inkdown/reader-core'
 import { detectPdfDocumentProfile } from '@/lib/reader/pdf-scan-detector'
 import {
   clearPdfOcrCache,
@@ -103,18 +103,18 @@ import {
   resolvePdfPageScrollTop,
   scalePdfPageCssSize,
   type PdfPageCssSize,
-} from '@/lib/reader/pdf-page-metrics'
+} from '@inkdown/reader-core'
 import { openPdfDocument } from '@/lib/reader/pdf-document'
 import { findPdfMarksAtPoint, findPdfNoteMarkAtPoint } from '@/lib/reader/pdf-reading-marks'
 import { shouldRenderPdfPage } from '@/lib/reader/pdf-render'
-import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
+import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   getSelectionToolbarPosition,
   readPdfSelection,
   buildPdfSnapshotFromRange,
   type PdfSelectionSnapshot,
-} from '@/lib/reader/pdf-selection'
+} from '@inkdown/reader-core'
 import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
 import { waitForDom } from '@/lib/reader/wait-for-dom'
 import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
@@ -123,7 +123,7 @@ import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
   clearWindowSelection,
-} from '@/lib/reader/reader-selection-dismiss'
+} from '@inkdown/reader-core'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
 import { resolvePreferNativeImport, shouldOfferPageOcr } from '@/lib/reader/pdf-import-mode'
 import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf-agent-search-gate'
@@ -134,11 +134,11 @@ import {
   resolvePdfChapter,
   resolvePdfChapterByPage,
   tocFromPdfUnits,
-} from '@/lib/reader/export-reading-notes'
+} from '@inkdown/reader-core'
 import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr-prefetch'
 import { loadPersistedOcrPageCaches } from '@/lib/reader/pdf-ocr-page-hydrate'
 import { shouldAutoOcrViewportPage } from '@/lib/reader/pdf-page-auto-ocr'
-import { suggestTocPageOffset } from '@/lib/reader/toc-offset'
+import { suggestTocPageOffset } from '@inkdown/reader-core'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore, useReaderNavTitles } from '@/stores/reader-navigation-store'

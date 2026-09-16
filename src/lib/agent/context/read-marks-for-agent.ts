@@ -5,7 +5,7 @@ import { isOk } from '@inkdown/contracts'
 import {
   collectHighlightPassages,
   serializeMarkPassage,
-} from '@/lib/reader/reading-mark-passages'
+} from '@inkdown/reader-core'
 import { collectActiveDocument } from './collect-turn-context'
 import { getReaderMarksProvider } from './reader-marks-registry'
 
@@ -13,7 +13,7 @@ export {
   collectHighlightPassages,
   isHighlightPassage,
   serializeMarkPassage as serializeMarkForAgent,
-} from '@/lib/reader/reading-mark-passages'
+} from '@inkdown/reader-core'
 
 function supportsInkdownMarks(kind: DocumentKind): boolean {
   return kind === 'web' || isReaderDocumentKind(kind)

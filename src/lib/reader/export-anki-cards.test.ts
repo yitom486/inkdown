@@ -10,7 +10,7 @@ import {
   findCurrentChapterRef,
   tocFromEpubUnits,
   resolveEpubChapter,
-} from './export-reading-notes'
+} from '@inkdown/reader-core'
 
 function createMark(overrides: Partial<ReadingMark> & Pick<ReadingMark, 'id' | 'kind' | 'anchor'>): ReadingMark {
   return {

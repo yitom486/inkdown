@@ -3,7 +3,7 @@ import {
   buildReaderUnitTree,
   shouldExpandReaderUnitNode,
 } from '@/lib/reader/reader-unit-tree'
-import { estimatePageOffsetTop, PDF_PAGE_GAP_PX } from '@/lib/reader/pdf-page-metrics'
+import { estimatePageOffsetTop, PDF_PAGE_GAP_PX } from '@inkdown/reader-core'
 
 describe('pdf-page-metrics', () => {
   it('按统一页高估算 offsetTop', () => {

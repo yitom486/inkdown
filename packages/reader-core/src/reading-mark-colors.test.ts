@@ -4,7 +4,7 @@ import {
   highlightFill,
   highlightSwatch,
   normalizeHighlightColor,
-} from './reading-mark-colors'
+} from '@inkdown/reader-core'
 
 describe('reading-mark-colors', () => {
   it('默认与未知值都回落到黄色', () => {

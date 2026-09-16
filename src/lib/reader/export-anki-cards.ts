@@ -5,12 +5,12 @@ import {
   isHighlightPassage,
   passageExcerpt,
   passageNote,
-} from '@/lib/reader/reading-mark-passages'
+} from '@inkdown/reader-core'
 import {
   bookTitleFromPath,
   type ReadingNotesChapterRef,
   type ReadingNotesScope,
-} from '@/lib/reader/export-reading-notes'
+} from '@inkdown/reader-core'
 import { fileApi } from '@/api/file-api'
 import { isOk } from '@inkdown/contracts'
 import { reportAppError } from '@/lib/workspace/report-error'

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { findPdfMarksAtPoint, renderPdfMarkOverlays } from './pdf-reading-marks'
-import type { PdfSelectionSnapshot } from './pdf-selection'
+import type { PdfSelectionSnapshot } from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
 import type { PageViewport } from 'pdfjs-dist'
 

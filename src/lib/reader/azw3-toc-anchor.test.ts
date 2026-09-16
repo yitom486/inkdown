@@ -7,7 +7,7 @@ import {
   isHeadingLabelMatch,
   scrollToViewportEntry,
   type ViewportNavEntry,
-} from '@/lib/reader/reader-viewport-nav'
+} from '@inkdown/reader-core'
 import { mockRelativeOffsetTop, mockScrollDocument } from '@/lib/reader/reader-viewport-test-helpers'
 
 describe('isHeadingLabelMatch wrapper guard', () => {

@@ -4,7 +4,7 @@ import {
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,
   type ReadingNotesScope,
-} from '@/lib/reader/export-reading-notes'
+} from '@inkdown/reader-core'
 import { saveAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
 

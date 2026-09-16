@@ -4,7 +4,7 @@ import {
   isEditableCopyTarget,
   shouldHandleReaderCopyShortcut,
   type ReaderCopyShortcutKey,
-} from './reader-copy-shortcut'
+} from '@inkdown/reader-core'
 
 const ctrlC: ReaderCopyShortcutKey = {
   key: 'c',

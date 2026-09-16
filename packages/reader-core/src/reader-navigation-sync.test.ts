@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { flattenEpubToc, findEpubFlatIndex, resolveChapterNav } from '@/lib/reader/epub-navigation'
+import { flattenEpubToc, findEpubFlatIndex, resolveChapterNav } from '@inkdown/reader-core'
 import {
   syncEpubNavigation,
   syncPdfNavigation,
-} from '@/lib/reader/reader-navigation-sync'
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+} from '@inkdown/reader-core'
+import type { ReaderUnit } from '@inkdown/reader-core'
 
 function buildGovernanceMonolithicToc() {
   return flattenEpubToc([

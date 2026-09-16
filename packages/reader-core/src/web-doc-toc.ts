@@ -1,6 +1,6 @@
 import type { WebDocTocEntry } from '@inkdown/contracts'
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
-import { resolveAdjacentFlatNav, type AdjacentFlatNavState } from '@/lib/reader/reader-chapter-nav'
+import type { ReaderUnit } from './reader-navigation'
+import { resolveAdjacentFlatNav, type AdjacentFlatNavState } from './reader-chapter-nav'
 
 const EMPTY_WEB_NAV: AdjacentFlatNavState<ReaderUnit> = {
   current: null,

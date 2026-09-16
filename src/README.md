@@ -17,6 +17,6 @@ Electron **渲染进程**源码。入口：`main.tsx` → `App.tsx`。路径别�
 | [`types/`](./types/) | 渲染端补充类型声明 |
 | [`public/`](./public/) | 静态资源（含 pdf.js 资源） |
 
-主进程代码在 [`electron/`](../electron/README.md)；跨进程契约在 `shared/`。细则见根目录 [AGENTS.md](../AGENTS.md)。
+主进程代码在 [`electron/`](../electron/README.md)；跨进程契约在 `packages/contracts/`（`@inkdown/contracts`，原 `shared/`）；阅读器纯逻辑在 `packages/reader-core/`（`@inkdown/reader-core`）。细则见根目录 [AGENTS.md](../AGENTS.md)。
 
 **约定**：本树内带 `README.md` 的目录，增删或改文件名后须同步更新对应 README。

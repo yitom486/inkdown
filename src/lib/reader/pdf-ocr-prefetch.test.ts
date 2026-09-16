@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   orderPagesForPrefetch,
   resolvePdfOcrChapterRange,

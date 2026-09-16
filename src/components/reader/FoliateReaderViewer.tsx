@@ -22,8 +22,8 @@ import { registerReaderContent } from '@/lib/agent/context/reader-content-regist
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
 import { focusAgentComposerOnReaderSelection } from '@/lib/agent/context/focus-agent-composer'
-import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
-import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@inkdown/reader-core'
+import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReaderNavigationStore, useReaderNavTitles, isNavIntentLocked } from '@/stores/reader-navigation-store'
@@ -41,32 +41,32 @@ import {
   flattenEpubToc,
   pickInitialChapter,
   type EpubChapter,
-} from '@/lib/reader/epub-navigation'
-import { normalizeLoadKey } from '@/lib/reader/reader-viewport-nav'
+} from '@inkdown/reader-core'
+import { normalizeLoadKey } from '@inkdown/reader-core'
 import {
   isSameSpineBase,
   scrollFoliateSectionToFragment,
   splitChapterFragment,
-} from '@/lib/reader/foliate-section-nav'
-import { getEpubThemeRules, applyEpubReadingLayout } from '@/lib/reader/epub-themes'
+} from '@inkdown/reader-core'
+import { getEpubThemeRules, applyEpubReadingLayout } from '@inkdown/reader-core'
 import {
   buildEpubSnapshotFromRange,
   readEpubSelection,
-} from '@/lib/reader/epub-selection'
+} from '@inkdown/reader-core'
 import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
 import { waitForDom } from '@/lib/reader/wait-for-dom'
 import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
-} from '@/lib/reader/reader-selection-dismiss'
+} from '@inkdown/reader-core'
 import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
 import {
   findCurrentChapterRef,
   resolveEpubChapter,
   resolveMobiChapter,
   tocFromEpubUnits,
-} from '@/lib/reader/export-reading-notes'
+} from '@inkdown/reader-core'
 import { reportAppError } from '@/lib/workspace/report-error'
 
 declare global {

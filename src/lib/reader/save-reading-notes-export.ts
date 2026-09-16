@@ -7,7 +7,7 @@ import {
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,
   type ReadingNotesScope,
-} from '@/lib/reader/export-reading-notes'
+} from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
 import { toast } from 'sonner'
 

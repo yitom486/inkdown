@@ -1,5 +1,5 @@
-import type { EpubThemeMode } from '@/lib/reader/epub-themes'
-import { READER_PALETTE } from '@/lib/reader/epub-themes'
+import type { EpubThemeMode } from '@inkdown/reader-core'
+import { READER_PALETTE } from '@inkdown/reader-core'
 import { buildCodeBlockToolbarHtml } from '@/lib/preview/code-block-chrome'
 
 const LANGUAGE_CLASS = /\blanguage-([\w-]+)\b/i

@@ -8,7 +8,7 @@ import {
   readPdfSelection,
   registerPdfPageTextGeometry,
   unionClientRects,
-} from './pdf-selection'
+} from '@inkdown/reader-core'
 import type { PageViewport } from 'pdfjs-dist'
 import type { TextContent } from 'pdfjs-dist/types/src/display/api'
 

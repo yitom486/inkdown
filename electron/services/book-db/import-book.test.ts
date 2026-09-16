@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
-import { buildBookIndex } from '@shared/reader/book-index'
+import { buildBookIndex } from '@inkdown/reader-core'
 import { migrateBookDb } from './schema'
 import {
   alignBlockToSpan,

@@ -1,5 +1,5 @@
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
-import type { EpubChapter } from '@/lib/reader/epub-navigation'
+import type { EpubChapter } from '@inkdown/reader-core'
 
 interface EpubChapterOutlineProps {
   chapters: EpubChapter[]

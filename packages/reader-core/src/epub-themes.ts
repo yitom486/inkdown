@@ -1,5 +1,5 @@
-import { liveSelectionCss } from '@/lib/reader/reading-mark-colors'
-import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
+import { liveSelectionCss } from './reading-mark-colors'
+import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from './reader-typography'
 
 /** 正文左右留白（百分比）：两侧各 5%，正文占中间 90% */
 export const EPUB_CONTENT_HORIZONTAL_PADDING = '5%'

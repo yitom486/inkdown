@@ -34,8 +34,8 @@ import { focusAgentComposerOnReaderSelection } from '@/lib/agent/context/focus-a
 import { registerReaderContent } from '@/lib/agent/context/reader-content-registry'
 import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
-import { DEFAULT_HIGHLIGHT_COLOR } from '@/lib/reader/reading-mark-colors'
-import { findMarkForSelection, isClickNotDrag } from '@/lib/reader/reading-mark-hit'
+import { DEFAULT_HIGHLIGHT_COLOR } from '@inkdown/reader-core'
+import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
 import { buildWebDocReaderDocument } from '@/lib/reader/web-doc-html'
 import { extractWebDocHeadings } from '@/lib/reader/web-doc-outline'
 import {
@@ -53,13 +53,13 @@ import {
 } from '@/lib/reader/web-doc-site'
 import { resolveWebDocClickHref, shouldNavigateWebDocInApp, isWebDocNavigationTarget, detectWebDocIframeEscape, isCrossOriginIframeEscape } from '@/lib/reader/web-doc-link'
 import { logWebDoc } from '@/lib/reader/web-doc-debug'
-import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@/lib/reader/web-doc-toc'
+import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@inkdown/reader-core'
 import {
   iterateWebDocUnits,
   primeWebDocAgentTextCache,
   readWebDocUnitByIndex,
 } from '@/lib/reader/web-doc-agent-content'
-import { readMobiSelection, buildMobiSnapshotFromRange } from '@/lib/reader/mobi-selection'
+import { readMobiSelection, buildMobiSnapshotFromRange } from '@inkdown/reader-core'
 import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
 import { waitForDom } from '@/lib/reader/wait-for-dom'
 import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
@@ -70,19 +70,19 @@ import {
   removeMobiPendingSelectionHighlight,
   renderWebMarkOverlays,
 } from '@/lib/reader/mobi-reading-marks'
-import { injectMobiMarkStyles } from '@/lib/reader/reader-mark-geometry'
+import { injectMobiMarkStyles } from '@inkdown/reader-core'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
   clearWindowSelection,
-} from '@/lib/reader/reader-selection-dismiss'
-import { copyTextToClipboard, type PdfSelectionSnapshot } from '@/lib/reader/pdf-selection'
+} from '@inkdown/reader-core'
+import { copyTextToClipboard, type PdfSelectionSnapshot } from '@inkdown/reader-core'
 import { applyCopyButtonFeedback, getCodeBlockTextFromCopyButton } from '@/lib/preview/code-block-copy'
 import { activateWebDocCodeTab } from '@/lib/reader/web-doc-code-blocks'
 import {
   resolveWebChapter,
   tocFromWebUnits,
-} from '@/lib/reader/export-reading-notes'
+} from '@inkdown/reader-core'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'

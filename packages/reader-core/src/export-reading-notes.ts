@@ -1,13 +1,13 @@
 import type { ReadingMark } from '@inkdown/contracts'
 import { isWebDocumentPath } from '@inkdown/contracts'
-import { normalizeLoadKey } from '@/lib/reader/reader-viewport-nav'
-import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'
+import { normalizeLoadKey } from './reader-viewport-nav'
+import { normalizeWebDocNavUrl } from './web-doc-toc'
 import {
   highlightSortKey,
   isHighlightPassage,
   passageExcerpt,
   passageNote,
-} from '@/lib/reader/reading-mark-passages'
+} from './reading-mark-passages'
 
 /** 批注 / 纯重点 / 综合 */
 export type ReadingNotesContentKind = 'notes' | 'highlights' | 'combined'

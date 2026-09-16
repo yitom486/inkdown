@@ -1,8 +1,8 @@
 import DOMPurify from 'dompurify'
 import type { WebDocPageContent, WebDocSiteId } from '@inkdown/contracts'
 import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
-import { buildReaderLayoutCss, type EpubThemeMode } from '@/lib/reader/epub-themes'
-import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@/lib/reader/reader-typography'
+import { buildReaderLayoutCss, type EpubThemeMode } from '@inkdown/reader-core'
+import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@inkdown/reader-core'
 import { buildWebDocCodeBlockCss, buildWebDocTabsRuntimeScript, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
 import {
   buildWebDocEmbedCss,

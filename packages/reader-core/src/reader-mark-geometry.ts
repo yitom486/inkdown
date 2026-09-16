@@ -4,7 +4,7 @@ import {
   applyHighlightSurface,
   highlightFill,
   liveSelectionCss,
-} from '@/lib/reader/reading-mark-colors'
+} from './reading-mark-colors'
 
 export function getReaderScrollRoot(doc: Document): HTMLElement {
   const scrolling = doc.scrollingElement

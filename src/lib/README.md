@@ -1,6 +1,6 @@
 # src/lib
 
-渲染进程**纯逻辑**（无 React Hook）。按产品域分子目录；通过 `@/lib/<域>/模块` 引用。  
+渲染进程**纯逻辑**（无 React Hook）。按产品域分子目录；通过 `@/lib/<域>/模块` 引用；通用导航/选区/标记逻辑走 `@inkdown/reader-core`（`packages/reader-core/src/`）。  
 **不要**在根目录再堆新文件。例外：`utils.ts` 是 shadcn 的 `cn()`，必须留在 `@/lib/utils`。
 
 组件胶水在 `src/hooks/`，IPC 在 `src/api/`，UI 状态在 `src/stores/`。
@@ -9,7 +9,7 @@
 |------|--------|
 | `editor/` | Markdown 解析/编辑/导出、CodeMirror、草稿、换行规范化 |
 | `preview/` | 预览 DOM：代码块复制、消毒、Mermaid hydrate |
-| `reader/` | EPUB / PDF / MOBI / **在线文档 HTML** 导航、选区、高亮批注、渲染 |
+| `reader/` | EPUB / PDF / MOBI / **在线文档 HTML** 渲染端专属逻辑（导航/选区/标记/排版等 27 模块已迁 `@inkdown/reader-core`，见下） |
 | `quiz/` | AI 伴读考官出题、自动判卷打分、JSONL 知识库与仓储抽象 |
 | `workspace/` | 文件树、对话框路径、全局错误上报 |
 | `agent/` | ACP 会话辅助；`context/` 为 Inkdown 注入 Agent 的 Skill / 快照 / 选区 |
@@ -52,20 +52,20 @@
 
 ## reader/
 
-按前缀找文件即可，不逐条列举：
+通用导航/选区/标记/排版等 27 模块已迁 `@inkdown/reader-core`（`packages/reader-core/src/`，见该包 `index.ts` 分组注释）；本目录仅留 PDF/OCR/Anki 等渲染端专属逻辑。按前缀找文件即可，不逐条列举：
 
 | 前缀 | 功能 |
 |------|------|
-| `reader-*` | 跨格式导航（flatIndex / 视口 / 翻页 / 目录树 / 选区关闭） |
-| `reading-mark-*` / `reader-mark-*` | 高亮颜色、命中、标签、几何 |
-| `reading-mark-passages` / `export-reading-notes` / `export-anki-cards` / `flashcard-review` / `save-reading-notes-export` / `reading-mark-kind-filters` | 划重点收集、按章 Markdown 导出、Anki 导出（纯文本 Flashcard → HTML）、闪卡复习纯函数、侧栏类型筛选 |
-| `epub-*` | EPUB 目录导航、主题样式、选区快照（渲染内核已迁 foliate 统一后端） |
-| `reader-adapter` / `foliate-*` | 统一阅读后端契约与 foliate 实现（EPUB+MOBI/KF8，MOBI 旧链已删） |
-| `pdf-*` | PDF 打开/渲染/目录/选区/批注 overlay；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js）；`pdf-book-search` 为手动正文搜索逻辑（只读 search + 会话防旧写回，库命中按页跳、内存命中按 label 跳章，跳页由调用方接线）；`pdf-agent-search-gate` 为 Agent 全书搜索闸门（未入库扫描/混合 PDF 直接报错，防整书 OCR） |
-| `toc-ai` / `toc-offset` | 目录 AI 整理 Prompt 构造与 JSON 校验；目录偏移多标题锚定共识 |
+| `reader-*` | 已迁 `@inkdown/reader-core`：跨格式导航（flatIndex / 视口 / 翻页 / 目录树 / 选区关闭）；本目录仅留 `reader-adapter` / `reader-unit-tree` 等 |
+| `reading-mark-*` / `reader-mark-*` | 已迁 `@inkdown/reader-core`：高亮颜色、命中、标签、几何 |
+| `reading-mark-passages` / `export-reading-notes` / `export-anki-cards` / `flashcard-review` / `save-reading-notes-export` / `reading-mark-kind-filters` | `reading-mark-passages` / `export-reading-notes` / `reading-mark-kind-filters` 已迁 `@inkdown/reader-core`；`export-anki-cards` / `flashcard-review` / `save-reading-notes-export` 仍在本目录（划重点收集、按章 Markdown 导出、Anki 导出、闪卡复习纯函数、侧栏类型筛选） |
+| `epub-*` | 已迁 `@inkdown/reader-core`：EPUB 目录导航、主题样式、选区快照（渲染内核已迁 foliate 统一后端） |
+| `reader-adapter` / `foliate-*` | `foliate-section-nav` 已迁 `@inkdown/reader-core`；`reader-adapter` / `foliate-book-adapter` 仍在本目录（统一阅读后端契约与 foliate 实现，EPUB+MOBI/KF8，MOBI 旧链已删） |
+| `pdf-*` | `pdf-outline` / `pdf-page-metrics` / `pdf-selection` 已迁 `@inkdown/reader-core`；其余 PDF 打开/渲染/目录/选区/批注 overlay 仍在本目录；`pdf-structure*` 为 WASM 结构化解析（Agent 正文优先，失败回退 pdf.js）；`pdf-book-search` 为手动正文搜索逻辑（只读 search + 会话防旧写回，库命中按页跳、内存命中按 label 跳章，跳页由调用方接线）；`pdf-agent-search-gate` 为 Agent 全书搜索闸门（未入库扫描/混合 PDF 直接报错，防整书 OCR） |
+| `toc-ai` / `toc-offset` | `toc-offset`（及 `toc-signature` / `book-index`）已迁 `@inkdown/reader-core`；`toc-ai` 仍在本目录（目录 AI 整理 Prompt 构造与 JSON 校验；目录偏移多标题锚定共识） |
 | `rosetta-*` | 罗盘索引：目录归一（rosetta-toc）、块转 Agent 文本（rosetta-agent-text）、目录签名与健康状态（rosetta-toc-status） |
 | `ocr-toc-*` | OCR 目录缓存状态：独立提示与校正/重识入口落点（ocr-toc-notice）、校正目录条目决议（pdf-ocr-toc-cache）、探测/识别/保存三取一租约锁＋文档世代（ocr-toc-op，防 ABA 与切文件旧写回）、探测反馈状态机（ocr-toc-detect-feedback，只填范围）；分级评估见 shared/reader/ocr-toc-assess，可用性门控见 pdf-ocr-toc-gate，范围评分见 shared/reader/toc-page-detect |
-| `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | 在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe（如 Python Tutor） |
+| `web-doc-html` / `web-doc-chrome` / `web-doc-site` / `web-doc-toc` / `web-doc-outline` / `web-doc-agent-content` / `web-doc-code-blocks` / `web-doc-math` / `web-doc-embeds` | `web-doc-toc` 已迁 `@inkdown/reader-core`；其余仍在本目录（在线文档正文提取、页头剥离、URL/目录、**本页标题大纲**、Agent 按页抓文、代码块复制/多语言 Tab、KaTeX 公式、白名单 iframe） |
 
 ## workspace/
 
@@ -77,7 +77,7 @@
 | `dialog-default-path` | 打开/保存对话框默认目录 |
 | `workspace-session` | 启动时恢复上次文件 / 在线文档 |
 | `report-error` / `error-reporter` | AppError 与运行时错误上报 |
-| `path-utils.test` / `document-types.test` | 测的是 `@shared` 路径与文档类型，放在工作区侧 |
+| `path-utils.test` / `document-types.test` | 测的是 `@inkdown/contracts`（原 `@shared`）路径与文档类型，放在工作区侧 |
 
 ## quiz/
 

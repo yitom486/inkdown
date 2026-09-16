@@ -1,6 +1,6 @@
 import { getDocumentKind } from '@inkdown/contracts'
 import { resolveWebDocDocumentId, resolveWebDocSiteId } from '@/lib/reader/web-doc-site'
-import type { ReaderFormat } from '@/lib/reader/reader-navigation-sync'
+import type { ReaderFormat } from '@inkdown/reader-core'
 import { useActiveDocumentStore } from '@/stores/active-document-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import type { InkdownActiveDocument, InkdownReadingState } from './turn-context'

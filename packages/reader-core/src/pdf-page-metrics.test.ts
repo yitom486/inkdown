@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   estimatePageOffsetTop,
   resolvePdfPageScrollTop,
-} from './pdf-page-metrics'
+} from '@inkdown/reader-core'
 
 describe('pdf page metrics', () => {
   it('按等高估算页偏移', () => {

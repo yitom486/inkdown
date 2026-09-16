@@ -500,4 +500,4 @@ export function getSelectionToolbarPosition(snapshot: PdfSelectionSnapshot): {
   return { x: snapshot.toolbarX, y: snapshot.toolbarY }
 }
 
-export { copyTextToClipboard } from '@/lib/reader/epub-selection'
+export { copyTextToClipboard } from './epub-selection'

@@ -2,7 +2,7 @@ export type {
   EpubChapter as ReaderUnit,
   EpubChapterNavState as ReaderUnitNavState,
   EpubTocSource as ReaderTocSource,
-} from '@/lib/reader/epub-navigation'
+} from './epub-navigation'
 
 export {
   flattenEpubToc as flattenReaderToc,
@@ -11,7 +11,7 @@ export {
   pickInitialChapter,
   resolveChapterNav as resolveUnitNav,
   type EpubLocationHint,
-} from '@/lib/reader/epub-navigation'
+} from './epub-navigation'
 
 export {
   findNextDistinctLoadTarget,
@@ -19,4 +19,4 @@ export {
   pickReaderNavLevel,
   resolveAdjacentFlatNav,
   resolveReaderChapterNav,
-} from '@/lib/reader/reader-chapter-nav'
+} from './reader-chapter-nav'

@@ -3,14 +3,14 @@ import {
   resolveChapterNav,
   type EpubChapter,
   type EpubLocationHint,
-} from '@/lib/reader/epub-navigation'
+} from './epub-navigation'
 import {
   pickReaderNavLevel,
   resolveReaderChapterNav,
   type AdjacentFlatNavState,
-} from '@/lib/reader/reader-chapter-nav'
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
-import { findWebDocFlatIndex, syncWebNavigation } from '@/lib/reader/web-doc-toc'
+} from './reader-chapter-nav'
+import type { ReaderUnit } from './reader-navigation'
+import { findWebDocFlatIndex, syncWebNavigation } from './web-doc-toc'
 
 export type ReaderFormat = 'epub' | 'mobi' | 'pdf' | 'web'
 

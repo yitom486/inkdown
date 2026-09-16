@@ -4,8 +4,8 @@ import {
   addSelectionMarkerToComposer,
   openAgentComposerToAskSelection,
 } from '@/lib/agent/context/focus-agent-composer'
-import { copyTextToClipboard } from '@/lib/reader/pdf-selection'
-import type { HighlightColorId } from '@/lib/reader/reading-mark-colors'
+import { copyTextToClipboard } from '@inkdown/reader-core'
+import type { HighlightColorId } from '@inkdown/reader-core'
 
 /**
  * 三阅读器（PDF / Foliate / WebDoc）划选工具条的共享动作。

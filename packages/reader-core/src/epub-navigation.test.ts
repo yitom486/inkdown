@@ -5,7 +5,7 @@ import {
   isTocLikeChapter,
   pickInitialChapter,
   resolveChapterNav,
-} from '@/lib/reader/epub-navigation'
+} from '@inkdown/reader-core'
 
 /** 复现《中国国家治理的制度逻辑》一类：一级仅「目录」，正文挂在二级 */
 function buildGovernanceToc() {

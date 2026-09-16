@@ -1,15 +1,15 @@
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
-import type { EpubChapter, EpubLocationHint } from '@/lib/reader/epub-navigation'
+import type { EpubChapter, EpubLocationHint } from '@inkdown/reader-core'
 import {
   EMPTY_READER_NAV,
   syncEpubNavigation,
   syncPdfNavigation,
   syncWebDocNavigation,
   type ReaderFormat,
-} from '@/lib/reader/reader-navigation-sync'
-import type { AdjacentFlatNavState } from '@/lib/reader/reader-chapter-nav'
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+} from '@inkdown/reader-core'
+import type { AdjacentFlatNavState } from '@inkdown/reader-core'
+import type { ReaderUnit } from '@inkdown/reader-core'
 
 /** 用户点击导航后，短暂阻止视口同步覆盖 intent flatIndex */
 export const NAV_INTENT_LOCK_MS = 800

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { resolveWheelPageTurn } from '@/lib/reader/reader-wheel-navigation'
+import { resolveWheelPageTurn } from '@inkdown/reader-core'
 
 interface UseReaderWheelNavigationOptions {
   onPrev: () => void

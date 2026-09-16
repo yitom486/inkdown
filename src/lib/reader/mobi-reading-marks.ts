@@ -1,7 +1,7 @@
 import type { PdfTextRect, ReadingAnchor, ReadingMark } from '@inkdown/contracts'
-import { applyHighlightSurface } from '@/lib/reader/reading-mark-colors'
-import { getMarkLayerMetrics, normalizeRectsInScrollDocument } from '@/lib/reader/reader-mark-geometry'
-import { normalizeWebDocNavUrl } from '@/lib/reader/web-doc-toc'
+import { applyHighlightSurface } from '@inkdown/reader-core'
+import { getMarkLayerMetrics, normalizeRectsInScrollDocument } from '@inkdown/reader-core'
+import { normalizeWebDocNavUrl } from '@inkdown/reader-core'
 
 const MARK_SELECTOR = '.mobi-mark-highlight, .mobi-mark-note, .mobi-mark-note-hit'
 

@@ -21,12 +21,12 @@ import {
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,
   type ReadingNotesScope,
-} from '@/lib/reader/export-reading-notes'
-import { isHighlightPassage, passageExcerpt } from '@/lib/reader/reading-mark-passages'
-import { getReadingMarkDisplayKind, getReadingMarkLabel, getReadingMarkStatusLabel } from '@/lib/reader/reading-mark-labels'
-import { highlightSwatch } from '@/lib/reader/reading-mark-colors'
+} from '@inkdown/reader-core'
+import { isHighlightPassage, passageExcerpt } from '@inkdown/reader-core'
+import { getReadingMarkDisplayKind, getReadingMarkLabel, getReadingMarkStatusLabel } from '@inkdown/reader-core'
+import { highlightSwatch } from '@inkdown/reader-core'
 import { useReadingMarkKindFilters } from '@/stores/reading-mark-panel-store'
-import { markMatchesKindFilters } from '@/lib/reader/reading-mark-kind-filters'
+import { markMatchesKindFilters } from '@inkdown/reader-core'
 import { cn } from '@/lib/utils'
 
 function MarkKindIcon({ kind }: { kind: ReadingMark['kind'] }) {

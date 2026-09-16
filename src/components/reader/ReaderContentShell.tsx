@@ -7,14 +7,14 @@ import { AiQuizDialog } from '@/components/quiz/AiQuizDialog'
 import { QuizHistoryDialog } from '@/components/quiz/QuizHistoryDialog'
 import { buildAnkiCardsExport } from '@/lib/reader/export-anki-cards'
 import type { Flashcard } from '@shared/types/flashcard'
-import type { ReaderUnit } from '@/lib/reader/reader-navigation'
+import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   findCurrentChapterRef,
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,
   type ReadingNotesScope,
-} from '@/lib/reader/export-reading-notes'
-import { passageExcerpt } from '@/lib/reader/reading-mark-passages'
+} from '@inkdown/reader-core'
+import { passageExcerpt } from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
 import { toast } from 'sonner'
 

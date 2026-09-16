@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   DEFAULT_READING_MARK_KIND_FILTERS,
   type ReadingMarkKindFilters,
-} from '@/lib/reader/reading-mark-kind-filters'
+} from '@inkdown/reader-core'
 
 interface ReadingMarkPanelStore extends ReadingMarkKindFilters {
   setHighlights: (value: boolean) => void

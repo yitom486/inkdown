@@ -1,6 +1,6 @@
 import type { ReadingAnchor, ReadingMark } from '@inkdown/contracts'
-import { getReadingMarkKindLabel, getReadingMarkLabel } from '@/lib/reader/reading-mark-labels'
-import { normalizeHighlightColor } from '@/lib/reader/reading-mark-colors'
+import { getReadingMarkKindLabel, getReadingMarkLabel } from './reading-mark-labels'
+import { normalizeHighlightColor } from './reading-mark-colors'
 
 function summarizeAnchor(anchor: ReadingAnchor): string {
   switch (anchor.format) {
