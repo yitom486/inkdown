@@ -32,6 +32,7 @@ export * from "./people-daily";
 export {
   resolveWebDocSiteId,
   normalizeWebDocInputUrl,
+  stripWebDocFragment,
   formatWebDocTitle,
   formatWebDocPathLabel,
   resolveWebDocTocDiscoveryUrl,

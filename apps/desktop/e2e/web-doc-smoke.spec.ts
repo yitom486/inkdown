@@ -92,6 +92,35 @@ test.describe('在线文档阅读', () => {
     }
   })
 
+  test('正文 fragment 链接保留锚点并定位当前页面', async () => {
+    const app = await launchBuiltApp({ E2E_WEB_DOC_FIXTURE_DIR: webDocFixtureDir() })
+
+    try {
+      const window = await app.firstWindow()
+      await window.waitForLoadState('domcontentloaded')
+
+      await welcomeWebDocUrlField(window).fill(E2E_WEB_DOC_START_URL)
+      await welcomeWebDocUrlField(window).press('Enter')
+
+      const panel = mainPanel(window)
+      const frame = webDocFrame(window)
+      await expect(frame.getByRole('heading', { name: 'Quick Start' })).toBeVisible({ timeout: 15_000 })
+
+      await frame.getByRole('link', { name: 'Jump to fragment target' }).click()
+
+      await expect(panel.locator('input[placeholder="https://"]')).toHaveValue(
+        `${E2E_WEB_DOC_START_URL}#fixture-fragment-target`,
+      )
+      const target = frame.locator('#fixture-fragment-target')
+      await expect(target.getByRole('heading', { name: 'Fragment Target' })).toBeVisible()
+      await expect
+        .poll(() => target.evaluate((element) => element.getBoundingClientRect().top))
+        .toBeLessThan(200)
+    } finally {
+      await app.close()
+    }
+  })
+
   test('fixture 文档可打开目录并步进', async () => {
     const app = await launchBuiltApp({ E2E_WEB_DOC_FIXTURE_DIR: webDocFixtureDir() })
 

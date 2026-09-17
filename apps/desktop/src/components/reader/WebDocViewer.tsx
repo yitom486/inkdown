@@ -50,6 +50,7 @@ import {
   resolveWebDocDocumentId,
   resolveWebDocSiteId,
   resolveWebDocTocDiscoveryUrl,
+  stripWebDocFragment,
 } from '@inkdown/web-doc'
 import {
   resolveWebDocClickHref,
@@ -129,6 +130,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
   const { data, isLoading, isFetching, error, refetch } = useWebDocPage(pageUrl)
   const siteId = useMemo(() => resolveWebDocSiteId(pageUrl), [pageUrl])
   const documentId = useMemo(() => resolveWebDocDocumentId(pageUrl, siteId), [pageUrl, siteId])
+  const documentUrl = useMemo(() => stripWebDocFragment(pageUrl), [pageUrl])
   const normalizedPageUrl = useMemo(() => normalizeWebDocNavUrl(pageUrl), [pageUrl])
   const fileFingerprint = useMemo(() => buildWebDocFileFingerprint(documentId), [documentId])
   const tocDiscoveryUrl = useMemo(
@@ -313,40 +315,28 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     [openPage],
   )
 
-  const navigateToFragment = useCallback((href: string): boolean => {
-    const fragment = resolveWebDocFragment(href, pageUrlRef.current)
-    if (fragment === null) return false
-
+  const scrollToWebDocFragment = useCallback((fragment: string): boolean => {
     const doc = iframeRef.current?.contentDocument
-    if (!doc) return true
+    if (!doc) return false
 
-    const target = fragment ? doc.getElementById(fragment) : null
-    if (target) {
-      target.scrollIntoView({ block: 'start', behavior: 'smooth' })
-      setActiveHeadingId(target.id || undefined)
-      return true
-    }
+    const target = doc.getElementById(fragment) ?? doc.getElementsByName(fragment)[0]
+    if (!target) return false
 
-    if (!fragment) {
-      const root = doc.scrollingElement ?? doc.documentElement
-      if (root instanceof HTMLElement) {
-        root.scrollTo({ top: 0, behavior: 'smooth' })
-      }
-    }
+    target.scrollIntoView({ block: 'start', behavior: 'auto' })
+    setActiveHeadingId(target.id || undefined)
     return true
   }, [])
 
   const handleWebDocLink = useCallback(
     (href: string) => {
       logWebDoc('link-click', { href, pageUrl: pageUrlRef.current })
-      if (navigateToFragment(href)) return
       if (shouldNavigateWebDocInApp(href, pageUrlRef.current)) {
         navigateToUrl(href)
         return
       }
       void appApi.openExternal(href)
     },
-    [navigateToFragment, navigateToUrl],
+    [navigateToUrl],
   )
 
   const goPrevious = useCallback(() => {
@@ -370,22 +360,22 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     if (scrollHeight <= 0) return
 
     const scrollRatio = root.scrollTop / scrollHeight
-    useReadingProgressStore.getState().saveWebProgress(pageUrl, { scrollRatio })
-  }, [pageUrl])
+    useReadingProgressStore.getState().saveWebProgress(normalizedPageUrl, { scrollRatio })
+  }, [normalizedPageUrl])
 
   const restoreScrollProgress = useCallback(() => {
     const doc = iframeRef.current?.contentDocument
     const root = doc?.documentElement
     if (!root) return
 
-    const saved = useReadingProgressStore.getState().getWebProgress(pageUrl)
+    const saved = useReadingProgressStore.getState().getWebProgress(normalizedPageUrl)
     if (!saved) return
 
     const scrollHeight = root.scrollHeight - root.clientHeight
     if (scrollHeight <= 0) return
 
     root.scrollTop = scrollHeight * saved.scrollRatio
-  }, [pageUrl])
+  }, [normalizedPageUrl])
 
   const addPageBookmark = useCallback(async () => {
     const result = await createMark({
@@ -738,7 +728,6 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       doc.addEventListener('mouseup', onMouseUp)
       doc.addEventListener('scroll', onScroll, { passive: true })
       doc.addEventListener('mousemove', onMouseMove, { passive: true })
-      restoreScrollProgress()
       syncActiveHeadingFromScroll()
 
       frameCleanupRef.current = () => {
@@ -754,7 +743,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         if (hoverRaf !== 0) window.cancelAnimationFrame(hoverRaf)
       }
     },
-    [documentId, handleWebDocLink, persistScrollProgress, restoreScrollProgress, scheduleWebMarkLayout, syncActiveHeadingFromScroll],
+    [documentId, handleWebDocLink, persistScrollProgress, scheduleWebMarkLayout, syncActiveHeadingFromScroll],
   )
 
   useEffect(() => {
@@ -790,6 +779,8 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       logWebDoc('iframe-clear', { pageUrl, reason: 'empty-reader-document' })
       return
     }
+
+    let fragmentRaf = 0
 
     const onLoad = () => {
       // 逃逸恢复：任何漏网的默认跳转（空 href、SVG 链接、键盘激活等）一旦让 iframe
@@ -827,6 +818,23 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       })
       setIframeReady(true)
       bindIframeFrameRef.current(iframe)
+
+      const fragment = resolveWebDocFragment(pageUrl, documentUrl)
+      if (fragment !== null) {
+        // srcdoc has loaded, but layout can still settle after styles and
+        // embeds are applied. Wait two frames before resolving the anchor.
+        fragmentRaf = window.requestAnimationFrame(() => {
+          fragmentRaf = window.requestAnimationFrame(() => {
+            fragmentRaf = 0
+            const found = scrollToWebDocFragment(fragment)
+            logWebDoc('fragment-scroll', { pageUrl, fragment, found })
+          })
+        })
+      } else {
+        restoreScrollProgress()
+        syncActiveHeadingFromScroll()
+      }
+
       const text = extractDocumentText(iframe.contentDocument)
       if (text.trim()) {
         primeWebDocAgentTextCache(pageUrl, text)
@@ -839,10 +847,14 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
     return () => {
       iframe.removeEventListener('load', onLoad)
+      if (fragmentRaf !== 0) {
+        window.cancelAnimationFrame(fragmentRaf)
+        fragmentRaf = 0
+      }
       frameCleanupRef.current?.()
       frameCleanupRef.current = null
     }
-  }, [pageUrl, readerDocument])
+  }, [documentUrl, pageUrl, readerDocument, restoreScrollProgress, scrollToWebDocFragment, syncActiveHeadingFromScroll])
 
   useEffect(() => {
     return () => {
@@ -930,7 +942,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
   }, [error])
 
   const handleReload = () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.webDocPage(pageUrl) })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.webDocPage(documentUrl) })
     void refetch()
   }
 

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { webDocApi } from '@/api/web-doc-api'
 import { queryKeys } from '@/api/query-keys'
 import { buildWebDocPageContent } from '@/lib/reader/web-doc-html'
-import { resolveWebDocSiteId } from '@inkdown/web-doc'
+import { resolveWebDocSiteId, stripWebDocFragment } from '@inkdown/web-doc'
 import { isOk } from '@inkdown/contracts'
 import type { AppError } from '@inkdown/contracts'
 import type { WebDocPageContent } from '@inkdown/contracts'
@@ -41,11 +41,12 @@ async function fetchWebDocPageData(pageUrl: string): Promise<WebDocPageData> {
 
 export function useWebDocPage(pageUrl: string | null | undefined) {
   const safeUrl = pageUrl?.trim() || null
+  const documentUrl = safeUrl ? stripWebDocFragment(safeUrl) : null
 
   return useQuery<WebDocPageData, AppError>({
-    queryKey: queryKeys.webDocPage(safeUrl ?? ''),
-    enabled: Boolean(safeUrl),
-    queryFn: () => fetchWebDocPageData(safeUrl!),
+    queryKey: queryKeys.webDocPage(documentUrl ?? ''),
+    enabled: Boolean(documentUrl),
+    queryFn: () => fetchWebDocPageData(documentUrl!),
     staleTime: 60_000,
   })
 }

@@ -29,10 +29,26 @@ export function normalizeWebDocInputUrl(raw: string): string | null {
   try {
     const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
     if (!['http:', 'https:'].includes(url.protocol)) return null
-    url.hash = ''
     return url.toString()
   } catch {
     return null
+  }
+}
+
+/**
+ * Remove only the client-side fragment from a valid document URL.
+ *
+ * Fragments are navigation state for the reader and must remain in the URL
+ * shown to the user. They are not sent to the server, however, so fetch/cache
+ * callers should use this helper to derive the document identity.
+ */
+export function stripWebDocFragment(url: string): string {
+  try {
+    const parsed = new URL(url)
+    parsed.hash = ''
+    return parsed.toString()
+  } catch {
+    return url
   }
 }
 
