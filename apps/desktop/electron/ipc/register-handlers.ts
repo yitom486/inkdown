@@ -29,6 +29,7 @@ import type {
   AcpSessionNewPayload,
   AcpSetConfigOptionPayload,
   AcpSnapshotResponsePayload,
+  AcpProviderSavePayload,
 } from '@inkdown/contracts'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@inkdown/contracts'
 import { resolveSnapshotTimeoutMs } from '@inkdown/contracts'
@@ -161,6 +162,11 @@ import {
   setAcpSnapshotBridge,
 } from '../services/acp/acp-client'
 import { pickAllowOptionId } from '../services/acp/client-handlers'
+import {
+  clearAcpProvider,
+  getAcpProviderStatus,
+  saveAcpProvider,
+} from '../services/acp/provider-config-service'
 
 /**
  * 应用还在运行时，把同一条 IPC 推到每一扇还活着的窗。
@@ -348,6 +354,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.ACP_SET_CONFIG_OPTION, (_event, payload: AcpSetConfigOptionPayload) =>
     setAcpConfigOption(payload),
   )
+  // --- ACP：自定义模型供应商（base URL + API Key） ---
+  ipcMain.handle(IPC.ACP_PROVIDER_GET, () => ok(getAcpProviderStatus()))
+  ipcMain.handle(IPC.ACP_PROVIDER_SAVE, (_event, payload: AcpProviderSavePayload) =>
+    saveAcpProvider(payload),
+  )
+  ipcMain.handle(IPC.ACP_PROVIDER_CLEAR, () => clearAcpProvider())
 
   // --- 应用：版本与自动更新 ---
   ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())

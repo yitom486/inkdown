@@ -50,6 +50,8 @@ import type {
   AcpSessionUpdateEvent,
   AcpSetConfigOptionPayload,
   AcpSetConfigOptionResult,
+  AcpProviderSavePayload,
+  AcpProviderStatus,
   AcpStatusChangedEvent,
 } from '../types/acp'
 import type {
@@ -106,8 +108,13 @@ import type {
 /**
  * preload `contextBridge` 暴露给渲染进程的 API（`window.electronAPI`）。
  * 有返回值的调用均为 `Result`；用户取消为 `CANCELLED`。`on*` 的返回值是取消订阅函数。
+ *
+ * 分区顺序（与 channels.ts 的 IPC 分区保持一致）：
+ * 应用与窗口 → 文件与工作区 → 罗盘 → Bun/日志 → 阅读书签 → ACP → 在线文档 → OCR → 应用更新 → 测验 → 云同步
+ * （interface 内成员顺序无语义，仅作阅读分区；通道字符串见 ../ipc/channels.ts）
  */
 export interface ElectronAPI {
+  /* ===== 应用与窗口：静态注入 + 窗口生命周期 ===== */
   /** 当前操作系统：`win32` / `darwin` / `linux` */
   platform: string
   /** 通过「新建窗口」打开时为 true，不恢复工作区/上次文件 */
@@ -122,10 +129,12 @@ export interface ElectronAPI {
   setDirty: (isDirty: boolean) => void
   /** 回复主进程的关窗请求：继续关闭或取消 */
   confirmClose: (decision: 'proceed' | 'cancel') => void
+  /* ===== 应用与窗口：关闭流程 / 快捷动作 ===== */
   /** 监听主进程「请关闭窗口」；返回取消订阅 */
   onRequestClose: (callback: () => void) => () => void
   /** 监听主进程全局快捷键动作（quick-open / find / replace 等）；返回取消订阅 */
   onGlobalAction?: (callback: (action: string) => void) => () => void
+  /* ===== 文件与工作区：对话框 / 读 / 写 / 导出 / 文件树操作 ===== */
   /** 打开文件对话框（文档） */
   openFile: (options?: OpenDialogOptions) => Promise<Result<OpenDocumentResult, AppError>>
   /** 打开文件夹对话框（工作区根） */
@@ -194,6 +203,7 @@ export interface ElectronAPI {
   takePendingExternalFile: () => Promise<string | null>
   /** 用系统默认浏览器打开外链 */
   openExternal: (url: string) => Promise<Result<void, AppError>>
+  /* ===== 罗盘：扫描书索引库（导入/查询/水印清洗） ===== */
   /** 扫描书一键导入罗盘索引（长任务，进度另走推送） */
   importBookToRosetta: (payload: RosettaImportPayload) => Promise<Result<RosettaImportStats, AppError>>
   /** 取消正在进行的罗盘导入 */
@@ -222,6 +232,7 @@ export interface ElectronAPI {
   inspectRosettaContent: (
     payload: RosettaInspectContentPayload,
   ) => Promise<Result<RosettaInspectContentResult, AppError>>
+  /* ===== Bun / 开发者工具 / 日志 ===== */
   /** 探测本机 Bun 运行时是否可用 */
   getBunRuntimeStatus: () => Promise<Result<BunRuntimeStatus, AppError>>
   /** 安装 / 确保 Bun 运行时 */
@@ -234,6 +245,7 @@ export interface ElectronAPI {
   getErrorLogPath: () => Promise<Result<string, AppError>>
   /** 开关主进程详细日志 */
   setVerboseLogs: (enabled: boolean) => void
+  /* ===== 阅读书签/批注 ===== */
   /** 列出某文件的阅读书签/批注 */
   listReadingMarks: (filePath: string) => Promise<Result<ReadingMark[], AppError>>
   /** 新建阅读书签/批注 */
@@ -242,6 +254,7 @@ export interface ElectronAPI {
   updateReadingMark: (payload: UpdateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
   /** 删除阅读书签/批注 */
   deleteReadingMark: (id: string) => Promise<Result<void, AppError>>
+  /* ===== ACP Agent：运行时/认证/session/prompt/权限/快照/推送 ===== */
   /** 列出可用 ACP Agent 运行时 */
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>
   /** 连接前探测 Codex/ACP 认证是否已就绪 */
@@ -268,6 +281,12 @@ export interface ElectronAPI {
   acpSetConfigOption: (
     payload: AcpSetConfigOptionPayload,
   ) => Promise<Result<AcpSetConfigOptionResult, AppError>>
+  /** 读取自定义模型供应商配置（API Key 永不回传，只给 hasApiKey） */
+  getAcpProvider: () => Promise<Result<AcpProviderStatus, AppError>>
+  /** 保存自定义模型供应商配置（base URL + API Key + 模型），下次连接生效 */
+  saveAcpProvider: (payload: AcpProviderSavePayload) => Promise<Result<AcpProviderStatus, AppError>>
+  /** 清除自定义供应商配置，回到本机 ~/.codex 订阅登录 */
+  clearAcpProvider: () => Promise<Result<void, AppError>>
   /** 回复 Agent 的权限询问 */
   acpRespondPermission: (payload: AcpPermissionResponsePayload) => void
   /** 回传编辑器/阅读器快照给 Agent */
@@ -282,12 +301,14 @@ export interface ElectronAPI {
   ) => () => void
   /** Agent 请求当前文档快照；返回取消订阅 */
   onAcpSnapshotRequest: (callback: (event: AcpSnapshotRequestEvent) => void) => () => void
+  /* ===== 在线文档 ===== */
   /** 抓取在线文档一页 HTML */
   fetchWebDocPage: (payload: WebDocFetchPayload) => Promise<Result<WebDocFetchResult, AppError>>
   /** 发现在线文档目录（TOC） */
   discoverWebDocToc: (
     payload: WebDocDiscoverTocPayload,
   ) => Promise<Result<WebDocDiscoverTocResult, AppError>>
+  /* ===== PDF OCR：目录/页缓存 + OCR 组件管理 ===== */
   /** 读取 PDF OCR 目录缓存 */
   getPdfOcrToc: (
     payload: GetPdfOcrTocPayload,
@@ -324,6 +345,7 @@ export interface ElectronAPI {
   ensureOcrComponent: () => Promise<Result<void, AppError>>
   /** 取消 OCR 组件下载 */
   cancelOcrComponentDownload: () => Promise<Result<OcrComponentStatus, AppError>>
+  /* ===== PDF 解析（pdf-inspector） ===== */
   /** pdf-inspector 分类（类型/页数/待 OCR 页） */
   classifyPdfDocument: (
     payload: ClassifyPdfDocumentPayload,
@@ -334,6 +356,7 @@ export interface ElectronAPI {
   ) => Promise<Result<InspectorBookMarkdown, AppError>>
   /** OCR 组件下载/就绪状态；返回取消订阅 */
   onOcrComponentStatus: (callback: (status: OcrComponentStatus) => void) => () => void
+  /* ===== 应用更新 ===== */
   /** 检查应用更新 */
   checkAppUpdate: () => Promise<AppUpdateStatus>
   /** 下载已发现的更新 */
@@ -344,12 +367,14 @@ export interface ElectronAPI {
   getAppUpdateStatus: () => Promise<Result<AppUpdateStatus, AppError>>
   /** 更新状态推送；返回取消订阅 */
   onAppUpdateStatus: (callback: (status: AppUpdateStatus) => void) => () => void
+  /* ===== AI 测验 ===== */
   /** 追加保存 AI 测验记录到 JSONL */
   appendQuizSession: (session: QuizSessionRecord) => Promise<Result<void, AppError>>
   /** 读取全部测验历史记录 */
   getAllQuizSessions: () => Promise<Result<QuizSessionRecord[], AppError>>
   /** 按书籍路径读取测验历史 */
   getQuizSessionsByFile: (filePath: string) => Promise<Result<QuizSessionRecord[], AppError>>
+  /* ===== 云同步：WebDAV 配置/状态/阅读进度 ===== */
   /** 获取云同步配置 */
   getSyncConfig: () => Promise<Result<SyncConfig, AppError>>
   /** 保存云同步配置 */

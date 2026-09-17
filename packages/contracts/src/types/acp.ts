@@ -320,3 +320,34 @@ export interface AcpAuthPreflightResult {
  * AcpAuthPreflightResult 完全一致，单一源在此，勿另建 types 文件。
  */
 export type CodexAuthPreflight = AcpAuthPreflightResult
+
+/**
+ * 自定义模型供应商（base URL + API Key 直连 OpenAI 兼容端点）。
+ * 启用后主进程用独立 CODEX_HOME（应用数据目录）spawn 适配器，完全不读写
+ * 用户的 ~/.codex；订阅登录（auth.json / 环境变量）与自定义 Key 二选一切换。
+ */
+export interface AcpProviderConfig {
+  /** 展示名（如 DeepSeek）；仅 UI 显示，可缺省回退「自定义 API」 */
+  name?: string
+  /** OpenAI 兼容 base URL（适配器会在其后拼接 /chat/completions 等） */
+  baseUrl: string
+  /** 默认模型 id（写进隔离 CODEX_HOME 的 config.toml 顶层 model） */
+  model: string
+  /** chat=OpenAI Chat Completions（DeepSeek 等兼容端点）；responses=OpenAI Responses API */
+  wireApi: 'chat' | 'responses'
+}
+
+/** 保存请求：比 AcpProviderConfig 多一个明文 Key；Key 只落主进程 userData 文件 */
+export interface AcpProviderSavePayload extends AcpProviderConfig {
+  apiKey: string
+}
+
+/** 查询结果：Key 永不回传渲染端，只给 hasApiKey */
+export interface AcpProviderStatus {
+  configured: boolean
+  name?: string
+  baseUrl?: string
+  model?: string
+  wireApi?: 'chat' | 'responses'
+  hasApiKey: boolean
+}

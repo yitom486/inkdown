@@ -16,6 +16,7 @@ import {
 import { AgentComposer } from '@/components/agent/AgentComposer'
 import { AgentMark } from '@/components/agent/AgentMark'
 import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
+import { AgentProviderDialog } from '@/components/agent/AgentProviderDialog'
 import { AgentBunInstallBanner } from '@/components/agent/AgentBunInstallBanner'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
 import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
@@ -30,6 +31,7 @@ import { appendSelectionChatMarker } from '@/lib/agent/context/selection-chat-ma
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -52,7 +54,7 @@ import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
 import { isOk } from '@inkdown/contracts'
 import { BUILTIN_ACP_RUNTIMES } from '@inkdown/contracts'
-import type { AcpConfigOption } from '@inkdown/contracts'
+import type { AcpConfigOption, AcpProviderStatus } from '@inkdown/contracts'
 
 interface AgentPanelProps {
   workspaceRoot?: string
@@ -359,6 +361,17 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      const providerResult = await acpApi.getProvider()
+      if (cancelled) return
+      if (isOk(providerResult) && providerResult.value.configured) {
+        setProviderStatus(providerResult.value)
+        setAuthHint(
+          `已启用自定义 API（${providerResult.value.name ?? '自定义'} · ${
+            providerResult.value.model ?? ''
+          }），连接时使用该 Key 认证`,
+        )
+        return
+      }
       const result = await acpApi.authPreflight()
       if (cancelled || !isOk(result)) return
       const p = result.value
@@ -391,6 +404,9 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
             : '未连接'
 
   const configsDisabled = view.status !== 'connected' || view.prompting
+
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false)
+  const [providerStatus, setProviderStatus] = useState<AcpProviderStatus | null>(null)
 
   return (
     <aside
@@ -579,6 +595,22 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
                     ))}
                   </DropdownMenuRadioGroup>
 
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                    认证 / 供应商
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className="text-xs"
+                    onSelect={() => setProviderDialogOpen(true)}
+                  >
+                    自定义 API…
+                    {providerStatus?.configured ? (
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {providerStatus.name ?? '已配置'}
+                      </span>
+                    ) : null}
+                  </DropdownMenuItem>
+
                   {secondary.length > 0 ? (
                     <>
                       <DropdownMenuSeparator />
@@ -655,6 +687,24 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
         error={authError}
         onSelect={(methodId) => void completeAuth(methodId)}
         onCancel={() => void cancelAuth()}
+      />
+
+      <AgentProviderDialog
+        open={providerDialogOpen}
+        onOpenChange={setProviderDialogOpen}
+        onChanged={(status) => {
+          setProviderStatus(status)
+          if (status.configured) {
+            setAuthHint(
+              `已启用自定义 API（${status.name ?? '自定义'} · ${status.model ?? ''}），连接时使用该 Key 认证`,
+            )
+            if (view.status === 'disconnected' || view.status === 'error') {
+              void connect()
+            }
+          } else {
+            setAuthHint('已清除自定义 API，连接时回到本机 ~/.codex 订阅登录')
+          }
+        }}
       />
     </aside>
   )

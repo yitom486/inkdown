@@ -15,6 +15,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。
 | `AgentPermissionHost` / `AgentPermissionCard` | 权限请求 UI |
 | `AgentSnapshotHost` | 向主进程提供 Inkdown 内存快照（MCP） |
 | `AgentAuthDialog` / `AgentHistoryMenu` | 认证与历史线程 |
+| `AgentProviderDialog` | 自定义模型供应商配置（base URL + API Key + 模型，Key 只存主进程） |
 | `AgentActivityGroup` / `AgentMark` | 活动分组与选区标记展示 |
 | `AgentBunInstallBanner` | 缺 Bun 运行时提示与一键安装横幅 |
 

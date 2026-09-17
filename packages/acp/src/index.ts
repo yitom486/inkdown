@@ -21,6 +21,7 @@ export * from "./terminal-output-buffer";
 export * from "./auth-method-order";
 export * from "./connect-auth-decision";
 export * from "./connect-auth-gate";
+export * from "./codex-provider-home";
 
 // ── 会话 ──
 export * from "./agent-registry";

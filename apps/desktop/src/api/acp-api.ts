@@ -20,6 +20,8 @@ import type {
   AcpSessionUpdateEvent,
   AcpSetConfigOptionPayload,
   AcpSetConfigOptionResult,
+  AcpProviderSavePayload,
+  AcpProviderStatus,
   AcpStatusChangedEvent,
 } from '@inkdown/contracts'
 
@@ -136,6 +138,44 @@ export const acpApi = {
     const api = requireAcpBridge()
     if (!api.ok) return api
     return api.value.acpSetConfigOption(payload)
+  },
+
+  async getProvider(): Promise<Result<AcpProviderStatus, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.getAcpProvider !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: '自定义 API 配置接口未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.getAcpProvider()
+  },
+
+  async saveProvider(
+    payload: AcpProviderSavePayload,
+  ): Promise<Result<AcpProviderStatus, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.saveAcpProvider !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: '自定义 API 配置接口未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.saveAcpProvider(payload)
+  },
+
+  async clearProvider(): Promise<Result<void, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.clearAcpProvider !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: '自定义 API 配置接口未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.clearAcpProvider()
   },
 
   respondPermission(payload: AcpPermissionResponsePayload): Result<void, AppError> {

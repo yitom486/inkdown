@@ -144,6 +144,9 @@ const electronAPI: ElectronAPI = {
   acpPrompt: (payload) => ipcRenderer.invoke(IPC.ACP_PROMPT, payload),
   acpCancel: (payload) => ipcRenderer.invoke(IPC.ACP_CANCEL, payload),
   acpSetConfigOption: (payload) => ipcRenderer.invoke(IPC.ACP_SET_CONFIG_OPTION, payload),
+  getAcpProvider: () => ipcRenderer.invoke(IPC.ACP_PROVIDER_GET),
+  saveAcpProvider: (payload) => ipcRenderer.invoke(IPC.ACP_PROVIDER_SAVE, payload),
+  clearAcpProvider: () => ipcRenderer.invoke(IPC.ACP_PROVIDER_CLEAR),
   acpRespondPermission: (payload) => {
     ipcRenderer.send(IPC.ACP_PERMISSION_RESPONSE, payload)
   },

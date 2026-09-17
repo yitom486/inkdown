@@ -9,7 +9,8 @@ ACP Agent 主进程侧 wiring：拉起 `codex-acp`、连接生命周期、权限
 | 入口 | `acp-client.ts` / `process-manager.ts` 留守；`packages/acp/src/jsonrpc-transport.ts` 已迁 `@inkdown/acp` | 连接生命周期、子进程、stdio JSON-RPC |
 | cwd | `agent-sandbox-cwd.ts` | 无用户工作区时 ACP 沙箱 cwd（`userData/agent-sandbox`） |
 | 注册 | `packages/acp/src/agent-registry.ts` 已迁 `@inkdown/acp`（`packages/acp/src/agent-registry.ts`） | 可用运行时（默认 `codex-acp`） |
-| 认证 | `codex-auth-preflight.ts` 留守（类型单一源 `@inkdown/contracts` 别名再导出）；`packages/acp/src/connect-auth-gate.ts` / `packages/acp/src/connect-auth-decision.ts` / `packages/acp/src/auth-method-order.ts` 已迁 `@inkdown/acp` | 连接前探活、authMethods 顺序、`~/.codex` |
+| 认证 | `codex-auth-preflight.ts` 留守（类型单一源 `@inkdown/contracts` 别名再导出）；`packages/acp/src/connect-auth-gate.ts` / `packages/acp/src/connect-auth-decision.ts` / `packages/acp/src/auth-method-order.ts` / `packages/acp/src/codex-provider-home.ts` 已迁 `@inkdown/acp` | 连接前探活、authMethods 顺序、`~/.codex`；自定义供应商隔离 CODEX_HOME 的 config.toml 生成 |
+| 供应商 | `provider-config-service.ts` | 自定义模型供应商（base URL + API Key）存储于 `userData/agent/provider.json`（Key 不回传渲染端）；启用时 connectAcp 用隔离 `userData/agent/codex-home` + 注入 env，不读写用户 `~/.codex` |
 | 会话 | `session-open.ts` 留守；`packages/acp/src/session-capabilities.ts` / `packages/acp/src/config-options.ts` 已迁 `@inkdown/acp` | `session/new`、能力、Mode/Model |
 | 回调 | `client-handlers.ts` 留守（含 `createAcpClientMethodRouter`） | Agent → 客户端：权限、fs、终端等 |
 | IO | `acp-fs.ts` / `acp-terminal.ts` 留守；`packages/acp/src/terminal-output-buffer.ts` 已迁 `@inkdown/acp` | 虚拟/真实读文件、终端（虚拟文件定义见 `@inkdown/contracts`：`packages/contracts/src/agent/inkdown-virtual-fs.ts`，快照类型同目录 `packages/contracts/src/agent/inkdown-snapshot.ts`） |

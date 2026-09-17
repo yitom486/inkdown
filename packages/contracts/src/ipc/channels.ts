@@ -1,8 +1,14 @@
 /**
  * 主进程 ↔ 渲染进程 IPC 通道名（字符串才是线上协议）。
  * 属性上的 JSDoc 会在 IDE 悬停 `IPC.XXX` 时显示。
+ *
+ * 分区顺序（与 electron-api.types.ts 的 ElectronAPI 分区保持一致）：
+ * 应用与窗口 → 应用更新 → Bun → 文件与工作区 → 阅读书签 → ACP → 在线文档 → OCR → PDF 解析 → 罗盘 → 测验 → 云同步
  */
 export const IPC = {
+  /* ================================================================
+   * 应用与窗口（app:*）
+   * ================================================================ */
   /** invoke：读取应用版本号 */
   APP_GET_VERSION: 'app:get-version',
   /** send：请求退出应用 */
@@ -31,10 +37,10 @@ export const IPC = {
   APP_GET_WINDOW_INIT: 'app:get-window-init',
   /** invoke：用系统默认浏览器打开外链 */
   APP_OPEN_EXTERNAL: 'app:open-external',
-  /** invoke：探测本机 Bun 运行时是否可用 */
-  BUN_GET_STATUS: 'bun:get-status',
-  /** invoke：安装 / 确保 Bun 运行时 */
-  BUN_INSTALL: 'bun:install',
+
+  /* ================================================================
+   * 应用更新（app:update-*）
+   * ================================================================ */
   /** invoke：检查应用更新 */
   APP_UPDATE_CHECK: 'app:update-check',
   /** invoke：下载已发现的更新 */
@@ -45,14 +51,24 @@ export const IPC = {
   APP_UPDATE_GET_STATUS: 'app:update-get-status',
   /** main→renderer：更新状态推送（检查/下载进度等） */
   APP_UPDATE_STATUS: 'app:update-status',
+
+  /* ================================================================
+   * Bun 运行时（bun:*）
+   * ================================================================ */
+  /** invoke：探测本机 Bun 运行时是否可用 */
+  BUN_GET_STATUS: 'bun:get-status',
+  /** invoke：安装 / 确保 Bun 运行时 */
+  BUN_INSTALL: 'bun:install',
+
+  /* ================================================================
+   * 文件与工作区（file:* / workspace:*）
+   * ================================================================ */
   /** invoke：打开文件对话框（文档） */
   FILE_OPEN: 'file:open',
   /** invoke：打开文件夹对话框（工作区根） */
   FILE_OPEN_FOLDER: 'file:open-folder',
   /** invoke：扫描已有工作区路径，返回文件树 */
   FILE_SCAN_WORKSPACE: 'file:scan-workspace',
-  /** invoke：工作区 Markdown 字面检索（只读，仅渲染端 inspect 链调用，不暴露给模型） */
-  WORKSPACE_SEARCH_MARKDOWN: 'workspace:search-markdown',
   /** invoke：按路径读文本文件 */
   FILE_READ: 'file:read',
   /** invoke：按路径读二进制文件 */
@@ -85,12 +101,18 @@ export const IPC = {
   FILE_COPY: 'file:copy',
   /** invoke：移动工作区路径 */
   FILE_MOVE: 'file:move',
+  /** invoke：工作区 Markdown 字面检索（只读，仅渲染端 inspect 链调用，不暴露给模型） */
+  WORKSPACE_SEARCH_MARKDOWN: 'workspace:search-markdown',
   /** send：开始监听工作区文件变化 */
   WORKSPACE_WATCH: 'workspace:watch',
   /** send：停止监听工作区 */
   WORKSPACE_UNWATCH: 'workspace:unwatch',
   /** main→renderer：工作区磁盘变化，渲染进程应刷新树 */
   WORKSPACE_CHANGED: 'workspace:changed',
+
+  /* ================================================================
+   * 阅读书签/批注（marks:*）
+   * ================================================================ */
   /** invoke：列出某文件的阅读书签/批注 */
   MARKS_LIST: 'marks:list',
   /** invoke：新建阅读书签/批注 */
@@ -99,12 +121,22 @@ export const IPC = {
   MARKS_UPDATE: 'marks:update',
   /** invoke：删除阅读书签/批注 */
   MARKS_DELETE: 'marks:delete',
+
+  /* ================================================================
+   * ACP Agent（acp:*）：协议见 @inkdown/acp，默认运行时 codex-acp
+   * ================================================================ */
   /** invoke：列出可用 ACP Agent 运行时（如 codex-acp） */
   ACP_LIST_RUNTIMES: 'acp:list-runtimes',
+  /** invoke：连接前探测 Codex/ACP 认证是否已就绪 */
+  ACP_AUTH_PREFLIGHT: 'acp:auth-preflight',
+  /** invoke：走 ACP authMethods 完成认证 */
+  ACP_AUTHENTICATE: 'acp:authenticate',
   /** invoke：拉起 ACP 传输并连接 */
   ACP_CONNECT: 'acp:connect',
   /** invoke：断开 ACP 并清理子进程 */
   ACP_DISCONNECT: 'acp:disconnect',
+  /** invoke：加载已有 ACP session（恢复历史） */
+  ACP_LOAD_SESSION: 'acp:load-session',
   /** invoke：ACP session/new */
   ACP_SESSION_NEW: 'acp:session-new',
   /** invoke：向当前 session 发送 prompt */
@@ -113,14 +145,16 @@ export const IPC = {
   ACP_CANCEL: 'acp:cancel',
   /** invoke：设置 ACP 会话配置项（模型等） */
   ACP_SET_CONFIG_OPTION: 'acp:set-config-option',
+  /** invoke：读取自定义模型供应商配置（Key 不回传，只给 hasApiKey） */
+  ACP_PROVIDER_GET: 'acp:provider-get',
+  /** invoke：保存自定义模型供应商配置（base URL + API Key + 模型） */
+  ACP_PROVIDER_SAVE: 'acp:provider-save',
+  /** invoke：清除自定义供应商配置，回到本机 ~/.codex 订阅登录 */
+  ACP_PROVIDER_CLEAR: 'acp:provider-clear',
   /** send：渲染进程回复 Agent 的权限询问 */
   ACP_PERMISSION_RESPONSE: 'acp:permission-response',
-  /** invoke：连接前探测 Codex/ACP 认证是否已就绪 */
-  ACP_AUTH_PREFLIGHT: 'acp:auth-preflight',
-  /** invoke：走 ACP authMethods 完成认证 */
-  ACP_AUTHENTICATE: 'acp:authenticate',
-  /** invoke：加载已有 ACP session（恢复历史） */
-  ACP_LOAD_SESSION: 'acp:load-session',
+  /** send：渲染进程回传快照内容 */
+  ACP_SNAPSHOT_RESPONSE: 'acp:snapshot-response',
   /** main→renderer：ACP session/update 流式事件 */
   ACP_SESSION_UPDATE: 'acp:session-update',
   /** main→renderer：ACP 连接/会话状态变化 */
@@ -129,12 +163,18 @@ export const IPC = {
   ACP_PERMISSION_REQUEST: 'acp:permission-request',
   /** main→renderer：Agent 要当前编辑器/阅读器快照 */
   ACP_SNAPSHOT_REQUEST: 'acp:snapshot-request',
-  /** send：渲染进程回传快照内容 */
-  ACP_SNAPSHOT_RESPONSE: 'acp:snapshot-response',
+
+  /* ================================================================
+   * 在线文档（web-doc:*）
+   * ================================================================ */
   /** invoke：抓取在线文档一页 HTML */
   WEB_DOC_FETCH_PAGE: 'web-doc:fetch-page',
   /** invoke：发现在线文档目录（TOC） */
   WEB_DOC_DISCOVER_TOC: 'web-doc:discover-toc',
+
+  /* ================================================================
+   * PDF OCR（ocr:*）
+   * ================================================================ */
   /** invoke：读取 PDF OCR 目录缓存 */
   OCR_GET_PDF_TOC: 'ocr:get-pdf-toc',
   /** invoke：对 PDF 目录页做 OCR 并缓存 */
@@ -161,10 +201,20 @@ export const IPC = {
   OCR_ENSURE_COMPONENT: 'ocr:ensure-component',
   /** invoke：取消 OCR 组件下载 */
   OCR_CANCEL_COMPONENT_DOWNLOAD: 'ocr:cancel-component-download',
+  /** main→renderer：OCR 组件下载/就绪状态推送 */
+  OCR_COMPONENT_STATUS: 'ocr:component-status',
+
+  /* ================================================================
+   * PDF 解析（pdf-inspect:*）
+   * ================================================================ */
   /** invoke：pdf-inspector 分类（类型/页数/待 OCR 页） */
   PDF_INSPECT_CLASSIFY: 'pdf-inspect:classify',
   /** invoke：pdf-inspector 整档 Markdown（原生文字层） */
   PDF_INSPECT_BOOK_MARKDOWN: 'pdf-inspect:book-markdown',
+
+  /* ================================================================
+   * 罗盘（rosetta:*）：扫描书索引库
+   * ================================================================ */
   /** invoke：扫描书一键导入罗盘索引（长任务，进度另走推送） */
   ROSETTA_IMPORT_BOOK: 'rosetta:import-book',
   /** send：取消正在进行的罗盘导入 */
@@ -185,14 +235,20 @@ export const IPC = {
   ROSETTA_APPLY_BODY_WATERMARK: 'rosetta:apply-body-watermark',
   /** invoke：已入库内容只读取证（readOnly + query_only，不写库；指纹由渲染端绑定当前文档） */
   ROSETTA_INSPECT_CONTENT: 'rosetta:inspect-content',
-  /** main→renderer：OCR 组件下载/就绪状态推送 */
-  OCR_COMPONENT_STATUS: 'ocr:component-status',
+
+  /* ================================================================
+   * AI 测验（quiz:*）
+   * ================================================================ */
   /** invoke：追加保存测验记录到 JSONL */
   QUIZ_APPEND_SESSION: 'quiz:append-session',
   /** invoke：读取所有历史测验记录 */
   QUIZ_GET_ALL_SESSIONS: 'quiz:get-all-sessions',
   /** invoke：按书籍路径读取测验历史 */
   QUIZ_GET_SESSIONS_BY_FILE: 'quiz:get-sessions-by-file',
+
+  /* ================================================================
+   * 云同步（sync:*）：WebDAV 双向同步
+   * ================================================================ */
   /** invoke：读取同步配置 */
   SYNC_GET_CONFIG: 'sync:get-config',
   /** invoke：保存同步配置 */
