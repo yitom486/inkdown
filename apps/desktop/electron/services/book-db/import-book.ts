@@ -9,7 +9,7 @@ import {
 import type { InspectorSpanLike } from '@inkdown/ocr-core'
 // 复用同一套归一化做 span 对齐（空格/标点/全角折叠），保证入库匹配与清洗一致
 import { normalizeWatermarkText } from '@inkdown/ocr-core'
-import type { BookBlockType, BookDbBlockBBox } from '@inkdown/contracts'
+import type { BookBlockType, PdfPointBBox } from '@inkdown/contracts'
 import { computeTocSignature } from '@inkdown/reader-core'
 import { migrateBookDb } from './schema'
 
@@ -104,7 +104,7 @@ export function classifyMarkdownLines(lines: readonly string[]): ClassifiedBlock
 export function alignBlockToSpan(
   blockContent: string,
   spans: readonly InspectorSpanLike[],
-): { bbox: BookDbBlockBBox; confidence: number } | null {
+): { bbox: PdfPointBBox; confidence: number } | null {
   const norm = normalizeWatermarkText(blockContent)
   if (!norm) return null
   let fuzzy: InspectorSpanLike | null = null

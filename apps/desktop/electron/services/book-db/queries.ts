@@ -4,7 +4,7 @@ import {
   NATIVE_PAGE_QUALITY_SUGGEST_OCR,
   OCR_SUGGESTED_PAGES_CAP,
 } from '@inkdown/ocr-core'
-import type { BookBlockSource, BookBlockType, BookDbBlockHit } from '@inkdown/contracts'
+import type { BookBlockSource, BookBlockType, BookDbBlockHit, PdfPointBBox } from '@inkdown/contracts'
 import { getCompletedPages } from './import-book'
 
 /** FTS5 查询转义：包成双引号短语，防 `*`/`"`/OR 等语法字符炸查询 */
@@ -194,16 +194,16 @@ export function getBlockContext(
   return rows.map((row) => toHit(row, ''))
 }
 
-/** 块定位：点 AI 文本 → 原图页 + bbox（点坐标 y-up，与 span 同帧） */
+/** 块定位：点 AI 文本 → 原图页 + 块级 bbox（PDF point，y-up，与 Inspector span 同帧） */
 export function locateBlock(
   db: DatabaseSync,
   blockId: number,
-): { pageNumber: number; bbox: { x: number; y: number; width: number; height: number } | null } | null {
+): { pageNumber: number; bbox: PdfPointBBox | null } | null {
   const row = db
     .prepare('SELECT page_number AS pageNumber, bbox FROM blocks WHERE id = ?')
     .get(blockId) as { pageNumber?: unknown; bbox?: unknown } | undefined
   if (!row || typeof row.pageNumber !== 'number') return null
-  let bbox: { x: number; y: number; width: number; height: number } | null = null
+  let bbox: PdfPointBBox | null = null
   if (typeof row.bbox === 'string' && row.bbox) {
     try {
       const parsed = JSON.parse(row.bbox) as Record<string, unknown>

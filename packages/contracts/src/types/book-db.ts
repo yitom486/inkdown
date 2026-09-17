@@ -12,13 +12,28 @@ export type BookBlockType = 'heading' | 'paragraph' | 'table' | 'list'
  */
 export type BookBlockSource = 'native' | 'ocr' | 'unknown'
 
-export interface BookDbBlockBBox {
-  /** PDF 点坐标，与 inspector span 同帧（左、下、宽、高，y-up） */
+/**
+ * PDF 页面本地坐标系中的轴对齐矩形。
+ *
+ * - 单位：PDF point（1/72 英寸）
+ * - 原点：页面左下角；x 向右，y 向上
+ * - x/y 是矩形左下角，不是浏览器常用的左上角
+ * - page number、页面尺寸、crop box 与 rotation 由所属记录或 viewport 提供
+ * - 当前用于块级 Inspector span 对齐，是近似块框，不是逐字符选区几何
+ */
+export interface PdfPointBBox {
+  /** 矩形左下角的 x 坐标，单位为 PDF point */
   x: number
+  /** 矩形左下角的 y 坐标，单位为 PDF point */
   y: number
+  /** 矩形宽度，单位为 PDF point */
   width: number
+  /** 矩形高度，单位为 PDF point */
   height: number
 }
+
+/** @deprecated 使用 PdfPointBBox；保留此别名以兼容已有调用方。 */
+export type BookDbBlockBBox = PdfPointBBox
 
 export interface BookDbBlockHit {
   id: number
