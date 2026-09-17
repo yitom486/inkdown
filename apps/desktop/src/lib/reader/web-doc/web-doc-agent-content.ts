@@ -1,6 +1,6 @@
 import { webDocApi } from '@/api/web-doc-api'
 import { htmlToText } from '@/lib/agent/context/extract-dom-text'
-import { buildWebDocPageContent } from '@/lib/reader/web-doc-html'
+import { buildWebDocPageContent } from '@/lib/reader/web-doc/web-doc-html'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import { normalizeWebDocNavUrl } from '@inkdown/reader-core'
 import { resolveWebDocSiteId } from '@inkdown/web-doc'

@@ -6,7 +6,7 @@ import {
   highlightSwatch,
   normalizeHighlightColor,
 } from '@inkdown/reader-core'
-import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { findTextRangeInRoot } from '@/lib/reader/marks/excerpt-text-match'
 import {
   buildPdfSnapshotFromRange,
   coalescePdfLineRects,

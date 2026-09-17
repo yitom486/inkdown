@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { strToU8, zipSync } from 'fflate'
-import { detectAdapterBookKind } from './reader-adapter'
+import { detectAdapterBookKind } from '@/lib/reader/reader-adapter'
 import { openFoliateBook } from './foliate-book-adapter'
 
 /**

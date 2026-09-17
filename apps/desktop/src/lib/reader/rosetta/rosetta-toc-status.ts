@@ -1,5 +1,5 @@
 import { computeTocSignature } from '@inkdown/reader-core'
-import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
+import { resolveRosettaTocEntries } from '@/lib/reader/rosetta/rosetta-toc'
 
 /**
  * 罗盘目录健康状态：数据库签名缺失/不一致时不得只显示“✓ AI 直接读库”。

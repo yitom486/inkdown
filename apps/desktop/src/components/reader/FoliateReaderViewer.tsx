@@ -33,7 +33,7 @@ import type { ReadingMark } from '@inkdown/contracts'
 import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
-import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/foliate-book-adapter'
+import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/adapter/foliate-book-adapter'
 import { parse as parseFoliateCfi, toRange as foliateCfiToRange } from '@foliate/epubcfi.js'
 import type { FoliateViewElement } from '@foliate/view.js'
 import type { OverlayerDrawFn } from '@foliate/overlayer.js'
@@ -53,14 +53,14 @@ import {
   buildEpubSnapshotFromRange,
   readEpubSelection,
 } from '@inkdown/reader-core'
-import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { findTextRangeInRoot } from '@/lib/reader/marks/excerpt-text-match'
 import { waitForDom } from '@/lib/reader/wait-for-dom'
 import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import {
   bindDocumentSelectionCollapse,
   bindOutsideReaderPointerDismiss,
 } from '@inkdown/reader-core'
-import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
+import { buildReadingFileFingerprint } from '@/lib/reader/adapter/reading-file-fingerprint'
 import {
   findCurrentChapterRef,
   resolveEpubChapter,

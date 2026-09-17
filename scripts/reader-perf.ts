@@ -10,7 +10,7 @@
  * 阈值均为本地经验值（M 系列/Ryzen 级别桌面 CPU），仅作退化告警，非严谨 benchmark。
  * 真机大书翻页 FPS/内存仍需手工压测（见 .plan 阶段 2.4）。
  */
-import { shouldRenderPdfPage, PDF_PAGE_RENDER_BUFFER } from '../apps/desktop/src/lib/reader/pdf-window'
+import { shouldRenderPdfPage, PDF_PAGE_RENDER_BUFFER } from '../apps/desktop/src/lib/reader/pdf/pdf-window'
 import { mergeReadingMarks } from '@inkdown/annotations'
 import type { ReadingMark } from '@inkdown/contracts'
 

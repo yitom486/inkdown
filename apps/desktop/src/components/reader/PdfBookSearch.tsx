@@ -11,7 +11,7 @@ import {
   summarizeBookSearchHit,
   toBookSearchKeyword,
   type BookSearchItem,
-} from '@/lib/reader/pdf-book-search'
+} from '@/lib/reader/pdf/pdf-book-search'
 import { searchReaderContent } from '@/lib/agent/context/search-reader-content'
 
 /**

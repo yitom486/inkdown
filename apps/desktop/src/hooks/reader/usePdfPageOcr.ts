@@ -7,8 +7,8 @@ import {
   pdfPageNeedsOcr,
   readPdfPageNativeText,
   textFromOcrPageCache,
-} from '@/lib/reader/pdf-page-text'
-import { assertPageOcrAllowed, mergeOcrPageCaches } from '@/lib/reader/pdf-page-auto-ocr'
+} from '@/lib/reader/pdf/pdf-page-text'
+import { assertPageOcrAllowed, mergeOcrPageCaches } from '@/lib/reader/pdf-ocr/pdf-page-auto-ocr'
 import type { PdfOcrPageCache } from '@inkdown/contracts'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 

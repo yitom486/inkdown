@@ -36,8 +36,8 @@ import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@inkdown/reader-core'
 import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
-import { buildWebDocReaderDocument } from '@/lib/reader/web-doc-html'
-import { extractWebDocHeadings } from '@/lib/reader/web-doc-outline'
+import { buildWebDocReaderDocument } from '@/lib/reader/web-doc/web-doc-html'
+import { extractWebDocHeadings } from '@/lib/reader/web-doc/web-doc-outline'
 import {
   collectPreviewHeadingPositions,
   findActiveHeadingByPositions,
@@ -59,16 +59,16 @@ import {
   isWebDocNavigationTarget,
   detectWebDocIframeEscape,
   isCrossOriginIframeEscape,
-} from '@/lib/reader/web-doc-link'
-import { logWebDoc } from '@/lib/reader/web-doc-debug'
+} from '@/lib/reader/web-doc/web-doc-link'
+import { logWebDoc } from '@/lib/reader/web-doc/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@inkdown/reader-core'
 import {
   iterateWebDocUnits,
   primeWebDocAgentTextCache,
   readWebDocUnitByIndex,
-} from '@/lib/reader/web-doc-agent-content'
+} from '@/lib/reader/web-doc/web-doc-agent-content'
 import { readMobiSelection, buildMobiSnapshotFromRange } from '@inkdown/reader-core'
-import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { findTextRangeInRoot } from '@/lib/reader/marks/excerpt-text-match'
 import { waitForDom } from '@/lib/reader/wait-for-dom'
 import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import {
@@ -77,7 +77,7 @@ import {
   findMobiNoteMarkAtPoint,
   removeMobiPendingSelectionHighlight,
   renderWebMarkOverlays,
-} from '@/lib/reader/mobi-reading-marks'
+} from '@/lib/reader/marks/mobi-reading-marks'
 import { injectMobiMarkStyles } from '@inkdown/reader-core'
 import {
   bindDocumentSelectionCollapse,
@@ -86,7 +86,7 @@ import {
 } from '@inkdown/reader-core'
 import { copyTextToClipboard, type PdfSelectionSnapshot } from '@inkdown/reader-core'
 import { applyCopyButtonFeedback, getCodeBlockTextFromCopyButton } from '@/lib/preview/code-block-copy'
-import { activateWebDocCodeTab } from '@/lib/reader/web-doc-code-blocks'
+import { activateWebDocCodeTab } from '@/lib/reader/web-doc/web-doc-code-blocks'
 import {
   resolveWebChapter,
   tocFromWebUnits,

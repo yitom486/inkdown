@@ -1,5 +1,5 @@
 import type { MarkProposalPayload } from '@inkdown/annotations'
-import { excerptAppearsIn, findExcerptInText } from '@/lib/reader/excerpt-text-match'
+import { excerptAppearsIn, findExcerptInText } from '@/lib/reader/marks/excerpt-text-match'
 import {
   markProposalDevLog,
   markProposalTextPreview,

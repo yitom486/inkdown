@@ -85,7 +85,7 @@ function getMarkSearchText(mark: ReadingMark): string {
 import {
   excerptSearchCandidates,
   findTextRangeInRoot,
-} from '@/lib/reader/excerpt-text-match'
+} from '@/lib/reader/marks/excerpt-text-match'
 
 function wrapMarkRange(
   range: Range,

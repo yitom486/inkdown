@@ -1,7 +1,7 @@
 import { isOk } from '@inkdown/contracts'
 import type { BookDbBlockHit } from '@inkdown/contracts'
 import { rosettaApi } from '@/api/rosetta-api'
-import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta-agent-text'
+import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta/rosetta-agent-text'
 import type { ReaderUnitText } from './reader-content-registry'
 
 /**

@@ -1,7 +1,7 @@
 import { Loader2, ScanText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ReactNode } from 'react'
-import type { TocDetectFeedback } from '@/lib/reader/ocr-toc-detect-feedback'
+import type { TocDetectFeedback } from '@/lib/reader/pdf-ocr/ocr-toc-detect-feedback'
 
 export type PdfOcrBannerMode =
   | 'scanned-no-outline'

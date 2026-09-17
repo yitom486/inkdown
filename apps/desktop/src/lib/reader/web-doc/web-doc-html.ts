@@ -1,25 +1,25 @@
 import DOMPurify from 'dompurify'
 import type { WebDocPageContent, WebDocSiteId } from '@inkdown/contracts'
-import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
+import { stripWebDocChrome } from '@/lib/reader/web-doc/web-doc-chrome'
 import { buildReaderLayoutCss, READER_PALETTE, type EpubThemeMode } from '@inkdown/reader-core'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@inkdown/reader-core'
-import { buildWebDocCodeBlockCss, buildWebDocTabsRuntimeScript, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
+import { buildWebDocCodeBlockCss, buildWebDocTabsRuntimeScript, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc/web-doc-code-blocks'
 import {
   buildWebDocEmbedCss,
   normalizeAllowedWebDocEmbeds,
   stripDisallowedWebDocEmbeds,
-} from '@/lib/reader/web-doc-embeds'
+} from '@/lib/reader/web-doc/web-doc-embeds'
 import {
   buildWebDocKatexStylesheetLink,
   buildWebDocMathCss,
   enhanceWebDocMath,
-} from '@/lib/reader/web-doc-math'
+} from '@/lib/reader/web-doc/web-doc-math'
 import {
   neutralizeWebDocNavigationLinks,
   WEB_DOC_READER_MARKER_ATTR,
   WEB_DOC_READER_MARKER_VALUE,
-} from '@/lib/reader/web-doc-link'
-import { ensureWebDocHeadingIds } from '@/lib/reader/web-doc-outline'
+} from '@/lib/reader/web-doc/web-doc-link'
+import { ensureWebDocHeadingIds } from '@/lib/reader/web-doc/web-doc-outline'
 import {
   extractPeopleDailyTitle,
   pickPeopleDailyArticleRoot,

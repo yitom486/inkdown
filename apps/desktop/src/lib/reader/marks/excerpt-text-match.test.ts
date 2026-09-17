@@ -6,7 +6,7 @@ import {
   excerptSearchCandidates,
   findExcerptInText,
   findTextRangeInRoot,
-} from '@/lib/reader/excerpt-text-match'
+} from '@/lib/reader/marks/excerpt-text-match'
 
 describe('excerpt-text-match', () => {
   it('collapseInlineWhitespace 折叠连续空白', () => {

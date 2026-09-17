@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPdfjsDocumentAssetOptions, pdfjsAssetBaseUrl } from '@/lib/reader/pdf-document-assets'
+import { buildPdfjsDocumentAssetOptions, pdfjsAssetBaseUrl } from '@/lib/reader/pdf/pdf-document-assets'
 
 describe('pdfjs document assets', () => {
   it('points at the pdfjs/ public asset root with trailing slash', () => {

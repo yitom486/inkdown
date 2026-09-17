@@ -1,5 +1,5 @@
 import type { WebDocSiteId } from '@inkdown/contracts'
-import { stripDisallowedWebDocEmbeds } from '@/lib/reader/web-doc-embeds'
+import { stripDisallowedWebDocEmbeds } from '@/lib/reader/web-doc/web-doc-embeds'
 import { stripHrttChrome } from '@/lib/reader/web-doc/hrtt-extract'
 
 const EDIT_PAGE_LABEL =

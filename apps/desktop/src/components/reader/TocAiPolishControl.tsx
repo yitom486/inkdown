@@ -7,7 +7,7 @@ import { isOk } from '@inkdown/contracts'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { AcpConfigOption } from '@inkdown/contracts'
 import type { OcrTocEntry } from '@inkdown/contracts'
-import { buildTocAiPrompt, mergeTocAiDraft, parseTocAiEntries } from '@/lib/reader/toc-ai'
+import { buildTocAiPrompt, mergeTocAiDraft, parseTocAiEntries } from '@/lib/reader/rosetta/toc-ai'
 import {
   decideTocAiPromptOutcome,
   peekTocDraftSeq,

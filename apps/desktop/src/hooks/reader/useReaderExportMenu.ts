@@ -5,8 +5,8 @@ import {
   type ReadingNotesContentKind,
   type ReadingNotesScope,
 } from '@inkdown/reader-core'
-import { saveAnkiCardsExport } from '@/lib/reader/export-anki-cards'
-import { saveReadingNotesExport } from '@/lib/reader/save-reading-notes-export'
+import { saveAnkiCardsExport } from '@/lib/reader/marks/export-anki-cards'
+import { saveReadingNotesExport } from '@/lib/reader/marks/save-reading-notes-export'
 
 /**
  * 三阅读器（PDF / Foliate / WebDoc）笔记与 Anki 导出菜单的共享外壳。

@@ -6,7 +6,7 @@ export {
   PDF_PAGE_RENDER_BUFFER,
   resolvePdfVisiblePageRange,
   shouldRenderPdfPage,
-} from '@/lib/reader/pdf-window'
+} from '@/lib/reader/pdf/pdf-window'
 
 /** pdf.js 取消渲染或 canvas 并发冲突时不应向用户报错 */
 export function isPdfRenderCancelled(cause: unknown): boolean {

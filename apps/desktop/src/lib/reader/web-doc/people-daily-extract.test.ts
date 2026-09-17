@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { extractWebDocArticle } from '../web-doc-html'
+import { extractWebDocArticle } from '@/lib/reader/web-doc/web-doc-html'
 
 describe('people-daily layout pages', () => {
   const pageUrl = 'https://paper.people.com.cn/rmrb/pc/layout/202609/01/node_03.html'

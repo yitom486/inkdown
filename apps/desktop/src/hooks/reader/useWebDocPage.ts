@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { webDocApi } from '@/api/web-doc-api'
 import { queryKeys } from '@/api/query-keys'
-import { buildWebDocPageContent } from '@/lib/reader/web-doc-html'
+import { buildWebDocPageContent } from '@/lib/reader/web-doc/web-doc-html'
 import { resolveWebDocSiteId, stripWebDocFragment } from '@inkdown/web-doc'
 import { isOk } from '@inkdown/contracts'
 import type { AppError } from '@inkdown/contracts'
@@ -12,7 +12,7 @@ export interface WebDocPageData {
   content: WebDocPageContent
 }
 
-import { logWebDoc } from '@/lib/reader/web-doc-debug'
+import { logWebDoc } from '@/lib/reader/web-doc/web-doc-debug'
 
 async function fetchWebDocPageData(pageUrl: string): Promise<WebDocPageData> {
   logWebDoc('fetch-start', { pageUrl })

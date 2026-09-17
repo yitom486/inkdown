@@ -1,8 +1,8 @@
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
-import { buildPdfjsDocumentAssetOptions } from '@/lib/reader/pdf-document-assets'
-import { pdfjsLib } from '@/lib/reader/pdf-worker'
+import { buildPdfjsDocumentAssetOptions } from '@/lib/reader/pdf/pdf-document-assets'
+import { pdfjsLib } from '@/lib/reader/pdf/pdf-worker'
 
-export { pdfjsAssetBaseUrl, buildPdfjsDocumentAssetOptions } from '@/lib/reader/pdf-document-assets'
+export { pdfjsAssetBaseUrl, buildPdfjsDocumentAssetOptions } from '@/lib/reader/pdf/pdf-document-assets'
 
 export interface OpenPdfDocumentOptions {
   data: Uint8Array

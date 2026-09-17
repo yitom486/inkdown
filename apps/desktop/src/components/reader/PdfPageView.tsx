@@ -4,13 +4,13 @@ import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist'
 import {
   createPdfPageViewport,
   isPdfRenderCancelled,
-} from '@/lib/reader/pdf-render'
-import { renderPdfMarkOverlays } from '@/lib/reader/pdf-reading-marks'
+} from '@/lib/reader/pdf/pdf-render'
+import { renderPdfMarkOverlays } from '@/lib/reader/marks/pdf-reading-marks'
 import {
   loadPdfTextLayerBuilder,
   type PdfTextLayerBuilderInstance,
-} from '@/lib/reader/pdf-text-layer-builder'
-import { mountOcrTextLayer } from '@/lib/reader/pdf-ocr-text-layer'
+} from '@/lib/reader/pdf/pdf-text-layer-builder'
+import { mountOcrTextLayer } from '@/lib/reader/pdf-ocr/pdf-ocr-text-layer'
 import { pageHasNativeText } from '@inkdown/ocr-core'
 import type { PdfOcrPageCache } from '@inkdown/contracts'
 import {

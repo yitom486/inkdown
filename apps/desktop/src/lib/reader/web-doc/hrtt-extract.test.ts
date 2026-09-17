@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { resolveWebDocSiteId } from '@inkdown/web-doc'
-import { extractWebDocArticle } from '../web-doc-html'
+import { extractWebDocArticle } from '@/lib/reader/web-doc/web-doc-html'
 
 describe('hrtt-news 华人头条资讯正文', () => {
   const pageUrl = 'https://www.52hrtt.com/klln/n/w/info/F1702965842341'

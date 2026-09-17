@@ -16,17 +16,17 @@ import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
 import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
-import { resolveRosettaTocEntries } from '@/lib/reader/rosetta-toc'
+import { resolveRosettaTocEntries } from '@/lib/reader/rosetta/rosetta-toc'
 import {
   getCurrentRosettaTocSignature,
   resolveRosettaIndexStatus,
-} from '@/lib/reader/rosetta-toc-status'
-import { canUseOcrToc } from '@/lib/reader/pdf-ocr-toc-gate'
+} from '@/lib/reader/rosetta/rosetta-toc-status'
+import { canUseOcrToc } from '@/lib/reader/pdf-ocr/pdf-ocr-toc-gate'
 import {
   reduceDetectFeedback,
   selectDetectCandidate,
   type TocDetectFeedback,
-} from '@/lib/reader/ocr-toc-detect-feedback'
+} from '@/lib/reader/pdf-ocr/ocr-toc-detect-feedback'
 import {
   TOC_DRAFT_GUARD_MESSAGE,
   TocDocLifecycle,
@@ -34,20 +34,20 @@ import {
   tocBusyMessage,
   type OcrTocOperation,
   type TocOpLease,
-} from '@/lib/reader/ocr-toc-op'
+} from '@/lib/reader/pdf-ocr/ocr-toc-op'
 import { resolveDetectApply } from '@inkdown/ocr-core'
 import {
   noticeForFreshRecognize,
   noticeForRestoredCache,
   placeOcrTocNotice,
   type OcrTocNotice,
-} from '@/lib/reader/ocr-toc-notice'
+} from '@/lib/reader/pdf-ocr/ocr-toc-notice'
 import { assessPdfOcrTocCache } from '@inkdown/ocr-core'
 import { reassembleDirectoryText } from '@inkdown/ocr-core'
 import { ACP_MAX_IMAGE_BYTES, blobToBase64 } from '@/lib/agent/acp-composer'
 import type { TocPromptImage } from '@/lib/agent/toc-ai-session'
-import { renderPdfPagesToPng } from '@/lib/reader/pdf-page-image'
-import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta-agent-text'
+import { renderPdfPagesToPng } from '@/lib/reader/pdf/pdf-page-image'
+import { formatRosettaBlocksForAgent } from '@/lib/reader/rosetta/rosetta-agent-text'
 import type { RosettaBookInfo, RosettaImportState } from '@inkdown/contracts'
 import { usePdfPageOcr } from '@/hooks/reader/usePdfPageOcr'
 import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
@@ -57,7 +57,7 @@ import { registerSelectionProvider, commitReaderSelection, clearReaderSelection 
 import { DEFAULT_HIGHLIGHT_COLOR } from '@inkdown/reader-core'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { loadPdfOutlineInfo, formatPdfOutlineNotice, type PdfOutlineSource } from '@inkdown/reader-core'
-import { detectPdfDocumentProfile } from '@/lib/reader/pdf-scan-detector'
+import { detectPdfDocumentProfile } from '@/lib/reader/pdf/pdf-scan-detector'
 import {
   clearPdfOcrCache,
   detectPdfTocPages,
@@ -67,13 +67,13 @@ import {
   getPdfOcrToc,
   savePdfOcrToc,
 } from '@/api/ocr-api'
-import { buildPdfOcrTocCache, resolveOcrTocEditorEntries } from '@/lib/reader/pdf-ocr-toc-cache'
+import { buildPdfOcrTocCache, resolveOcrTocEditorEntries } from '@/lib/reader/pdf-ocr/pdf-ocr-toc-cache'
 import {
   formatPdfPageTextForAgent,
-} from '@/lib/reader/pdf-page-text'
-import { isStructuredPageTextUsable } from '@/lib/reader/pdf-structure'
-import { pdfStructureClient } from '@/lib/reader/pdf-structure-client'
-import { pdfInspectorClient } from '@/lib/reader/pdf-inspector-client'
+} from '@/lib/reader/pdf/pdf-page-text'
+import { isStructuredPageTextUsable } from '@/lib/reader/pdf/pdf-structure'
+import { pdfStructureClient } from '@/lib/reader/pdf/pdf-structure-client'
+import { pdfInspectorClient } from '@/lib/reader/pdf/pdf-inspector-client'
 
 declare global {
   interface Window {
@@ -104,9 +104,9 @@ import {
   scalePdfPageCssSize,
   type PdfPageCssSize,
 } from '@inkdown/reader-core'
-import { openPdfDocument } from '@/lib/reader/pdf-document'
-import { findPdfMarksAtPoint, findPdfNoteMarkAtPoint } from '@/lib/reader/pdf-reading-marks'
-import { shouldRenderPdfPage } from '@/lib/reader/pdf-render'
+import { openPdfDocument } from '@/lib/reader/pdf/pdf-document'
+import { findPdfMarksAtPoint, findPdfNoteMarkAtPoint } from '@/lib/reader/marks/pdf-reading-marks'
+import { shouldRenderPdfPage } from '@/lib/reader/pdf/pdf-render'
 import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
@@ -115,7 +115,7 @@ import {
   buildPdfSnapshotFromRange,
   type PdfSelectionSnapshot,
 } from '@inkdown/reader-core'
-import { findTextRangeInRoot } from '@/lib/reader/excerpt-text-match'
+import { findTextRangeInRoot } from '@/lib/reader/marks/excerpt-text-match'
 import { waitForDom } from '@/lib/reader/wait-for-dom'
 import type { CreateMarkAtParams } from '@/lib/agent/context/reader-marks-registry'
 import { focusAgentComposerOnReaderSelection } from '@/lib/agent/context/focus-agent-composer'
@@ -124,10 +124,10 @@ import {
   bindOutsideReaderPointerDismiss,
   clearWindowSelection,
 } from '@inkdown/reader-core'
-import { buildReadingFileFingerprint } from '@/lib/reader/reading-file-fingerprint'
-import { resolvePreferNativeImport, shouldOfferPageOcr } from '@/lib/reader/pdf-import-mode'
-import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf-agent-search-gate'
-import { rosettaPageMissingError } from '@/lib/reader/rosetta-read-guard'
+import { buildReadingFileFingerprint } from '@/lib/reader/adapter/reading-file-fingerprint'
+import { resolvePreferNativeImport, shouldOfferPageOcr } from '@/lib/reader/pdf/pdf-import-mode'
+import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf/pdf-agent-search-gate'
+import { rosettaPageMissingError } from '@/lib/reader/rosetta/rosetta-read-guard'
 import { iterateRosettaChapterUnits } from '@/lib/agent/context/rosetta-chapter-units'
 import { reportAppError } from '@/lib/workspace/report-error'
 import {
@@ -135,9 +135,9 @@ import {
   resolvePdfChapterByPage,
   tocFromPdfUnits,
 } from '@inkdown/reader-core'
-import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr-prefetch'
-import { loadPersistedOcrPageCaches } from '@/lib/reader/pdf-ocr-page-hydrate'
-import { shouldAutoOcrViewportPage } from '@/lib/reader/pdf-page-auto-ocr'
+import { resolvePdfOcrPrefetchPages } from '@/lib/reader/pdf-ocr/pdf-ocr-prefetch'
+import { loadPersistedOcrPageCaches } from '@/lib/reader/pdf-ocr/pdf-ocr-page-hydrate'
+import { shouldAutoOcrViewportPage } from '@/lib/reader/pdf-ocr/pdf-page-auto-ocr'
 import { suggestTocPageOffset } from '@inkdown/reader-core'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
