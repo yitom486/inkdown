@@ -14,7 +14,11 @@ import {
   buildWebDocMathCss,
   enhanceWebDocMath,
 } from '@/lib/reader/web-doc-math'
-import { neutralizeWebDocNavigationLinks } from '@/lib/reader/web-doc-link'
+import {
+  neutralizeWebDocNavigationLinks,
+  WEB_DOC_READER_MARKER_ATTR,
+  WEB_DOC_READER_MARKER_VALUE,
+} from '@/lib/reader/web-doc-link'
 import { ensureWebDocHeadingIds } from '@/lib/reader/web-doc-outline'
 import {
   extractPeopleDailyTitle,
@@ -322,7 +326,7 @@ export function buildWebDocReaderDocument(
   )
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" ${WEB_DOC_READER_MARKER_ATTR}="${WEB_DOC_READER_MARKER_VALUE}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />

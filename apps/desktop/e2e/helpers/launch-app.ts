@@ -11,8 +11,12 @@ export async function launchBuiltApp(
   extraEnv: Record<string, string> = {},
 ): Promise<ElectronApplication> {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'inkdown-e2e-'))
+  const electronTestArgs =
+    process.platform === 'win32' ? ['--disable-gpu', '--in-process-gpu', '--no-sandbox'] : []
   const app = await electron.launch({
-    args: [MAIN_ENTRY, `--user-data-dir=${userDataDir}`],
+    // E2E exercises DOM/IPC behavior and must also run on Windows hosts without
+    // a usable GPU/sandbox runtime; keep the test target deterministic there.
+    args: [...electronTestArgs, MAIN_ENTRY, `--user-data-dir=${userDataDir}`],
     env: {
       ...process.env,
       ...extraEnv,

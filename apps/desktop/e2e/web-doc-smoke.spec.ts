@@ -64,6 +64,34 @@ test.describe('在线文档阅读', () => {
     }
   })
 
+  test('正文同源链接在应用内打开目标文档且不会逃逸到 Electron 页面', async () => {
+    const app = await launchBuiltApp({ E2E_WEB_DOC_FIXTURE_DIR: webDocFixtureDir() })
+
+    try {
+      const window = await app.firstWindow()
+      await window.waitForLoadState('domcontentloaded')
+
+      await welcomeWebDocUrlField(window).fill(E2E_WEB_DOC_START_URL)
+      await welcomeWebDocUrlField(window).press('Enter')
+
+      const panel = mainPanel(window)
+      const frame = webDocFrame(window)
+      await expect(frame.getByRole('heading', { name: 'Quick Start' })).toBeVisible({ timeout: 15_000 })
+
+      await frame.getByRole('link', { name: 'Installation guide' }).click()
+
+      await expect(panel.locator('input[placeholder="https://"]')).toHaveValue(E2E_WEB_DOC_INSTALL_URL)
+      await expect(frame.getByRole('heading', { name: 'Installation' })).toBeVisible({ timeout: 15_000 })
+      await expect(frame.getByText('Inkdown E2E fixture second page content.')).toBeVisible()
+
+      const readerFrame = window.frames().find((candidate) => candidate.url() === 'about:srcdoc')
+      expect(readerFrame).toBeDefined()
+      await expect(readerFrame!.getByText(/preload 未成功注入 API/)).toHaveCount(0)
+    } finally {
+      await app.close()
+    }
+  })
+
   test('fixture 文档可打开目录并步进', async () => {
     const app = await launchBuiltApp({ E2E_WEB_DOC_FIXTURE_DIR: webDocFixtureDir() })
 

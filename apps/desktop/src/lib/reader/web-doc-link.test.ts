@@ -2,10 +2,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   INKDOWN_NAV_HREF_ATTR,
+  WEB_DOC_READER_MARKER_ATTR,
+  WEB_DOC_READER_MARKER_VALUE,
   detectWebDocIframeEscape,
   isWebDocNavigationTarget,
+  isWebDocReaderDocument,
   neutralizeWebDocNavigationLinks,
   resolveWebDocClickHref,
+  resolveWebDocFragment,
   shouldNavigateWebDocInApp,
 } from './web-doc-link'
 
@@ -34,11 +38,14 @@ describe('web-doc-link', () => {
     const root = document.createElement('div')
     root.innerHTML = html
     const link = root.querySelector('a')
-    expect(link?.getAttribute('href')).toBe('#')
+    expect(link?.getAttribute('href')).toBeNull()
     expect(link?.getAttribute(INKDOWN_NAV_HREF_ATTR)).toBe(
       'https://paper.people.com.cn/rmrb/pc/layout/202609/01/node_02.html',
     )
-    expect(root.querySelectorAll('a')[1]?.getAttribute('href')).toBe('#top')
+    expect(root.querySelectorAll('a')[1]?.getAttribute('href')).toBeNull()
+    expect(root.querySelectorAll('a')[1]?.getAttribute(INKDOWN_NAV_HREF_ATTR)).toBe(
+      'https://paper.people.com.cn/rmrb/pc/layout/202609/01/node_03.html#top',
+    )
   })
 
   it('neutralize 将空 href 置为惰性（避免导航到 srcdoc base 即应用自身）', () => {
@@ -54,6 +61,20 @@ describe('web-doc-link', () => {
     expect(links[2]?.getAttribute('href')).toBeNull()
     // 惰性链接不再是导航目标，点击走默认行为也不会离开 srcdoc
     expect(isWebDocNavigationTarget(links[0], 'https://bojieli.github.io/ai-infra-book/')).toBe(false)
+  })
+
+  it('保留 mailto/tel 系统动作链接', () => {
+    const root = document.createElement('div')
+    root.innerHTML = neutralizeWebDocNavigationLinks(
+      '<a href="mailto:reader@example.com">邮件</a><a href="tel:+8613800000000">电话</a>',
+      current,
+    )
+
+    const links = root.querySelectorAll('a')
+    expect(links[0]?.getAttribute('href')).toBe('mailto:reader@example.com')
+    expect(links[1]?.getAttribute('href')).toBe('tel:+8613800000000')
+    expect(links[0]?.getAttribute(INKDOWN_NAV_HREF_ATTR)).toBeNull()
+    expect(links[1]?.getAttribute(INKDOWN_NAV_HREF_ATTR)).toBeNull()
   })
 
   it('解析 SVG 命名空间的 a 链接（SVGAElement 同样可点击导航）', () => {
@@ -81,7 +102,6 @@ describe('web-doc-link', () => {
 
   it('解析 data-inkdown-href 链接', () => {
     const anchor = document.createElement('a')
-    anchor.setAttribute('href', '#')
     anchor.setAttribute(INKDOWN_NAV_HREF_ATTR, 'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
     const href = resolveWebDocClickHref(anchor, current)
     expect(href).toBe('https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
@@ -89,8 +109,40 @@ describe('web-doc-link', () => {
 
   it('isWebDocNavigationTarget 识别 data 链接', () => {
     const anchor = document.createElement('a')
-    anchor.setAttribute('href', '#')
     anchor.setAttribute(INKDOWN_NAV_HREF_ATTR, 'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
     expect(isWebDocNavigationTarget(anchor, current)).toBe(true)
+  })
+
+  it('解析不同 DOM realm 的链接目标（真实 iframe 点击）', () => {
+    const otherDocument = document.implementation.createHTMLDocument('iframe')
+    const anchor = otherDocument.createElement('a')
+    anchor.setAttribute(INKDOWN_NAV_HREF_ATTR, 'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html')
+    otherDocument.body.append(anchor)
+
+    expect(resolveWebDocClickHref(anchor, current)).toBe(
+      'https://paper.people.com.cn/rmrb/pc/content/202609/01/content_30178365.html',
+    )
+  })
+
+  it('hash 链接解析为当前页片段，不触发重新抓取', () => {
+    expect(resolveWebDocFragment('#top', current)).toBe('top')
+    expect(resolveWebDocFragment(`${current}#top`, current)).toBe('top')
+    expect(resolveWebDocFragment('https://paper.people.com.cn/other#top', current)).toBeNull()
+  })
+
+  it('reader marker 可区分正常 srcdoc 与同源 Electron 页面', () => {
+    const readerDocument = document.implementation.createHTMLDocument('reader')
+    readerDocument.documentElement.setAttribute(WEB_DOC_READER_MARKER_ATTR, WEB_DOC_READER_MARKER_VALUE)
+    expect(isWebDocReaderDocument(readerDocument)).toBe(true)
+
+    const appDocument = document.implementation.createHTMLDocument('app')
+    expect(isWebDocReaderDocument(appDocument)).toBe(false)
+
+    const iframe = document.createElement('iframe')
+    Object.defineProperty(iframe, 'contentDocument', { value: appDocument })
+    Object.defineProperty(iframe, 'contentWindow', {
+      value: { location: { href: 'http://localhost:5173/' } },
+    })
+    expect(detectWebDocIframeEscape(iframe, 'http://localhost:5173')).toBe('http://localhost:5173/')
   })
 })

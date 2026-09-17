@@ -1,9 +1,16 @@
 export const INKDOWN_NAV_HREF_ATTR = 'data-inkdown-href'
+export const WEB_DOC_READER_MARKER_ATTR = 'data-inkdown-web-doc-reader'
+export const WEB_DOC_READER_MARKER_VALUE = '1'
 
 function isNavigableHref(href: string): boolean {
-  if (!href || href.startsWith('#')) return false
+  if (!href || href === '#') return false
   if (href.startsWith('mailto:') || href.startsWith('tel:')) return false
-  return true
+  try {
+    const protocol = new URL(href, 'https://inkdown.invalid').protocol
+    return protocol === 'http:' || protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 function toAbsoluteNavUrl(href: string, baseUrl: string): string | null {
@@ -26,11 +33,16 @@ export function neutralizeWebDocNavigationLinks(bodyHtml: string, baseUrl: strin
   const root = doc.getElementById('inkdown-nav-root')
   if (!root) return bodyHtml
 
-  root.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+  root.querySelectorAll<HTMLAnchorElement>('a').forEach((anchor) => {
     const existing = anchor.getAttribute(INKDOWN_NAV_HREF_ATTR)?.trim()
     if (existing) {
-      anchor.setAttribute('href', '#')
+      // Keep the target in a data attribute only. A native href would still be
+      // able to navigate the srcdoc frame if the delegated listener is late or
+      // temporarily unavailable.
+      anchor.removeAttribute('href')
       anchor.removeAttribute('target')
+      anchor.setAttribute('role', 'link')
+      anchor.setAttribute('tabindex', '0')
       return
     }
 
@@ -42,17 +54,31 @@ export function neutralizeWebDocNavigationLinks(bodyHtml: string, baseUrl: strin
       anchor.removeAttribute('target')
       return
     }
-    if (!isNavigableHref(raw)) return
+
+    if (raw === '#') {
+      // A bare hash is inert; most importantly, it must not resolve against the
+      // host Electron document when this HTML is loaded through srcdoc.
+      anchor.removeAttribute('href')
+      anchor.removeAttribute('target')
+      return
+    }
+
+    // Preserve system-handled actions. The main-process web-document URL
+    // validator intentionally accepts only http(s), so routing these through
+    // the app would make mailto/tel links inert instead of opening externally.
+    if (raw.startsWith('mailto:') || raw.startsWith('tel:')) return
 
     const absolute = toAbsoluteNavUrl(raw, baseUrl)
-    if (!absolute) {
+    if (!absolute || !isNavigableHref(raw)) {
       anchor.removeAttribute('href')
       return
     }
 
     anchor.setAttribute(INKDOWN_NAV_HREF_ATTR, absolute)
-    anchor.setAttribute('href', '#')
+    anchor.removeAttribute('href')
     anchor.removeAttribute('target')
+    anchor.setAttribute('role', 'link')
+    anchor.setAttribute('tabindex', '0')
   })
 
   root.querySelectorAll<HTMLAreaElement>('area[href]').forEach((area) => {
@@ -84,13 +110,43 @@ export function shouldNavigateWebDocInApp(href: string, currentPageUrl: string):
   }
 }
 
+/** 返回当前在线文档页面内的 hash 目标；跨页 hash 仍按普通网页链接处理。 */
+export function resolveWebDocFragment(href: string, currentPageUrl: string): string | null {
+  try {
+    const target = new URL(href, currentPageUrl)
+    const current = new URL(currentPageUrl)
+    if (
+      !target.hash ||
+      target.origin !== current.origin ||
+      target.pathname !== current.pathname ||
+      target.search !== current.search
+    ) {
+      return null
+    }
+
+    const encodedId = target.hash.slice(1)
+    try {
+      return decodeURIComponent(encodedId)
+    } catch {
+      return encodedId
+    }
+  } catch {
+    return null
+  }
+}
+
 export function resolveWebDocClickHref(
   target: EventTarget | null,
   currentPageUrl: string,
 ): string | null {
-  if (!(target instanceof Element)) return null
+  // The event target belongs to the iframe's DOM realm. Its Element
+  // constructor is different from the parent renderer's Element constructor,
+  // so instanceof Element would reject real iframe clicks.
+  if (!target || typeof target !== 'object') return null
+  const element = target as Partial<Element>
+  if (typeof element.closest !== 'function') return null
 
-  const area = target.closest('area')
+  const area = element.closest('area')
   if (area) {
     const href = readInkdownNavHref(area)
     if (!href) return null
@@ -101,7 +157,7 @@ export function resolveWebDocClickHref(
     }
   }
 
-  const anchor = target.closest('a')
+  const anchor = element.closest('a')
   // 不限定 HTMLAnchorElement：SVG/MathML 的 <a>（SVGAElement 等）同样可点击导航，
   // 之前会被拦截逻辑漏掉而直接跳转。getAttribute 在各类 Element 上都可用。
   if (!anchor) return null
@@ -123,12 +179,20 @@ export function detectWebDocIframeEscape(
   hostOrigin?: string,
 ): string | null {
   try {
+    const document = iframe.contentDocument
+    if (isWebDocReaderDocument(document)) {
+      return null
+    }
+
     const href = iframe.contentWindow?.location.href
     if (!href || href === 'about:srcdoc' || href.startsWith('about:blank')) {
       return null
     }
 
-    if (hostOrigin) {
+    // A test double or a transient load may not expose contentDocument. Keep
+    // the old same-origin fallback only for that case; a real same-origin
+    // document without our marker is an escaped host/app document.
+    if (!document && hostOrigin) {
       try {
         if (new URL(href).origin === new URL(hostOrigin).origin) {
           return null
@@ -142,6 +206,11 @@ export function detectWebDocIframeEscape(
   } catch {
     return '__cross_origin__'
   }
+}
+
+/** 判断 iframe 当前文档是否为 Inkdown 生成的 srcdoc 阅读文档。 */
+export function isWebDocReaderDocument(document: Document | null): boolean {
+  return document?.documentElement?.getAttribute(WEB_DOC_READER_MARKER_ATTR) === WEB_DOC_READER_MARKER_VALUE
 }
 
 export function isCrossOriginIframeEscape(mark: string | null): mark is '__cross_origin__' {

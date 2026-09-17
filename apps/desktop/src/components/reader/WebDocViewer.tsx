@@ -51,7 +51,14 @@ import {
   resolveWebDocSiteId,
   resolveWebDocTocDiscoveryUrl,
 } from '@inkdown/web-doc'
-import { resolveWebDocClickHref, shouldNavigateWebDocInApp, isWebDocNavigationTarget, detectWebDocIframeEscape, isCrossOriginIframeEscape } from '@/lib/reader/web-doc-link'
+import {
+  resolveWebDocClickHref,
+  resolveWebDocFragment,
+  shouldNavigateWebDocInApp,
+  isWebDocNavigationTarget,
+  detectWebDocIframeEscape,
+  isCrossOriginIframeEscape,
+} from '@/lib/reader/web-doc-link'
 import { logWebDoc } from '@/lib/reader/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@inkdown/reader-core'
 import {
@@ -306,16 +313,40 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     [openPage],
   )
 
+  const navigateToFragment = useCallback((href: string): boolean => {
+    const fragment = resolveWebDocFragment(href, pageUrlRef.current)
+    if (fragment === null) return false
+
+    const doc = iframeRef.current?.contentDocument
+    if (!doc) return true
+
+    const target = fragment ? doc.getElementById(fragment) : null
+    if (target) {
+      target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      setActiveHeadingId(target.id || undefined)
+      return true
+    }
+
+    if (!fragment) {
+      const root = doc.scrollingElement ?? doc.documentElement
+      if (root instanceof HTMLElement) {
+        root.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }
+    return true
+  }, [])
+
   const handleWebDocLink = useCallback(
     (href: string) => {
       logWebDoc('link-click', { href, pageUrl: pageUrlRef.current })
+      if (navigateToFragment(href)) return
       if (shouldNavigateWebDocInApp(href, pageUrlRef.current)) {
         navigateToUrl(href)
         return
       }
       void appApi.openExternal(href)
     },
-    [navigateToUrl],
+    [navigateToFragment, navigateToUrl],
   )
 
   const goPrevious = useCallback(() => {
@@ -648,6 +679,23 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         tryInContentNavigate(href, win)
       }
 
+      const onKeyDownCapture = (event: KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+
+        const href = resolveWebDocClickHref(event.target, pageUrlRef.current)
+        if (!href) return
+
+        event.preventDefault()
+        event.stopPropagation()
+
+        if (event.metaKey || event.ctrlKey || event.shiftKey) {
+          void appApi.openExternal(href)
+          return
+        }
+
+        tryInContentNavigate(href, win)
+      }
+
       const onSelectionChange = bindDocumentSelectionCollapse(doc, win, () => {
         setSelectionToolbarPos(null)
       })
@@ -684,6 +732,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
       doc.addEventListener('click', onCodeChromeClick)
       doc.addEventListener('click', onClickCapture, true)
+      doc.addEventListener('keydown', onKeyDownCapture, true)
       doc.addEventListener('pointerdown', onPointerDownCapture, true)
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
@@ -695,6 +744,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       frameCleanupRef.current = () => {
         doc.removeEventListener('click', onCodeChromeClick)
         doc.removeEventListener('click', onClickCapture, true)
+        doc.removeEventListener('keydown', onKeyDownCapture, true)
         doc.removeEventListener('pointerdown', onPointerDownCapture, true)
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
