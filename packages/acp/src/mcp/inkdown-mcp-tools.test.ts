@@ -92,3 +92,49 @@ describe('inkdown_read 回归', () => {
     expect(readSnapshot).toHaveBeenCalledWith('search', { query: '王道计' })
   })
 })
+
+describe('MCP read-only annotations and concurrency', () => {
+  it('tools/list marks read-only tools as safe/idempotent hints', async () => {
+    const response = (await handleInkdownMcpRpc(
+      { jsonrpc: '2.0', id: 3, method: 'tools/list' },
+      context(),
+    )) as {
+      result: {
+        tools: Array<{
+          name: string
+          annotations?: Record<string, unknown>
+        }>
+      }
+    }
+    const read = response.result.tools.find((tool) => tool.name === 'inkdown_read')
+    const inspect = response.result.tools.find((tool) => tool.name === 'inkdown_inspect_content')
+    const propose = response.result.tools.find((tool) => tool.name === 'inkdown_propose_mark')
+    expect(read?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    })
+    expect(inspect?.annotations).toMatchObject({ readOnlyHint: true })
+    expect(propose?.annotations).toMatchObject({ readOnlyHint: false })
+  })
+
+  it('independent read-only calls execute concurrently when the client sends them concurrently', async () => {
+    let active = 0
+    let maxActive = 0
+    const readSnapshot = vi.fn(async () => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      active -= 1
+      return '{}'
+    })
+
+    await Promise.all([
+      callInkdownMcpTool('inkdown_read', context(readSnapshot), { scope: 'viewport' }),
+      callInkdownMcpTool('inkdown_read', context(readSnapshot), { scope: 'toc' }),
+      callInkdownMcpTool('inkdown_get_selection', context(readSnapshot)),
+    ])
+
+    expect(maxActive).toBe(3)
+  })
+})

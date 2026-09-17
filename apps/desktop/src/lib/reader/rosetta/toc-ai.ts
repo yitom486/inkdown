@@ -68,9 +68,8 @@ export function buildTocAiPrompt(
     withImages
       ? `你是图书目录结构化助手。${imageLine}以附图为准提取章节条目，OCR 文本只供辅助定位。`
       : '你是图书目录结构化助手。从下面的目录页 OCR 文本中提取章节条目。',
-    '首选目录工具：先调 toc_replace_all 把完整目录一次写入草稿' +
-      '（fingerprint 照抄任务中的值；level：章/部=1，节=2，小节=3；水印碎片会被自动丢弃并计数）。' +
-      '小修补用 toc_upsert_entry / toc_delete_entry，写完调 toc_list_draft 自查。',
+    '优先使用已提供的 toc_* MCP 工具；完整参数与限制以 tools/list 返回的工具描述为准。' +
+      '完整目录优先 toc_replace_all，小修补使用 toc_upsert_entry / toc_delete_entry，写完可用 toc_list_draft 自查。',
     `本书指纹 fingerprint 为：${fingerprint}。`,
     '工具全部成功后只回复一行 DONE 加条数，不要输出其它文字。',
     '工具不可用时才输出 JSON 数组：每个元素为 {"title": "章节标题", "printedPage": 印刷页码数字, "level": 层级数字}。',

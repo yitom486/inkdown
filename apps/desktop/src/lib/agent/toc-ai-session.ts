@@ -5,6 +5,10 @@ import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { buildAcpPromptBlocks, type ComposerAttachment } from '@/lib/agent/acp-composer'
 import { extractTextFromContent } from '@/stores/acp-chat-types'
 import type { AcpConfigOption } from '@inkdown/contracts'
+import {
+  markSessionBootstrapSent,
+  shouldSendSessionBootstrap,
+} from './context/session-bootstrap'
 
 /** 目录页原图（渲染端离屏渲染，供模型识图；无图片能力时自动退化纯文本） */
 export interface TocPromptImage {
@@ -25,6 +29,12 @@ let tocReplyBuffer = ''
 let tocPrompting = false
 /** 单调 prompt 序号：与 session 短 id 合成 operationId（审计日志关联一次整理） */
 let tocPromptSeq = 0
+
+const TOC_TOOL_OVERVIEW =
+  'This is an Inkdown TOC task. The ACP client has already discovered the available toc_* MCP tools via MCP tools/list. Prefer toc_replace_all for a complete draft, toc_upsert_entry/toc_delete_entry for small fixes, and toc_list_draft to verify. Full parameters and limits are in the tool descriptions.'
+
+const TOC_SESSION_BOOTSTRAP =
+  'You are the one-shot Inkdown table-of-contents assistant. Work only on the supplied book TOC task, use the available toc_* tools, and never write the final cache directly; the user confirms the draft in the UI.'
 
 export function isTocPrompting(): boolean {
   return tocPrompting
@@ -196,7 +206,15 @@ export async function sendTocPrompt(
     base64: image.base64,
   }))
   const caps = useAcpUiStore.getState().promptCapabilities
-  const blocks = buildAcpPromptBlocks({ text: promptText, attachments, promptCapabilities: caps })
+  const includeBootstrap = shouldSendSessionBootstrap(tocSessionId)
+  const taskText = [
+    includeBootstrap ? TOC_SESSION_BOOTSTRAP : null,
+    TOC_TOOL_OVERVIEW,
+    promptText,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join('\n\n')
+  const blocks = buildAcpPromptBlocks({ text: taskText, attachments, promptCapabilities: caps })
   const imageCount = blocks.filter((block) => block.type === 'image').length
   console.info(
     `[toc-ai] prompt:start op=${opId} session=${shortSid} fp=${fpTail} chars=${promptText.length} images=${imageCount}/${attachments.length}`,
@@ -215,6 +233,9 @@ export async function sendTocPrompt(
         `[toc-ai] send:return op=${opId} outcome=${outcome} elapsedMs=${elapsedMs} error=${result.error.message}`,
       )
       return { reply: null, outcome, elapsedMs, opId }
+    }
+    if (includeBootstrap) {
+      markSessionBootstrapSent(tocSessionId)
     }
     const reply = tocReplyBuffer.trim()
     const outcome: TocPromptSendOutcome = reply ? 'ok' : 'empty'

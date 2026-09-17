@@ -9,6 +9,10 @@ import type {
 import type { AcpMessageAttachment } from '@/lib/agent/acp-composer'
 import { acpApi } from '@/api/acp-api'
 import { buildInkdownPromptPrefix } from '@/lib/agent/context/build-prompt-prefix'
+import {
+  markSessionBootstrapSent,
+  shouldSendSessionBootstrap,
+} from '@/lib/agent/context/session-bootstrap'
 import { resetTurnContextTracker } from '@/lib/agent/context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
@@ -447,11 +451,17 @@ export function useAcpSession(workspaceRoot?: string) {
       appendUserMessage(payload.text, payload.messageAttachments)
       setPrompting(true)
       beginAgentReply()
-      const prefix = buildInkdownPromptPrefix(useAcpUiStore.getState().activeThreadId)
+      const includeBootstrap = shouldSendSessionBootstrap(sid)
+      const prefix = buildInkdownPromptPrefix(useAcpUiStore.getState().activeThreadId, {
+        includeBootstrap,
+      })
       const result = await acpApi.prompt({
         sessionId: sid,
         prompt: [...prefix, ...payload.prompt],
       })
+      if (isOk(result) && includeBootstrap) {
+        markSessionBootstrapSent(sid)
+      }
       flushBufferedChunks()
       finishStreaming()
       if (!isOk(result)) {

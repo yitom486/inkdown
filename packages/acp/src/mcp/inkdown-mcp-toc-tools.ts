@@ -31,11 +31,25 @@ const TOC_ENTRY_SCHEMA = {
 export const INKDOWN_TOC_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'toc_list_draft',
+    annotations: {
+      title: 'List TOC draft',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description: '查看当前目录草稿（条目、指纹）。写入后调用来自查。',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'toc_replace_all',
+    annotations: {
+      title: 'Replace TOC draft',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       '整单写入目录草稿（首选，一次写完整个目录，只需确认一次）。' +
       'level：章/部=1，节=2，小节=3；水印碎片会被自动丢弃并计数。' +
@@ -57,6 +71,13 @@ export const INKDOWN_TOC_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'toc_upsert_entry',
+    annotations: {
+      title: 'Update TOC entry',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description: '新增或按标题更新一条目录（小修补用，大改走 toc_replace_all）。',
     inputSchema: {
       type: 'object',
@@ -70,6 +91,13 @@ export const INKDOWN_TOC_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'toc_delete_entry',
+    annotations: {
+      title: 'Delete TOC entry',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description: '按序号（从 0 起）或标题删一条目录。',
     inputSchema: {
       type: 'object',

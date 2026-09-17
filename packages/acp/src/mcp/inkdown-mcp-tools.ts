@@ -15,6 +15,17 @@ export interface InkdownMcpToolDefinition {
   name: string
   description: string
   inputSchema: Record<string, unknown>
+  /** MCP tool annotations consumed by capable agents for safety/parallelism hints. */
+  annotations?: InkdownMcpToolAnnotations
+}
+
+/** MCP ToolAnnotations (hints, not an authorization mechanism). */
+export interface InkdownMcpToolAnnotations {
+  title?: string
+  readOnlyHint?: boolean
+  destructiveHint?: boolean
+  idempotentHint?: boolean
+  openWorldHint?: boolean
 }
 
 const READER_FORMATS =
@@ -31,13 +42,27 @@ const MARK_LIST_FILTER_ENUM = ['all', 'highlights', 'bookmarks'] as const
 export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   {
     name: 'inkdown_read',
+    annotations: {
+      title: 'Read Inkdown document',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       `读取当前打开的 ${READER_FORMATS} 内容（不含用户选区；选区用 inkdown_get_selection）。` +
       'scope 含义：toc=目录结构；viewport=当前视口约一屏（优先于整章）；current=当前章/页全文；' +
       'chapter=指定 TOC 章/页（需 flatIndex 或 title，不跳转）；search=全书关键词检索（需 query）。' +
-      '正文 escalation：viewport → current → chapter；结构用 toc；「哪里提到 X」用 search。' +
+      '正文 escalation：viewport → current → chapter；结构用 toc；「哪里提到 X」用 search；' +
+      '「这页/这章」不要直接用 current，先看线程里是否已有内容。' +
       'scope=search 的 JSON 含 source=memory|index，以及 preciseTotal=false' +
-      '（精确 corpus total 只用 inkdown_inspect_content）。',
+      '（精确 corpus total 只用 inkdown_inspect_content）。\n' +
+      '已入库 PDF（罗盘索引已建）：所有读取只读索引；缺页返回 error（不是空成功）——' +
+      '告知用户，不要重试指望 OCR 补上，也不要凭记忆编造该页内容；请用户重建索引。\n' +
+      '未入库扫描/混合 PDF：search / inspect_content 会报错而不整书 OCR；' +
+      'viewport/current/chapter 可按需单页 OCR（首次 10–30 秒，缓存后即时）。\n' +
+      '正文前缀【PDF 第 N/M 页】标识真实读到的页——永远信任该页头，' +
+      '不要用其他页或记忆的内容替代；OCR 失败返回 error，提示用户「识别本页」或重建索引。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -65,13 +90,20 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'inkdown_inspect_content',
+    annotations: {
+      title: 'Inspect indexed content',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       '块级取证：按字面关键词返回至多 10 条内容证据（原文、命中位置 start/end/middle/multiple、精确总数与截断标记）。' +
       '覆盖：当前打开且已入库的 PDF（book-index：PDF 页码、章节标题、block id）、' +
       '当前 md（editor-buffer：行号，有文件夹时兼 workspace-file 相对路径）、' +
       '当前 EPUB/MOBI（ebook-section：章节标题定位）。' +
       '专供审计残留命中（如清洗后是否还有「王道计」、命中是正文还是水印碎片）；章节级阅读仍用 inkdown_read。' +
-      '只读，不建库、不 OCR；未入库或参数错误会直接报错。',
+      '只读，不建库、不 OCR；已入库 PDF 仅读罗盘索引，缺索引直接报错（不要重试指望 OCR），未入库或参数错误也会报错。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -92,6 +124,13 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'inkdown_get_selection',
+    annotations: {
+      title: 'Get current selection',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       '获取用户当前选中的文本（高频独立工具）。若选区较短（≤30 字），仅向前后各补约 30 字作为 excerpt。' +
       '仅当 turn-context 出现 hasSelection=true（本轮新划选）时几乎必调；无此标记时不要调。' +
@@ -104,6 +143,13 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'inkdown_list_marks',
+    annotations: {
+      title: 'List reading marks',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       '列出当前打开文档的阅读标记。filter=all（默认）=书签+高亮+批注；highlights=仅划重点（高亮与带摘录批注，含 passages）；' +
       'bookmarks=仅书签。用于 EPUB/PDF/MOBI/在线文档。',
@@ -121,10 +167,18 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'inkdown_suggest_chapters',
+    annotations: {
+      title: 'Suggest chapters to mark',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description:
       '提交章级划重点建议供用户点选（不写 marks、不调 propose_mark）。' +
       '先 inkdown_read(scope=toc)；再提交 2～5 章，每章含 flatIndex、title、reason。' +
-      '用户点选一章后，再 read(scope=chapter) + inkdown_propose_mark(marks)，单批≤10。',
+      '用户点选一章后，再 read(scope=chapter) + inkdown_propose_mark(marks)，单批≤10。' +
+      '禁止：跳过用户点选、整书范围内提建议、一次批量超限。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -151,6 +205,13 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'inkdown_create_bookmark',
+    annotations: {
+      title: 'Create bookmark',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description:
       '在当前阅读位置创建书签（不跳转）。用户明确要求「加个书签」时调用；仅 EPUB/PDF/MOBI。',
     inputSchema: {
@@ -161,12 +222,20 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
   },
   {
     name: 'inkdown_propose_mark',
+    annotations: {
+      title: 'Propose highlight or note',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description:
       '唯一标记提议工具（高亮 / 批注 / 批量，不入库；用户「采用」后才写入）。' +
       '单条：excerpt（原句或口述关键词）+ 可选 note（空=仅高亮）+ 可选 kind=highlight|note|auto + 可选 flatIndex。' +
       '有 fresh 选区时也可只传 note（用当前选区定位）。' +
-      '批量：marks 数组（每项同单条字段，单批≤10）。' +
-      '客户端读正文并模糊匹配原句；建议先 inkdown_read(scope=viewport) 或 scope=chapter。',
+      '批量：marks 数组（每项同单条字段，单批≤10，客户端截断超出部分）。' +
+      '客户端读正文并模糊匹配原句；建议先 inkdown_read(scope=viewport) 或 scope=chapter。' +
+      '仅在用户明确要求保存高亮/批注时调用；不要未经提示发明标记，也不要整书到处提议。',
     inputSchema: {
       type: 'object',
       properties: {

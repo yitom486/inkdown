@@ -2,6 +2,10 @@ import { useCallback, useState } from 'react'
 import { isOk } from '@inkdown/contracts'
 import { acpApi } from '@/api/acp-api'
 import { buildInkdownPromptPrefix } from '@/lib/agent/context/build-prompt-prefix'
+import {
+  markSessionBootstrapSent,
+  shouldSendSessionBootstrap,
+} from '@/lib/agent/context/session-bootstrap'
 import { proposeMarkForAgent } from '@/lib/agent/context/propose-mark'
 import {
   ANNOTATION_DIRECTION_ASK,
@@ -154,11 +158,15 @@ export function useAnnotationAgentAssist(options: {
       store.appendUserMessage(displayText)
       store.beginAgentReply()
 
-      const prefix = buildInkdownPromptPrefix(`annotation:${fileKey}`)
+      const includeBootstrap = shouldSendSessionBootstrap(sid)
+      const prefix = buildInkdownPromptPrefix(`annotation:${fileKey}`, { includeBootstrap })
       const result = await acpApi.prompt({
         sessionId: sid,
         prompt: [...prefix, { type: 'text', text: promptText }],
       })
+      if (isOk(result) && includeBootstrap) {
+        markSessionBootstrapSent(sid)
+      }
 
       store.finishStreaming()
       store.setCapturing(false)
@@ -335,11 +343,15 @@ export function useAnnotationAgentAssist(options: {
       store.appendUserMessage(built.displayText)
       store.beginAgentReply()
 
-      const prefix = buildInkdownPromptPrefix(`annotation:${fileKey}`)
+      const includeBootstrap = shouldSendSessionBootstrap(sid)
+      const prefix = buildInkdownPromptPrefix(`annotation:${fileKey}`, { includeBootstrap })
       const result = await acpApi.prompt({
         sessionId: sid,
         prompt: [...prefix, { type: 'text', text: built.promptText }],
       })
+      if (isOk(result) && includeBootstrap) {
+        markSessionBootstrapSent(sid)
+      }
 
       store.finishStreaming()
       store.setCapturing(false)
