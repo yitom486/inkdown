@@ -144,6 +144,31 @@ describe('web-doc-html', () => {
     expect(document).toContain('body pre code')
   })
 
+  it('把原生 hr、Tailwind 边界类与 inline border 归一化为通用分割线类', () => {
+    const html = `<!DOCTYPE html><html><body><article>
+      <div class="field border-gray-50 border-b"><p>第一组</p></div>
+      <div style="border-top: 1px solid #eee"><p>第二组</p></div>
+      <div class="divide-y"><div>第三组</div><div>第四组</div></div>
+      <hr />
+    </article></body></html>`
+
+    const result = extractWebDocArticle(html, 'https://example.com/docs')
+    expect(result.bodyHtml).toContain('web-doc-divider-after')
+    expect(result.bodyHtml).toContain('web-doc-divider-block')
+    expect(result.bodyHtml).toContain('web-doc-divider-before')
+    expect(result.bodyHtml).toContain('web-doc-divider-group')
+    expect(result.bodyHtml).toContain('web-doc-divider')
+
+    const document = buildWebDocReaderDocument(
+      { title: 'Divider', bodyHtml: result.bodyHtml, baseUrl: 'https://example.com/docs' },
+      'dark',
+    )
+    expect(document).toContain('.web-doc-divider-after')
+    expect(document).toContain('.web-doc-divider-block.web-doc-divider-after')
+    expect(document).toContain('.web-doc-divider-group > * + *')
+    expect(document).toContain('hr.web-doc-divider')
+  })
+
   it('人民日报电子版仅提取 .article 正文', () => {    const html = `<!DOCTYPE html><html><head><title> 测试标题 </title></head><body>
       <div class="main w1000">
         <div class="paper-box">

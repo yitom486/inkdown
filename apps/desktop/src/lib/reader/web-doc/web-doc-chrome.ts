@@ -9,6 +9,80 @@ const DOC_CHROME_BUTTON_LABEL =
   /copy(?:\s+(?:page|link|code))?|edit(?:\s+(?:this\s+)?(?:page|file))?|open\s+menu|search|toggle\s+(?:menu|navigation)|previous|next/i
 
 const HEADING_SELECTOR = 'h1,h2,h3,h4,h5,h6'
+const DIVIDER_SPACING_TAGS = new Set([
+  'ARTICLE',
+  'ASIDE',
+  'BLOCKQUOTE',
+  'DIV',
+  'FIGURE',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'LI',
+  'MAIN',
+  'P',
+  'SECTION',
+])
+
+function tailwindUtilityName(token: string): string {
+  const variants = token.toLowerCase().split(':')
+  return variants[variants.length - 1] ?? token.toLowerCase()
+}
+
+function hasTailwindBorderUtility(element: Element, edge: 'top' | 'bottom'): boolean {
+  const edgePattern = edge === 'bottom' ? /^border-(?:b|y)(?:-|$)/ : /^border-(?:t|y)(?:-|$)/
+  const zeroPattern = edge === 'bottom' ? /^border-(?:b|y)-(?:0|none)$/ : /^border-(?:t|y)-(?:0|none)$/
+
+  return Array.from(element.classList).some((token) => {
+    const utility = tailwindUtilityName(token)
+    return edgePattern.test(utility) && !zeroPattern.test(utility)
+  })
+}
+
+function hasInlineBorder(element: Element, edge: 'top' | 'bottom'): boolean {
+  const style = element.getAttribute('style')?.toLowerCase() ?? ''
+  const property = edge === 'bottom' ? '(?:border-bottom|border-block-end)' : '(?:border-top|border-block-start)'
+  return new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*(?!0(?:px)?(?:\\s|;|$)|none(?:\\s|;|$))[^;]+`).test(style)
+}
+
+function hasTailwindDivideYUtility(element: Element): boolean {
+  return Array.from(element.classList).some((token) => {
+    const utility = tailwindUtilityName(token)
+    return /^divide-y(?:-|$)/.test(utility) && !/^divide-y-(?:0|none)$/.test(utility)
+  })
+}
+
+/**
+ * 原站的 utility CSS 不会随正文进入 srcdoc。这里把 HTML 本身能表达的
+ * 分组边界转换成 Inkdown 自己的语义类，避免依赖某个站点的 CSS 文件。
+ * 只处理明确的边框语义，不猜测普通布局类，降低跨站误伤。
+ */
+function normalizeWebDocDividers(root: HTMLElement): void {
+  root.querySelectorAll<HTMLElement>('[class], [style], hr').forEach((element) => {
+    if (element.tagName === 'HR') {
+      element.classList.add('web-doc-divider')
+    }
+
+    if (hasTailwindBorderUtility(element, 'bottom') || hasInlineBorder(element, 'bottom')) {
+      element.classList.add('web-doc-divider-after')
+      if (DIVIDER_SPACING_TAGS.has(element.tagName)) {
+        element.classList.add('web-doc-divider-block')
+      }
+    }
+    if (hasTailwindBorderUtility(element, 'top') || hasInlineBorder(element, 'top')) {
+      element.classList.add('web-doc-divider-before')
+      if (DIVIDER_SPACING_TAGS.has(element.tagName)) {
+        element.classList.add('web-doc-divider-block')
+      }
+    }
+    if (hasTailwindDivideYUtility(element)) {
+      element.classList.add('web-doc-divider-group')
+    }
+  })
+}
 
 function isDocChromeButton(button: HTMLButtonElement): boolean {
   if (button.closest('header, nav, [role="navigation"]')) return true
@@ -47,6 +121,10 @@ function preserveSemanticButtonText(root: HTMLElement): void {
 
     const replacement = root.ownerDocument.createElement('span')
     replacement.className = 'web-doc-semantic-control'
+    const componentPart = button.getAttribute('data-component-part')
+    if (componentPart) {
+      replacement.setAttribute('data-component-part', componentPart)
+    }
     while (button.firstChild) {
       replacement.appendChild(button.firstChild)
     }
@@ -54,23 +132,67 @@ function preserveSemanticButtonText(root: HTMLElement): void {
   })
 }
 
-function stripHeadingPermalinks(root: HTMLElement): void {
-  root.querySelectorAll<HTMLElement>(HEADING_SELECTOR).forEach((heading) => {
-    heading.querySelectorAll<HTMLAnchorElement>('a').forEach((anchor) => {
-      const ariaLabel = anchor.getAttribute('aria-label')?.toLowerCase() ?? ''
-      const className = anchor.className ?? ''
-      const text = anchor.textContent?.replace(/\s+/g, ' ').trim() ?? ''
-      const href = anchor.getAttribute('href') ?? ''
-      const isNamedPermalink =
-        ariaLabel.includes('heading') ||
-        ariaLabel.includes('link for') ||
-        /(?:^|\s)(?:anchor|header-anchor)(?:\s|$)/i.test(className)
-      const isIconOnlyFragment = href.startsWith('#') && (!text || text === '#') && Boolean(anchor.querySelector('svg, img'))
+function isHeaderPermalink(anchor: HTMLAnchorElement): boolean {
+  const ariaLabel = anchor.getAttribute('aria-label')?.trim().toLowerCase() ?? ''
+  return ariaLabel.startsWith('navigate to header')
+}
 
-      if (isNamedPermalink || isIconOnlyFragment) {
-        anchor.remove()
+/**
+ * 保留站点的标题/字段锚点，但把它们变成阅读器自己的悬停控件。
+ * Mintlify 的锚点并不只出现在 h1-h6 中，ResponseField 也会在字段名旁生成一份。
+ */
+function normalizeWebDocPermalinks(root: HTMLElement): void {
+  root.querySelectorAll<HTMLAnchorElement>('a[aria-label]').forEach((anchor) => {
+    const ariaLabel = anchor.getAttribute('aria-label')?.toLowerCase() ?? ''
+    const isLegacyHeadingAnchor = ariaLabel.includes('link for') || ariaLabel.includes('heading')
+
+    if (isLegacyHeadingAnchor && !isHeaderPermalink(anchor)) {
+      anchor.remove()
+      return
+    }
+    if (!isHeaderPermalink(anchor)) return
+
+    const heading = anchor.closest<HTMLElement>(HEADING_SELECTOR)
+    if (heading) {
+      heading.classList.add('web-doc-heading-with-anchor')
+      anchor.classList.add('web-doc-heading-anchor')
+      anchor.parentElement?.classList.add('web-doc-heading-anchor-wrap')
+      return
+    }
+
+    const fieldHead = anchor.closest<HTMLElement>('.param-head')
+    if (fieldHead) {
+      fieldHead.classList.add('web-doc-param-head')
+      anchor.classList.add('web-doc-field-anchor')
+      anchor.parentElement?.classList.add('web-doc-field-anchor-wrap')
+      anchor.parentElement?.parentElement?.classList.add('web-doc-field-row', 'web-doc-field-with-anchor')
+      return
+    }
+
+    // 不能判断归属的站点锚点只会产生孤立图标，不保留到正文流中。
+    anchor.remove()
+  })
+}
+
+/** Mintlify Card：移除站点 CSS 仍保留语义，让阅读器重新控制卡片布局。 */
+function normalizeWebDocCards(root: HTMLElement): void {
+  root.querySelectorAll<HTMLElement>('[data-component-part="card-content"]').forEach((content) => {
+    const card = content.closest('a')
+    if (!(card instanceof HTMLAnchorElement)) return
+
+    card.classList.add('web-doc-card')
+    card.removeAttribute('aria-hidden')
+    content.classList.add('web-doc-card-content')
+
+    const icon = card.querySelector<HTMLElement>('[data-component-part="card-icon"]')
+    icon?.classList.add('web-doc-card-icon')
+
+    for (const child of Array.from(card.children)) {
+      if (!(child instanceof HTMLElement)) continue
+      if (child.classList.contains('absolute') && child.querySelector('svg')) {
+        child.classList.add('web-doc-card-arrow')
       }
-    })
+    }
   })
 }
 
@@ -116,7 +238,9 @@ function stripGenericChrome(root: HTMLElement): void {
     }
   })
 
-  stripHeadingPermalinks(root)
+  normalizeWebDocDividers(root)
+  normalizeWebDocPermalinks(root)
+  normalizeWebDocCards(root)
 }
 
 function stripPeopleDailyChrome(root: HTMLElement): void {

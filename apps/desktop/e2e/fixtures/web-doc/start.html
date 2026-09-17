@@ -8,14 +8,33 @@
     <article>
       <h1>Quick Start</h1>
       <p>Inkdown E2E fixture paragraph for online document smoke tests.</p>
-      <h4>Authentication Capabilities<a aria-label="Link for this heading" href="#authentication-capabilities">
-        <svg viewBox="0 0 24 24"><path d="M1" /></svg>
-      </a></h4>
-      <div class="response-field">
-        <button>logout</button>
-        <code>LogoutCapabilities Object</code>
+      <h4 class="group" id="authentication-capabilities">
+        <div class="absolute"><a aria-label="Navigate to header" href="#authentication-capabilities">
+          <svg viewBox="0 0 18 18"><path d="M1" /></svg>
+        </a></div>
+        <span>Authentication Capabilities</span>
+      </h4>
+      <div class="field border-gray-50 border-b">
+        <div id="param-logout" class="param-head">
+          <div class="flex-1">
+            <div class="flex items-center flex-wrap">
+              <div class="absolute"><a aria-label="Navigate to header: logout" href="#param-logout">
+                <svg viewBox="0 0 18 18"><path d="M1" /></svg>
+              </a></div>
+              <button data-component-part="field-name">logout</button>
+              <div data-component-part="field-meta">
+                <div data-component-part="field-info-pill"><span>LogoutCapabilities Object</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
         <p>The <a href="/protocol/v1/authentication#logging-out"><code>logout</code></a> method is available.</p>
       </div>
+      <a href="/protocol/v1/authentication" aria-hidden="true" style="display: contents;">
+        <div class="absolute"><svg viewBox="0 0 18 18"><path d="M14 4L4 14" /></svg></div>
+        <div data-component-part="card-icon"><svg viewBox="0 0 24 24"><path d="M1" /></svg></div>
+        <div><div data-component-part="card-content"><span>Learn more about Authentication</span></div></div>
+      </a>
       <div class="language-bash">
         <pre class="language-bash"><code>echo hello-inkdown</code></pre>
       </div>

@@ -83,6 +83,176 @@ function buildWebDocInlineCodeCss(theme: EpubThemeMode): string {
       color: ${palette.link} !important;
       font: inherit !important;
     }
+    /* ResponseField 的字段名与类型徽章应保持同一行。 */
+    body .web-doc-param-head {
+      position: relative !important;
+    }
+    body .web-doc-param-head [data-component-part="field-name"] {
+      display: inline !important;
+      color: ${palette.link} !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      font-weight: 600 !important;
+    }
+    body .web-doc-param-head [data-component-part="field-meta"] {
+      display: inline !important;
+      margin-left: 0.35em !important;
+    }
+    body .web-doc-param-head [data-component-part="field-info-pill"] {
+      display: inline-block !important;
+      padding: 0.12em 0.5em !important;
+      border: 0 !important;
+      border-radius: 0.35em !important;
+      background: ${surface} !important;
+      color: ${palette.text} !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      font-size: 0.9em !important;
+      font-weight: 600 !important;
+      line-height: 1.35 !important;
+    }
+    /* 标题与字段 permalink 默认隐藏，只在对应区域悬停/聚焦时出现。 */
+    body h1, body h2, body h3, body h4, body h5, body h6,
+    body .web-doc-param-head {
+      position: relative !important;
+    }
+    body .web-doc-field-row {
+      position: relative !important;
+    }
+    body .web-doc-heading-anchor-wrap,
+    body .web-doc-field-anchor-wrap {
+      position: absolute !important;
+      top: 50% !important;
+      left: -1.75rem !important;
+      z-index: 1 !important;
+      display: block !important;
+      width: 1.25rem !important;
+      height: 1.25rem !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      opacity: 0 !important;
+      pointer-events: auto !important;
+      transform: translateY(-50%) !important;
+    }
+    body .web-doc-heading-anchor,
+    body .web-doc-field-anchor {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 100% !important;
+      height: 100% !important;
+      color: ${palette.link} !important;
+      text-decoration: none !important;
+    }
+    body .web-doc-heading-anchor-wrap svg,
+    body .web-doc-field-anchor-wrap svg {
+      display: block !important;
+      width: 1rem !important;
+      height: 1rem !important;
+      max-width: 1rem !important;
+      max-height: 1rem !important;
+    }
+    body .web-doc-heading-with-anchor:hover .web-doc-heading-anchor-wrap,
+    body .web-doc-heading-with-anchor:focus-within .web-doc-heading-anchor-wrap,
+    body .web-doc-field-with-anchor:hover .web-doc-field-anchor-wrap,
+    body .web-doc-field-with-anchor:focus-within .web-doc-field-anchor-wrap,
+    body .web-doc-heading-anchor-wrap:hover,
+    body .web-doc-heading-anchor-wrap:focus-within,
+    body .web-doc-field-anchor-wrap:hover,
+    body .web-doc-field-anchor-wrap:focus-within {
+      opacity: 1 !important;
+    }
+    /* 通用分组边界：原站常用 Tailwind border-b/divide-y，正文抽取后由阅读器重建。 */
+    body .web-doc-divider-after {
+      border-bottom: 1px solid ${border} !important;
+    }
+    /* 块级分割线通常同时承担字段组的上下留白；避免只画线而挤压正文。 */
+    body .web-doc-divider-block.web-doc-divider-after {
+      margin-top: 0.625rem !important;
+      margin-bottom: 0.625rem !important;
+      padding-top: 0.625rem !important;
+      padding-bottom: 1.25rem !important;
+    }
+    body .web-doc-divider-before {
+      border-top: 1px solid ${border} !important;
+    }
+    body .web-doc-divider-block.web-doc-divider-before {
+      margin-top: 0.625rem !important;
+      padding-top: 0.625rem !important;
+    }
+    body .web-doc-divider-group > * + * {
+      border-top: 1px solid ${border} !important;
+    }
+    body hr.web-doc-divider {
+      height: 0 !important;
+      margin: 1.25rem 0 !important;
+      border: 0 !important;
+      border-top: 1px solid ${border} !important;
+    }
+    /* Mintlify Card：站点的 display: contents/absolute 工具类被剥离后重新布局。 */
+    body .web-doc-card {
+      position: relative !important;
+      display: flex !important;
+      align-items: flex-start !important;
+      gap: 0.75rem !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      margin: 1.25rem 0 !important;
+      padding: 1rem 3rem 1rem 1rem !important;
+      border: 1px solid ${border} !important;
+      border-radius: 0.75rem !important;
+      background: transparent !important;
+      color: ${palette.text} !important;
+      text-decoration: none !important;
+      box-sizing: border-box !important;
+    }
+    body .web-doc-card:hover,
+    body .web-doc-card:focus-visible,
+    body .web-doc-card:focus-within {
+      border-color: ${palette.link} !important;
+    }
+    body .web-doc-card-icon {
+      display: flex !important;
+      flex: 0 0 auto !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 1.5rem !important;
+      height: 1.5rem !important;
+    }
+    body .web-doc-card-icon svg {
+      width: 1.5rem !important;
+      height: 1.5rem !important;
+      max-width: 1.5rem !important;
+      max-height: 1.5rem !important;
+    }
+    body .web-doc-card-content {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+    }
+    body .web-doc-card-arrow {
+      position: absolute !important;
+      top: 1rem !important;
+      right: 1rem !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 1rem !important;
+      height: 1rem !important;
+      margin: 0 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    body .web-doc-card-arrow svg {
+      display: block !important;
+      width: 1rem !important;
+      height: 1rem !important;
+      max-width: 1rem !important;
+      max-height: 1rem !important;
+    }
+    body .web-doc-card:hover .web-doc-card-arrow,
+    body .web-doc-card:focus-visible .web-doc-card-arrow,
+    body .web-doc-card:focus-within .web-doc-card-arrow {
+      opacity: 1 !important;
+    }
   `
 }
 

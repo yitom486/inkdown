@@ -35,9 +35,33 @@ test.describe('在线文档阅读', () => {
       await expect(frame.getByRole('heading', { name: 'Quick Start' })).toBeVisible({ timeout: 15_000 })
       await expect(frame.getByText('Inkdown E2E fixture paragraph for online document smoke tests.')).toBeVisible()
       await expect(frame.getByRole('heading', { name: 'Authentication Capabilities' })).toBeVisible()
-      await expect(frame.locator('.web-doc-semantic-control')).toHaveText('logout')
-      await expect(frame.locator('code').filter({ hasText: 'LogoutCapabilities Object' })).toBeVisible()
-      await expect(frame.locator('h4 a')).toHaveCount(0)
+      await expect(frame.locator('[data-component-part="field-name"]')).toHaveText('logout')
+      await expect(frame.locator('[data-component-part="field-info-pill"]')).toHaveText('LogoutCapabilities Object')
+      await expect(frame.locator('.web-doc-heading-anchor-wrap')).toHaveCSS('opacity', '0')
+      await expect(frame.locator('.web-doc-field-anchor-wrap')).toHaveCSS('opacity', '0')
+      await expect(frame.locator('.web-doc-card-arrow')).toHaveCSS('opacity', '0')
+      const divider = frame.locator('.web-doc-divider-block.web-doc-divider-after')
+      await expect(divider).toHaveCount(1)
+      await expect(divider).toHaveCSS('border-bottom-style', 'solid')
+      await expect
+        .poll(() =>
+          divider.evaluate((element) => Number.parseFloat(getComputedStyle(element).borderBottomWidth)),
+        )
+        .toBeGreaterThan(0)
+      await expect
+        .poll(() => divider.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingBottom)))
+        .toBeGreaterThan(0)
+      await frame.locator('.web-doc-heading-with-anchor').hover()
+      await expect(frame.locator('.web-doc-heading-anchor-wrap')).toHaveCSS('opacity', '1')
+      const fieldAnchor = frame.locator('.web-doc-field-anchor')
+      await fieldAnchor.hover()
+      await expect(frame.locator('.web-doc-field-anchor-wrap')).toHaveCSS('opacity', '1')
+      await fieldAnchor.click()
+      await expect(panel.locator('input[placeholder="https://"]')).toHaveValue(
+        `${E2E_WEB_DOC_START_URL}#param-logout`,
+      )
+      await frame.locator('.web-doc-card').hover()
+      await expect(frame.locator('.web-doc-card-arrow')).toHaveCSS('opacity', '1')
       await expect(frame.getByRole('button', { name: '复制代码' })).toBeVisible()
     } finally {
       await app.close()
