@@ -1,12 +1,14 @@
 {
   "name": "inkdown",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Inkdown — Markdown 编辑、电子书与在线文档阅读、Agent 助手",
   "author": "Yitom <yitom486@gmail.com>",
   "main": "out/main/main.js",
   "type": "module",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "overrides": {
     "@firecrawl/pdf-inspector": "https://github.com/yitom486/pdf-inspector/releases/download/inkdown-napi-v1.18.0/firecrawl-pdf-inspector-1.18.0.tgz",
     "@firecrawl/pdf-inspector-win32-x64-msvc": "https://github.com/yitom486/pdf-inspector/releases/download/inkdown-napi-v1.18.0/firecrawl-pdf-inspector-win32-x64-msvc-1.18.0.tgz",

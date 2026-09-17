@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.4.0] - 2026-09-17
+
 - ### Agent
 
   - **自定义模型供应商**：可配置 OpenAI 兼容 API 的 Base URL、API Key、模型与协议，支持 DeepSeek 等服务；配置使用隔离的 Codex 运行目录，不影响本机 `~/.codex` 订阅登录
@@ -277,7 +281,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.3.1...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/yitom486/inkdown/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/yitom486/inkdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yitom486/inkdown/compare/v0.2.9...v0.3.0
 [0.2.9]: https://github.com/yitom486/inkdown/compare/v0.2.8...v0.2.9
