@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   cancelOcrComponentDownload,
   ensureOcrComponent,
   getOcrComponentStatus,
   onOcrComponentStatus,
 } from '@/api/ocr-api'
+import { queryKeys } from '@/api/query-keys'
 import type { OcrComponentStatus } from '@inkdown/contracts'
 
 const DEFAULT_STATUS: OcrComponentStatus = {
@@ -16,22 +18,32 @@ const DEFAULT_STATUS: OcrComponentStatus = {
 }
 
 export function useOcrComponent(enabled = true) {
-  const [status, setStatus] = useState<OcrComponentStatus>(DEFAULT_STATUS)
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
 
-  const refresh = useCallback(async () => {
-    const result = await getOcrComponentStatus()
-    if (result.ok) {
-      setStatus(result.value)
-    }
-  }, [])
+  // 组件状态：初始 invoke + 推送 setQueryData 写回（推送是真值来源）
+  const query = useQuery({
+    queryKey: queryKeys.ocrComponent,
+    queryFn: async (): Promise<OcrComponentStatus> => {
+      const result = await getOcrComponentStatus()
+      return result.ok ? result.value : DEFAULT_STATUS
+    },
+    enabled,
+    staleTime: Infinity,
+  })
 
   useEffect(() => {
     if (!enabled) return
-    void refresh()
-    const unsubscribe = onOcrComponentStatus((next) => setStatus(next))
-    return unsubscribe
-  }, [enabled, refresh])
+    return onOcrComponentStatus((next) => {
+      queryClient.setQueryData(queryKeys.ocrComponent, next)
+    })
+  }, [enabled, queryClient])
+
+  const status = query.data ?? DEFAULT_STATUS
+
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.ocrComponent })
+  }, [queryClient])
 
   const download = useCallback(async () => {
     setLoading(true)
@@ -49,9 +61,10 @@ export function useOcrComponent(enabled = true) {
   const cancel = useCallback(async () => {
     const result = await cancelOcrComponentDownload()
     if (result.ok) {
-      setStatus(result.value)
+      queryClient.setQueryData(queryKeys.ocrComponent, result.value)
     }
-  }, [])
+    return result
+  }, [queryClient])
 
   return {
     status,

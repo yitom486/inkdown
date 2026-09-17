@@ -7,8 +7,10 @@
 |------|--------|
 | `editor/` | Markdown 编辑：预览、草稿、自动保存、导出、粘贴图、滚动同步 |
 | `preview/` | 预览 DOM 增强：代码块复制、hljs 主题、Mermaid（预览与 Agent 气泡共用） |
-| `reader/` | EPUB / PDF / MOBI：二进制加载、侧栏、书签批注、高亮浮层 |
+| `reader/` | EPUB / PDF / MOBI：二进制加载、侧栏、书签批注、高亮浮层、OCR/罗盘 |
 | `workspace/` | 工作区壳：打开/保存文件、文件树、侧栏折叠、全局错误 |
+| `quiz/` | AI 测验历史读取（TanStack Query） |
+| `sync/` | 云同步配置/状态（配置种子 + 状态推送写回） |
 | `agent/` | ACP Agent 会话（协议/传输/认证/MCP 纯逻辑见 `@inkdown/acp`） |
 
 ---
@@ -45,9 +47,22 @@
 | `useReaderSelectionActions` | 三阅读器划选工具条共享动作：复制/批注/高亮/加入对话/问 Agent |
 | `useReaderExportMenu` | 三阅读器笔记与 Anki 导出菜单共享外壳（toc/当前章由各家传入） |
 | `usePdfPageOcr` | PDF 单页 OCR 域：页缓存/识别去重/统一正文读取/当前页识别 |
-| `useRosettaImport` | 罗盘导入视图状态：横幅按钮 + 进度 + 已索引信息 + 纯本地目录重建 |
+| `useOcrComponent` | OCR 组件状态（初始 invoke + 推送写回 Query 缓存、下载/取消） |
+| `useRosettaImport` | 罗盘导入视图状态：横幅按钮 + 进度 + 已索引信息（Query 按 fingerprint 缓存）+ 纯本地目录重建 |
 | `useReaderWheelNavigation` | 滚轮到顶/底翻页。逻辑已抽出，Viewer 里仍有内联调用，此 Hook **暂无引用** |
 | `useSyncProgressBridge` | 阅读进度 Store 与主进程云同步双向桥接 |
+
+## quiz/
+
+| 文件 | 功能 |
+|------|------|
+| `useQuizSessions` | TanStack Query 按书籍路径读取测验历史（JSONL 仓储）；`invalidateQuizSessions` 供落库后失效 |
+
+## sync/
+
+| 文件 | 功能 |
+|------|------|
+| `useSyncConfigStatus` | 云同步：`useSyncConfig`（配置表单种子）+ `useSyncStatus`（状态快照，`onStatusChanged` 推送经 `setQueryData` 写回缓存） |
 
 ## workspace/
 

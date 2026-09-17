@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { rosettaApi } from '@/api/rosetta-api'
+import { queryKeys } from '@/api/query-keys'
 import { isOk } from '@inkdown/contracts'
 import type {
   RosettaBookInfo,
@@ -28,28 +30,32 @@ export interface RosettaImportStartArgs {
  * 长任务进度走主进程推送；invoke 结果只做兜底（推送已覆盖全部终态）。
  */
 export function useRosettaImport(fileFingerprint: string) {
+  const queryClient = useQueryClient()
   const [state, setState] = useState<RosettaImportState>('idle')
   const [phase, setPhase] = useState<RosettaImportPhase>('preparing')
   const [donePages, setDonePages] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
-  const [info, setInfo] = useState<RosettaBookInfo | null>(null)
   const startingRef = useRef(false)
 
-  const refreshInfo = useCallback(async () => {
-    if (!fileFingerprint) {
-      setInfo(null)
-      return
-    }
-    try {
+  // 书索引信息：可缓存读（按 fingerprint），导入完成/目录重建后失效重取
+  const infoQuery = useQuery({
+    queryKey: queryKeys.rosettaBookInfo(fileFingerprint),
+    queryFn: async (): Promise<RosettaBookInfo | null> => {
       const result = await rosettaApi.getBookInfo(fileFingerprint)
-      setInfo(isOk(result) ? result.value : null)
-    } catch {
-      setInfo(null)
-    }
-  }, [fileFingerprint])
+      return isOk(result) ? result.value : null
+    },
+    enabled: Boolean(fileFingerprint),
+  })
+  const info = infoQuery.data ?? null
+
+  const refreshInfo = useCallback((): Promise<void> => {
+    if (!fileFingerprint) return Promise.resolve()
+    return queryClient
+      .invalidateQueries({ queryKey: queryKeys.rosettaBookInfo(fileFingerprint) })
+      .then(() => undefined)
+  }, [queryClient, fileFingerprint])
 
   useEffect(() => {
-    void refreshInfo()
     if (!fileFingerprint) return
     // 窗口重载时推送已错过：主动拉一次进行中的快照，恢复进度显示
     void rosettaApi.getActiveImport().then((result) => {
@@ -59,7 +65,7 @@ export function useRosettaImport(fileFingerprint: string) {
       setDonePages(result.value.donePages)
       setTotalPages(result.value.totalPages)
     })
-  }, [refreshInfo, fileFingerprint])
+  }, [fileFingerprint])
 
   useEffect(() => {
     if (!fileFingerprint) return

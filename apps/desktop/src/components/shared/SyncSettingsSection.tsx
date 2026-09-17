@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Cloud,
   RefreshCw,
@@ -14,7 +15,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { syncApi } from '@/api/sync-api'
 import { appApi } from '@/api/app-api'
-import type { SyncConfig, SyncStatus, SyncProviderType } from '@inkdown/contracts'
+import { queryKeys } from '@/api/query-keys'
+import { useSyncConfig, useSyncStatus } from '@/hooks/sync/useSyncConfigStatus'
+import type { SyncConfig, SyncProviderType } from '@inkdown/contracts'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -29,6 +32,11 @@ const PROVIDER_OPTIONS: Array<{ value: SyncProviderType; label: string }> = [
 ]
 
 export function SyncSettingsSection(_props: SyncSettingsSectionProps) {
+  const queryClient = useQueryClient()
+  const configQuery = useSyncConfig()
+  const { status } = useSyncStatus()
+
+  // 表单编辑态：服务端配置只作为首次种子（避免失效重取覆盖未保存的编辑）
   const [config, setConfig] = useState<SyncConfig>({
     enabled: false,
     provider: 'jianguoyun',
@@ -39,40 +47,34 @@ export function SyncSettingsSection(_props: SyncSettingsSectionProps) {
     syncOnStartup: true,
     ignoreTlsErrors: false,
   })
+  const seededRef = useRef(false)
+  useEffect(() => {
+    if (configQuery.data && !seededRef.current) {
+      seededRef.current = true
+      setConfig(configQuery.data)
+    }
+  }, [configQuery.data])
 
-  const [status, setStatus] = useState<SyncStatus>({ phase: 'idle' })
   const [showPassword, setShowPassword] = useState(false)
   const [testing, setTesting] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
-  // 1. 载入初始配置与状态
+  // 推送离开 syncing 态时复位按钮 loading（推送经 setQueryData 已写入 status 缓存）
   useEffect(() => {
-    void syncApi.getConfig().then((res) => {
-      if (res.ok) {
-        setConfig(res.value)
-      }
-    })
-    void syncApi.getStatus().then((res) => {
-      if (res.ok) {
-        setStatus(res.value)
-      }
-    })
+    if (status.phase !== 'syncing') {
+      setSyncing(false)
+    }
+  }, [status.phase])
 
-    const unsubscribe = syncApi.onStatusChanged((newStatus) => {
-      setStatus(newStatus)
-      if (newStatus.phase !== 'syncing') {
-        setSyncing(false)
-      }
-    })
-
-    return unsubscribe
-  }, [])
-
-  // 2. 更新配置并持久化
+  // 2. 更新配置并持久化（写后失效配置缓存，保持其他消费方一致）
   const updateConfig = (patch: Partial<SyncConfig>) => {
     const next = { ...config, ...patch }
     setConfig(next)
-    void syncApi.saveConfig(next)
+    void syncApi.saveConfig(next).then((res) => {
+      if (res.ok) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.syncConfig })
+      }
+    })
   }
 
   // 3. 切换服务商预设

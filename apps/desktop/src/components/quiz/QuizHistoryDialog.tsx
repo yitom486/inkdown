@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
   DialogContent,
@@ -18,8 +19,7 @@ import {
   Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { QuizSessionRecord } from '@inkdown/contracts'
-import { defaultQuizRepository } from '@/lib/quiz/quiz-storage-jsonl'
+import { useQuizSessions } from '@/hooks/quiz/useQuizSessions'
 
 export interface QuizHistoryDialogProps {
   open: boolean
@@ -38,30 +38,17 @@ export function QuizHistoryDialog({
   onNavigateToMark,
   onRetryQuestion,
 }: QuizHistoryDialogProps) {
-  const [sessions, setSessions] = useState<QuizSessionRecord[]>([])
+  const { sessions, isLoading: loading } = useQuizSessions(filePath, open)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!open) return
-    let isMounted = true
-    setLoading(true)
-
-    defaultQuizRepository.getSessionsByFile(filePath).then((list) => {
-      if (!isMounted) return
-      setSessions(list)
-      if (list.length > 0) {
-        setSelectedId(list[0].id)
-      } else {
-        setSelectedId(null)
-      }
-      setLoading(false)
-    })
-
-    return () => {
-      isMounted = false
+    if (sessions.length > 0) {
+      setSelectedId((prev) => (sessions.some((s) => s.id === prev) ? prev : sessions[0].id))
+    } else {
+      setSelectedId(null)
     }
-  }, [open, filePath])
+  }, [open, sessions])
 
   const [activeQuestionIdx, setActiveQuestionIdx] = useState<number>(0)
 

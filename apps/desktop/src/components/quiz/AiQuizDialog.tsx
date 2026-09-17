@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
 } from '@/lib/quiz/quiz-evaluator'
 import { resetQuizSession } from '@/lib/quiz/quiz-acp-session'
 import { defaultQuizRepository } from '@/lib/quiz/quiz-storage-jsonl'
+import { invalidateQuizSessions } from '@/hooks/quiz/useQuizSessions'
 import { toast } from 'sonner'
 
 export interface AiQuizDialogProps {
@@ -55,6 +57,7 @@ export function AiQuizDialog({
   onNavigateToMark,
   onOpenHistory,
 }: AiQuizDialogProps) {
+  const queryClient = useQueryClient()
   const [phase, setPhase] = useState<DialogPhase>('generating')
   const [targetCount, setTargetCount] = useState<number>(3) // 默认 3 道题
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
@@ -147,6 +150,7 @@ export function AiQuizDialog({
       }
 
       await defaultQuizRepository.appendSession(sessionRecord)
+      invalidateQuizSessions(queryClient, filePath)
       setPhase('result')
       toast.success(`AI 整卷判卷完成！总分：${evalResult.totalScore} 分 (${evalResult.grade})`)
     } catch {
