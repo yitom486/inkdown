@@ -1,6 +1,6 @@
 import { useDefaultLayout } from 'react-resizable-panels'
-import { FileExplorer } from '@/components/layout/FileExplorer'
-import { DocumentOutline } from '@/components/layout/DocumentOutline'
+import { FileExplorer } from '@/components/layout/panels/FileExplorer'
+import { DocumentOutline } from '@/components/layout/panels/DocumentOutline'
 import {
   ResizableHandle,
   ResizablePanel,

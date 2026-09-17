@@ -4,8 +4,8 @@ import { toast } from 'sonner'
 import {
   AgentChatItem,
   AgentChatItemBody,
-} from '@/components/agent/AgentChatItem'
-import { ProposeMarkCard } from '@/components/agent/ProposeMarkCard'
+} from '@/components/agent/chat/AgentChatItem'
+import { ProposeMarkCard } from '@/components/agent/propose/ProposeMarkCard'
 import { Button } from '@/components/ui/button'
 import { adoptProposedMark } from '@/lib/agent/context/propose-mark'
 import { toastMarkProposalFailure } from '@/lib/agent/mark-proposal-failure'

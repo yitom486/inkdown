@@ -9,9 +9,10 @@ import { useAcpUiStore } from '@/stores/acp-ui-store'
 
 /**
  * 挂在 App 根：订阅 ACP 权限请求，写入 store，供聊天内联审批卡使用。
- * （不再用全局 Dialog 作为主路径——用户期望按钮出现在气泡/工具卡上。）
+ * （不再用全局 Dialog 作为主路径——用户期望按钮出现在气泡/工具卡上。
+ *  Agent 断开/出错时清掉未决请求。）
  */
-export function AgentPermissionHost() {
+export function useAcpPermissionIngest(): void {
   const ingestPermissionRequest = useAcpUiStore((s) => s.ingestPermissionRequest)
   const clearPendingPermission = useAcpUiStore((s) => s.clearPendingPermission)
 
@@ -39,7 +40,7 @@ export function AgentPermissionHost() {
         toolCall,
       })
     })
-  }, [clearPendingPermission, ingestPermissionRequest])
+  }, [ingestPermissionRequest])
 
   useEffect(() => {
     return acpApi.onStatusChanged((event) => {
@@ -48,11 +49,4 @@ export function AgentPermissionHost() {
       }
     })
   }, [clearPendingPermission])
-
-  return null
-}
-
-/** @deprecated 使用 AgentPermissionHost 组件 */
-export function useAcpPermissionBridge(): void {
-  // 保留空实现以免旧调用崩溃；实际由 AgentPermissionHost 负责
 }

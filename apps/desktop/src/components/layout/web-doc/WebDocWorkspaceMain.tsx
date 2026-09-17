@@ -1,8 +1,8 @@
 import { Suspense, forwardRef, lazy, useImperativeHandle, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { WebDocViewerHandle } from '@/components/reader/WebDocViewer'
-import { WebDocAddressBar } from '@/components/layout/WebDocAddressBar'
-import type { EditorOutlineState } from '@/components/layout/EditorWorkspaceMain'
+import { WebDocAddressBar } from '@/components/layout/web-doc/WebDocAddressBar'
+import type { EditorOutlineState } from '@/components/layout/main/EditorWorkspaceMain'
 import type { MarkdownHeading } from '@/lib/editor/markdown-headings'
 
 export interface WebDocWorkspaceMainHandle {

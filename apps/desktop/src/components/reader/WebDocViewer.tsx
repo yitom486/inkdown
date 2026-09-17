@@ -43,7 +43,7 @@ import {
   findActiveHeadingByPositions,
   type MarkdownHeading,
 } from '@/lib/editor/markdown-headings'
-import type { EditorOutlineState } from '@/components/layout/EditorWorkspaceMain'
+import type { EditorOutlineState } from '@/components/layout/main/EditorWorkspaceMain'
 import {
   buildWebDocFileFingerprint,
   formatWebDocTitle,

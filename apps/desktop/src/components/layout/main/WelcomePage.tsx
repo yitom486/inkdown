@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { WebDocUrlField } from '@/components/layout/WebDocUrlField'
+import { WebDocUrlField } from '@/components/layout/web-doc/WebDocUrlField'
 import { Clock, FileText, FolderOpen, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'

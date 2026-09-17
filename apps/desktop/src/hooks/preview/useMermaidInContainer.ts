@@ -5,7 +5,7 @@ import { useEditorUiStore } from '@/stores/editor-ui-store'
 
 /**
  * 在容器内渲染 `.mermaid` 节点（预览等仍可用）。
- * Agent 气泡已改为独立 AgentMermaidBlock，避免整段 HTML 重灌竞态。
+ * Agent 气泡已改为独立 MermaidBlock，避免整段 HTML 重灌竞态。
  */
 export function useMermaidInContainer(
   containerRef: RefObject<HTMLElement | null>,

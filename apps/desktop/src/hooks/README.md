@@ -78,6 +78,8 @@
 | 文件 | 功能 |
 |------|------|
 | `useAcpSession` | 连接 ACP、发 prompt、流式消息、权限与配置；Agent 面板主状态机 |
+| `useAcpPermissionIngest` | App 根订阅权限请求 → store（聊天内联审批卡数据源）；断开/出错清未决 |
+| `useInkdownSnapshotHost` | App 根应答主进程快照请求（MCP 工具 / `fs/read .inkdown/agent/*`） |
 | `useAnnotationAgentAssist` | 批注对话框：独立 ACP session；意图/写成批注 → 不进右侧时间线 |
 | `useStickToBottomScroll` | Agent 消息列表贴底滚动；`streaming` 时 rAF 合并 ResizeObserver；返回 `pinned` / `scrollToBottom` |
 | `useSmoothStreamingText` | 流式匀速揭示（常驻 rAF + 自适应消费 + 完成排空）+ `useThrottledValue` 低频重解析 |

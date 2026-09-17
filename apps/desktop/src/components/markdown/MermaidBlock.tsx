@@ -73,4 +73,3 @@ export function MermaidBlock({ source, className }: MermaidBlockProps) {
 }
 
 /** @deprecated 使用 MermaidBlock */
-export const AgentMermaidBlock = MermaidBlock

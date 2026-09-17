@@ -56,7 +56,7 @@ describe('hydrateMermaidInElement', () => {
     expect(svg?.id.startsWith('inkdown-mmd-')).toBe(true)
   })
 
-  it('hydrates when root itself is the mermaid host (AgentMermaidBlock)', async () => {
+  it('hydrates when root itself is the mermaid host (MermaidBlock)', async () => {
     const { hydrateMermaidInElement } = await import('./mermaid-hydrate')
     const host = document.createElement('div')
     host.className = 'mermaid'

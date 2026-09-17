@@ -4,14 +4,14 @@ import {
   AgentChatItem,
   AgentChatItemBody,
   useAgentChatOpen,
-} from '@/components/agent/AgentChatItem'
-import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
+} from '@/components/agent/chat/AgentChatItem'
+import { AgentMessageBubble } from '@/components/agent/chat/AgentMessageBubble'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { formatDuration } from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'
 import { isProposalPromotedToAgent } from '@/lib/agent/promote-mark-proposals'
 import { isChapterPlanPromotedToAgent } from '@/lib/agent/promote-chapter-mark-plans'
-import type { ChapterMarkPlanSelectPayload } from '@/components/agent/ChapterMarkPlanCard'
+import type { ChapterMarkPlanSelectPayload } from '@/components/agent/propose/ChapterMarkPlanCard'
 
 interface AgentActivityGroupProps {
   messages: AcpChatMessage[]

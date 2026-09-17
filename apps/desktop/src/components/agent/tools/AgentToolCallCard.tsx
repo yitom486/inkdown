@@ -20,9 +20,9 @@ import {
   AgentChatItemBody,
   AGENT_CHAT_PRE_CLASS,
   useAgentChatOpen,
-} from '@/components/agent/AgentChatItem'
-import { AgentDiffPreview } from '@/components/agent/AgentDiffPreview'
-import { AgentPermissionCard } from '@/components/agent/AgentPermissionCard'
+} from '@/components/agent/chat/AgentChatItem'
+import { AgentDiffPreview } from '@/components/agent/tools/AgentDiffPreview'
+import { AgentPermissionCard } from '@/components/agent/permission/AgentPermissionCard'
 import { Button } from '@/components/ui/button'
 import { toolMessageNeedsApproval } from '@/lib/agent/acp-permission-ui'
 import { isProposeMarkToolTitle } from '@/lib/agent/parse-mark-proposal'

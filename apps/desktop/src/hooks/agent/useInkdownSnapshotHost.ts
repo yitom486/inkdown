@@ -14,7 +14,7 @@ import { useAnnotationAgentStore } from '@/stores/annotation-agent-store'
  * 挂在 App 根：应答主进程对 Inkdown 内存快照的请求。
  * MCP 工具调用与 Agent `fs/read .inkdown/agent/*` 最终都落在这里。
  */
-export function AgentSnapshotHost() {
+export function useInkdownSnapshotHost(): void {
   useEffect(() => {
     return acpApi.onSnapshotRequest((event) => {
       void (async () => {
@@ -66,6 +66,4 @@ export function AgentSnapshotHost() {
       })()
     })
   }, [])
-
-  return null
 }

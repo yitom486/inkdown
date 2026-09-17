@@ -3,7 +3,7 @@ import { useState } from 'react'
 import {
   AgentChatItem,
   AgentChatItemBody,
-} from '@/components/agent/AgentChatItem'
+} from '@/components/agent/chat/AgentChatItem'
 import { cn } from '@/lib/utils'
 import type { ChapterMarkPlanEntry } from '@inkdown/annotations'
 

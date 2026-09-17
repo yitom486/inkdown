@@ -1,23 +1,56 @@
 # src/components/agent
 
-ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。
+ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。已按渲染链分子目录（2026-09 重构）。
+
+## 根目录：面板与接线
 
 | 文件 | 功能 |
 |------|------|
-| `AgentPanel` | 右侧 Agent 主面板 |
+| `AgentPanel` | 右侧 Agent 主面板（壳 + 接线；配置项分类纯逻辑已出库 `lib/agent/acp-config-menu`） |
+| `CompactConfigMenu` | 输入栏旁的紧凑配置下拉（primary 配置项） |
 | `AgentComposer` | 输入框、附件、选区标记 |
-| `AgentChatItem` / `AgentMessageBubble` / `AgentMermaidBlock` | 消息列表与气泡 |
-| `AgentScrollToBottomButton` | 消息列表「回到底部」浮动按钮 |
-| `AgentToolCallCard` / `AgentDiffPreview` / `AgentPlanCard` | 工具调用、diff、计划 |
-| `ProposeMarkChatBlock` / `ProposeMarkCard` | 聊天气泡内可折叠提议块（含批量勾选采用） |
-| `ChapterMarkPlanCard` | 章级划重点建议（用户点选章后继续 Agent） |
-| `AgentBlockRenderer` | 兼容入口（tool 消息） |
-| `AgentPermissionHost` / `AgentPermissionCard` | 权限请求 UI |
-| `AgentSnapshotHost` | 向主进程提供 Inkdown 内存快照（MCP） |
-| `AgentAuthDialog` / `AgentHistoryMenu` | 认证与历史线程 |
+| `AgentMark` | Agent 徽标（布局/TitleBar 共用） |
+| `AgentAuthDialog` | 认证方式选择（复用本机 Codex 登录，对齐 VS Code / Zed） |
 | `AgentProviderDialog` | 自定义模型供应商配置（base URL + API Key + 模型，Key 只存主进程） |
-| `AgentActivityGroup` / `AgentMark` | 活动分组与选区标记展示 |
+| `AgentHistoryMenu` | 历史线程切换 |
 | `AgentBunInstallBanner` | 缺 Bun 运行时提示与一键安装横幅 |
+
+## chat/ 消息列表渲染
+
+| 文件 | 功能 |
+|------|------|
+| `AgentMessageList` | 消息列表容器（时间线分组、贴底滚动、孤案权限卡兜底；memo 隔离流式刷新） |
+| `AgentActivityGroup` | 活动 grouping（同类消息聚合 + 计时） |
+| `AgentChatItem` | 消息行通用骨架（列宽、可展开体、聊天打开态） |
+| `AgentMessageBubble` | 用户/助手气泡（Markdown、tool 卡、提议块挂接） |
+| `AgentScrollToBottomButton` | 「回到底部」浮动按钮 |
+
+## tools/ 工具调用展示
+
+| 文件 | 功能 |
+|------|------|
+| `AgentToolCallCard` | 工具调用卡（含权限子卡） |
+| `AgentDiffPreview` | diff 预览 |
+| `AgentPlanCard` | 计划条目卡 |
+| `AgentBlockRenderer` | 兼容入口（tool 消息） |
+
+## propose/ 批注提议
+
+| 文件 | 功能 |
+|------|------|
+| `ProposeMarkChatBlock` | 聊天气泡内可折叠提议块（含批量勾选采用） |
+| `ProposeMarkCard` | 单条划重点提议卡 |
+| `ChapterMarkPlanCard` | 章级划重点建议（用户点选章后继续 Agent） |
+
+## permission/ 权限审批
+
+| 文件 | 功能 |
+|------|------|
+| `AgentPermissionCard` | 工具权限请求卡（聊天内联审批按钮） |
+
+> 订阅接线已在 `hooks/agent/useAcpPermissionIngest` / `useInkdownSnapshotHost`（原 `AgentPermissionHost` / `AgentSnapshotHost` 假组件已删，App 根直接调 Hook）。
+
+---
 
 会话状态机：`src/hooks/agent/useAcpSession`；UI 状态：`acp-ui-store`。
 

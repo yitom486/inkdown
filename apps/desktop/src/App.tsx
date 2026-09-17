@@ -5,15 +5,13 @@ import { ErrorLogDialog } from '@/components/shared/ErrorLogDialog'
 import { QuickOpenDialog } from '@/components/shared/QuickOpenDialog'
 import { SettingsDialog } from '@/components/shared/SettingsDialog'
 import { UnsavedChangesDialog } from '@/components/shared/UnsavedChangesDialog'
-import { AgentPermissionHost } from '@/components/agent/AgentPermissionHost'
-import { AgentSnapshotHost } from '@/components/agent/AgentSnapshotHost'
 import {
   EditorWorkspaceMain,
   type EditorOutlineState,
   type EditorWorkspaceMainHandle,
-} from '@/components/layout/EditorWorkspaceMain'
-import { ReaderWorkspaceMain } from '@/components/layout/ReaderWorkspaceMain'
-import { WebDocWorkspaceMain, type WebDocWorkspaceMainHandle } from '@/components/layout/WebDocWorkspaceMain'
+} from '@/components/layout/main/EditorWorkspaceMain'
+import { ReaderWorkspaceMain } from '@/components/layout/main/ReaderWorkspaceMain'
+import { WebDocWorkspaceMain, type WebDocWorkspaceMainHandle } from '@/components/layout/web-doc/WebDocWorkspaceMain'
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell'
 import { Toaster } from '@/components/ui/sonner'
 import { UpdatePromptHost } from '@/components/shared/UpdatePromptHost'
@@ -26,6 +24,8 @@ import { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 import { useGlobalErrorHandlers } from '@/hooks/workspace/useGlobalErrorHandlers'
 import { useAppMeta, useFileOperations } from '@/hooks/workspace/useFileOperations'
 import { useSyncProgressBridge } from '@/hooks/reader/useSyncProgressBridge'
+import { useAcpPermissionIngest } from '@/hooks/agent/useAcpPermissionIngest'
+import { useInkdownSnapshotHost } from '@/hooks/agent/useInkdownSnapshotHost'
 import { pickLatestRecoverableDraft } from '@/lib/editor/draft-utils'
 import { resolveStartupRestoreTarget } from '@/lib/workspace/workspace-session'
 import { reportAppError, reportUnknownError } from '@/lib/workspace/report-error'
@@ -124,6 +124,8 @@ function App() {
   })
   useGlobalErrorHandlers(filePath)
   useSyncProgressBridge()
+  useAcpPermissionIngest()
+  useInkdownSnapshotHost()
 
   const handleAutoSave = useCallback(async () => {
     if (!isMarkdownDocument || !filePath || !isDirty || isFileBusy) return
@@ -452,8 +454,6 @@ function App() {
     <>
       <Toaster theme={theme} richColors closeButton position="top-right" />
       <UpdatePromptHost />
-      <AgentPermissionHost />
-      <AgentSnapshotHost />
 
       <WorkspaceShell
         theme={theme}

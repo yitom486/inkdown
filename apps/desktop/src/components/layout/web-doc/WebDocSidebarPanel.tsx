@@ -1,5 +1,5 @@
 import { Globe } from 'lucide-react'
-import { WebDocUrlField } from '@/components/layout/WebDocUrlField'
+import { WebDocUrlField } from '@/components/layout/web-doc/WebDocUrlField'
 
 function formatWebDocLabel(url: string): string {
   try {

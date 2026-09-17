@@ -21,7 +21,7 @@ import { writeWorkspacePathsToDataTransfer } from '@/lib/agent/acp-composer'
 import { getParentDir, isAncestorOrSelf, isAncestorPath, isMarkdownPath } from '@/lib/workspace/file-tree-ops'
 import { cn } from '@/lib/utils'
 import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
-import { WebDocSidebarPanel } from '@/components/layout/WebDocSidebarPanel'
+import { WebDocSidebarPanel } from '@/components/layout/web-doc/WebDocSidebarPanel'
 
 type TreeActions = ReturnType<typeof useFileTreeActions>
 

@@ -1,4 +1,4 @@
-import { ProposeMarkChatBlock } from '@/components/agent/ProposeMarkChatBlock'
+import { ProposeMarkChatBlock } from '@/components/agent/propose/ProposeMarkChatBlock'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'
 import { dismissProposedMark } from '@/lib/agent/context/propose-mark'

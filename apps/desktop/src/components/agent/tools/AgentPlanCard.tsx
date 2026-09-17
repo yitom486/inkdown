@@ -6,7 +6,7 @@ import {
   ListTodo,
   Loader2,
 } from 'lucide-react'
-import { AgentChatItem, AgentChatItemBody, useAgentChatOpen } from '@/components/agent/AgentChatItem'
+import { AgentChatItem, AgentChatItemBody, useAgentChatOpen } from '@/components/agent/chat/AgentChatItem'
 import { cn } from '@/lib/utils'
 import { summarizePlanProgress } from '@/lib/agent/acp-plan'
 import type { AcpChatMessage } from '@/stores/acp-chat-types'

@@ -1,7 +1,8 @@
 /**
  * @inkdown/acp barrel（E片合并）。
  *
- * 11 模块，按传输 / 认证 / 会话 / MCP 分组。session-open 留守 electron，
+ * 12 模块，按四个子目录分组：transport/（传输）、auth/（认证）、
+ * session/（会话）、mcp/（MCP 工具表）。session-open 留守 electron，
  * 不在此导出（见 electron/services/acp/session-open.ts）。
  *
  * 查重（A/B 片 export 清单）：
@@ -9,26 +10,26 @@
  *   无 list/get/getDefault 裸名冲突；
  * - MCP 三表仅共享类型名 InkdownMcpToolContext/Definition（同源自
  *   inkdown-mcp-tools），接口声明一致，无值冲突；
- * - 其余 11 模块导出名两两不交，可安全 `export *`，无需显式冲突消解。
+ * - 其余模块导出名两两不交，可安全 `export *`，无需显式冲突消解。
  * 若后续新增裸名 list/get 等，须在此改显式重导出并报告。
  */
 
 // ── 传输 ──
-export * from "./jsonrpc-transport";
-export * from "./terminal-output-buffer";
+export * from "./transport/jsonrpc-transport";
+export * from "./transport/terminal-output-buffer";
 
 // ── 认证 ──
-export * from "./auth-method-order";
-export * from "./connect-auth-decision";
-export * from "./connect-auth-gate";
-export * from "./codex-provider-home";
+export * from "./auth/auth-method-order";
+export * from "./auth/connect-auth-decision";
+export * from "./auth/connect-auth-gate";
+export * from "./auth/codex-provider-home";
 
 // ── 会话 ──
-export * from "./agent-registry";
-export * from "./config-options";
-export * from "./session-capabilities";
+export * from "./session/agent-registry";
+export * from "./session/config-options";
+export * from "./session/session-capabilities";
 
 // ── MCP ──
-export * from "./inkdown-mcp-tools";
-export * from "./inkdown-mcp-toc-tools";
-export * from "./inkdown-mcp-rpc";
+export * from "./mcp/inkdown-mcp-tools";
+export * from "./mcp/inkdown-mcp-toc-tools";
+export * from "./mcp/inkdown-mcp-rpc";

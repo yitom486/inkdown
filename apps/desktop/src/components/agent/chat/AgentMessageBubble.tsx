@@ -5,15 +5,15 @@ import {
   AgentChatItem,
   AgentChatItemBody,
   useAgentChatOpen,
-} from '@/components/agent/AgentChatItem'
-import { AgentToolCallCard } from '@/components/agent/AgentToolCallCard'
-import { AgentPlanCard } from '@/components/agent/AgentPlanCard'
+} from '@/components/agent/chat/AgentChatItem'
+import { AgentToolCallCard } from '@/components/agent/tools/AgentToolCallCard'
+import { AgentPlanCard } from '@/components/agent/tools/AgentPlanCard'
 import {
   ChapterMarkPlanCard,
   type ChapterMarkPlanSelectPayload,
-} from '@/components/agent/ChapterMarkPlanCard'
-import { ProposeMarkBlockList, ProposeMarkChatBlock } from '@/components/agent/ProposeMarkChatBlock'
-import type { ResolveMarkProposal } from '@/components/agent/AgentBlockRenderer'
+} from '@/components/agent/propose/ChapterMarkPlanCard'
+import { ProposeMarkBlockList, ProposeMarkChatBlock } from '@/components/agent/propose/ProposeMarkChatBlock'
+import type { ResolveMarkProposal } from '@/components/agent/tools/AgentBlockRenderer'
 import { dismissProposedMark } from '@/lib/agent/context/propose-mark'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'

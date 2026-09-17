@@ -20,10 +20,10 @@ import {
   selectAnnotationActiveMessages,
   useAnnotationAgentStore,
 } from '@/stores/annotation-agent-store'
-import { ProposeMarkChatBlock } from '@/components/agent/ProposeMarkChatBlock'
-import { groupAgentMessages } from '@/components/agent/AgentActivityGroup'
-import { AgentMessageBubble } from '@/components/agent/AgentMessageBubble'
-import { AgentScrollToBottomButton } from '@/components/agent/AgentScrollToBottomButton'
+import { ProposeMarkChatBlock } from '@/components/agent/propose/ProposeMarkChatBlock'
+import { groupAgentMessages } from '@/components/agent/chat/AgentActivityGroup'
+import { AgentMessageBubble } from '@/components/agent/chat/AgentMessageBubble'
+import { AgentScrollToBottomButton } from '@/components/agent/chat/AgentScrollToBottomButton'
 import { useStickToBottomScroll } from '@/hooks/agent/useStickToBottomScroll'
 import { toProposedMark } from '@inkdown/annotations'
 import { toast } from 'sonner'

@@ -9,9 +9,9 @@ import {
 } from 'react'
 import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 import { useDefaultLayout } from 'react-resizable-panels'
-import { FileBreadcrumb } from '@/components/layout/FileBreadcrumb'
-import { WelcomePage } from '@/components/layout/WelcomePage'
-import { ViewModeToggle } from '@/components/layout/ViewModeToggle'
+import { FileBreadcrumb } from '@/components/layout/panels/FileBreadcrumb'
+import { WelcomePage } from '@/components/layout/main/WelcomePage'
+import { ViewModeToggle } from '@/components/layout/main/ViewModeToggle'
 import {
   MarkdownEditor,
   type MarkdownEditorHandle,
