@@ -34,6 +34,10 @@ test.describe('在线文档阅读', () => {
       const frame = webDocFrame(window)
       await expect(frame.getByRole('heading', { name: 'Quick Start' })).toBeVisible({ timeout: 15_000 })
       await expect(frame.getByText('Inkdown E2E fixture paragraph for online document smoke tests.')).toBeVisible()
+      await expect(frame.getByRole('heading', { name: 'Authentication Capabilities' })).toBeVisible()
+      await expect(frame.locator('.web-doc-semantic-control')).toHaveText('logout')
+      await expect(frame.locator('code').filter({ hasText: 'LogoutCapabilities Object' })).toBeVisible()
+      await expect(frame.locator('h4 a')).toHaveCount(0)
       await expect(frame.getByRole('button', { name: '复制代码' })).toBeVisible()
     } finally {
       await app.close()

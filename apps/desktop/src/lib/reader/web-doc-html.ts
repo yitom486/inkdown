@@ -1,7 +1,7 @@
 import DOMPurify from 'dompurify'
 import type { WebDocPageContent, WebDocSiteId } from '@inkdown/contracts'
 import { stripWebDocChrome } from '@/lib/reader/web-doc-chrome'
-import { buildReaderLayoutCss, type EpubThemeMode } from '@inkdown/reader-core'
+import { buildReaderLayoutCss, READER_PALETTE, type EpubThemeMode } from '@inkdown/reader-core'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@inkdown/reader-core'
 import { buildWebDocCodeBlockCss, buildWebDocTabsRuntimeScript, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc-code-blocks'
 import {
@@ -43,6 +43,48 @@ const GENERIC_ARTICLE_SELECTORS = [
 ]
 
 const SITE_ARTICLE_SELECTORS: Partial<Record<WebDocSiteId, string[]>> = {}
+
+function buildWebDocInlineCodeCss(theme: EpubThemeMode): string {
+  const palette = READER_PALETTE[theme]
+  const surface = theme === 'dark' ? '#27272a' : '#f4f4f5'
+  const border = theme === 'dark' ? '#3f3f46' : '#e4e4e7'
+
+  return `
+    /* MDX 的反引号最终会变成 inline <code>，不能和代码块共用透明背景规则。 */
+    body code {
+      display: inline !important;
+      padding: 0.12em 0.35em !important;
+      border: 1px solid ${border} !important;
+      border-radius: 0.3em !important;
+      background: ${surface} !important;
+      color: ${palette.text} !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+      font-size: 0.9em !important;
+      line-height: 1.35 !important;
+      white-space: break-spaces !important;
+      word-break: break-word !important;
+    }
+    body pre code,
+    body .code-block code {
+      display: inline !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      font-size: inherit !important;
+      white-space: inherit !important;
+    }
+    /* 从 ResponseField 降级而来的字段名保留文字，但不再伪装成可交互按钮。 */
+    body .web-doc-semantic-control {
+      display: inline !important;
+      padding: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      color: ${palette.link} !important;
+      font: inherit !important;
+    }
+  `
+}
 
 /** 选择器赢家小于此字符数、且 body 远大于此 → 视为被导航碎片截胡，进密度兜底 */
 const TINY_WINNER_TEXT = 500
@@ -317,6 +359,7 @@ export function buildWebDocReaderDocument(
 ): string {
   const layoutCss = buildReaderLayoutCss(theme, typography)
   const codeBlockCss = buildWebDocCodeBlockCss(theme)
+  const inlineCodeCss = buildWebDocInlineCodeCss(theme)
   const mathCss = buildWebDocMathCss()
   const embedCss = buildWebDocEmbedCss()
   const safeTitle = DOMPurify.sanitize(content.title)
@@ -334,6 +377,7 @@ export function buildWebDocReaderDocument(
   ${buildWebDocKatexStylesheetLink()}
   <style>${layoutCss}</style>
   <style>${codeBlockCss}</style>
+  <style>${inlineCodeCss}</style>
   <style>${mathCss}</style>
   <style>${embedCss}</style>
   <style>

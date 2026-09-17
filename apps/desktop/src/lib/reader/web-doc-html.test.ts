@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import {
+  buildWebDocReaderDocument,
   extractDocumentTitle,
   extractWebDocArticle,
   rewriteRelativeUrls,
@@ -101,6 +102,46 @@ describe('web-doc-html', () => {
     expect(result.bodyHtml).not.toContain('Copy page')
     expect(result.bodyHtml).not.toContain('Learn React')
     expect(result.bodyHtml).not.toContain('aria-label="Link for this heading"')
+  })
+
+  it('保留 MDX ResponseField 的字段名与行内代码类型，并剥离 h4 标题锚点', () => {
+    const html = `<!DOCTYPE html><html><body><article>
+      <h4>Authentication Capabilities<a aria-label="Link for this heading" href="#authentication-capabilities">
+        <svg viewBox="0 0 24 24"><path d="M1" /></svg>
+      </a></h4>
+      <div class="response-field">
+        <button>logout</button>
+        <code>LogoutCapabilities Object</code>
+        <p>The <a href="/protocol/v1/authentication#logging-out"><code>logout</code></a> method is available.</p>
+      </div>
+      <button aria-label="Copy page">Copy page</button>
+    </article></body></html>`
+
+    const result = extractWebDocArticle(html, 'https://agentclientprotocol.com/protocol/v1/initialization')
+    expect(result.bodyHtml).toContain('Authentication Capabilities')
+    expect(result.bodyHtml).toContain('logout')
+    expect(result.bodyHtml).toContain('<code>LogoutCapabilities Object</code>')
+    expect(result.bodyHtml).not.toContain('<button')
+    expect(result.bodyHtml).not.toContain('aria-label="Link for this heading"')
+    expect(result.bodyHtml).not.toContain('viewBox="0 0 24 24"')
+    expect(result.bodyHtml).not.toContain('Copy page')
+  })
+
+  it('在线文档阅读器为行内 code 与降级字段名注入独立样式', () => {
+    const document = buildWebDocReaderDocument(
+      {
+        title: 'Initialization',
+        bodyHtml:
+          '<p><span class="web-doc-semantic-control">logout</span> <code>LogoutCapabilities Object</code></p>',
+        baseUrl: 'https://agentclientprotocol.com/protocol/v1/initialization',
+      },
+      'dark',
+    )
+
+    expect(document).toContain('body code')
+    expect(document).toContain('background: #27272a')
+    expect(document).toContain('.web-doc-semantic-control')
+    expect(document).toContain('body pre code')
   })
 
   it('人民日报电子版仅提取 .article 正文', () => {    const html = `<!DOCTYPE html><html><head><title> 测试标题 </title></head><body>
