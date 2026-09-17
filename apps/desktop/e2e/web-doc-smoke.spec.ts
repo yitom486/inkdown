@@ -38,6 +38,9 @@ test.describe('在线文档阅读', () => {
       await expect(frame.getByRole('heading', { name: 'Authentication Capabilities' })).toBeVisible()
       await expect(frame.locator('[data-component-part="field-name"]')).toHaveText('logout')
       await expect(frame.locator('[data-component-part="field-info-pill"]')).toHaveText('LogoutCapabilities Object')
+      // The pointer may still be over the welcome-page input after navigation;
+      // move it outside the iframe before asserting the default hidden state.
+      await window.mouse.move(1, 1)
       await expect(frame.locator('.web-doc-heading-anchor-wrap')).toHaveCSS('opacity', '0')
       await expect(frame.locator('.web-doc-field-anchor-wrap')).toHaveCSS('opacity', '0')
       await expect(frame.locator('.web-doc-card-arrow')).toHaveCSS('opacity', '0')
