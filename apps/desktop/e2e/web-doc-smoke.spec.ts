@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { launchBuiltApp } from './helpers/launch-app'
 import {
+  E2E_WEB_DOC_CARD_URL,
   E2E_WEB_DOC_INSTALL_URL,
   E2E_WEB_DOC_START_URL,
   webDocFixtureDir,
@@ -62,7 +63,13 @@ test.describe('在线文档阅读', () => {
       )
       await frame.locator('.web-doc-card').hover()
       await expect(frame.locator('.web-doc-card-arrow')).toHaveCSS('opacity', '1')
+      await expect(frame.locator('.web-doc-card')).toHaveCSS('position', 'relative')
+      await expect(frame.locator('.web-doc-card')).toHaveCSS('display', 'block')
+      await expect(frame.locator('.web-doc-card-content-container')).toHaveCSS('display', 'flex')
       await expect(frame.getByRole('button', { name: '复制代码' })).toBeVisible()
+      await frame.locator('.web-doc-card').click()
+      await expect(panel.locator('input[placeholder="https://"]')).toHaveValue(E2E_WEB_DOC_CARD_URL)
+      await expect(frame.getByRole('heading', { name: 'Installation' })).toBeVisible({ timeout: 15_000 })
     } finally {
       await app.close()
     }

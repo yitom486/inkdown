@@ -144,6 +144,69 @@ describe('web-doc-html', () => {
     expect(document).toContain('body pre code')
   })
 
+  it('Mintlify 嵌套卡片把布局和导航提升到外层语义节点', () => {
+    const html = `<!DOCTYPE html><html><body><article>
+      <div class="card" role="link" tabindex="0" aria-labelledby="learn-more">
+        <div class="px-6 py-5" data-component-part="card-content-container">
+          <a href="/protocol/v1/elicitation" aria-hidden="true" tabindex="-1" style="display: contents;">
+            <div class="absolute"><svg viewBox="0 0 18 18"><path d="M1" /></svg></div>
+            <div data-component-part="card-icon"><svg viewBox="0 0 24 24"><path d="M1" /></svg></div>
+            <div class="w-full"><div id="learn-more" data-component-part="card-content"><span>Learn more about Elicitation</span></div></div>
+          </a>
+        </div>
+      </div>
+    </article></body></html>`
+
+    const result = extractWebDocArticle(html, 'https://agentclientprotocol.com/protocol/v1/initialization')
+    expect(result.bodyHtml).toContain('web-doc-card')
+    expect(result.bodyHtml).toContain('web-doc-card-with-container')
+    expect(result.bodyHtml).toContain(`data-inkdown-source-href="/protocol/v1/elicitation"`)
+    expect(result.bodyHtml).toContain('web-doc-card-content-wrap')
+
+    const readerDocument = buildWebDocReaderDocument(
+      {
+        title: 'Initialization',
+        bodyHtml: result.bodyHtml,
+        baseUrl: 'https://agentclientprotocol.com/protocol/v1/initialization',
+      },
+      'dark',
+    )
+    expect(readerDocument).toContain(
+      'data-inkdown-href="https://agentclientprotocol.com/protocol/v1/elicitation"',
+    )
+    expect(readerDocument).not.toContain('data-inkdown-source-href')
+    expect(readerDocument).toContain('data-component-part="card-content-container"')
+    expect(readerDocument).toContain('<main class="web-doc-reader-content">')
+    expect(readerDocument).toContain('</main>')
+
+    expect(readerDocument).toContain('tabindex="-1"')
+  })
+
+  it('最终生成 srcdoc 时也能修复尚未归一化的旧卡片片段', () => {
+    const readerDocument = buildWebDocReaderDocument(
+      {
+        title: 'Initialization',
+        bodyHtml: `<div role="link" tabindex="0">
+          <div data-component-part="card-content-container">
+            <a href="/protocol/v1/elicitation" aria-hidden="true" style="display: contents;">
+              <div class="absolute"><svg viewBox="0 0 18 18"><path d="M1" /></svg></div>
+              <div data-component-part="card-icon"><svg viewBox="0 0 24 24"><path d="M1" /></svg></div>
+              <div><div data-component-part="card-content"><span>Learn more</span></div></div>
+            </a>
+          </div>
+        </div>`,
+        baseUrl: 'https://agentclientprotocol.com/protocol/v1/initialization',
+      },
+      'dark',
+    )
+
+    expect(readerDocument).toContain('web-doc-card-with-container')
+    expect(readerDocument).toContain(
+      'data-inkdown-href="https://agentclientprotocol.com/protocol/v1/elicitation"',
+    )
+    expect(readerDocument).not.toContain('data-inkdown-source-href')
+  })
+
   it('把原生 hr、Tailwind 边界类与 inline border 归一化为通用分割线类', () => {
     const html = `<!DOCTYPE html><html><body><article>
       <div class="field border-gray-50 border-b"><p>第一组</p></div>

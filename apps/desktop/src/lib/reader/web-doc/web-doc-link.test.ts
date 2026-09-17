@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   INKDOWN_NAV_HREF_ATTR,
+  INKDOWN_SOURCE_HREF_ATTR,
   WEB_DOC_READER_MARKER_ATTR,
   WEB_DOC_READER_MARKER_VALUE,
   detectWebDocIframeEscape,
@@ -61,6 +62,40 @@ describe('web-doc-link', () => {
     expect(links[2]?.getAttribute('href')).toBeNull()
     // 惰性链接不再是导航目标，点击走默认行为也不会离开 srcdoc
     expect(isWebDocNavigationTarget(links[0], 'https://bojieli.github.io/ai-infra-book/')).toBe(false)
+  })
+
+  it('neutralize 将非 anchor 卡片根节点的来源 href 提升为导航目标', () => {
+    const root = document.createElement('div')
+    root.innerHTML = neutralizeWebDocNavigationLinks(
+      `<div role="link" tabindex="0" ${INKDOWN_SOURCE_HREF_ATTR}="/protocol/v1/elicitation"><span>Learn more</span></div>`,
+      'https://agentclientprotocol.com/protocol/v1/initialization',
+    )
+
+    const card = root.firstElementChild
+    expect(card?.getAttribute(INKDOWN_SOURCE_HREF_ATTR)).toBeNull()
+    expect(card?.getAttribute(INKDOWN_NAV_HREF_ATTR)).toBe(
+      'https://agentclientprotocol.com/protocol/v1/elicitation',
+    )
+    expect(card?.getAttribute('role')).toBe('link')
+    expect(card?.getAttribute('tabindex')).toBe('0')
+    expect(resolveWebDocClickHref(card?.firstElementChild ?? null, current)).toBe(
+      'https://agentclientprotocol.com/protocol/v1/elicitation',
+    )
+  })
+
+  it('卡片内部 display-contents anchor 不会抢走外层导航目标', () => {
+    const root = document.createElement('div')
+    root.innerHTML = neutralizeWebDocNavigationLinks(
+      `<div ${INKDOWN_SOURCE_HREF_ATTR}="/next"><a class="web-doc-card-inner-link" href="/next"><span>Next</span></a></div>`,
+      'https://example.com/docs/start',
+    )
+
+    const inner = root.querySelector('a')
+    expect(inner?.getAttribute('href')).toBeNull()
+    expect(inner?.getAttribute(INKDOWN_NAV_HREF_ATTR)).toBeNull()
+    expect(resolveWebDocClickHref(inner?.firstElementChild ?? null, 'https://example.com/docs/start')).toBe(
+      'https://example.com/next',
+    )
   })
 
   it('保留 mailto/tel 系统动作链接', () => {

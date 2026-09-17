@@ -1,6 +1,7 @@
 import type { WebDocSiteId } from '@inkdown/contracts'
 import { stripDisallowedWebDocEmbeds } from '@/lib/reader/web-doc/web-doc-embeds'
 import { stripHrttChrome } from '@/lib/reader/web-doc/hrtt-extract'
+import { INKDOWN_SOURCE_HREF_ATTR } from '@/lib/reader/web-doc/web-doc-link'
 
 const EDIT_PAGE_LABEL =
   /编辑此页|编辑本页|在\s*github\s*上编辑|edit this page|edit this file|edit on github|improve this page/i
@@ -175,23 +176,48 @@ function normalizeWebDocPermalinks(root: HTMLElement): void {
 }
 
 /** Mintlify Card：移除站点 CSS 仍保留语义，让阅读器重新控制卡片布局。 */
-function normalizeWebDocCards(root: HTMLElement): void {
+export function normalizeWebDocCards(root: HTMLElement): void {
   root.querySelectorAll<HTMLElement>('[data-component-part="card-content"]').forEach((content) => {
-    const card = content.closest('a')
-    if (!(card instanceof HTMLAnchorElement)) return
+    const link = content.closest('a')
+    if (!(link instanceof HTMLAnchorElement)) return
+
+    // Mintlify 的实际结构是：div[role="link"] > div[card-content-container] >
+    // a[aria-hidden][style="display: contents"]。旧实现把样式施加到内层 a，
+    // 其 display:contents 被覆盖后就会出现大块空白和脱离卡片的箭头。
+    const contentContainer = link.closest<HTMLElement>(
+      '[data-component-part="card-content-container"]',
+    )
+    const card =
+      link.closest<HTMLElement>('[role="link"], .card') ?? contentContainer?.parentElement ?? link
 
     card.classList.add('web-doc-card')
     card.removeAttribute('aria-hidden')
+    if (card !== link) {
+      const href = link.getAttribute('href')?.trim()
+      if (href) card.setAttribute(INKDOWN_SOURCE_HREF_ATTR, href)
+      link.classList.add('web-doc-card-inner-link')
+      link.setAttribute('aria-hidden', 'true')
+      link.setAttribute('tabindex', '-1')
+    }
+
+    const cardContentContainer =
+      card.querySelector<HTMLElement>('[data-component-part="card-content-container"]') ??
+      (contentContainer?.parentElement === card ? contentContainer : null)
+    if (cardContentContainer && cardContentContainer !== card) {
+      card.classList.add('web-doc-card-with-container')
+      cardContentContainer.classList.add('web-doc-card-content-container')
+    }
+
     content.classList.add('web-doc-card-content')
+    if (content.parentElement && content.parentElement !== link) {
+      content.parentElement.classList.add('web-doc-card-content-wrap')
+    }
 
     const icon = card.querySelector<HTMLElement>('[data-component-part="card-icon"]')
     icon?.classList.add('web-doc-card-icon')
 
-    for (const child of Array.from(card.children)) {
-      if (!(child instanceof HTMLElement)) continue
-      if (child.classList.contains('absolute') && child.querySelector('svg')) {
-        child.classList.add('web-doc-card-arrow')
-      }
+    for (const arrow of Array.from(card.querySelectorAll<HTMLElement>('.absolute'))) {
+      if (arrow.querySelector('svg')) arrow.classList.add('web-doc-card-arrow')
     }
   })
 }

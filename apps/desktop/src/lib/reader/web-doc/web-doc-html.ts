@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify'
 import type { WebDocPageContent, WebDocSiteId } from '@inkdown/contracts'
-import { stripWebDocChrome } from '@/lib/reader/web-doc/web-doc-chrome'
+import { normalizeWebDocCards, stripWebDocChrome } from '@/lib/reader/web-doc/web-doc-chrome'
 import { buildReaderLayoutCss, READER_PALETTE, type EpubThemeMode } from '@inkdown/reader-core'
 import { DEFAULT_READER_TYPOGRAPHY, type ReaderTypography } from '@inkdown/reader-core'
 import { buildWebDocCodeBlockCss, buildWebDocTabsRuntimeScript, enhanceWebDocCodeBlocks } from '@/lib/reader/web-doc/web-doc-code-blocks'
@@ -15,6 +15,7 @@ import {
   enhanceWebDocMath,
 } from '@/lib/reader/web-doc/web-doc-math'
 import {
+  INKDOWN_SOURCE_HREF_ATTR,
   neutralizeWebDocNavigationLinks,
   WEB_DOC_READER_MARKER_ATTR,
   WEB_DOC_READER_MARKER_VALUE,
@@ -204,6 +205,30 @@ function buildWebDocInlineCodeCss(theme: EpubThemeMode): string {
       text-decoration: none !important;
       box-sizing: border-box !important;
     }
+    /* reader-core 对 body 直属 div 有更高优先级的 position: static；卡片必须
+       保留自己的定位上下文，否则内部绝对定位箭头会跑到正文左上角。 */
+    /* Mintlify 的真实卡片还有一层 content-container；卡片边框/点击区域
+       应在外层，内部容器只负责承载图标、正文和悬停箭头。 */
+    body .web-doc-card.web-doc-card-with-container {
+      display: block !important;
+      padding: 0 !important;
+    }
+    body .web-doc-card-content-container {
+      display: flex !important;
+      align-items: flex-start !important;
+      gap: 0.75rem !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      padding: 1rem 3rem 1rem 1rem !important;
+      box-sizing: border-box !important;
+    }
+
+    body .web-doc-card-inner-link {
+      display: contents !important;
+      color: inherit !important;
+      text-decoration: none !important;
+    }
+
     body .web-doc-card:hover,
     body .web-doc-card:focus-visible,
     body .web-doc-card:focus-within {
@@ -227,6 +252,10 @@ function buildWebDocInlineCodeCss(theme: EpubThemeMode): string {
       flex: 1 1 auto !important;
       min-width: 0 !important;
       margin: 0 !important;
+    }
+    body .web-doc-card-content-wrap {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
     }
     body .web-doc-card-arrow {
       position: absolute !important;
@@ -486,7 +515,9 @@ export function sanitizeWebDocBodyHtml(html: string): string {
       'loading',
       'aria-hidden',
       'role',
+      'tabindex',
       'data-inkdown-href',
+      INKDOWN_SOURCE_HREF_ATTR,
       'referrerpolicy',
       'allow',
       'allowfullscreen',
@@ -533,8 +564,20 @@ export function buildWebDocReaderDocument(
   const mathCss = buildWebDocMathCss()
   const embedCss = buildWebDocEmbedCss()
   const safeTitle = DOMPurify.sanitize(content.title)
+  // Query cache/HMR 可能让旧版 bodyHtml 在一次会话内继续存在；在最终生成
+  // srcdoc 前再归一化一次，确保旧片段也不会把 display:contents 卡片撑坏。
+  const normalizedBodyHtml = (() => {
+    const doc = new DOMParser().parseFromString(
+      `<div id="inkdown-reader-body">${content.bodyHtml}</div>`,
+      'text/html',
+    )
+    const root = doc.getElementById('inkdown-reader-body')
+    if (!root) return content.bodyHtml
+    normalizeWebDocCards(root)
+    return root.innerHTML
+  })()
   const body = neutralizeWebDocNavigationLinks(
-    enhanceWebDocCodeBlocks(enhanceWebDocMath(content.bodyHtml)),
+    enhanceWebDocCodeBlocks(enhanceWebDocMath(normalizedBodyHtml)),
     content.baseUrl,
   )
 
@@ -553,7 +596,7 @@ export function buildWebDocReaderDocument(
   <style>
     body { margin: 0; padding: 1.25rem 1.5rem 2rem; }
     a { word-break: break-word; }
-    a[data-inkdown-href] { cursor: pointer; }
+    [data-inkdown-href] { cursor: pointer; }
     pre { overflow-x: auto; }
     img { max-width: 100%; height: auto; }
     /* 无宽高的图标 SVG（如「编辑此页」）否则会按 viewBox 撑满版面 */
@@ -576,7 +619,7 @@ export function buildWebDocReaderDocument(
     }
   </style>
 </head>
-<body>${body}${buildWebDocTabsRuntimeScript()}</body>
+<body><main class="web-doc-reader-content">${body}</main>${buildWebDocTabsRuntimeScript()}</body>
 </html>`
 }
 

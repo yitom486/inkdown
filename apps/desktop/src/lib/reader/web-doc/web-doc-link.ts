@@ -1,4 +1,6 @@
 export const INKDOWN_NAV_HREF_ATTR = 'data-inkdown-href'
+/** 临时保留卡片内部链接的原始 href，归一化后会提升到语义卡片根节点。 */
+export const INKDOWN_SOURCE_HREF_ATTR = 'data-inkdown-source-href'
 export const WEB_DOC_READER_MARKER_ATTR = 'data-inkdown-web-doc-reader'
 export const WEB_DOC_READER_MARKER_VALUE = '1'
 
@@ -33,7 +35,44 @@ export function neutralizeWebDocNavigationLinks(bodyHtml: string, baseUrl: strin
   const root = doc.getElementById('inkdown-nav-root')
   if (!root) return bodyHtml
 
+  // Mintlify 等站点把卡片做成 div[role="link"]，真正的 href 放在一个
+  // aria-hidden/display:contents 的子 anchor 上。把原始 href 提升到卡片根节点，
+  // 这样卡片的任意子元素都能走同一套应用内导航。
+  root.querySelectorAll<HTMLElement>(`[${INKDOWN_SOURCE_HREF_ATTR}]`).forEach((target) => {
+    const raw = target.getAttribute(INKDOWN_SOURCE_HREF_ATTR)?.trim() ?? ''
+    target.removeAttribute(INKDOWN_SOURCE_HREF_ATTR)
+    target.removeAttribute('href')
+
+    if (!raw || raw === '#' || raw.startsWith('mailto:') || raw.startsWith('tel:')) {
+      target.removeAttribute(INKDOWN_NAV_HREF_ATTR)
+      return
+    }
+
+    const absolute = toAbsoluteNavUrl(raw, baseUrl)
+    if (!absolute || !isNavigableHref(raw)) {
+      target.removeAttribute(INKDOWN_NAV_HREF_ATTR)
+      return
+    }
+
+    target.setAttribute(INKDOWN_NAV_HREF_ATTR, absolute)
+    if (target.tagName !== 'A' && target.tagName !== 'AREA') {
+      target.setAttribute('role', 'link')
+      target.setAttribute('tabindex', '0')
+    }
+  })
+
   root.querySelectorAll<HTMLAnchorElement>('a').forEach((anchor) => {
+    // 卡片内部 anchor 只是站点实现细节；导航目标已经提升到外层卡片。
+    // 置空 href 可以阻止 srcdoc 原生导航，同时保留 aria-hidden 的语义。
+    if (anchor.classList.contains('web-doc-card-inner-link')) {
+      anchor.removeAttribute('href')
+      anchor.removeAttribute('target')
+      anchor.removeAttribute(INKDOWN_NAV_HREF_ATTR)
+      anchor.setAttribute('aria-hidden', 'true')
+      anchor.setAttribute('tabindex', '-1')
+      return
+    }
+
     const existing = anchor.getAttribute(INKDOWN_NAV_HREF_ATTR)?.trim()
     if (existing) {
       // Keep the target in a data attribute only. A native href would still be
@@ -149,6 +188,17 @@ export function resolveWebDocClickHref(
   const area = element.closest('area')
   if (area) {
     const href = readInkdownNavHref(area)
+    if (!href) return null
+    try {
+      return new URL(href, currentPageUrl).toString()
+    } catch {
+      return null
+    }
+  }
+
+  const navigableTarget = element.closest(`[${INKDOWN_NAV_HREF_ATTR}]`)
+  if (navigableTarget) {
+    const href = readInkdownNavHref(navigableTarget)
     if (!href) return null
     try {
       return new URL(href, currentPageUrl).toString()
