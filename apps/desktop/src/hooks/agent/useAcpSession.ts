@@ -18,6 +18,7 @@ import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
 import { STREAM_FLUSH_MS, StreamCoalescer, isCoalescableAgentChunk } from '@/lib/agent/stream-coalescer'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
+import { selectActiveThreadAgentSessionId } from '@/stores/acp-ui-store'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useAnnotationAgentStore, annotationOwnsSessionId } from '@/stores/annotation-agent-store'
@@ -25,9 +26,7 @@ import { quizOwnsSessionId, accumulateQuizSessionUpdate, isQuizPrompting } from 
 import { tocOwnsSessionId, accumulateTocSessionUpdate, isTocPrompting } from '@/lib/agent/toc-ai-session'
 
 function activeThreadAgentSessionId(): string | undefined {
-  const s = useAcpUiStore.getState()
-  const thread = s.threads.find((t) => t.id === s.activeThreadId)
-  return thread?.agentSessionId?.trim() || undefined
+  return selectActiveThreadAgentSessionId(useAcpUiStore.getState())
 }
 
 /** 连接就绪后：把 Zustand 里记住的 Mode/Model 等写回当前 ACP session */
@@ -112,13 +111,13 @@ export function useAcpSession(workspaceRoot?: string) {
       setStatus(event.status, event.errorMessage)
       if (event.sessionId) setSession(event.sessionId)
       if (event.status === 'disconnected') {
-        // 清「当前连接」；勿清 thread.agentSessionId（setSession(null) 已保留）
+        // 清「当前连接」；勿清 thread.agentSessionIds（setSession(null) 已按运行时保留）
         setSession(null)
         flushBufferedChunks()
         finishStreaming()
         setAuthOpen(false)
         setAuthMethods([])
-        // 批注：保留 agentSessionId，仅标记 stale，重连后 session/load 续上
+        // 批注：保留 agentSessionIds，仅标记 stale，重连后 session/load 续上
         useAnnotationAgentStore.getState().markSessionsStale()
       }
     })
@@ -288,8 +287,8 @@ export function useAcpSession(workspaceRoot?: string) {
 
   /**
    * 对齐 Agent 到当前本地线程：离线会自动连接；已连接则按需重连并 resume。
-   * - 有 agentSessionId → connect(resume)
-   * - 无 agentSessionId → connect(new)
+   * - 当前运行时下有 agentSessionIds[id] → connect(resume)
+   * - 无 → connect(new)（换运行时后旧会话不会跨 Agent 串线）
    * @param forceReconnect 工作区 cwd 变更时强制重连（即使 sessionId 已对齐）
    */
   const syncAgentSessionToActiveThread = useCallback(async (

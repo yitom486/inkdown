@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
 import type { AcpChatMessage, AcpChatRole } from '@/stores/acp-chat-types'
 import {
   extractTextFromContent,
@@ -31,8 +32,26 @@ export interface AnnotationAgentThread {
   title: string
   createdAt: number
   updatedAt: number
-  agentSessionId?: string | null
+  /** 每个 ACP 运行时最近一次的 sessionId：换 Agent 不冲掉其他 Agent 的会话恢复能力 */
+  agentSessionIds?: Record<string, string | null>
   messages: AcpChatMessage[]
+}
+
+/** 旧版持久化迁移：单值 agentSessionId → 按运行时分桶（旧数据均为 codex） */
+export function migrateLegacyAnnotationThreadSessions(
+  thread: AnnotationAgentThread & { agentSessionId?: unknown },
+): AnnotationAgentThread {
+  if (thread.agentSessionIds) return thread
+  const legacy = thread.agentSessionId
+  const migrated: AnnotationAgentThread = {
+    ...thread,
+    agentSessionIds:
+      typeof legacy === 'string' && legacy.trim()
+        ? { [DEFAULT_ACP_RUNTIME_ID]: legacy }
+        : {},
+  }
+  delete (migrated as unknown as Record<string, unknown>).agentSessionId
+  return migrated
 }
 
 export interface AnnotationAgentFileState {
@@ -55,9 +74,9 @@ interface AnnotationAgentStore {
   /** 正式 Agent 经 MCP propose 时弹出独立确认框 */
   externalProposeOpen: boolean
   /**
-   * 断开重连后为 true：下次 ensure 时对已保存的 agentSessionId 做 session/load。
-   * 不清空 id（与右侧主会话一样保留，便于 resume）。
-   */
+    * 断开重连后为 true：下次 ensure 时对已保存的 agentSessionIds 做 session/load。
+    * 不清空 id（与右侧主会话一样保留，便于 resume）。
+    */
   sessionsStale: boolean
 
   ensureFile: (fileKey: string) => void
@@ -78,7 +97,7 @@ interface AnnotationAgentStore {
   beginAgentReply: () => void
   finishStreaming: () => void
   applySessionUpdate: (update: Record<string, unknown>) => void
-  bindSessionId: (sessionId: string | null) => void
+  bindSessionId: (sessionId: string | null, runtimeId: string) => void
   markSessionsStale: () => void
   clearSessionsStale: () => void
   /** 测试 / 显式重置用 */
@@ -94,7 +113,7 @@ function emptyThread(): AnnotationAgentThread {
     title: '批注助手',
     createdAt: now,
     updatedAt: now,
-    agentSessionId: null,
+    agentSessionIds: {},
     messages: [],
   }
 }
@@ -320,14 +339,15 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
           return { prompting: false, ...patched }
         }),
 
-      bindSessionId: (sessionId) =>
-        set((s) =>
+      bindSessionId: (sessionId, runtimeId) => {
+        return set((s) =>
           patchActiveThread(s, (t) => ({
             ...t,
-            agentSessionId: sessionId,
+            agentSessionIds: { ...(t.agentSessionIds ?? {}), [runtimeId]: sessionId },
             updatedAt: Date.now(),
           })),
-        ),
+        )
+      },
 
       markSessionsStale: () =>
         set({ sessionsStale: true, capturing: false, prompting: false }),
@@ -342,7 +362,7 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
               ...file,
               threads: file.threads.map((t) => ({
                 ...t,
-                agentSessionId: null,
+                agentSessionIds: {},
               })),
             }
           }
@@ -502,6 +522,17 @@ export const useAnnotationAgentStore = create<AnnotationAgentStore>()(
       partialize: (s) => ({
         byFileKey: s.byFileKey,
       }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as { byFileKey?: Record<string, AnnotationAgentFileState> }
+        const byFileKey: Record<string, AnnotationAgentFileState> = {}
+        for (const [key, file] of Object.entries(p.byFileKey ?? current.byFileKey)) {
+          byFileKey[key] = {
+            ...file,
+            threads: file.threads.map(migrateLegacyAnnotationThreadSessions),
+          }
+        }
+        return { ...current, byFileKey }
+      },
     },
   ),
 )
@@ -529,7 +560,9 @@ export function annotationOwnsSessionId(
   if (!id) return false
   for (const file of Object.values(state.byFileKey)) {
     for (const thread of file.threads) {
-      if (thread.agentSessionId === id) return true
+      for (const bound of Object.values(thread.agentSessionIds ?? {})) {
+        if (bound === id) return true
+      }
     }
   }
   return false

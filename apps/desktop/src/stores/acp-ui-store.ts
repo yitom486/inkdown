@@ -67,8 +67,12 @@ export interface AcpChatThread {
   createdAt: number
   updatedAt: number
   workspaceRoot?: string
-  /** 关联的 ACP sessionId：断开后仍保留，供重连 resume/load */
-  agentSessionId?: string | null
+  /**
+   * 每个 ACP 运行时最近一次的 sessionId：断开后仍保留，供同运行时重连 resume/load。
+   * 按运行时分桶：切换 Agent 不覆盖其他 Agent 的会话 id（跨运行时 resume 必然失效，
+   * 回退 new 时不能冲掉旧运行时的恢复能力）。
+   */
+  agentSessionIds?: Record<string, string | null>
   messages: AcpChatMessage[]
 }
 
@@ -159,9 +163,49 @@ function createEmptyThread(workspaceRoot?: string): AcpChatThread {
     createdAt: now,
     updatedAt: now,
     workspaceRoot,
-    agentSessionId: null,
+    agentSessionIds: {},
     messages: [],
   }
+}
+
+/**
+ * 旧版持久化迁移：`agentSessionId`（单值）→ `agentSessionIds`（按运行时分桶）。
+ * 旧数据产生时唯一运行时即 codex-acp，故归入其桶。
+ */
+export function migrateLegacyThreadSessions(
+  thread: AcpChatThread & { agentSessionId?: unknown },
+): AcpChatThread {
+  if (thread.agentSessionIds) return thread
+  const legacy = thread.agentSessionId
+  const migrated: AcpChatThread = {
+    ...thread,
+    agentSessionIds:
+      typeof legacy === 'string' && legacy.trim()
+        ? { [DEFAULT_ACP_RUNTIME_ID]: legacy }
+        : {},
+  }
+  delete (migrated as unknown as Record<string, unknown>).agentSessionId
+  return migrated
+}
+
+/** 当前线程在指定运行时下的可恢复 ACP sessionId（未连过该运行时为 null） */
+export function threadAgentSessionForRuntime(
+  thread: AcpChatThread,
+  runtimeId: string,
+): string | null {
+  return thread.agentSessionIds?.[runtimeId]?.trim() || null
+}
+
+/** 当前激活线程在当前运行时下的可恢复 ACP sessionId */
+export function selectActiveThreadAgentSessionId(
+  state: Pick<
+    AcpUiStore,
+    'threads' | 'activeThreadId' | 'selectedRuntimeId'
+  >,
+): string | undefined {
+  const thread = state.threads.find((t) => t.id === state.activeThreadId)
+  if (!thread) return undefined
+  return threadAgentSessionForRuntime(thread, state.selectedRuntimeId) || undefined
 }
 
 function titleFromMessages(messages: AcpChatMessage[]): string {
@@ -462,7 +506,13 @@ export const useAcpUiStore = create<AcpUiStore>()(
             ? { statusError: undefined, statusErrorCode: undefined }
             : {}),
           ...(status === 'disconnected' || status === 'error'
-            ? { prompting: false, pendingPermission: null, promptCapabilities: {} }
+            ? {
+                prompting: false,
+                pendingPermission: null,
+                promptCapabilities: {},
+                // 断开/失败即清除旧 Agent 的模型列表，避免切运行时后残留误导 UI
+                configOptions: [],
+              }
             : {}),
         }),
 
@@ -470,11 +520,14 @@ export const useAcpUiStore = create<AcpUiStore>()(
         set((s) => ({
           sessionId,
           ...(configOptions ? { configOptions } : {}),
-          // 仅在拿到有效 session 时写入 thread；断开时保留 agentSessionId 以便恢复
+          // 仅在拿到有效 session 时写入 thread；断开时按运行时保留以便恢复
           ...(sessionId
             ? patchActiveThread(s, (t) => ({
                 ...t,
-                agentSessionId: sessionId,
+                agentSessionIds: {
+                  ...(t.agentSessionIds ?? {}),
+                  [s.selectedRuntimeId]: sessionId,
+                },
                 updatedAt: Date.now(),
               }))
             : {}),
@@ -965,7 +1018,9 @@ export const useAcpUiStore = create<AcpUiStore>()(
             ? p.threads
             : current.threads
         const pruned = pruneBlankThreads(rawThreads)
-        const ensured = pruned.length > 0 ? pruned : current.threads
+        const ensured = (pruned.length > 0 ? pruned : current.threads).map(
+          migrateLegacyThreadSessions,
+        )
         const activeThreadId =
           typeof p.activeThreadId === 'string' &&
           ensured.some((t) => t.id === p.activeThreadId)

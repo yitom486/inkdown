@@ -19,16 +19,20 @@ describe('acp-ui-store history + plan', () => {
     })
   })
 
-  it('setSession(null) keeps thread.agentSessionId for reconnect', () => {
+  it('setSession(null) keeps thread.agentSessionIds for reconnect', () => {
     useAcpUiStore.getState().setSession('sess-keep-me')
     const threadId = useAcpUiStore.getState().activeThreadId
     expect(
-      useAcpUiStore.getState().threads.find((t) => t.id === threadId)?.agentSessionId,
+      useAcpUiStore.getState().threads.find((t) => t.id === threadId)?.agentSessionIds?.[
+        'codex-acp'
+      ],
     ).toBe('sess-keep-me')
     useAcpUiStore.getState().setSession(null)
     const state = useAcpUiStore.getState()
     expect(state.sessionId).toBeNull()
-    expect(state.threads.find((t) => t.id === threadId)?.agentSessionId).toBe('sess-keep-me')
+    expect(
+      state.threads.find((t) => t.id === threadId)?.agentSessionIds?.['codex-acp'],
+    ).toBe('sess-keep-me')
   })
 
   it('ingestPermissionRequest surfaces pending + tool card for approval UI', () => {

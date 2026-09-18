@@ -44,7 +44,9 @@ function activeAnnotationAgentSessionId(fileKey: string): string | null {
   const file = s.byFileKey[fileKey]
   if (!file) return null
   const thread = file.threads.find((t) => t.id === file.activeThreadId)
-  return thread?.agentSessionId?.trim() || null
+  // 按当前运行时取：换 Agent 后旧运行时的 session 不参与 resume/load
+  const runtimeId = useAcpUiStore.getState().selectedRuntimeId
+  return thread?.agentSessionIds?.[runtimeId]?.trim() || null
 }
 
 /**
@@ -93,6 +95,8 @@ export function useAnnotationAgentAssist(options: {
     const cwd = resolvePreferredAgentCwd()
 
     // 重连后：用 session/load 恢复模型记忆（ACP 无独立短期记忆，靠 session 续上）
+    // bind 一律按当前运行时记账：换 Agent 后旧运行时的 session 不参与恢复
+    const runtimeId = useAcpUiStore.getState().selectedRuntimeId
     if (existing && stale) {
       const loaded = await acpApi.loadSession({
         sessionId: existing,
@@ -100,12 +104,14 @@ export function useAnnotationAgentAssist(options: {
         secondary: true,
       })
       if (isOk(loaded)) {
-        useAnnotationAgentStore.getState().bindSessionId(loaded.value.sessionId)
+        useAnnotationAgentStore
+          .getState()
+          .bindSessionId(loaded.value.sessionId, runtimeId)
         useAnnotationAgentStore.getState().clearSessionsStale()
         return loaded.value.sessionId
       }
       // load 失败（Agent 不支持或 session 已失效）→ 新建，本地气泡仍保留
-      useAnnotationAgentStore.getState().bindSessionId(null)
+      useAnnotationAgentStore.getState().bindSessionId(null, runtimeId)
     }
 
     const created = await acpApi.sessionNew({ cwd })
@@ -114,10 +120,11 @@ export function useAnnotationAgentAssist(options: {
       return null
     }
 
-    useAnnotationAgentStore.getState().bindSessionId(created.value.sessionId)
+    useAnnotationAgentStore
+      .getState()
+      .bindSessionId(created.value.sessionId, runtimeId)
     useAnnotationAgentStore.getState().clearSessionsStale()
 
-    const runtimeId = useAcpUiStore.getState().selectedRuntimeId
     const preferred =
       useAcpUiStore.getState().preferredConfigByRuntime[runtimeId] ?? undefined
     const patches = listPreferredConfigPatches(
@@ -177,7 +184,9 @@ export function useAnnotationAgentAssist(options: {
           result.error.code === 'ACP_PROTOCOL_ERROR' ||
           result.error.code === 'ACP_NOT_CONNECTED'
         ) {
-          useAnnotationAgentStore.getState().bindSessionId(null)
+          useAnnotationAgentStore
+            .getState()
+            .bindSessionId(null, useAcpUiStore.getState().selectedRuntimeId)
         }
         reportAppError(result.error)
         store.setPhase(store.pendingDraft ? 'editing' : 'idle')
@@ -361,7 +370,9 @@ export function useAnnotationAgentAssist(options: {
           result.error.code === 'ACP_PROTOCOL_ERROR' ||
           result.error.code === 'ACP_NOT_CONNECTED'
         ) {
-          useAnnotationAgentStore.getState().bindSessionId(null)
+          useAnnotationAgentStore
+            .getState()
+            .bindSessionId(null, useAcpUiStore.getState().selectedRuntimeId)
         }
         reportAppError(result.error)
         store.setPhase(store.pendingDraft ? 'editing' : 'idle')

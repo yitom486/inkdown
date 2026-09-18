@@ -62,7 +62,7 @@ describe('annotation-agent-store', () => {
   it('annotationOwnsSessionId 只认批注线程绑定的 session', () => {
     const key = annotationFileKey('s', '/s.epub')
     useAnnotationAgentStore.getState().ensureFile(key)
-    useAnnotationAgentStore.getState().bindSessionId('ann-sess-1')
+    useAnnotationAgentStore.getState().bindSessionId('ann-sess-1', 'codex-acp')
     expect(
       annotationOwnsSessionId(useAnnotationAgentStore.getState(), 'ann-sess-1'),
     ).toBe(true)
@@ -74,22 +74,24 @@ describe('annotation-agent-store', () => {
   it('clearAllAgentSessionIds 清绑定但保留本地消息', () => {
     const key = annotationFileKey('c', '/c.epub')
     useAnnotationAgentStore.getState().ensureFile(key)
-    useAnnotationAgentStore.getState().bindSessionId('ann-x')
+    useAnnotationAgentStore.getState().bindSessionId('ann-x', 'codex-acp')
     useAnnotationAgentStore.getState().appendUserMessage('留下')
     useAnnotationAgentStore.getState().clearAllAgentSessionIds()
     const thread = useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!
-    expect(thread.agentSessionId).toBeNull()
+    expect(thread.agentSessionIds?.['codex-acp']).toBeUndefined()
     expect(thread.messages.some((m) => m.text === '留下')).toBe(true)
   })
 
-  it('markSessionsStale 保留 agentSessionId 供重连 load', () => {
+  it('markSessionsStale 保留 agentSessionIds 供重连 load', () => {
     const key = annotationFileKey('r', '/r.epub')
     useAnnotationAgentStore.getState().ensureFile(key)
-    useAnnotationAgentStore.getState().bindSessionId('ann-resume')
+    useAnnotationAgentStore.getState().bindSessionId('ann-resume', 'codex-acp')
     useAnnotationAgentStore.getState().markSessionsStale()
     expect(useAnnotationAgentStore.getState().sessionsStale).toBe(true)
     expect(
-      useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!.agentSessionId,
+      useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!.agentSessionIds?.[
+        'codex-acp'
+      ],
     ).toBe('ann-resume')
     useAnnotationAgentStore.getState().clearSessionsStale()
     expect(useAnnotationAgentStore.getState().sessionsStale).toBe(false)
