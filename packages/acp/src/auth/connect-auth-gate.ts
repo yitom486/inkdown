@@ -13,11 +13,15 @@ export interface ConnectAuthGateDeps {
   authenticate: (methodId: string) => Promise<void>
   /** 静默认证全失败后的兜底；返回 true 表示已建会话 */
   tryOpenSessionWithoutAuth?: () => Promise<boolean>
+  /**
+   * 是否优先尝试直接建立会话复用本机认证（例如 codex-acp 本地已有 auth.json 时 session/new 即可复用，避免 authenticate 唤起浏览器）
+   */
+  preferDirectSession?: boolean
 }
 
 /**
  * 连接阶段认证门闩（mock Agent + preflight 可测）。
- * 对齐：有 auth.json → 静默；无登录痕迹 → 弹向导。
+ * 对齐：有 auth.json → 静默复用；无登录痕迹 → 弹向导。
  */
 export async function runConnectAuthGate(
   authMethods: AcpAuthMethod[],
@@ -32,6 +36,19 @@ export async function runConnectAuthGate(
 
   if (decision.action === 'needs_auth') {
     return { outcome: 'needs_auth', methods: decision.methods }
+  }
+
+  // 若指定优先直接建会话（如 codex-acp 且检测到已登录），优先直接开会话复用凭据，避免 authenticate 唤起浏览器
+  if (deps.preferDirectSession && preflight.looksLoggedIn && deps.tryOpenSessionWithoutAuth) {
+    try {
+      if (await deps.tryOpenSessionWithoutAuth()) {
+        return { outcome: 'session_without_auth' }
+      }
+    } catch {
+      // 失败则说明本地凭据失效，直接转入待认证向导，避免无提示弹浏览器
+      return { outcome: 'needs_auth', methods: authMethods }
+    }
+    return { outcome: 'needs_auth', methods: authMethods }
   }
 
   for (const methodId of decision.methodIds) {

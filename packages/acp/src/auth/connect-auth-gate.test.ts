@@ -99,4 +99,83 @@ describe('runConnectAuthGate (E2E scenarios with mock Agent)', () => {
     expect(result).toEqual({ outcome: 'skip_auth' })
     expect(authenticate).not.toHaveBeenCalled()
   })
+
+  it('preferDirectSession: true + looksLoggedIn: true → directly opens session without calling authenticate', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn().mockResolvedValue(true)
+    const result = await runConnectAuthGate(
+      mockAgentAuthMethods,
+      { looksLoggedIn: true, hasAuthFile: true, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+        preferDirectSession: true,
+      },
+    )
+
+    expect(result).toEqual({ outcome: 'session_without_auth' })
+    expect(tryOpenSessionWithoutAuth).toHaveBeenCalledTimes(1)
+    expect(authenticate).not.toHaveBeenCalled()
+  })
+
+  it('preferDirectSession: true + looksLoggedIn: true but session fails → falls back to needs_auth wizard', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn().mockResolvedValue(false)
+    const result = await runConnectAuthGate(
+      mockAgentAuthMethods,
+      { looksLoggedIn: true, hasAuthFile: true, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+        preferDirectSession: true,
+      },
+    )
+
+    expect(result).toMatchObject({ outcome: 'needs_auth' })
+    expect(tryOpenSessionWithoutAuth).toHaveBeenCalledTimes(1)
+    expect(authenticate).not.toHaveBeenCalled()
+  })
+
+  it('preferDirectSession: true + looksLoggedIn: false → opens wizard without trying direct session', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn()
+    const result = await runConnectAuthGate(
+      mockAgentAuthMethods,
+      { looksLoggedIn: false, hasAuthFile: false, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+        preferDirectSession: true,
+      },
+    )
+    expect(result).toMatchObject({ outcome: 'needs_auth' })
+    expect(tryOpenSessionWithoutAuth).not.toHaveBeenCalled()
+    expect(authenticate).not.toHaveBeenCalled()
+  })
+
+  it('antigravity-acp: preferDirectSession: true + looksLoggedIn: true → directly opens session, never triggers oauth-personal browser popup', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn().mockResolvedValue(true)
+    const antigravityAuthMethods = [
+      { id: 'oauth-personal', name: 'Google 账号（个人）', type: 'oauth' },
+      { id: 'oauth-business', name: 'Google Workspace（企业）', type: 'oauth' },
+      { id: 'gemini-api-key', name: 'Gemini API Key', type: 'api_key' },
+    ]
+
+    const result = await runConnectAuthGate(
+      antigravityAuthMethods,
+      { looksLoggedIn: true, hasAuthFile: true, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+        preferDirectSession: true,
+      },
+    )
+
+    expect(result).toEqual({ outcome: 'session_without_auth' })
+    expect(tryOpenSessionWithoutAuth).toHaveBeenCalledTimes(1)
+    expect(authenticate).not.toHaveBeenCalled()
+  })
 })
+
+

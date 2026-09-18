@@ -6,7 +6,7 @@ function methodKey(method: AcpAuthMethod): string {
 }
 
 function isChatGptMethod(method: AcpAuthMethod): boolean {
-  return /chatgpt|openai|oauth|subscription|login/.test(methodKey(method))
+  return /chatgpt|openai|google|oauth|subscription|login/.test(methodKey(method))
 }
 
 function isApiKeyMethod(method: AcpAuthMethod): boolean {
@@ -25,6 +25,12 @@ export function orderSilentAuthMethodIds(
   if (methods.length === 0) return []
 
   const score = (method: AcpAuthMethod): number => {
+    const id = method.id.toLowerCase()
+    // Google Antigravity：优先个人账号，企业账号排后
+    if (id === 'oauth-personal') return 0
+    if (id === 'oauth-business') return 2
+    if (id === 'gemini-api-key') return preflight.hasApiKeyEnv ? 1 : 4
+
     const chatgpt = isChatGptMethod(method)
     const apiKey = isApiKeyMethod(method)
     if (preflight.hasAuthFile && chatgpt) return 0
