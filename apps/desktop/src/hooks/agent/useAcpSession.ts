@@ -79,6 +79,19 @@ export function useAcpSession(workspaceRoot?: string) {
   const [authMethods, setAuthMethods] = useState<AcpAuthMethod[]>([])
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  /** 弹窗内 methods 归属的运行时：completeAuth 前必须与当前选中一致，防止串 runtime */
+  const [authRuntimeId, setAuthRuntimeId] = useState<string | null>(null)
+
+  /**
+   * 连接代际：connect / switchRuntime / sync / disconnect 任一新流程启动即 +1。
+   * 渲染端此前对滞后 IPC 响应无任何防线——旧运行时的 needs_auth 会盖掉新连接的
+   * connected（标题读 live selectedRuntimeId，methods 却是旧的），必须丢弃。
+   */
+  const connectionEpochRef = useRef(0)
+  const bumpConnectionEpoch = useCallback(() => {
+    connectionEpochRef.current += 1
+    return connectionEpochRef.current
+  }, [])
 
   // 接收缓冲提到 hook 级：结束/cancel/断开路径必须先冲刷再 finishStreaming，
   // 否则尾部 chunk 可能丢失或错序
@@ -117,6 +130,7 @@ export function useAcpSession(workspaceRoot?: string) {
         finishStreaming()
         setAuthOpen(false)
         setAuthMethods([])
+        setAuthRuntimeId(null)
         // 批注：保留 agentSessionIds，仅标记 stale，重连后 session/load 续上
         useAnnotationAgentStore.getState().markSessionsStale()
       }
@@ -162,6 +176,11 @@ export function useAcpSession(workspaceRoot?: string) {
   const finalizeConnected = useCallback(
     async (result: AcpConnectReadyResult, prefix: string) => {
       setStatus('connected')
+      // 成功即收掉可能残留的认证弹窗（滞后 needs_auth 不应再出现，见 epoch 防线）
+      setAuthOpen(false)
+      setAuthMethods([])
+      setAuthRuntimeId(null)
+      setAuthError(null)
       const options = result.configOptions ?? []
       setSession(result.sessionId, options)
       setPromptCapabilities(result.promptCapabilities ?? {})
@@ -206,6 +225,7 @@ export function useAcpSession(workspaceRoot?: string) {
       appendSystemMessage('正在连接中，请稍候…')
       return
     }
+    const epoch = bumpConnectionEpoch()
     setStatus('connecting')
     setAuthError(null)
     const resumeSessionId = activeThreadAgentSessionId()
@@ -219,6 +239,8 @@ export function useAcpSession(workspaceRoot?: string) {
       cwd,
       resumeSessionId,
     })
+    // 滞后响应：连接期间用户已切走（新流程 bump 了 epoch），一律丢弃
+    if (epoch !== connectionEpochRef.current) return
     if (!isOk(result)) {
       setStatus('error', result.error.message, result.error.code)
       reportAppError(result.error)
@@ -227,8 +249,11 @@ export function useAcpSession(workspaceRoot?: string) {
     }
 
     if (result.value.phase === 'needs_auth') {
+      // 防串 runtime：只接受归属当前选中运行时的认证请求
+      if (result.value.runtimeId !== useAcpUiStore.getState().selectedRuntimeId) return
       setStatus('awaiting_auth')
       setAuthMethods(result.value.authMethods)
+      setAuthRuntimeId(result.value.runtimeId)
       setAuthOpen(true)
       appendSystemMessage('需要认证：请选择登录方式')
       return
@@ -237,6 +262,7 @@ export function useAcpSession(workspaceRoot?: string) {
     await finalizeConnected(result.value, '已连接')
   }, [
     appendSystemMessage,
+    bumpConnectionEpoch,
     finalizeConnected,
     selectedRuntimeId,
     setStatus,
@@ -245,6 +271,14 @@ export function useAcpSession(workspaceRoot?: string) {
 
   const completeAuth = useCallback(
     async (methodId: string) => {
+      // 弹窗打开后用户可能已切换 Agent：归属不一致则拒绝，避免把旧方式发给新服务端
+      if (
+        authRuntimeId !== null &&
+        authRuntimeId !== useAcpUiStore.getState().selectedRuntimeId
+      ) {
+        setAuthError('已切换 Agent，该登录方式已过期，请重新连接。')
+        return
+      }
       setAuthBusy(true)
       setAuthError(null)
       const result = await acpApi.authenticate({ methodId })
@@ -256,22 +290,26 @@ export function useAcpSession(workspaceRoot?: string) {
       }
       setAuthOpen(false)
       setAuthMethods([])
+      setAuthRuntimeId(null)
       await finalizeConnected(result.value, '已认证并连接')
     },
-    [finalizeConnected],
+    [authRuntimeId, finalizeConnected],
   )
 
   const cancelAuth = useCallback(async () => {
+    bumpConnectionEpoch()
     setAuthOpen(false)
     setAuthMethods([])
+    setAuthRuntimeId(null)
     setAuthError(null)
     await acpApi.disconnect()
     setSession(null)
     setStatus('disconnected')
     appendSystemMessage('已取消认证')
-  }, [appendSystemMessage, setSession, setStatus])
+  }, [appendSystemMessage, bumpConnectionEpoch, setSession, setStatus])
 
   const disconnect = useCallback(async () => {
+    bumpConnectionEpoch()
     const result = await acpApi.disconnect()
     if (!isOk(result)) {
       reportAppError(result.error)
@@ -283,7 +321,7 @@ export function useAcpSession(workspaceRoot?: string) {
     finishStreaming()
     setAuthOpen(false)
     appendSystemMessage('已断开连接（本对话会话 id 已保留，重连时可恢复）')
-  }, [appendSystemMessage, finishStreaming, flushBufferedChunks, setSession, setStatus])
+  }, [appendSystemMessage, bumpConnectionEpoch, finishStreaming, flushBufferedChunks, setSession, setStatus])
 
   /**
    * 切换 ACP 运行时（如在 codex-acp 与 antigravity-acp 间切换）：
@@ -301,6 +339,8 @@ export function useAcpSession(workspaceRoot?: string) {
         statusNow === 'awaiting_auth'
       ) {
         await disconnect()
+        // disconnect 内部已 bump epoch，此处重新捕获，之后只认本流程的响应
+        const epoch = bumpConnectionEpoch()
         const cwd = workspaceRoot?.trim() || undefined
         setStatus('connecting')
         setAuthError(null)
@@ -315,6 +355,7 @@ export function useAcpSession(workspaceRoot?: string) {
           cwd,
           resumeSessionId,
         })
+        if (epoch !== connectionEpochRef.current) return
         if (!isOk(result)) {
           setStatus('error', result.error.message, result.error.code)
           reportAppError(result.error)
@@ -323,8 +364,11 @@ export function useAcpSession(workspaceRoot?: string) {
         }
 
         if (result.value.phase === 'needs_auth') {
+          // 防串 runtime：旧流程滞后返回的 needs_auth 直接丢弃
+          if (result.value.runtimeId !== useAcpUiStore.getState().selectedRuntimeId) return
           setStatus('awaiting_auth')
           setAuthMethods(result.value.authMethods)
+          setAuthRuntimeId(result.value.runtimeId)
           setAuthOpen(true)
           appendSystemMessage('需要认证：请选择登录方式')
           return
@@ -333,7 +377,7 @@ export function useAcpSession(workspaceRoot?: string) {
         await finalizeConnected(result.value, `已连接至 ${nextRuntimeId}`)
       }
     },
-    [appendSystemMessage, disconnect, finalizeConnected, setStatus, workspaceRoot],
+    [appendSystemMessage, bumpConnectionEpoch, disconnect, finalizeConnected, setStatus, workspaceRoot],
   )
 
   /**
@@ -356,6 +400,7 @@ export function useAcpSession(workspaceRoot?: string) {
       return false
     }
 
+    const epoch = bumpConnectionEpoch()
     const resumeSessionId = activeThreadAgentSessionId()
     const liveSessionId = useAcpUiStore.getState().sessionId?.trim() || undefined
     const alreadyAligned =
@@ -413,6 +458,7 @@ export function useAcpSession(workspaceRoot?: string) {
       cwd,
       resumeSessionId,
     })
+    if (epoch !== connectionEpochRef.current) return false
     if (!isOk(result)) {
       acpDevWarn('sync connect failed', result.error)
       setStatus('error', result.error.message, result.error.code)
@@ -422,9 +468,14 @@ export function useAcpSession(workspaceRoot?: string) {
     }
 
     if (result.value.phase === 'needs_auth') {
+      if (result.value.runtimeId !== useAcpUiStore.getState().selectedRuntimeId) {
+        // 滞后于切换的旧响应：静默丢弃
+        return false
+      }
       acpDevLog('sync needs auth', { methods: result.value.authMethods.length })
       setStatus('awaiting_auth')
       setAuthMethods(result.value.authMethods)
+      setAuthRuntimeId(result.value.runtimeId)
       setAuthOpen(true)
       appendSystemMessage('需要认证：请选择登录方式')
       return false
@@ -447,6 +498,7 @@ export function useAcpSession(workspaceRoot?: string) {
     return true
   }, [
     appendSystemMessage,
+    bumpConnectionEpoch,
     finalizeConnected,
     finishStreaming,
     flushBufferedChunks,
