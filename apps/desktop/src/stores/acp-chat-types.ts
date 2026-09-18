@@ -14,6 +14,11 @@ export interface AcpToolDiff {
   newText: string
 }
 
+export interface AcpToolLocation {
+  path: string
+  line?: number
+}
+
 export interface AcpChatMessage {
   id: string
   role: AcpChatRole

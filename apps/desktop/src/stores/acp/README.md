@@ -1,0 +1,22 @@
+# src/stores/acp
+
+ACP 智能体交互与次世代伴读 HUD 专职状态管理。由原 1182 行巨石仓库 `acp-ui-store.ts` 拆解分流而成。
+
+| 文件 | 职责说明 |
+| :--- | :--- |
+| `acp-types.ts` | 会话线程、权限审批卡与 HUD 模态通用数据类型定义与线程会话辅助 |
+| `session-slice.ts` | 协议连接状态（status）、运行时切换、会话 ID、模型与配置项偏好（preferredConfig） |
+| `chat-slice.ts` | 多会话线程（threads）、消息流式接收（streaming）、快照提议与计划提升 |
+| `chat-helpers.ts` | 线程草稿修剪、提议挂载与工具调用卡片解析纯逻辑辅助 |
+| `permission-slice.ts` | 工具调用权限审批拦截（pendingPermission）与审批记录同步 |
+| `hud-slice.ts` | 伴读 HUD 面板开闭与输入框调度 |
+| `reader-hud-store.ts` | 伴读 HUD 独立表现层（三态切换、自由拖拽坐标、四大 Tab、卡轨开关、全屏图表模态） |
+| `acp-store.ts` | Slices 组装与持久化存储中间件（保持 `useAcpUiStore` 统一接口） |
+| `index.ts` | 模块统一导出入口 |
+
+---
+
+### 设计原则与架构边界
+1. **Slices 模式物理隔离**：每个切片文件仅百余行，逻辑清晰内聚，彻底解决巨石代码维护痛点。
+2. **纯 UI 隔离**：`reader-hud-store.ts` 专职处理界面拖拽、Tab 切换、抽屉模态等纯前端视觉状态，避免与底层 ACP JSON-RPC 消息流混杂。
+3. **零破坏兼容**：父级 `acp-ui-store.ts` 作为门面透明转发，保证已有 27 处业务调用和全量单测 100% 绿灯。

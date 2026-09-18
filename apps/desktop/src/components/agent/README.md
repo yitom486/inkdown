@@ -7,6 +7,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 | 文件 | 功能 |
 |------|------|
 | `AgentPanel` | 右侧 Agent 主面板（壳 + 接线；配置项分类纯逻辑已出库 `lib/agent/acp-config-menu`） |
+| `FloatingAIHud` | 悬浮 AI 伴读浮窗与微型药丸胶囊（支持 docked / floating / capsule 三态平滑切换） |
 | `CompactConfigMenu` | 输入栏旁的紧凑配置下拉（primary 配置项） |
 | `AgentComposer` | 输入框、附件、选区标记 |
 | `AgentMark` | Agent 徽标（布局/TitleBar 共用） |
@@ -29,7 +30,9 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 
 | 文件 | 功能 |
 |------|------|
-| `AgentToolCallCard` | 工具调用卡（含权限子卡） |
+| `AgentToolCallCard` | 工具调用卡（含权限子卡、图表卡、跨章实体卡挂接） |
+| `DiagramViewerCard` | 交互式双模图表卡（时序步骤流 / 实体概览 / Mermaid 原生出图 / 正文穿透 / 钉入） |
+| `CrossReferenceCard` | 跨章节实体概念流转轨迹卡（章节分布热力权重条 / 证据折叠 / 跨章定位） |
 | `AgentDiffPreview` | diff 预览 |
 | `AgentPlanCard` | 计划条目卡 |
 | `AgentBlockRenderer` | 兼容入口（tool 消息） |

@@ -94,3 +94,27 @@
       sans-serif;
   }
 }
+
+/* 墨韵与文房水墨美学辅助样式 */
+@keyframes ink-spread {
+  0% {
+    background-color: oklch(0.55 0.2 27.5 / 20%);
+    box-shadow: 0 0 0 1px oklch(0.55 0.2 27.5 / 50%);
+  }
+  60% {
+    background-color: oklch(0.55 0.2 27.5 / 12%);
+    box-shadow: 0 0 0 2px oklch(0.55 0.2 27.5 / 30%);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.ink-anchor-pulse {
+  animation: ink-spread 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.ink-seal-text {
+  font-family: 'Songti SC', 'SimSun', 'Noto Serif SC', serif;
+}

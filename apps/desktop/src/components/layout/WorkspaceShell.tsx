@@ -4,6 +4,7 @@ import { TitleBar } from '@/components/layout/TitleBar'
 import { ActivityBar } from '@/components/layout/ActivityBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { AgentPanel } from '@/components/agent/AgentPanel'
+import { FloatingAIHud } from '@/components/agent/FloatingAIHud'
 import {
   ResizableHandle,
   ResizablePanel,
@@ -101,9 +102,11 @@ export function WorkspaceShell({
   const outlineExpanded = useEditorUiStore((state) => state.outlineExpanded)
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
   const agentPanelOpen = useAcpUiStore((state) => state.panelOpen)
+  const hudDisplayMode = useAcpUiStore((state) => state.hudDisplayMode)
+  const isDockedPanelVisible = agentPanelOpen && hudDisplayMode === 'docked'
   const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
   const sidebarPanelRef = useCollapsiblePanelSync(sidebarVisible)
-  const agentPanelRef = useCollapsiblePanelSync(agentPanelOpen)
+  const agentPanelRef = useCollapsiblePanelSync(isDockedPanelVisible)
 
   const shellLayout = useDefaultLayout({
     id: 'workspace-shell',
@@ -202,7 +205,7 @@ export function WorkspaceShell({
             {children}
           </ResizablePanel>
 
-          {agentPanelOpen ? <ResizableHandle withHandle /> : null}
+          {isDockedPanelVisible ? <ResizableHandle withHandle /> : null}
 
           <ResizablePanel
             id="agent"
@@ -218,6 +221,8 @@ export function WorkspaceShell({
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
+
+      <FloatingAIHud workspaceRoot={workspaceRoot} />
     </div>
   )
 }

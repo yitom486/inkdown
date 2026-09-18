@@ -324,4 +324,19 @@ describe('acp-ui-store history + plan', () => {
     ])
     expect(plan?.streaming).toBe(false)
   })
+
+  it('hudDisplayMode 支持 docked / floating / capsule 三态流转与划选自动展开', () => {
+    useAcpUiStore.getState().setHudDisplayMode('docked')
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('docked')
+    useAcpUiStore.getState().setHudDisplayMode('floating')
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('floating')
+
+    useAcpUiStore.getState().setHudDisplayMode('capsule')
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('capsule')
+
+    // 划词时调用 openPanelAndFocusComposer 会自动将 capsule 展开为 floating
+    useAcpUiStore.getState().openPanelAndFocusComposer()
+    expect(useAcpUiStore.getState().panelOpen).toBe(true)
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('floating')
+  })
 })

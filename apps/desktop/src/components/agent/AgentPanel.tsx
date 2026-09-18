@@ -1,6 +1,9 @@
 import {
   ChevronDown,
+  Columns2,
+  ExternalLink,
   Loader2,
+  Minimize2,
   Plus,
   Settings2,
   Trash2,
@@ -47,12 +50,21 @@ import type { AcpConfigOption, AcpProviderStatus, AcpProxySettings } from '@inkd
 
 interface AgentPanelProps {
   workspaceRoot?: string
+  floating?: boolean
+  onToggleFloating?: () => void
+  onMinimizeToCapsule?: () => void
 }
 
-export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanelProps) {
+export const AgentPanel = memo(function AgentPanel({
+  workspaceRoot,
+  floating = false,
+  onToggleFloating,
+  onMinimizeToCapsule,
+}: AgentPanelProps) {
   const view = useAcpChatShell()
   const setSelectedRuntimeId = useAcpUiStore((s) => s.setSelectedRuntimeId)
   const setPanelOpen = useAcpUiStore((s) => s.setPanelOpen)
+  const setHudDisplayMode = useAcpUiStore((s) => s.setHudDisplayMode)
   const createThread = useAcpUiStore((s) => s.createThread)
   const {
     connect,
@@ -373,13 +385,53 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
           >
             <Trash2 className="size-3.5" />
           </Button>
+          {floating ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
+                title="最小化为极简胶囊"
+                onClick={onMinimizeToCapsule}
+              >
+                <Minimize2 className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
+                title="停靠回侧栏"
+                onClick={onToggleFloating}
+              >
+                <Columns2 className="size-3.5" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
+              title="切换为悬浮伴读小窗"
+              onClick={() => {
+                setHudDisplayMode('floating')
+              }}
+            >
+              <ExternalLink className="size-3.5" />
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="size-7 rounded-lg"
             title="关闭面板"
-            onClick={() => setPanelOpen(false)}
+            onClick={() => {
+              setPanelOpen(false)
+              if (floating) setHudDisplayMode('docked')
+            }}
           >
             <X className="size-3.5" />
           </Button>
