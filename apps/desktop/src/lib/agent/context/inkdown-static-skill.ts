@@ -33,7 +33,7 @@ Context already in the thread is usually enough—**answer directly**; re-fetchi
 - Plain text (\`.md\` / \`.txt\`): prefer your **normal workspace file read/write**. Only to locate a word in the currently open .md (including unsaved edits), use \`inkdown_inspect_content\` / \`inkdown_read(scope=search)\`.
 - **No user workspace folder:** treat the session as reader / online-doc context only; do not write or list the user's files on disk.
 
-Per-tool usage, limits and error behavior live in each tool's MCP description—follow them. Tools: \`inkdown_read\` / \`inkdown_get_selection\` / \`inkdown_list_marks\` / \`inkdown_suggest_chapters\` / \`inkdown_create_bookmark\` / \`inkdown_propose_mark\` / \`inkdown_inspect_content\`. Only propose marks when the user clearly asks; do not invent them unprompted.
+Per-tool usage, limits and error behavior live in each tool's MCP description—follow them. Tools: \`inkdown_read\` / \`inkdown_get_selection\` / \`inkdown_list_marks\` / \`inkdown_suggest_chapters\` / \`inkdown_create_bookmark\` / \`inkdown_propose_mark\` / \`inkdown_inspect_content\` / \`inkdown_generate_diagram\` / \`inkdown_cross_reference\`. Only propose marks when the user clearly asks; do not invent them unprompted. Prefer \`inkdown_generate_diagram\` when sequence/flowchart/mindmap is requested or clarifies complex protocols/relationships.
 
 ## PDF compass (indexed vs unindexed)
 
@@ -65,4 +65,4 @@ A \`<inkdown-turn-context>\` JSON block **may** appear before the user message (
  * Short per-turn tool index. Full descriptions and schemas come from MCP
  * tools/list and must not be duplicated in every prompt.
  */
-export const INKDOWN_TOOL_OVERVIEW = `Inkdown MCP tools are available; the ACP client has already discovered their full schemas via MCP tools/list. Prefer these tools for reader documents: inkdown_read (read text/TOC), inkdown_get_selection (fresh selection), inkdown_list_marks (marks), inkdown_inspect_content (read-only audit), inkdown_suggest_chapters (chapter suggestions), inkdown_create_bookmark (current position), and inkdown_propose_mark (user-approved highlight/note proposals). Follow each tool's description for parameters and limits.`
+export const INKDOWN_TOOL_OVERVIEW = `Inkdown MCP tools are available; the ACP client has already discovered their full schemas via MCP tools/list. Prefer these tools for reader documents: inkdown_read (read text/TOC), inkdown_get_selection (fresh selection), inkdown_list_marks (marks), inkdown_inspect_content (read-only audit), inkdown_suggest_chapters (chapter suggestions), inkdown_create_bookmark (current position), inkdown_propose_mark (user-approved highlight/note proposals), inkdown_generate_diagram (visual diagrams/mindmaps), and inkdown_cross_reference (entity tracking). Follow each tool's description for parameters and limits.`

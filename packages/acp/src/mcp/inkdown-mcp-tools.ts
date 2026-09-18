@@ -276,6 +276,101 @@ export const INKDOWN_MCP_TOOLS: InkdownMcpToolDefinition[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'inkdown_generate_diagram',
+    annotations: {
+      title: 'Generate visualization diagram',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      '生成 Mermaid 可视化图解（时序图、流程图、状态机、实体关系网络或章节思维导图）。' +
+      '当读者询问复杂交互时序（如握手协议流程）、概念实体网络、算法状态机或全章宏观导图时调用。' +
+      '客户端将渲染悬浮卡片并支持双向高亮与「钉入正文」。' +
+      'mermaidCode 仅提供图表纯语法，不要包含 ```mermaid 围栏标记。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        diagramType: {
+          type: 'string',
+          enum: ['sequence', 'flowchart', 'mindmap', 'stateDiagram', 'classDiagram', 'erDiagram'],
+          description:
+            '图表类型：sequence=时序交互；flowchart=流程决策；mindmap=思维导图；stateDiagram=状态机；classDiagram=类关系；erDiagram=实体网络',
+        },
+        title: {
+          type: 'string',
+          description: '图表标题（如：ACP 握手与能力协商时序图）',
+        },
+        mermaidCode: {
+          type: 'string',
+          description: '标准 Mermaid 语法图表代码（不要加 ``` 围栏）',
+        },
+        anchorExcerpt: {
+          type: 'string',
+          description: '可选：该图表所对应的正文关键原文片段（用于点击穿透高亮）',
+        },
+        summary: {
+          type: 'string',
+          description: '可选：该图表的核心要点解读（1–2 句话）',
+        },
+        visualSteps: {
+          type: 'array',
+          description:
+            '可选：结构化交互式卡片步骤流（提供更现代、可展开参数、可点击正文穿透高亮的卡片视觉）',
+          items: {
+            type: 'object',
+            properties: {
+              from: { type: 'string', description: '发起方角色（如：client, agent, user, server）' },
+              to: { type: 'string', description: '接收方角色（如：agent, client, database）' },
+              action: { type: 'string', description: '动作或方法名（如：1. initialize）' },
+              desc: { type: 'string', description: '该步骤的关键说明' },
+              payload: { type: 'string', description: '可选：该步骤传输的代码或 JSON 参数详情' },
+              anchorExcerpt: {
+                type: 'string',
+                description: '可选：该步骤对应的正文片段（用于点击穿透高亮）',
+              },
+            },
+            required: ['from', 'to', 'action'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['diagramType', 'title', 'mermaidCode'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'inkdown_cross_reference',
+    annotations: {
+      title: 'Cross reference entity tracker',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      '全书跨章节实体/概念流转脉络追踪。检索关键技术变量、哲学概念或历史人物在本书各章节的提及分布与上下文证据链。' +
+      '返回按章节组织的证据列表，用于梳理脉络或进行跨章比对。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        entityName: {
+          type: 'string',
+          description: '追踪的目标实体或概念名称（至少 2 字符，取自原文）',
+        },
+        maxPerChapter: {
+          type: 'number',
+          description: '每章最多展示的引用片段数（1–5，默认 3）',
+          minimum: 1,
+          maximum: 5,
+        },
+      },
+      required: ['entityName'],
+      additionalProperties: false,
+    },
+  },
 ]
 
 export interface InkdownMcpToolResult {
@@ -470,6 +565,129 @@ export async function callInkdownMcpTool(
         ...(Array.isArray(marks) ? { marks } : {}),
       })
       return { content: [{ type: 'text', text }] }
+    }
+    case 'inkdown_generate_diagram': {
+      const diagramType = args?.diagramType
+      const title = args?.title
+      const mermaidCode = args?.mermaidCode
+      const anchorExcerpt =
+        typeof args?.anchorExcerpt === 'string' ? args.anchorExcerpt.trim() : undefined
+      const summary = typeof args?.summary === 'string' ? args.summary.trim() : undefined
+
+      const validTypes = [
+        'sequence',
+        'flowchart',
+        'mindmap',
+        'stateDiagram',
+        'classDiagram',
+        'erDiagram',
+      ]
+      if (typeof diagramType !== 'string' || !validTypes.includes(diagramType)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `inkdown_generate_diagram 需要有效的 diagramType: ${validTypes.join(', ')}`,
+            },
+          ],
+          isError: true,
+        }
+      }
+      if (typeof title !== 'string' || !title.trim()) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'inkdown_generate_diagram 需要非空的 title 参数',
+            },
+          ],
+          isError: true,
+        }
+      }
+      if (typeof mermaidCode !== 'string' || !mermaidCode.trim()) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'inkdown_generate_diagram 需要非空的 mermaidCode 参数',
+            },
+          ],
+          isError: true,
+        }
+      }
+
+      // 清洗可能意外包含的 ```mermaid 围栏
+      const cleanedCode = mermaidCode
+        .replace(/^```(?:mermaid)?\s*/i, '')
+        .replace(/```\s*$/, '')
+        .trim()
+
+      const visualSteps = Array.isArray(args?.visualSteps) ? args.visualSteps : undefined
+
+      const payload = {
+        diagramId: `diag-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        diagramType,
+        title: title.trim(),
+        mermaidCode: cleanedCode,
+        ...(anchorExcerpt ? { anchorExcerpt } : {}),
+        ...(summary ? { summary } : {}),
+        ...(visualSteps ? { visualSteps } : {}),
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(payload, null, 2),
+          },
+        ],
+      }
+    }
+    case 'inkdown_cross_reference': {
+      const entityName = args?.entityName
+      if (typeof entityName !== 'string' || entityName.trim().length < 2) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'inkdown_cross_reference 需要至少 2 个字符的 entityName 参数',
+            },
+          ],
+          isError: true,
+        }
+      }
+      const rawText = await context.readSnapshot('search', { query: entityName.trim() })
+      try {
+        const parsed = JSON.parse(rawText)
+        const maxPerChapter =
+          typeof args?.maxPerChapter === 'number' &&
+          args.maxPerChapter >= 1 &&
+          args.maxPerChapter <= 5
+            ? Math.floor(args.maxPerChapter)
+            : 3
+
+        interface RawHit {
+          title?: string
+          flatIndex?: number
+          snippet?: string
+          count?: number
+        }
+
+        const hits: RawHit[] = Array.isArray(parsed.hits) ? parsed.hits : []
+        const result = {
+          entity: entityName.trim(),
+          totalOccurrences: parsed.totalMatches ?? hits.length,
+          chapterDistribution: hits.slice(0, 15).map((h) => ({
+            chapter: h.title ?? '未知章节',
+            flatIndex: h.flatIndex,
+            occurrences: h.count ?? 1,
+            excerpt: h.snippet ?? '',
+          })),
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+      } catch {
+        return { content: [{ type: 'text', text: rawText }] }
+      }
     }
     default:
       return {

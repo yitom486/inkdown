@@ -116,6 +116,96 @@ describe('MCP read-only annotations and concurrency', () => {
     })
     expect(inspect?.annotations).toMatchObject({ readOnlyHint: true })
     expect(propose?.annotations).toMatchObject({ readOnlyHint: false })
+
+    const diagram = response.result.tools.find((tool) => tool.name === 'inkdown_generate_diagram')
+    const crossRef = response.result.tools.find((tool) => tool.name === 'inkdown_cross_reference')
+    expect(diagram?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true })
+    expect(crossRef?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true })
+  })
+
+  it('inkdown_generate_diagram 校验入参并清洗 ```mermaid 标记', async () => {
+    const invalidType = await callInkdownMcpTool(
+      'inkdown_generate_diagram',
+      context(),
+      { diagramType: 'invalid', title: 'Test', mermaidCode: 'graph TD; A-->B;' },
+    )
+    expect(invalidType.isError).toBe(true)
+
+    const missingTitle = await callInkdownMcpTool(
+      'inkdown_generate_diagram',
+      context(),
+      { diagramType: 'sequence', title: '', mermaidCode: 'Alice->Bob: Hi' },
+    )
+    expect(missingTitle.isError).toBe(true)
+
+    const valid = await callInkdownMcpTool(
+      'inkdown_generate_diagram',
+      context(),
+      {
+        diagramType: 'sequence',
+        title: 'ACP 握手时序',
+        mermaidCode: '```mermaid\nsequenceDiagram\nClient->>Agent: init\nAgent-->>Client: ack\n```',
+        anchorExcerpt: 'Clients MUST initialize the connection',
+        summary: '这是协议初始握手过程',
+        visualSteps: [
+          {
+            from: 'client',
+            to: 'agent',
+            action: 'initialize',
+            desc: '发起握手',
+            payload: '{ protocolVersion: 1 }',
+          },
+        ],
+      },
+    )
+    expect(valid.isError).toBeUndefined()
+    const parsed = JSON.parse(valid.content[0]!.text)
+    expect(parsed.diagramType).toBe('sequence')
+    expect(parsed.title).toBe('ACP 握手时序')
+    expect(parsed.mermaidCode).toBe('sequenceDiagram\nClient->>Agent: init\nAgent-->>Client: ack')
+    expect(parsed.anchorExcerpt).toBe('Clients MUST initialize the connection')
+    expect(parsed.summary).toBe('这是协议初始握手过程')
+    expect(parsed.visualSteps).toHaveLength(1)
+    expect(parsed.visualSteps[0].action).toBe('initialize')
+    expect(parsed.diagramId).toMatch(/^diag-/)
+  })
+
+  it('inkdown_cross_reference 跨章节聚合检索命中', async () => {
+    const tooShort = await callInkdownMcpTool(
+      'inkdown_cross_reference',
+      context(),
+      { entityName: 'a' },
+    )
+    expect(tooShort.isError).toBe(true)
+
+    const readSnapshot = vi.fn(async () =>
+      JSON.stringify({
+        query: 'protocolVersion',
+        totalMatches: 5,
+        hits: [
+          { title: 'Chapter 1', flatIndex: 0, count: 2, snippet: 'negotiate protocolVersion' },
+          { title: 'Chapter 2', flatIndex: 1, count: 3, snippet: 'latest protocolVersion supported' },
+        ],
+      }),
+    )
+
+    const valid = await callInkdownMcpTool(
+      'inkdown_cross_reference',
+      context(readSnapshot),
+      { entityName: 'protocolVersion' },
+    )
+    expect(readSnapshot).toHaveBeenCalledWith('search', { query: 'protocolVersion' })
+    expect(valid.isError).toBeUndefined()
+    const parsed = JSON.parse(valid.content[0]!.text)
+    expect(parsed.entity).toBe('protocolVersion')
+    expect(parsed.totalOccurrences).toBe(5)
+    expect(parsed.chapterDistribution).toHaveLength(2)
+    expect(parsed.chapterDistribution[0]).toEqual({
+      chapter: 'Chapter 1',
+      flatIndex: 0,
+      occurrences: 2,
+      excerpt: 'negotiate protocolVersion',
+    })
   })
 
   it('independent read-only calls execute concurrently when the client sends them concurrently', async () => {

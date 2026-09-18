@@ -39,6 +39,8 @@ describe('handleInkdownMcpRpc', () => {
       'inkdown_suggest_chapters',
       'inkdown_create_bookmark',
       'inkdown_propose_mark',
+      'inkdown_generate_diagram',
+      'inkdown_cross_reference',
     ])
     expect(names).not.toContain('inkdown_get_toc')
     expect(names).not.toContain('inkdown_list_highlights')
