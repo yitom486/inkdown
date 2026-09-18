@@ -1,5 +1,9 @@
 import { app } from 'electron'
-import { APP_TITLE, DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import {
+  ANTIGRAVITY_ACP_RUNTIME_ID,
+  APP_TITLE,
+  DEFAULT_ACP_RUNTIME_ID,
+} from '@inkdown/contracts'
 import type { AppError } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type {
@@ -23,21 +27,12 @@ import { getAcpRuntime } from '@inkdown/acp'
 import { resolveAgentCwd } from './agent-sandbox-cwd'
 import { parseAcpConfigOptions } from '@inkdown/acp'
 import {
-  buildCustomProviderConfigToml,
-  buildCustomProviderSpawnEnv,
-} from '@inkdown/acp'
-import {
   createAcpClientMethodRouter,
   pickAllowOptionId,
   type PermissionDecision,
 } from './client-handlers'
-import { probeCodexAuth } from './codex-auth-preflight'
 import { buildAcpProxySpawnEnv, readAcpProxySettings } from './acp-proxy-service'
-import {
-  getAcpProviderCodexHome,
-  readStoredAcpProvider,
-  type StoredAcpProvider,
-} from './provider-config-service'
+import { getAcpRuntimeAdapter } from './runtimes'
 import { runConnectAuthGate } from '@inkdown/acp'
 import { AcpTerminalManager } from './acp-terminal'
 import {
@@ -74,27 +69,6 @@ const NEUTRAL_AUTH_PREFLIGHT: AcpAuthPreflightResult = {
   looksLoggedIn: false,
 }
 
-/**
- * 自定义供应商模式：预生成隔离 CODEX_HOME 的 config.toml（若失败则放弃
- * 自定义模式，回落本机登录，不阻断连接）。
- */
-async function provisionCustomProviderCodexHome(
-  provider: StoredAcpProvider,
-  codexHome: string,
-): Promise<boolean> {
-  try {
-    await mkdir(codexHome, { recursive: true })
-    await writeFile(
-      join(codexHome, 'config.toml'),
-      buildCustomProviderConfigToml(provider),
-      'utf8',
-    )
-    return true
-  } catch (error) {
-    console.error('[acp] 自定义供应商 config.toml 写入失败，回落本机登录', error)
-    return false
-  }
-}
 
 export type AcpSessionUpdateListener = (event: AcpSessionUpdateEvent) => void
 export type AcpStatusListener = (event: AcpStatusChangedEvent) => void
@@ -422,6 +396,25 @@ export async function connectAcp(payload: {
   pendingResumeSessionId = payload.resumeSessionId?.trim() || null
   setStatus('connecting')
 
+  const adapter = getAcpRuntimeAdapter(runtime.id)
+
+  if (runtime.id === ANTIGRAVITY_ACP_RUNTIME_ID) {
+    const agy = adapter.findServer ? adapter.findServer() : null
+    if (!agy) {
+      setStatus('error', '未检测到 Google Antigravity 服务端')
+      return err({
+        code: 'ACP_SPAWN_ERROR',
+        message:
+          '未检测到 Google Antigravity 服务端（agy_acp_server）。请确保本机已安装 Zed Antigravity 扩展，或设置环境变量 AGY_ACP_SERVER_PATH 指向可执行文件。',
+      })
+    }
+  }
+
+  // 启动前钩子：例如 Antigravity 自动桥接 Windows 凭据管理器，无感同步 refresh_token
+  if (adapter.beforeSpawn) {
+    await adapter.beforeSpawn()
+  }
+
   const bunCheck = await ensureBunForCommand(runtime.command)
   if (!bunCheck.ok) {
     setStatus('error', bunCheck.error.message)
@@ -434,32 +427,33 @@ export async function connectAcp(payload: {
   const { cwd } = resolveAgentCwd(payload.cwd)
   workspaceRoot = cwd
 
-  // Codex 专属能力门控：自定义供应商 / 本机登录探测仅对 codex-acp 有意义。
-  // 其他 Agent 的认证完全走协议 initialize 返回的 authMethods。
-  const isCodexRuntime = runtime.id === DEFAULT_ACP_RUNTIME_ID
-
-  // 代理设置：spawn 时注入环境变量；关闭时移除代理键（应用内开关为权威配置）
+  // 代理环境变量：优先委托 adapter，未声明则走通用 acp-proxy
   const proxySettings = await readAcpProxySettings()
-  const { env: proxyEnv, envRemove: proxyEnvRemove } =
-    buildAcpProxySpawnEnv(proxySettings)
+  const proxyResult = adapter.getSpawnEnv
+    ? adapter.getSpawnEnv(proxySettings)
+    : buildAcpProxySpawnEnv(proxySettings)
 
-  // 自定义供应商模式（仅 codex-acp）：隔离 CODEX_HOME + 注入 Key；失败则回落本机登录
-  const provider = isCodexRuntime ? await readStoredAcpProvider() : null
-  const useCustomProvider =
-    provider !== null &&
-    (await provisionCustomProviderCodexHome(provider, getAcpProviderCodexHome()))
+  // 自定义供应商模式（Codex 等）：隔离 CODEX_HOME + 注入 Key
+  let customProviderEnv: NodeJS.ProcessEnv = {}
+  if (adapter.getCustomProvider) {
+    const custom = await adapter.getCustomProvider()
+    customProviderEnv = custom.customEnv
+  }
 
   try {
     processHandle = spawnAcpProcess({
       runtime,
       cwd,
       env: {
-        ...(useCustomProvider && provider
-          ? buildCustomProviderSpawnEnv(provider, provider.apiKey, getAcpProviderCodexHome())
-          : {}),
-        ...proxyEnv,
+        ...customProviderEnv,
+        ...proxyResult.env,
       },
-      envRemove: proxyEnvRemove,
+      envRemove: proxyResult.envRemove,
+      onStderrLine: (line) => {
+        if (line.includes('https://accounts.google.com/o/oauth2/')) {
+          console.info('[acp] agy_acp_server 正在进行 Google 授权')
+        }
+      },
       onExit: () => {
         if (gen !== connectGeneration) return
         if (
@@ -569,23 +563,17 @@ export async function connectAcp(payload: {
       console.warn('[acp-mcp] Agent 未声明 mcpCapabilities.http，Inkdown 工具不可用')
     }
 
-    const authMethods = parseAuthMethods(initResult.authMethods)
-    // 自定义供应商模式：隔离 HOME 无 auth.json、Key 走注入 env → 必然「已就绪」，
-    // 静默走 API Key 类 authMethods；订阅登录只在未启用自定义供应商时生效。
-    // 非 codex 运行时跳过本机探测，交由协议 authMethods 决策。
-    const preflight = useCustomProvider
-      ? {
-          codexHome: getAcpProviderCodexHome(),
-          hasCodexHome: true,
-          hasAuthFile: false,
-          hasApiKeyEnv: true,
-          looksLoggedIn: true,
-        }
-      : isCodexRuntime
-        ? probeCodexAuth()
-        : NEUTRAL_AUTH_PREFLIGHT
+    let authMethods = parseAuthMethods(initResult.authMethods)
+    if (adapter.orderAuthMethods) {
+      authMethods = adapter.orderAuthMethods(authMethods)
+    }
+
+    const preflight = adapter.probeAuth()
     let openedWithoutAuth: Extract<AcpConnectResult, { phase: 'ready' }> | null = null
     const gate = await runConnectAuthGate(authMethods, preflight, {
+      // 本地已有凭据（codex 的 ~/.codex、antigravity 的 settings.json / 桥接 Token 等）
+      // 时，一律优先直接建立会话（session/new）复用已有登录态，杜绝弹出系统浏览器
+      preferDirectSession: true,
       authenticate: async (methodId) => {
         await localTransport.request('authenticate', { methodId })
       },
@@ -631,10 +619,20 @@ export async function connectAcp(payload: {
 
 export async function authenticateAcp(payload: {
   methodId: string
+  force?: boolean
 }): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
   const t = requireTransport(true)
   if (!t.ok) return t
   const cwd = resolveAgentCwd(workspaceRoot).cwd
+
+  const adapter = getAcpRuntimeAdapter(runtimeId ?? '')
+  // 认证守门员逻辑（docs/antigravity_acp_auth_and_lifecycle.md 第 3.4 节）：
+  // 官方 ACP 收到 authenticate 请求时无脑拉起系统浏览器；
+  // 若本地已持有有效 Token，直接复用已有凭据建立会话，杜绝弹出系统浏览器
+  if (adapter.canSkipInteractiveAuth?.(payload.methodId, payload.force)) {
+    console.info('[acp] 认证守门员生效：本地凭据已就绪，跳过交互式 authenticate，直接建立会话')
+    return await openSessionAfterAuth(cwd)
+  }
 
   try {
     await t.value.request('authenticate', { methodId: payload.methodId })

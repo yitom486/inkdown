@@ -19,7 +19,10 @@ export function ensureAgentSandboxCwd(): string {
 export function resolveAgentCwd(preferred?: string | null): ResolvedAgentCwd {
   const trimmed = preferred?.trim()
   if (trimmed) {
-    return { cwd: trimmed, source: 'workspace' }
+    // 剥离 Windows 扩展路径前缀 \\?\，避免进入 Go 编写的 agy_acp_server 导致 file://%3F/ panic
+    const normalized = trimmed.replace(/^\\\\\?\\/, '')
+    return { cwd: normalized, source: 'workspace' }
   }
-  return { cwd: ensureAgentSandboxCwd(), source: 'sandbox' }
+  return { cwd: ensureAgentSandboxCwd().replace(/^\\\\\?\\/, ''), source: 'sandbox' }
 }
+

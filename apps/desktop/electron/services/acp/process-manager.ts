@@ -1,5 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import type { AcpRuntimeInfo } from '@inkdown/contracts'
+import { ANTIGRAVITY_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import { findAntigravityServer } from './antigravity-discovery'
 
 export interface SpawnedAcpProcess {
   runtimeId: string
@@ -19,12 +21,19 @@ export interface SpawnAcpOptions {
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void
 }
 
-function resolveCommand(command: string): { file: string; shell: boolean } {
+function resolveCommand(runtime: AcpRuntimeInfo): { file: string; shell: boolean } {
+  if (runtime.id === ANTIGRAVITY_ACP_RUNTIME_ID || runtime.command === 'agy_acp_server') {
+    const discovered = findAntigravityServer()
+    if (discovered) {
+      return { file: discovered.executablePath, shell: false }
+    }
+  }
+
   // Windows 上 bunx 常为 .cmd，需 shell
   if (process.platform === 'win32') {
-    return { file: command, shell: true }
+    return { file: runtime.command, shell: true }
   }
-  return { file: command, shell: false }
+  return { file: runtime.command, shell: false }
 }
 
 export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
@@ -33,13 +42,20 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
     existing.kill()
   }
 
-  const { file, shell } = resolveCommand(options.runtime.command)
+  const { file, shell } = resolveCommand(options.runtime)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ...options.env,
   }
   for (const key of options.envRemove ?? []) {
     delete env[key]
+  }
+
+  // 过滤 Python/PyInstaller 临时环境变量，避免嵌入式运行时校验中断
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('_PYI') || key.startsWith('_MEI')) {
+      delete env[key]
+    }
   }
 
   // 默认允许本机浏览器 OAuth（对齐 VS Code/Zed）；无头/CI 才禁用

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   DEFAULT_ACP_PROXY_SETTINGS,
   buildAcpProxySpawnEnv,
+  buildAntigravityProxyEnv,
   readAcpProxySettings,
   saveAcpProxySettings,
 } from './acp-proxy-service'
@@ -77,3 +78,26 @@ describe('buildAcpProxySpawnEnv', () => {
     )
   })
 })
+
+describe('buildAntigravityProxyEnv', () => {
+  it('默认端口 7897 并完整注入大小写变量与 SOCKS5 ALL_PROXY，且 envRemove 为空', () => {
+    const { env, envRemove } = buildAntigravityProxyEnv()
+    expect(env.HTTP_PROXY).toBe('http://127.0.0.1:7897')
+    expect(env.HTTPS_PROXY).toBe('http://127.0.0.1:7897')
+    expect(env.http_proxy).toBe('http://127.0.0.1:7897')
+    expect(env.https_proxy).toBe('http://127.0.0.1:7897')
+    expect(env.ALL_PROXY).toBe('socks5://127.0.0.1:7897')
+    expect(env.all_proxy).toBe('socks5://127.0.0.1:7897')
+    expect(env.NO_PROXY).toBe('localhost,127.0.0.1,::1')
+    expect(env.no_proxy).toBe('localhost,127.0.0.1,::1')
+    expect(envRemove).toEqual([])
+  })
+
+  it('支持自定义主机与端口', () => {
+    const { env, envRemove } = buildAntigravityProxyEnv({ host: '192.168.1.100', port: 10808 })
+    expect(env.HTTP_PROXY).toBe('http://192.168.1.100:10808')
+    expect(env.ALL_PROXY).toBe('socks5://192.168.1.100:10808')
+    expect(envRemove).toEqual([])
+  })
+})
+

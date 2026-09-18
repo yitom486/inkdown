@@ -148,6 +148,8 @@ import {
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
 import { listAcpRuntimes } from '@inkdown/acp'
+import { ANTIGRAVITY_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import { probeAntigravityAuth } from '../services/acp/antigravity-discovery'
 import {
   emptyAcpAuthPreflight,
   isCodexPreflightRuntime,
@@ -335,10 +337,12 @@ export function registerIpcHandlers(): void {
 
   // --- ACP：连接、认证、session、prompt ---
   ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
-  ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, (_event, payload?: AcpAuthPreflightPayload) =>
-    // 本机登录探测仅对 codex-acp 有意义；其他运行时返回中性结果
-    ok(isCodexPreflightRuntime(payload?.runtimeId) ? probeCodexAuth() : emptyAcpAuthPreflight()),
-  )
+  ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, (_event, payload?: AcpAuthPreflightPayload) => {
+    if (payload?.runtimeId === ANTIGRAVITY_ACP_RUNTIME_ID) {
+      return ok(probeAntigravityAuth())
+    }
+    return ok(isCodexPreflightRuntime(payload?.runtimeId) ? probeCodexAuth() : emptyAcpAuthPreflight())
+  })
   ipcMain.handle(IPC.ACP_CONNECT, (event, payload: AcpConnectPayload) => {
     // 这扇窗之后的快照都问它
     rememberAgentOwner(event.sender)
@@ -368,13 +372,13 @@ export function registerIpcHandlers(): void {
     setAcpConfigOption(payload),
   )
   // --- ACP：自定义模型供应商（base URL + API Key） ---
-  ipcMain.handle(IPC.ACP_PROVIDER_GET, () => ok(getAcpProviderStatus()))
+  ipcMain.handle(IPC.ACP_PROVIDER_GET, async () => ok(await getAcpProviderStatus()))
   ipcMain.handle(IPC.ACP_PROVIDER_SAVE, (_event, payload: AcpProviderSavePayload) =>
     saveAcpProvider(payload),
   )
   ipcMain.handle(IPC.ACP_PROVIDER_CLEAR, () => clearAcpProvider())
   // --- ACP：子进程代理设置 ---
-  ipcMain.handle(IPC.ACP_PROXY_GET, () => ok(readAcpProxySettings()))
+  ipcMain.handle(IPC.ACP_PROXY_GET, async () => ok(await readAcpProxySettings()))
   ipcMain.handle(IPC.ACP_PROXY_SAVE, (_event, payload: AcpProxySettings) =>
     saveAcpProxySettings(payload),
   )
