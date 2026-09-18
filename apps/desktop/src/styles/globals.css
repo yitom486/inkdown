@@ -54,6 +54,18 @@
   --sidebar: oklch(0.985 0 0);
   --editor: oklch(1 0 0);
   --preview: oklch(0.99 0 0);
+
+  /* 知识卡片语义色 (5 类柔和学术与工程色系) */
+  --card-concept-bg: #ebf2f7;
+  --card-concept-text: #2e5166;
+  --card-quote-bg: #fdf3eb;
+  --card-quote-text: #7d4a2b;
+  --card-method-bg: #eff6f1;
+  --card-method-text: #2b583b;
+  --card-diagram-bg: #f5f2f7;
+  --card-diagram-text: #524060;
+  --card-question-bg: #fef8eb;
+  --card-question-text: #8c5a2b;
 }
 
 .dark {
@@ -78,6 +90,30 @@
   --sidebar: oklch(0.14 0.005 286);
   --editor: oklch(0.16 0.005 286);
   --preview: oklch(0.18 0.005 286);
+
+  /* 知识卡片语义色 (暗色自适应微晶柔光) */
+  --card-concept-bg: #15222e;
+  --card-concept-text: #89b4d4;
+  --card-quote-bg: #291e17;
+  --card-quote-text: #d99f79;
+  --card-method-bg: #15261c;
+  --card-method-text: #82c496;
+  --card-diagram-bg: #221a28;
+  --card-diagram-text: #bca0cf;
+  --card-question-bg: #292015;
+  --card-question-text: #dfa872;
+}
+
+.sepia {
+  --background: #f6f1e5;
+  --foreground: #3c342a;
+  --card: #eee8d8;
+  --card-foreground: #3c342a;
+  --popover: #eee8d8;
+  --popover-foreground: #3c342a;
+  --border: rgba(60, 52, 42, 0.12);
+  --muted: #e6dfcc;
+  --muted-foreground: #7e7161;
 }
 
 @layer base {
@@ -95,15 +131,15 @@
   }
 }
 
-/* 墨韵与文房水墨美学辅助样式 */
+/* 锚点定位与发光穿透微动效 */
 @keyframes ink-spread {
   0% {
-    background-color: oklch(0.55 0.2 27.5 / 20%);
-    box-shadow: 0 0 0 1px oklch(0.55 0.2 27.5 / 50%);
+    background-color: oklch(0.65 0.18 240 / 30%);
+    box-shadow: 0 0 0 1px oklch(0.65 0.18 240 / 60%), 0 0 16px oklch(0.65 0.18 240 / 40%);
   }
   60% {
-    background-color: oklch(0.55 0.2 27.5 / 12%);
-    box-shadow: 0 0 0 2px oklch(0.55 0.2 27.5 / 30%);
+    background-color: oklch(0.65 0.18 240 / 15%);
+    box-shadow: 0 0 0 2px oklch(0.65 0.18 240 / 30%), 0 0 8px oklch(0.65 0.18 240 / 20%);
   }
   100% {
     background-color: transparent;
@@ -118,3 +154,4 @@
 .ink-seal-text {
   font-family: 'Songti SC', 'SimSun', 'Noto Serif SC', serif;
 }
+

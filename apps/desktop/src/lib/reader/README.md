@@ -12,6 +12,6 @@ EPUB / PDF / MOBI / 在线文档 渲染端专属逻辑，按域分子目录（20
 | `marks/` | 阅读标记渲染/命中（PDF/MOBI/Web 复用）、划词匹配、导出 Anki/读书笔记 |
 | `web-doc/` | 在线文档：正文提取、页头剥离、URL/链接、本页大纲、公式/代码块/iframe 白名单、Agent 按页抓文 |
 
-根目录仅留跨格式骨架：`reader-adapter`（后端契约）、`reader-unit-tree`（目录树）、`reader-viewport-*`（视口测试助手）、`wait-for-dom`、`azw3-toc-anchor.test`（测 `@inkdown/reader-core` 的 azw3 锚定）。
+根目录仅留跨格式骨架：`reader-adapter`（后端契约）、`reader-unit-tree`（目录树）、`scroll-anchor`（视口防抖锚点锁）、`reader-viewport-*`（视口测试助手）、`wait-for-dom`、`azw3-toc-anchor.test`（测 `@inkdown/reader-core` 的 azw3 锚定）。
 
 增删或改名后，更新本 README 与上级 [../README.md](../README.md) 的 **reader/** 节。

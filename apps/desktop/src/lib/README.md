@@ -64,7 +64,7 @@
 | `marks/` | 阅读标记渲染/命中（PDF/MOBI/Web）、划词匹配、Anki 与读书笔记导出 |
 | `web-doc/` | 在线文档：正文提取、页头剥离、链接、本页大纲、公式/代码块/iframe、Agent 按页抓文 |
 
-根目录留跨格式骨架：`reader-adapter` / `reader-unit-tree` / `reader-viewport-*`（测试助手）/ `wait-for-dom`。
+根目录留跨格式骨架：`reader-adapter` / `reader-unit-tree` / `scroll-anchor` / `reader-viewport-*`（测试助手）/ `wait-for-dom`。
 
 ## workspace/
 
