@@ -23,4 +23,12 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
       expect(runtime.args.join(' ')).not.toContain(LEGACY_ZED_CODEX_ACP_NPM_PACKAGE)
     }
   })
+
+  it('includes built-in Google Antigravity runtime template', () => {
+    const agy = findBuiltinAcpRuntime('antigravity-acp')
+    expect(agy).toBeDefined()
+    expect(agy!.name).toBe('Google Antigravity')
+    expect(agy!.command).toBe('agy_acp_server')
+  })
 })
+
