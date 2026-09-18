@@ -12,6 +12,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  ANTIGRAVITY_ACP_RUNTIME_ID,
   DEFAULT_ACP_RUNTIME_ID,
 } from '@inkdown/contracts'
 import {
@@ -25,10 +26,10 @@ import {
 } from '@/stores/annotation-agent-store'
 
 const CODEX = DEFAULT_ACP_RUNTIME_ID
-const ANTIGRAVITY = 'antigravity-acp'
+const ANTIGRAVITY = ANTIGRAVITY_ACP_RUNTIME_ID
 
 function freshMainThread(): void {
-  const threadId = useAcpUiStore.getState().createThread()
+  const threadId = useAcpUiStore.getState().createThread(undefined, CODEX)
   useAcpUiStore.setState({
     prompting: false,
     sessionId: null,
@@ -110,15 +111,21 @@ describe('ACP 运行时切换：状态联动语义', () => {
     useAcpUiStore.getState().setSession(null)
     expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBeUndefined()
 
-    // antigravity 连接 → 记入自己的桶，codex 桶不被覆盖
+    // antigravity 连接 → 记入自己的桶（活动线程为 antigravity 专属线程）
     useAcpUiStore.getState().setSession('sess-antigravity-1', [])
     const threadId = useAcpUiStore.getState().activeThreadId
     let thread = useAcpUiStore.getState().threads.find((t) => t.id === threadId)
     expect(thread?.agentSessionIds?.[ANTIGRAVITY]).toBe('sess-antigravity-1')
-    expect(thread?.agentSessionIds?.[CODEX]).toBe('sess-codex-1')
 
-    // 切回 codex：原会话仍可恢复
+    // codex 桶仍由 codex 专属线程持有，互不覆盖
+    const codexThread = useAcpUiStore
+      .getState()
+      .threads.find((t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === CODEX)
+    expect(codexThread?.agentSessionIds?.[CODEX]).toBe('sess-codex-1')
+
+    // 切回 codex：回到 codex 线程，原会话仍可恢复
     useAcpUiStore.getState().setSelectedRuntimeId(CODEX)
+    expect(useAcpUiStore.getState().activeThreadId).toBe(codexThread!.id)
     expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBe('sess-codex-1')
 
     // 断开保留两侧恢复能力
@@ -127,7 +134,10 @@ describe('ACP 运行时切换：状态联动语义', () => {
       .getState()
       .threads.find((t) => t.id === useAcpUiStore.getState().activeThreadId)
     expect(thread?.agentSessionIds?.[CODEX]).toBe('sess-codex-1')
-    expect(thread?.agentSessionIds?.[ANTIGRAVITY]).toBe('sess-antigravity-1')
+    const antigravityThread = useAcpUiStore
+      .getState()
+      .threads.find((t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === ANTIGRAVITY)
+    expect(antigravityThread?.agentSessionIds?.[ANTIGRAVITY]).toBe('sess-antigravity-1')
   })
 
   it('模型偏好按运行时隔离，互不污染', () => {
@@ -140,14 +150,24 @@ describe('ACP 运行时切换：状态联动语义', () => {
     expect(prefs[ANTIGRAVITY]?.mode).toBeUndefined()
   })
 
-  it('本地聊天记录跨运行时保留（换 Agent 不清历史）', () => {
+  it('聊天记录按运行时各线程隔离：换 Agent 不清旧历史，新 Agent 从空白开始', () => {
     useAcpUiStore.getState().appendUserMessage('在 codex 下问的问题')
     useAcpUiStore.getState().setSelectedRuntimeId(ANTIGRAVITY)
-    const messages =
+    // antigravity 使用自己的专属线程，从空白开始
+    const antigravityMessages =
+      useAcpUiStore
+        .getState()
+        .threads.find((t) => t.id === useAcpUiStore.getState().activeThreadId)?.messages ??
+      []
+    expect(antigravityMessages.some((m) => m.role === 'user')).toBe(false)
+
+    // 切回 codex：旧对话记录仍在
+    useAcpUiStore.getState().setSelectedRuntimeId(CODEX)
+    const codexMessages =
       useAcpUiStore
         .getState()
         .threads.find((t) => t.id === useAcpUiStore.getState().activeThreadId)?.messages ?? []
-    expect(messages.some((m) => m.text === '在 codex 下问的问题')).toBe(true)
+    expect(codexMessages.some((m) => m.text === '在 codex 下问的问题')).toBe(true)
   })
 
   it('旧版持久化自动迁移：单值 agentSessionId 归入 codex 桶', async () => {
@@ -234,3 +254,4 @@ describe('ACP 运行时切换：状态联动语义', () => {
     ).toBe(true)
   })
 })
+

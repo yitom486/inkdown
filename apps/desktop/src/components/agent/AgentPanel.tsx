@@ -38,7 +38,11 @@ import { useAcpChatShell, useAcpUiStore } from '@/stores/acp-ui-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
 import { isOk } from '@inkdown/contracts'
-import { BUILTIN_ACP_RUNTIMES, DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import {
+  ANTIGRAVITY_ACP_RUNTIME_ID,
+  BUILTIN_ACP_RUNTIMES,
+  DEFAULT_ACP_RUNTIME_ID,
+} from '@inkdown/contracts'
 import type { AcpConfigOption, AcpProviderStatus, AcpProxySettings } from '@inkdown/contracts'
 
 interface AgentPanelProps {
@@ -53,6 +57,7 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
   const {
     connect,
     disconnect,
+    switchRuntime,
     syncAgentSessionToActiveThread,
     sendPrompt,
     cancel,
@@ -103,14 +108,33 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
 
   /** Codex 专属能力：本机登录提示 / 自定义 API 仅 codex-acp 运行时可用 */
   const isCodexRuntime = view.selectedRuntimeId === DEFAULT_ACP_RUNTIME_ID
+  const isAntigravityRuntime = view.selectedRuntimeId === ANTIGRAVITY_ACP_RUNTIME_ID
 
   useEffect(() => {
     let cancelled = false
-    if (!isCodexRuntime) {
+    if (!isCodexRuntime && !isAntigravityRuntime) {
       setProviderStatus(null)
       setAuthHint(null)
       return
     }
+
+    if (isAntigravityRuntime) {
+      setProviderStatus(null)
+      void (async () => {
+        const result = await acpApi.authPreflight({ runtimeId: view.selectedRuntimeId })
+        if (cancelled || !isOk(result)) return
+        const p = result.value
+        if (p.looksLoggedIn) {
+          setAuthHint('已检测到本机 Google Antigravity 登录（复用本机账号授权）')
+        } else {
+          setAuthHint('未检测到本机 Google 授权，连接时将自动唤起浏览器完成登录')
+        }
+      })()
+      return () => {
+        cancelled = true
+      }
+    }
+
     void (async () => {
       const providerResult = await acpApi.getProvider()
       if (cancelled) return
@@ -141,7 +165,7 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
     return () => {
       cancelled = true
     }
-  }, [isCodexRuntime, view.selectedRuntimeId])
+  }, [isCodexRuntime, isAntigravityRuntime, view.selectedRuntimeId])
 
   // 代理设置：全局一份，spawn Agent 子进程时注入；保存后需重新连接
   const [proxySettings, setProxySettings] = useState<AcpProxySettings | null>(null)
@@ -202,11 +226,65 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
           <AgentMark className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold tracking-tight">Agent</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded px-1 -ml-1 text-sm font-semibold tracking-tight hover:bg-muted/70 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  title="点击切换 Agent 运行时"
+                >
+                  <span className="truncate max-w-[130px]">{runtimeName}</span>
+                  <ChevronDown className="size-3 text-muted-foreground shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                  切换 Agent 运行时
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={view.selectedRuntimeId}
+                  onValueChange={(val) => void switchRuntime(val)}
+                >
+                  {BUILTIN_ACP_RUNTIMES.map((rt) => (
+                    <DropdownMenuRadioItem
+                      key={rt.id}
+                      value={rt.id}
+                      className="text-xs flex items-center justify-between"
+                    >
+                      <span>{rt.name}</span>
+                      {rt.id === view.selectedRuntimeId && view.status === 'connected' ? (
+                        <span className="size-1.5 rounded-full bg-emerald-500" />
+                      ) : null}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+
+                {isCodexRuntime ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                      认证 / 供应商
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="text-xs"
+                      onSelect={() => setProviderDialogOpen(true)}
+                    >
+                      自定义 API…
+                      {providerStatus?.configured ? (
+                        <span className="ml-auto text-[10px] text-muted-foreground">
+                          {providerStatus.name ?? '已配置'}
+                        </span>
+                      ) : null}
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <span
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0',
                 view.status === 'connected' &&
                   'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
                 view.status === 'connecting' &&
@@ -318,6 +396,8 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
         bottomRef={bottomRef}
         messagesRef={messagesRef}
         authHint={authHint}
+        runtimeName={runtimeName}
+        runtimeId={view.selectedRuntimeId}
         onChapterPlanSelect={handleChapterPlanSelect}
       />
 
@@ -358,17 +438,12 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
                   </DropdownMenuLabel>
                   <DropdownMenuRadioGroup
                     value={view.selectedRuntimeId}
-                    onValueChange={setSelectedRuntimeId}
+                    onValueChange={(val) => void switchRuntime(val)}
                   >
                     {BUILTIN_ACP_RUNTIMES.map((rt) => (
                       <DropdownMenuRadioItem
                         key={rt.id}
                         value={rt.id}
-                        disabled={
-                          view.status === 'connected' ||
-                          view.status === 'connecting' ||
-                          view.status === 'awaiting_auth'
-                        }
                         className="text-xs"
                       >
                         {rt.name}
@@ -398,48 +473,83 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
 
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[10px] text-muted-foreground">
-                    代理（Agent 子进程）
+                    {isAntigravityRuntime ? 'Antigravity 专享代理端口' : '代理（Agent 子进程）'}
                   </DropdownMenuLabel>
-                  <div className="flex items-center justify-between px-2 py-1">
-                    <label
-                      className="flex cursor-pointer items-center gap-2 text-xs"
-                      title="连接 Agent 时注入 HTTP(S)_PROXY 环境变量"
-                    >
-                      <input
-                        type="checkbox"
-                        className="size-3.5 accent-[hsl(var(--primary))]"
-                        checked={proxySettings?.enabled ?? false}
-                        disabled={view.status === 'connected' || view.status === 'connecting' || view.status === 'awaiting_auth'}
-                        onChange={(e) => updateProxySettings({ enabled: e.target.checked })}
-                      />
-                      启用代理
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <input
-                        className="h-6 w-24 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
-                        value={proxySettings?.host ?? '127.0.0.1'}
-                        disabled={!proxySettings?.enabled}
-                        spellCheck={false}
-                        onChange={(e) => updateProxySettings({ host: e.target.value })}
-                      />
-                      <span className="text-[10px] text-muted-foreground">:</span>
-                      <input
-                        className="h-6 w-14 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
-                        value={proxySettings?.port ?? 7897}
-                        disabled={!proxySettings?.enabled}
-                        inputMode="numeric"
-                        onChange={(e) => {
-                          const port = Number(e.target.value)
-                          if (Number.isInteger(port) && port >= 1 && port <= 65535) {
-                            updateProxySettings({ port })
-                          }
-                        }}
-                      />
+                  {isAntigravityRuntime ? (
+                    <div className="space-y-1 px-2 py-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">代理服务</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            className="h-6 w-24 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none"
+                            value={proxySettings?.host ?? '127.0.0.1'}
+                            spellCheck={false}
+                            disabled={view.status === 'connected' || view.status === 'connecting'}
+                            onChange={(e) => updateProxySettings({ host: e.target.value })}
+                          />
+                          <span className="text-[10px] text-muted-foreground">:</span>
+                          <input
+                            className="h-6 w-14 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none"
+                            value={proxySettings?.port ?? 7897}
+                            inputMode="numeric"
+                            disabled={view.status === 'connected' || view.status === 'connecting'}
+                            onChange={(e) => {
+                              const port = Number(e.target.value)
+                              if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+                                updateProxySettings({ port })
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        仅作用于 Antigravity（默认 7897）；重新连接生效
+                      </p>
                     </div>
-                  </div>
-                  <p className="px-2 pb-1 text-[10px] text-muted-foreground">
-                    仅对 Agent 进程生效；保存后需重新连接
-                  </p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between px-2 py-1">
+                        <label
+                          className="flex cursor-pointer items-center gap-2 text-xs shrink-0 whitespace-nowrap"
+                          title="连接 Agent 时注入 HTTP(S)_PROXY 环境变量"
+                        >
+                          <input
+                            type="checkbox"
+                            className="size-3.5 accent-[hsl(var(--primary))]"
+                            checked={proxySettings?.enabled ?? false}
+                            disabled={view.status === 'connected' || view.status === 'connecting' || view.status === 'awaiting_auth'}
+                            onChange={(e) => updateProxySettings({ enabled: e.target.checked })}
+                          />
+                          启用代理
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            className="h-6 w-24 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
+                            value={proxySettings?.host ?? '127.0.0.1'}
+                            disabled={!proxySettings?.enabled}
+                            spellCheck={false}
+                            onChange={(e) => updateProxySettings({ host: e.target.value })}
+                          />
+                          <span className="text-[10px] text-muted-foreground">:</span>
+                          <input
+                            className="h-6 w-14 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
+                            value={proxySettings?.port ?? 7897}
+                            disabled={!proxySettings?.enabled}
+                            inputMode="numeric"
+                            onChange={(e) => {
+                              const port = Number(e.target.value)
+                              if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+                                updateProxySettings({ port })
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <p className="px-2 pb-1 text-[10px] text-muted-foreground">
+                        仅对 Agent 进程生效；保存后需重新连接
+                      </p>
+                    </>
+                  )}
 
                   {secondary.length > 0 ? (
                     <>
@@ -515,6 +625,8 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
         methods={authMethods}
         busy={authBusy}
         error={authError}
+        runtimeName={runtimeName}
+        runtimeId={view.selectedRuntimeId}
         onSelect={(methodId) => void completeAuth(methodId)}
         onCancel={() => void cancelAuth()}
       />

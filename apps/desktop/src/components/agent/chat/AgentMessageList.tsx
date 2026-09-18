@@ -23,6 +23,8 @@ interface AgentMessageListProps {
   bottomRef: RefObject<HTMLDivElement | null>
   messagesRef: RefObject<HTMLDivElement | null>
   authHint: string | null
+  runtimeName?: string
+  runtimeId?: string
   onChapterPlanSelect?: (payload: ChapterMarkPlanSelectPayload) => void
 }
 
@@ -33,6 +35,8 @@ export const AgentMessageList = memo(function AgentMessageList({
   bottomRef,
   messagesRef,
   authHint,
+  runtimeName,
+  runtimeId,
   onChapterPlanSelect,
 }: AgentMessageListProps) {
   const messages = useAcpActiveMessages()
@@ -106,9 +110,13 @@ export const AgentMessageList = memo(function AgentMessageList({
         {messages.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-3 py-4 text-center">
             <AgentMark className="mx-auto mb-2 size-6 text-muted-foreground/60" />
-            <p className="text-xs font-medium text-foreground/80">开始与 Codex 对话</p>
+            <p className="text-xs font-medium text-foreground/80">
+              开始与 {runtimeName ?? 'Agent'} 对话
+            </p>
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。
+              {runtimeId === 'antigravity-acp'
+                ? '点击右上角连接。自动复用本机 Google 账号授权。'
+                : '点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。'}
             </p>
             {authHint ? (
               <p

@@ -67,6 +67,8 @@ export interface AcpChatThread {
   createdAt: number
   updatedAt: number
   workspaceRoot?: string
+  /** 所属 Agent 运行时，默认为 DEFAULT_ACP_RUNTIME_ID ('codex-acp') */
+  runtimeId?: string
   /**
    * 每个 ACP 运行时最近一次的 sessionId：断开后仍保留，供同运行时重连 resume/load。
    * 按运行时分桶：切换 Agent 不覆盖其他 Agent 的会话 id（跨运行时 resume 必然失效，
@@ -137,7 +139,7 @@ interface AcpUiStore {
   attachMarkProposalsFromSnapshot: (content: string) => void
   resolveMarkProposal: (proposalId: string, status: Exclude<MarkProposalStatus, 'pending'>) => void
   selectChapterMarkPlan: (entryId: string) => void
-  createThread: (workspaceRoot?: string) => string
+  createThread: (workspaceRoot?: string, runtimeId?: string) => string
   switchThread: (threadId: string) => void
   deleteThread: (threadId: string) => void
   renameThread: (threadId: string, title: string) => void
@@ -155,7 +157,10 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function createEmptyThread(workspaceRoot?: string): AcpChatThread {
+function createEmptyThread(
+  workspaceRoot?: string,
+  runtimeId = DEFAULT_ACP_RUNTIME_ID,
+): AcpChatThread {
   const now = Date.now()
   return {
     id: newId('thread'),
@@ -163,6 +168,7 @@ function createEmptyThread(workspaceRoot?: string): AcpChatThread {
     createdAt: now,
     updatedAt: now,
     workspaceRoot,
+    runtimeId,
     agentSessionIds: {},
     messages: [],
   }
@@ -170,19 +176,21 @@ function createEmptyThread(workspaceRoot?: string): AcpChatThread {
 
 /**
  * 旧版持久化迁移：`agentSessionId`（单值）→ `agentSessionIds`（按运行时分桶）。
- * 旧数据产生时唯一运行时即 codex-acp，故归入其桶。
+ * 旧数据产生时唯一运行时即 codex-acp，故归入其桶，未标记 runtimeId 者默认归入 codex-acp。
  */
 export function migrateLegacyThreadSessions(
   thread: AcpChatThread & { agentSessionId?: unknown },
 ): AcpChatThread {
-  if (thread.agentSessionIds) return thread
   const legacy = thread.agentSessionId
+  const runtimeId = thread.runtimeId || DEFAULT_ACP_RUNTIME_ID
   const migrated: AcpChatThread = {
     ...thread,
+    runtimeId,
     agentSessionIds:
-      typeof legacy === 'string' && legacy.trim()
+      thread.agentSessionIds ??
+      (typeof legacy === 'string' && legacy.trim()
         ? { [DEFAULT_ACP_RUNTIME_ID]: legacy }
-        : {},
+        : {}),
   }
   delete (migrated as unknown as Record<string, unknown>).agentSessionId
   return migrated
@@ -495,7 +503,38 @@ export const useAcpUiStore = create<AcpUiStore>()(
           composerInsertNonce: s.composerInsertNonce + 1,
         })),
       setHistoryOpen: (open) => set({ historyOpen: open }),
-      setSelectedRuntimeId: (id) => set({ selectedRuntimeId: id }),
+      setSelectedRuntimeId: (id) =>
+        set((s) => {
+          if (s.selectedRuntimeId === id) return s
+
+          // 寻找目标 Agent 下的已有线程列表
+          const targetThreads = s.threads.filter(
+            (t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === id,
+          )
+          let threads = s.threads
+          let activeThreadId = s.activeThreadId
+
+          if (targetThreads.length > 0) {
+            const sorted = [...targetThreads].sort((a, b) => b.updatedAt - a.updatedAt)
+            activeThreadId = sorted[0]!.id
+          } else {
+            // 该 Agent 尚无历史线程，自动为其创建专属空白线程
+            const fresh = createEmptyThread(undefined, id)
+            threads = [fresh, ...threads]
+            activeThreadId = fresh.id
+          }
+
+          return {
+            selectedRuntimeId: id,
+            threads,
+            activeThreadId,
+            prompting: false,
+            pendingPermission: null,
+            // 切换 Agent 后立即清空旧 Agent 遗留的模型选项与能力缓存
+            configOptions: [],
+            promptCapabilities: {},
+          }
+        }),
 
       setStatus: (status, errorMessage, errorCode) =>
         set({
@@ -716,8 +755,9 @@ export const useAcpUiStore = create<AcpUiStore>()(
           })),
         ),
 
-      createThread: (workspaceRoot) => {
-        const thread = createEmptyThread(workspaceRoot)
+      createThread: (workspaceRoot, runtimeId) => {
+        const rId = runtimeId ?? get().selectedRuntimeId
+        const thread = createEmptyThread(workspaceRoot, rId)
         set((s) => {
           const frozen = s.threads.map((t) =>
             t.id === s.activeThreadId
@@ -762,16 +802,21 @@ export const useAcpUiStore = create<AcpUiStore>()(
       deleteThread: (threadId) =>
         set((s) => {
           let threads = s.threads.filter((t) => t.id !== threadId)
-          if (threads.length === 0) {
-            const fresh = createEmptyThread()
+          const currentRuntimeId = s.selectedRuntimeId
+          const runtimeThreads = threads.filter(
+            (t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === currentRuntimeId,
+          )
+          if (runtimeThreads.length === 0) {
+            const fresh = createEmptyThread(undefined, currentRuntimeId)
+            threads = [fresh, ...threads]
             return {
-              threads: [fresh],
+              threads,
               activeThreadId: fresh.id,
               prompting: false,
             }
           }
           const activeThreadId =
-            s.activeThreadId === threadId ? threads[0]!.id : s.activeThreadId
+            s.activeThreadId === threadId ? runtimeThreads[0]!.id : s.activeThreadId
           return { threads, activeThreadId, prompting: false }
         }),
 
@@ -1112,4 +1157,14 @@ export function useAcpChatView() {
       }
     }),
   )
+}
+
+/** 仅获取指定 Agent 运行时名下的会话线程列表（按更新时间降序） */
+export function selectThreadsForRuntime(
+  threads: AcpChatThread[],
+  runtimeId: string,
+): AcpChatThread[] {
+  return threads
+    .filter((t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === runtimeId)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
 }

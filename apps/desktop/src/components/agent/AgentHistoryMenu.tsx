@@ -9,7 +9,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { useAcpUiStore, type AcpChatThread } from '@/stores/acp-ui-store'
+import {
+  useAcpUiStore,
+  selectThreadsForRuntime,
+  type AcpChatThread,
+} from '@/stores/acp-ui-store'
 
 function formatThreadTime(ts: number): string {
   const d = new Date(ts)
@@ -36,13 +40,14 @@ export function AgentHistoryMenu({
   onAfterSwitchThread,
 }: AgentHistoryMenuProps) {
   const threads = useAcpUiStore((s) => s.threads)
+  const selectedRuntimeId = useAcpUiStore((s) => s.selectedRuntimeId)
   const activeThreadId = useAcpUiStore((s) => s.activeThreadId)
   const prompting = useAcpUiStore((s) => s.prompting)
   const createThread = useAcpUiStore((s) => s.createThread)
   const switchThread = useAcpUiStore((s) => s.switchThread)
   const deleteThread = useAcpUiStore((s) => s.deleteThread)
 
-  const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt)
+  const runtimeThreads = selectThreadsForRuntime(threads, selectedRuntimeId)
 
   return (
     <DropdownMenu>
@@ -60,8 +65,12 @@ export function AgentHistoryMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-          <span>本地对话历史</span>
-          <span className="font-normal">{threads.length}</span>
+          <span>
+            {selectedRuntimeId === 'antigravity-acp'
+              ? 'Antigravity 对话历史'
+              : 'Codex 对话历史'}
+          </span>
+          <span className="font-normal">{runtimeThreads.length}</span>
         </DropdownMenuLabel>
         <DropdownMenuItem
           className="gap-2 text-xs"
@@ -77,7 +86,7 @@ export function AgentHistoryMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <div className="max-h-64 overflow-y-auto">
-          {sorted.map((thread) => (
+          {runtimeThreads.map((thread) => (
             <ThreadRow
               key={thread.id}
               thread={thread}

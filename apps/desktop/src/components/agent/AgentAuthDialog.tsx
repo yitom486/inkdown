@@ -16,6 +16,8 @@ interface AgentAuthDialogProps {
   methods: AcpAuthMethod[]
   busy?: boolean
   error?: string | null
+  runtimeName?: string
+  runtimeId?: string
   onSelect: (methodId: string) => void
   onCancel: () => void
 }
@@ -25,6 +27,8 @@ export function AgentAuthDialog({
   methods,
   busy,
   error,
+  runtimeName,
+  runtimeId,
   onSelect,
   onCancel,
 }: AgentAuthDialogProps) {
@@ -39,9 +43,11 @@ export function AgentAuthDialog({
     >
       <DialogContent className="sm:max-w-md" showCloseButton={!busy}>
         <DialogHeader>
-          <DialogTitle>连接 Agent 需要认证</DialogTitle>
+          <DialogTitle>连接 {runtimeName ?? 'Agent'} 需要认证</DialogTitle>
           <DialogDescription>
-            复用本机 Codex 登录，或选择 Agent 提供的认证方式（对齐 VS Code / Zed）。
+            {runtimeId === 'antigravity-acp'
+              ? '复用本机 Google 账号授权，或选择其他登录方式。'
+              : '复用本机登录凭证（如 ~/.codex / 环境变量），或选择 Agent 提供的认证方式。'}
           </DialogDescription>
         </DialogHeader>
 

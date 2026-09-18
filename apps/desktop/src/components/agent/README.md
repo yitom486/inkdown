@@ -10,7 +10,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 | `CompactConfigMenu` | 输入栏旁的紧凑配置下拉（primary 配置项） |
 | `AgentComposer` | 输入框、附件、选区标记 |
 | `AgentMark` | Agent 徽标（布局/TitleBar 共用） |
-| `AgentAuthDialog` | 认证方式选择（复用本机 Codex 登录，对齐 VS Code / Zed） |
+| `AgentAuthDialog` | 认证方式选择（复用本机 Codex / Google 登录，对齐 VS Code / Zed） |
 | `AgentProviderDialog` | 自定义模型供应商配置（base URL + API Key + 模型，Key 只存主进程） |
 | `AgentHistoryMenu` | 历史线程切换 |
 | `AgentBunInstallBanner` | 缺 Bun 运行时提示与一键安装横幅 |

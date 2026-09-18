@@ -286,6 +286,57 @@ export function useAcpSession(workspaceRoot?: string) {
   }, [appendSystemMessage, finishStreaming, flushBufferedChunks, setSession, setStatus])
 
   /**
+   * 切换 ACP 运行时（如在 codex-acp 与 antigravity-acp 间切换）：
+   * 若当前正处于连接态，会自动断开旧运行时并立即连接新运行时。
+   */
+  const switchRuntime = useCallback(
+    async (nextRuntimeId: string) => {
+      const current = useAcpUiStore.getState().selectedRuntimeId
+      if (!nextRuntimeId || nextRuntimeId === current) return
+      useAcpUiStore.getState().setSelectedRuntimeId(nextRuntimeId)
+      const statusNow = useAcpUiStore.getState().status
+      if (
+        statusNow === 'connected' ||
+        statusNow === 'connecting' ||
+        statusNow === 'awaiting_auth'
+      ) {
+        await disconnect()
+        const cwd = workspaceRoot?.trim() || undefined
+        setStatus('connecting')
+        setAuthError(null)
+        const resumeSessionId = activeThreadAgentSessionId()
+        appendSystemMessage(
+          resumeSessionId
+            ? `正在切换至 ${nextRuntimeId}（尝试恢复会话 ${resumeSessionId.slice(0, 8)}…）…`
+            : `正在切换至 ${nextRuntimeId}${cwd ? '' : '（网页会话）'}…`,
+        )
+        const result = await acpApi.connect({
+          runtimeId: nextRuntimeId,
+          cwd,
+          resumeSessionId,
+        })
+        if (!isOk(result)) {
+          setStatus('error', result.error.message, result.error.code)
+          reportAppError(result.error)
+          appendSystemMessage(`连接失败：${result.error.message}`)
+          return
+        }
+
+        if (result.value.phase === 'needs_auth') {
+          setStatus('awaiting_auth')
+          setAuthMethods(result.value.authMethods)
+          setAuthOpen(true)
+          appendSystemMessage('需要认证：请选择登录方式')
+          return
+        }
+
+        await finalizeConnected(result.value, `已连接至 ${nextRuntimeId}`)
+      }
+    },
+    [appendSystemMessage, disconnect, finalizeConnected, setStatus, workspaceRoot],
+  )
+
+  /**
    * 对齐 Agent 到当前本地线程：离线会自动连接；已连接则按需重连并 resume。
    * - 当前运行时下有 agentSessionIds[id] → connect(resume)
    * - 无 → connect(new)（换运行时后旧会话不会跨 Agent 串线）
@@ -524,6 +575,7 @@ export function useAcpSession(workspaceRoot?: string) {
   return {
     connect,
     disconnect,
+    switchRuntime,
     syncAgentSessionToActiveThread,
     sendPrompt,
     cancel,
