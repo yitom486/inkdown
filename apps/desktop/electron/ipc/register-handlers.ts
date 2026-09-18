@@ -20,6 +20,7 @@ import type {
   UpdateReadingMarkPayload,
 } from '@inkdown/contracts'
 import type {
+  AcpAuthPreflightPayload,
   AcpAuthenticatePayload,
   AcpCancelPayload,
   AcpConnectPayload,
@@ -30,6 +31,7 @@ import type {
   AcpSetConfigOptionPayload,
   AcpSnapshotResponsePayload,
   AcpProviderSavePayload,
+  AcpProxySettings,
 } from '@inkdown/contracts'
 import type { WebDocDiscoverTocPayload, WebDocFetchPayload } from '@inkdown/contracts'
 import { resolveSnapshotTimeoutMs } from '@inkdown/contracts'
@@ -146,7 +148,11 @@ import {
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
 import { listAcpRuntimes } from '@inkdown/acp'
-import { probeCodexAuth } from '../services/acp/codex-auth-preflight'
+import {
+  emptyAcpAuthPreflight,
+  isCodexPreflightRuntime,
+  probeCodexAuth,
+} from '../services/acp/codex-auth-preflight'
 import {
   authenticateAcp,
   cancelAcp,
@@ -167,6 +173,10 @@ import {
   getAcpProviderStatus,
   saveAcpProvider,
 } from '../services/acp/provider-config-service'
+import {
+  readAcpProxySettings,
+  saveAcpProxySettings,
+} from '../services/acp/acp-proxy-service'
 
 /**
  * 应用还在运行时，把同一条 IPC 推到每一扇还活着的窗。
@@ -325,7 +335,10 @@ export function registerIpcHandlers(): void {
 
   // --- ACP：连接、认证、session、prompt ---
   ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
-  ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, () => ok(probeCodexAuth()))
+  ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, (_event, payload?: AcpAuthPreflightPayload) =>
+    // 本机登录探测仅对 codex-acp 有意义；其他运行时返回中性结果
+    ok(isCodexPreflightRuntime(payload?.runtimeId) ? probeCodexAuth() : emptyAcpAuthPreflight()),
+  )
   ipcMain.handle(IPC.ACP_CONNECT, (event, payload: AcpConnectPayload) => {
     // 这扇窗之后的快照都问它
     rememberAgentOwner(event.sender)
@@ -360,6 +373,11 @@ export function registerIpcHandlers(): void {
     saveAcpProvider(payload),
   )
   ipcMain.handle(IPC.ACP_PROVIDER_CLEAR, () => clearAcpProvider())
+  // --- ACP：子进程代理设置 ---
+  ipcMain.handle(IPC.ACP_PROXY_GET, () => ok(readAcpProxySettings()))
+  ipcMain.handle(IPC.ACP_PROXY_SAVE, (_event, payload: AcpProxySettings) =>
+    saveAcpProxySettings(payload),
+  )
 
   // --- 应用：版本与自动更新 ---
   ipcMain.handle(IPC.APP_GET_VERSION, () => getAppVersion())

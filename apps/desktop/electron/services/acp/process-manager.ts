@@ -13,6 +13,8 @@ export interface SpawnAcpOptions {
   runtime: AcpRuntimeInfo
   cwd: string
   env?: NodeJS.ProcessEnv
+  /** 需要从继承环境里剔除的变量名（如关闭代理时清理 HTTP(S)_PROXY） */
+  envRemove?: string[]
   onStderrLine?: (line: string) => void
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void
 }
@@ -35,6 +37,9 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ...options.env,
+  }
+  for (const key of options.envRemove ?? []) {
+    delete env[key]
   }
 
   // 默认允许本机浏览器 OAuth（对齐 VS Code/Zed）；无头/CI 才禁用

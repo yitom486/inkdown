@@ -151,6 +151,10 @@ export const IPC = {
   ACP_PROVIDER_SAVE: 'acp:provider-save',
   /** invoke：清除自定义供应商配置，回到本机 ~/.codex 订阅登录 */
   ACP_PROVIDER_CLEAR: 'acp:provider-clear',
+  /** invoke：读取 ACP 子进程代理设置 */
+  ACP_PROXY_GET: 'acp:proxy-get',
+  /** invoke：保存 ACP 子进程代理设置（重新连接后生效） */
+  ACP_PROXY_SAVE: 'acp:proxy-save',
   /** send：渲染进程回复 Agent 的权限询问 */
   ACP_PERMISSION_RESPONSE: 'acp:permission-response',
   /** send：渲染进程回传快照内容 */

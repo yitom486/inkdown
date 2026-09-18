@@ -2,6 +2,7 @@ import type { AppError } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type { ElectronAPI } from '@inkdown/contracts'
 import type {
+  AcpAuthPreflightPayload,
   AcpAuthPreflightResult,
   AcpAuthenticatePayload,
   AcpCancelPayload,
@@ -22,6 +23,7 @@ import type {
   AcpSetConfigOptionResult,
   AcpProviderSavePayload,
   AcpProviderStatus,
+  AcpProxySettings,
   AcpStatusChangedEvent,
 } from '@inkdown/contracts'
 
@@ -64,7 +66,9 @@ export const acpApi = {
     return api.value.listAcpRuntimes()
   },
 
-  async authPreflight(): Promise<Result<AcpAuthPreflightResult, AppError>> {
+  async authPreflight(
+    payload?: AcpAuthPreflightPayload,
+  ): Promise<Result<AcpAuthPreflightResult, AppError>> {
     const api = requireAcpBridge()
     if (!api.ok) return api
     if (typeof api.value.acpAuthPreflight !== 'function') {
@@ -73,7 +77,7 @@ export const acpApi = {
         message: 'ACP auth preflight 未就绪（请完全重启 bun run dev）',
       })
     }
-    return api.value.acpAuthPreflight()
+    return api.value.acpAuthPreflight(payload)
   },
 
   async connect(payload: AcpConnectPayload): Promise<Result<AcpConnectResult, AppError>> {
@@ -176,6 +180,32 @@ export const acpApi = {
       })
     }
     return api.value.clearAcpProvider()
+  },
+
+  async getProxySettings(): Promise<Result<AcpProxySettings, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.getAcpProxySettings !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: 'ACP 代理设置接口未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.getAcpProxySettings()
+  },
+
+  async saveProxySettings(
+    payload: AcpProxySettings,
+  ): Promise<Result<AcpProxySettings, AppError>> {
+    const api = requireAcpBridge()
+    if (!api.ok) return api
+    if (typeof api.value.saveAcpProxySettings !== 'function') {
+      return err({
+        code: 'API_UNAVAILABLE',
+        message: 'ACP 代理设置接口未就绪（请完全重启 bun run dev）',
+      })
+    }
+    return api.value.saveAcpProxySettings(payload)
   },
 
   respondPermission(payload: AcpPermissionResponsePayload): Result<void, AppError> {

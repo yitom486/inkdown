@@ -32,6 +32,7 @@ import type {
 } from '../types/reading-mark'
 import type { QuizSessionRecord } from '../types/quiz'
 import type {
+  AcpAuthPreflightPayload,
   AcpAuthPreflightResult,
   AcpAuthenticatePayload,
   AcpCancelPayload,
@@ -53,6 +54,7 @@ import type {
   AcpProviderSavePayload,
   AcpProviderStatus,
   AcpStatusChangedEvent,
+  AcpProxySettings,
 } from '../types/acp'
 import type {
   WebDocDiscoverTocPayload,
@@ -257,8 +259,10 @@ export interface ElectronAPI {
   /* ===== ACP Agent：运行时/认证/session/prompt/权限/快照/推送 ===== */
   /** 列出可用 ACP Agent 运行时 */
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>
-  /** 连接前探测 Codex/ACP 认证是否已就绪 */
-  acpAuthPreflight: () => Promise<Result<AcpAuthPreflightResult, AppError>>
+  /** 连接前探测 Codex/ACP 认证是否已就绪；非 codex-acp 运行时返回中性结果 */
+  acpAuthPreflight: (
+    payload?: AcpAuthPreflightPayload,
+  ) => Promise<Result<AcpAuthPreflightResult, AppError>>
   /** 拉起 ACP 传输并连接 */
   acpConnect: (payload: AcpConnectPayload) => Promise<Result<AcpConnectResult, AppError>>
   /** 走 ACP authMethods 完成认证 */
@@ -287,6 +291,10 @@ export interface ElectronAPI {
   saveAcpProvider: (payload: AcpProviderSavePayload) => Promise<Result<AcpProviderStatus, AppError>>
   /** 清除自定义供应商配置，回到本机 ~/.codex 订阅登录 */
   clearAcpProvider: () => Promise<Result<void, AppError>>
+  /** 读取 ACP 子进程代理设置 */
+  getAcpProxySettings: () => Promise<Result<AcpProxySettings, AppError>>
+  /** 保存 ACP 子进程代理设置（重新连接后生效） */
+  saveAcpProxySettings: (payload: AcpProxySettings) => Promise<Result<AcpProxySettings, AppError>>
   /** 回复 Agent 的权限询问 */
   acpRespondPermission: (payload: AcpPermissionResponsePayload) => void
   /** 回传编辑器/阅读器快照给 Agent */

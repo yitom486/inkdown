@@ -135,7 +135,7 @@ const electronAPI: ElectronAPI = {
   updateReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_UPDATE, payload),
   deleteReadingMark: (id: string) => ipcRenderer.invoke(IPC.MARKS_DELETE, id),
   listAcpRuntimes: () => ipcRenderer.invoke(IPC.ACP_LIST_RUNTIMES),
-  acpAuthPreflight: () => ipcRenderer.invoke(IPC.ACP_AUTH_PREFLIGHT),
+  acpAuthPreflight: (payload) => ipcRenderer.invoke(IPC.ACP_AUTH_PREFLIGHT, payload),
   acpConnect: (payload) => ipcRenderer.invoke(IPC.ACP_CONNECT, payload),
   acpAuthenticate: (payload) => ipcRenderer.invoke(IPC.ACP_AUTHENTICATE, payload),
   acpLoadSession: (payload) => ipcRenderer.invoke(IPC.ACP_LOAD_SESSION, payload),
@@ -147,6 +147,8 @@ const electronAPI: ElectronAPI = {
   getAcpProvider: () => ipcRenderer.invoke(IPC.ACP_PROVIDER_GET),
   saveAcpProvider: (payload) => ipcRenderer.invoke(IPC.ACP_PROVIDER_SAVE, payload),
   clearAcpProvider: () => ipcRenderer.invoke(IPC.ACP_PROVIDER_CLEAR),
+  getAcpProxySettings: () => ipcRenderer.invoke(IPC.ACP_PROXY_GET),
+  saveAcpProxySettings: (payload) => ipcRenderer.invoke(IPC.ACP_PROXY_SAVE, payload),
   acpRespondPermission: (payload) => {
     ipcRenderer.send(IPC.ACP_PERMISSION_RESPONSE, payload)
   },

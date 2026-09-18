@@ -1,9 +1,10 @@
 import { app } from 'electron'
-import { APP_TITLE } from '@inkdown/contracts'
+import { APP_TITLE, DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
 import type { AppError } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type {
   AcpAuthMethod,
+  AcpAuthPreflightResult,
   AcpConnectResult,
   AcpConnectionStatus,
   AcpContentBlock,
@@ -31,6 +32,7 @@ import {
   type PermissionDecision,
 } from './client-handlers'
 import { probeCodexAuth } from './codex-auth-preflight'
+import { buildAcpProxySpawnEnv, readAcpProxySettings } from './acp-proxy-service'
 import {
   getAcpProviderCodexHome,
   readStoredAcpProvider,
@@ -62,6 +64,15 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const PROTOCOL_VERSION = 1
+
+/** 非 codex-acp 运行时的中性 preflight：无本地登录痕迹 → gate 走协议 authMethods 弹向导 */
+const NEUTRAL_AUTH_PREFLIGHT: AcpAuthPreflightResult = {
+  codexHome: '',
+  hasCodexHome: false,
+  hasAuthFile: false,
+  hasApiKeyEnv: false,
+  looksLoggedIn: false,
+}
 
 /**
  * 自定义供应商模式：预生成隔离 CODEX_HOME 的 config.toml（若失败则放弃
@@ -423,8 +434,17 @@ export async function connectAcp(payload: {
   const { cwd } = resolveAgentCwd(payload.cwd)
   workspaceRoot = cwd
 
-  // 自定义供应商模式：隔离 CODEX_HOME + 注入 Key；失败则回落本机登录
-  const provider = await readStoredAcpProvider()
+  // Codex 专属能力门控：自定义供应商 / 本机登录探测仅对 codex-acp 有意义。
+  // 其他 Agent 的认证完全走协议 initialize 返回的 authMethods。
+  const isCodexRuntime = runtime.id === DEFAULT_ACP_RUNTIME_ID
+
+  // 代理设置：spawn 时注入环境变量；关闭时移除代理键（应用内开关为权威配置）
+  const proxySettings = await readAcpProxySettings()
+  const { env: proxyEnv, envRemove: proxyEnvRemove } =
+    buildAcpProxySpawnEnv(proxySettings)
+
+  // 自定义供应商模式（仅 codex-acp）：隔离 CODEX_HOME + 注入 Key；失败则回落本机登录
+  const provider = isCodexRuntime ? await readStoredAcpProvider() : null
   const useCustomProvider =
     provider !== null &&
     (await provisionCustomProviderCodexHome(provider, getAcpProviderCodexHome()))
@@ -433,9 +453,13 @@ export async function connectAcp(payload: {
     processHandle = spawnAcpProcess({
       runtime,
       cwd,
-      env: useCustomProvider && provider
-        ? buildCustomProviderSpawnEnv(provider, provider.apiKey, getAcpProviderCodexHome())
-        : undefined,
+      env: {
+        ...(useCustomProvider && provider
+          ? buildCustomProviderSpawnEnv(provider, provider.apiKey, getAcpProviderCodexHome())
+          : {}),
+        ...proxyEnv,
+      },
+      envRemove: proxyEnvRemove,
       onExit: () => {
         if (gen !== connectGeneration) return
         if (
@@ -548,6 +572,7 @@ export async function connectAcp(payload: {
     const authMethods = parseAuthMethods(initResult.authMethods)
     // 自定义供应商模式：隔离 HOME 无 auth.json、Key 走注入 env → 必然「已就绪」，
     // 静默走 API Key 类 authMethods；订阅登录只在未启用自定义供应商时生效。
+    // 非 codex 运行时跳过本机探测，交由协议 authMethods 决策。
     const preflight = useCustomProvider
       ? {
           codexHome: getAcpProviderCodexHome(),
@@ -556,7 +581,9 @@ export async function connectAcp(payload: {
           hasApiKeyEnv: true,
           looksLoggedIn: true,
         }
-      : probeCodexAuth()
+      : isCodexRuntime
+        ? probeCodexAuth()
+        : NEUTRAL_AUTH_PREFLIGHT
     let openedWithoutAuth: Extract<AcpConnectResult, { phase: 'ready' }> | null = null
     const gate = await runConnectAuthGate(authMethods, preflight, {
       authenticate: async (methodId) => {

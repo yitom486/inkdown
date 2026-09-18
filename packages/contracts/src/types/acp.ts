@@ -314,6 +314,11 @@ export interface AcpAuthPreflightResult {
   looksLoggedIn: boolean
 }
 
+/** preflight 请求参数：runtimeId 用于主进程门控（探测仅对 codex-acp 有意义） */
+export interface AcpAuthPreflightPayload {
+  runtimeId?: string
+}
+
 /**
  * 历史别名：electron 留守 `codex-auth-preflight.ts` 与已迁入 packages/acp 的
  * 三文件（auth-method-order / decision / gate）沿用此名。形状与
@@ -323,6 +328,8 @@ export type CodexAuthPreflight = AcpAuthPreflightResult
 
 /**
  * 自定义模型供应商（base URL + API Key 直连 OpenAI 兼容端点）。
+ * ⚠️ 仅 codex-acp 运行时支持：实现依赖隔离 CODEX_HOME + config.toml（Codex 专属机制），
+ * 其他 ACP Agent 接入后 UI 必须隐藏此入口，主进程 IPC 亦应校验 runtimeId。
  * 启用后主进程用独立 CODEX_HOME（应用数据目录）spawn 适配器，完全不读写
  * 用户的 ~/.codex；订阅登录（auth.json / 环境变量）与自定义 Key 二选一切换。
  */
@@ -350,4 +357,18 @@ export interface AcpProviderStatus {
   model?: string
   wireApi?: 'chat' | 'responses'
   hasApiKey: boolean
+}
+
+/**
+ * ACP 子进程代理设置。
+ * 生效方式：spawn Agent 子进程时注入 HTTP_PROXY / HTTPS_PROXY / ALL_PROXY 环境变量，
+ * 仅影响 Agent 进程的网络请求，不影响应用自身（更新、WebDAV 等）。
+ * 保存后须重新连接才生效。
+ */
+export interface AcpProxySettings {
+  enabled: boolean
+  /** 代理主机，默认 127.0.0.1 */
+  host: string
+  /** 代理端口，默认 7897（Clash Verge 常用混合端口） */
+  port: number
 }

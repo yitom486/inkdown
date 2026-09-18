@@ -38,8 +38,8 @@ import { useAcpChatShell, useAcpUiStore } from '@/stores/acp-ui-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
 import { isOk } from '@inkdown/contracts'
-import { BUILTIN_ACP_RUNTIMES } from '@inkdown/contracts'
-import type { AcpConfigOption, AcpProviderStatus } from '@inkdown/contracts'
+import { BUILTIN_ACP_RUNTIMES, DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import type { AcpConfigOption, AcpProviderStatus, AcpProxySettings } from '@inkdown/contracts'
 
 interface AgentPanelProps {
   workspaceRoot?: string
@@ -101,8 +101,16 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
     BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === view.selectedRuntimeId)?.name ??
     view.selectedRuntimeId
 
+  /** Codex 专属能力：本机登录提示 / 自定义 API 仅 codex-acp 运行时可用 */
+  const isCodexRuntime = view.selectedRuntimeId === DEFAULT_ACP_RUNTIME_ID
+
   useEffect(() => {
     let cancelled = false
+    if (!isCodexRuntime) {
+      setProviderStatus(null)
+      setAuthHint(null)
+      return
+    }
     void (async () => {
       const providerResult = await acpApi.getProvider()
       if (cancelled) return
@@ -115,7 +123,7 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
         )
         return
       }
-      const result = await acpApi.authPreflight()
+      const result = await acpApi.authPreflight({ runtimeId: view.selectedRuntimeId })
       if (cancelled || !isOk(result)) return
       const p = result.value
       if (p.looksLoggedIn) {
@@ -133,7 +141,37 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
     return () => {
       cancelled = true
     }
+  }, [isCodexRuntime, view.selectedRuntimeId])
+
+  // 代理设置：全局一份，spawn Agent 子进程时注入；保存后需重新连接
+  const [proxySettings, setProxySettings] = useState<AcpProxySettings | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const result = await acpApi.getProxySettings()
+      if (cancelled) return
+      if (isOk(result)) setProxySettings(result.value)
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  const updateProxySettings = useCallback(
+    (patch: Partial<AcpProxySettings>) => {
+      setProxySettings((prev) => {
+        const next: AcpProxySettings = {
+          enabled: prev?.enabled ?? false,
+          host: prev?.host ?? '127.0.0.1',
+          port: prev?.port ?? 7897,
+          ...patch,
+        }
+        void acpApi.saveProxySettings(next)
+        return next
+      })
+    },
+    [],
+  )
 
   const statusLabel =
     view.status === 'connected'
@@ -339,20 +377,69 @@ export const AgentPanel = memo(function AgentPanel({ workspaceRoot }: AgentPanel
                   </DropdownMenuRadioGroup>
 
                   <DropdownMenuSeparator />
+                  {isCodexRuntime ? (
+                    <>
+                      <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                        认证 / 供应商
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        className="text-xs"
+                        onSelect={() => setProviderDialogOpen(true)}
+                      >
+                        自定义 API…
+                        {providerStatus?.configured ? (
+                          <span className="ml-auto text-[10px] text-muted-foreground">
+                            {providerStatus.name ?? '已配置'}
+                          </span>
+                        ) : null}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+
+                  <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[10px] text-muted-foreground">
-                    认证 / 供应商
+                    代理（Agent 子进程）
                   </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    className="text-xs"
-                    onSelect={() => setProviderDialogOpen(true)}
-                  >
-                    自定义 API…
-                    {providerStatus?.configured ? (
-                      <span className="ml-auto text-[10px] text-muted-foreground">
-                        {providerStatus.name ?? '已配置'}
-                      </span>
-                    ) : null}
-                  </DropdownMenuItem>
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <label
+                      className="flex cursor-pointer items-center gap-2 text-xs"
+                      title="连接 Agent 时注入 HTTP(S)_PROXY 环境变量"
+                    >
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-[hsl(var(--primary))]"
+                        checked={proxySettings?.enabled ?? false}
+                        disabled={view.status === 'connected' || view.status === 'connecting' || view.status === 'awaiting_auth'}
+                        onChange={(e) => updateProxySettings({ enabled: e.target.checked })}
+                      />
+                      启用代理
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        className="h-6 w-24 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
+                        value={proxySettings?.host ?? '127.0.0.1'}
+                        disabled={!proxySettings?.enabled}
+                        spellCheck={false}
+                        onChange={(e) => updateProxySettings({ host: e.target.value })}
+                      />
+                      <span className="text-[10px] text-muted-foreground">:</span>
+                      <input
+                        className="h-6 w-14 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
+                        value={proxySettings?.port ?? 7897}
+                        disabled={!proxySettings?.enabled}
+                        inputMode="numeric"
+                        onChange={(e) => {
+                          const port = Number(e.target.value)
+                          if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+                            updateProxySettings({ port })
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <p className="px-2 pb-1 text-[10px] text-muted-foreground">
+                    仅对 Agent 进程生效；保存后需重新连接
+                  </p>
 
                   {secondary.length > 0 ? (
                     <>
