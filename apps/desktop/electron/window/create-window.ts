@@ -1,5 +1,6 @@
-import { BrowserWindow, dialog, nativeImage, shell } from 'electron'
-import { join } from 'path'
+import { BrowserWindow, app, dialog, nativeImage, shell } from 'electron'
+import { watch, type FSWatcher } from 'node:fs'
+import { basename, dirname, join } from 'path'
 import { IPC } from '@inkdown/contracts'
 import { APP_TITLE } from '@inkdown/contracts'
 import { resolveAppIconPath } from '../services/app-paths'
@@ -25,6 +26,45 @@ function createWindowCloseHandlers(session: WindowSession) {
       win.webContents.send(IPC.APP_REQUEST_CLOSE)
     },
   })
+}
+
+function watchDevAppIcon(window: BrowserWindow, iconPath: string | undefined): () => void {
+  if (app.isPackaged || !iconPath) return () => undefined
+
+  let watcher: FSWatcher | undefined
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined
+  const iconFileName = basename(iconPath).toLowerCase()
+
+  const refreshIcon = () => {
+    refreshTimer = undefined
+    if (window.isDestroyed()) return
+
+    const nextIcon = nativeImage.createFromPath(iconPath)
+    if (nextIcon.isEmpty()) {
+      console.warn('[window-icon] 图标文件尚未准备好，跳过本次热更新', iconPath)
+      return
+    }
+
+    window.setIcon(nextIcon)
+    console.info('[window-icon] 开发态图标已热更新', iconPath)
+  }
+
+  try {
+    watcher = watch(dirname(iconPath), { persistent: false }, (_eventType, fileName) => {
+      const changedFileName = fileName?.toString().toLowerCase()
+      if (changedFileName && changedFileName !== iconFileName) return
+
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(refreshIcon, 180)
+    })
+  } catch (error) {
+    console.warn('[window-icon] 无法监听开发态图标', iconPath, error)
+  }
+
+  return () => {
+    if (refreshTimer) clearTimeout(refreshTimer)
+    watcher?.close()
+  }
 }
 
 export function createWindow(options: { fresh?: boolean } = {}): void {
@@ -59,6 +99,7 @@ export function createWindow(options: { fresh?: boolean } = {}): void {
   }
   session.closeController = createWindowCloseHandlers(session)
   registerWindowSession(session)
+  const disposeDevIconWatcher = watchDevAppIcon(window, iconPath)
 
   window.on('ready-to-show', () => {
     // 保留 Application Menu 的 editMenu 角色（Ctrl+C/V）；仅隐藏菜单栏
@@ -149,6 +190,7 @@ export function createWindow(options: { fresh?: boolean } = {}): void {
   })
 
   window.on('closed', () => {
+    disposeDevIconWatcher()
     session.closeController.clearPendingCloseTimeout()
     unregisterWindowSession(window)
   })
