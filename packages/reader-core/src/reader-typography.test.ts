@@ -22,4 +22,10 @@ describe('reader typography defaults', () => {
     expect(buildReaderLayoutCss('dark', typography)).toContain('font-size: 24px !important')
     expect(buildReaderLayoutCss('dark', typography)).toContain('line-height: 2.05 !important')
   })
+
+  it('主题 !important 规则豁免 M2 页边旗标（否则 fixed 定位被压成 static 全宽条）', () => {
+    const typography = { fontSize: 18 as const, lineHeight: 1.85 as const }
+    const css = buildReaderLayoutCss('dark', typography)
+    expect(css).toContain(':not([data-inkdown-flag])')
+  })
 })
