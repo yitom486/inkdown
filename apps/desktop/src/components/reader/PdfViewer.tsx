@@ -110,6 +110,7 @@ import { openPdfDocument } from '@/lib/reader/pdf/pdf-document'
 import { findPdfMarksAtPoint, findPdfNoteMarkAtPoint } from '@/lib/reader/marks/pdf-reading-marks'
 import { shouldRenderPdfPage } from '@/lib/reader/pdf/pdf-render'
 import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
+import { toCanonicalChapter } from '@inkdown/reader-core'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   getSelectionToolbarPosition,
@@ -1567,6 +1568,9 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
     }, 10)
   }, [captureSelectionSnapshot, clearTextSelection, inspector, marks])
 
+  // 目录（供卡片章节归属写入固化与透传；置于创建回调之前，避免 TDZ）
+  const marksToc = useMemo(() => tocFromPdfUnits(outlineUnits), [outlineUnits])
+
   const addPageBookmark = useCallback(async () => {
     if (!fileFingerprint || numPages === 0) {
       throw new Error('无法获取当前页')
@@ -1577,13 +1581,14 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
       kind: 'bookmark',
       anchor: { format: 'pdf', page: pageNum },
       label: nav.current?.label ?? `第 ${pageNum} 页`,
+      chapter: toCanonicalChapter({ format: 'pdf', page: pageNum }, marksToc) ?? undefined,
     })
     if (!isOk(result)) {
       throw new Error(result.error.message || '创建书签失败')
     }
     toast.success('已添加书签')
     return result.value
-  }, [createMark, fileFingerprint, filePath, nav.current?.label, numPages, pageNum])
+  }, [createMark, fileFingerprint, filePath, marksToc, nav.current?.label, numPages, pageNum])
 
   const handleSaveAnnotation = useCallback(
     async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
@@ -1606,6 +1611,7 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
         const result = await updateMark({
           id: existing.id,
           color,
+          chapter: toCanonicalChapter({ format: 'pdf', page: snapshot.page }, marksToc) ?? undefined,
           ...(trimmed
             ? {
                 note: trimmed,
@@ -1641,6 +1647,10 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
           quads: snapshot.quads,
           rects: snapshot.rects,
         },
+        chapter: toCanonicalChapter(
+          { format: 'pdf', page: snapshot.page },
+          marksToc,
+        ) ?? undefined,
         excerpt: snapshot.text,
         note: meta.note,
         category: meta.category,
@@ -1659,7 +1669,7 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
       clearTextSelection()
       return result.value
     },
-    [clearTextSelection, createMark, fileFingerprint, filePath, marks, updateMark],
+    [clearTextSelection, createMark, fileFingerprint, filePath, marks, marksToc, updateMark],
   )
 
   const selectionActions = useReaderSelectionActions({
@@ -1802,7 +1812,6 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
     setMarkTooltipPos(null)
   }, [])
 
-  const marksToc = useMemo(() => tocFromPdfUnits(outlineUnits), [outlineUnits])
   const currentPdfChapter = useMemo(
     () => resolvePdfChapterByPage(pageNum, marksToc),
     [marksToc, pageNum],
@@ -2207,8 +2216,9 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
 
       {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航在行下通栏 */}
       <div className="flex min-h-0 flex-1">
-        <ReaderContentShell
-          filePath={filePath}
+      <ReaderContentShell
+        filePath={filePath}
+        readingFraction={numPages > 1 ? (pageNum - 1) / (numPages - 1) : 0}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -2217,7 +2227,7 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
         onExportNotes={handleExportNotes}
         onExportAnkiCards={handleExportAnkiCards}
         marksToc={marksToc}
-        marksCurrentChapterKey={currentPdfChapter.key}
+        marksCurrentChapterKey={currentPdfChapter.matchKey ?? currentPdfChapter.key}
         marksResolveChapter={resolvePdfChapter}
         tocOpen={tocOpen}
         units={outlineUnits}

@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import type { ReadingMark, ReadingMarkCategory } from '@inkdown/contracts'
+import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { Button } from '@/components/ui/button'
 
 export interface NotesDrawerProps {
@@ -54,6 +55,7 @@ export const NotesDrawer: React.FC<NotesDrawerProps> = ({
       const textMatch =
         (m.title && m.title.toLowerCase().includes(q)) ||
         (m.note && m.note.toLowerCase().includes(q)) ||
+        (resolveCardMeta(m).displayNote?.toLowerCase().includes(q) ?? false) ||
         (m.excerpt && m.excerpt.toLowerCase().includes(q)) ||
         (m.label && m.label.toLowerCase().includes(q))
       if (!textMatch) return false
@@ -67,14 +69,15 @@ export const NotesDrawer: React.FC<NotesDrawerProps> = ({
 总卡片数: ${marks.length} 篇
 
 ${marks
-  .map(
-    (m) => `### 【${m.category ? m.category.toUpperCase() : 'NOTE'}】${m.title || m.label || '笔记'}
+  .map((m) => {
+    const meta = resolveCardMeta(m)
+    return `### 【${m.category ? m.category.toUpperCase() : 'NOTE'}】${meta.title || m.label || '笔记'}
 - **原文摘录**: > "${m.excerpt || '无'}"
-- **研读心得**: ${m.note || '无'}
+- **研读心得**: ${meta.displayNote || '无'}
 ${m.aiSummary ? `- **AI 洞见**: ${m.aiSummary}` : ''}
 - **记录时间**: ${m.createdAt ? new Date(m.createdAt).toLocaleString() : '未知'}
 `
-  )
+  })
   .join('\n---\n\n')}
 `
     navigator.clipboard.writeText(md)
@@ -234,11 +237,14 @@ ${m.aiSummary ? `- **AI 洞见**: ${m.aiSummary}` : ''}
                 </p>
               )}
 
-              {mark.note && (
-                <p className="text-foreground text-[11px] leading-relaxed">
-                  {mark.note}
-                </p>
-              )}
+              {(() => {
+                const displayNote = resolveCardMeta(mark).displayNote
+                return displayNote ? (
+                  <p className="text-foreground text-[11px] leading-relaxed">
+                    {displayNote}
+                  </p>
+                ) : null
+              })()}
 
               {mark.aiSummary && (
                 <div className="p-2 rounded-lg bg-muted/40 border border-border/50 text-[10.5px] text-muted-foreground">

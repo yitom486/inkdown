@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Bookmark, ChevronLeft } from 'lucide-react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
@@ -51,6 +51,8 @@ interface ReaderContentShellProps {
   children: ReactNode
   /** 卡片悬停时透出原文 excerpt（EPUB 用 CSS 高亮 API 照亮正文，PDF 画布暂不支持） */
   onHoverExcerpt?: (excerpt: string | undefined) => void
+  /** 正文书级阅读进度 0~1：卡片轨等比跟随滚动；缺省不同滚 */
+  readingFraction?: number
 }
 
 export function ReaderContentShell({
@@ -76,6 +78,7 @@ export function ReaderContentShell({
   tocAside,
   children,
   onHoverExcerpt,
+  readingFraction,
 }: ReaderContentShellProps) {
   // 知识卡轨与伴读联动状态
   const isCardRailOpen = useReaderHudUiStore((s) => s.isCardRailOpen)
@@ -104,6 +107,9 @@ export function ReaderContentShell({
     ...m,
     collapsed: collapsedMap[m.id] ?? m.collapsed,
   }))
+
+  // 目录键序：卡片按文档位置排序用（纵序对齐正文）
+  const chapterOrder = useMemo(() => marksToc?.map((t) => t.key) ?? [], [marksToc])
 
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewCards, setReviewCards] = useState<Flashcard[]>([])
@@ -250,19 +256,20 @@ export function ReaderContentShell({
           marks={enhancedMarks}
           onMarkClick={onSelectMark}
           onHoverAnchor={onHoverExcerpt}
-          chapterOfMark={
-            marksToc && marksResolveChapter
-              ? (m) => {
-                  try {
-                    const ref = marksResolveChapter(m, marksToc)
-                    return { key: ref.key, label: ref.label }
-                  } catch {
-                    return null
-                  }
-                }
-              : undefined
-          }
+          chapterOfMark={(m) => {
+            // 优先读写入时固化的章节归属；老数据缺字段时回落运行时解析
+            if (m.chapter) return { key: m.chapter.key, label: m.chapter.label }
+            if (!(marksToc && marksResolveChapter)) return null
+            try {
+              const ref = marksResolveChapter(m, marksToc)
+              return { key: ref.matchKey, label: ref.label }
+            } catch {
+              return null
+            }
+          }}
           currentChapterKey={marksCurrentChapterKey}
+          chapterOrder={chapterOrder}
+          readingFraction={readingFraction}
           onDeleteMark={(id) => {
             const m = marks.find((item) => item.id === id)
             if (m) onDeleteMark(m)

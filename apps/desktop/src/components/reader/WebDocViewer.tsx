@@ -64,6 +64,7 @@ import {
 } from '@/lib/reader/web-doc/web-doc-link'
 import { logWebDoc } from '@/lib/reader/web-doc/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@inkdown/reader-core'
+import { toCanonicalChapter } from '@inkdown/reader-core'
 import {
   iterateWebDocUnits,
   primeWebDocAgentTextCache,
@@ -392,6 +393,10 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       kind: 'bookmark',
       anchor: { format: 'web', url: normalizedPageUrl },
       label: nav.current?.label ?? data?.content.title ?? '书签',
+      chapter: toCanonicalChapter(
+        { format: 'web', url: normalizedPageUrl },
+        tocFromWebUnits(units),
+      ) ?? undefined,
     })
     if (!isOk(result)) {
       throw new Error(result.error.message || '创建书签失败')
@@ -418,6 +423,10 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         const result = await updateMark({
           id: existing.id,
           color,
+          chapter: toCanonicalChapter(
+            { format: 'web', url: normalizedPageUrl },
+            tocFromWebUnits(units),
+          ) ?? undefined,
           ...(trimmed
             ? {
                 note: trimmed,
@@ -450,6 +459,10 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           selectedText: snapshot.text,
           rects: snapshot.rects,
         },
+        chapter: toCanonicalChapter(
+          { format: 'web', url: normalizedPageUrl },
+          tocFromWebUnits(units),
+        ) ?? undefined,
         excerpt: snapshot.text,
         note: meta.note,
         category: meta.category,

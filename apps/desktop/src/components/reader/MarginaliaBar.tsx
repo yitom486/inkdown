@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bookmark,
   Plus,
@@ -11,6 +11,7 @@ import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { KnowledgeCardItem } from './KnowledgeCardItem'
 import { BracketConnector } from './BracketConnector'
 import { sortMarksByDocumentPosition } from '@/lib/reader/marks/mark-document-order'
+import { subscribeRailFollow, subscribeRailFocus } from '@/lib/reader/rail-follow'
 
 export interface MarginaliaBarProps {
   marks: ReadingMark[]
@@ -57,36 +58,55 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
   className = '',
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | ReadingMarkCategory>('all')
+  // 作用域：默认只看本章（与右侧正文绑定，跳章即换）；全部用于跨章回顾
+  const canScopeByChapter = !!chapterOfMark && !!currentChapterKey
+  const [scope, setScope] = useState<'chapter' | 'all'>(() =>
+    chapterOfMark && currentChapterKey ? 'chapter' : 'all',
+  )
   const railRef = useRef<HTMLElement>(null)
 
   const resolveCategory = (m: ReadingMark): ReadingMarkCategory => {
     return resolveCardMeta(m).category
   }
 
-  const concepts = marks.filter((m) => resolveCategory(m) === 'concept')
-  const quotes = marks.filter((m) => resolveCategory(m) === 'quote')
-  const methods = marks.filter((m) => resolveCategory(m) === 'method')
-  const diagrams = marks.filter((m) => resolveCategory(m) === 'diagram')
-  const questions = marks.filter((m) => resolveCategory(m) === 'question')
+  // 章节键解析（普通函数，过滤与排序共用；内部自带 try 保护）
+  const chapterKeyOf = (m: ReadingMark): string | null => {
+    try {
+      return chapterOfMark?.(m)?.key ?? null
+    } catch {
+      return null
+    }
+  }
+
+  // 作用域内集合：本章模式下分类计数与列表都只算本章（计数组跟随作用域）；
+  // 全书模式回落全量。头部总数同样跟随，避免"本章(0)+概念(1)"精神分裂。
+  const scopeMarks = useMemo(() => {
+    if (scope !== 'chapter' || !canScopeByChapter) return marks
+    return marks.filter((m) => chapterKeyOf(m) === currentChapterKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marks, scope, canScopeByChapter, currentChapterKey])
+  const concepts = scopeMarks.filter((m) => resolveCategory(m) === 'concept')
+  const quotes = scopeMarks.filter((m) => resolveCategory(m) === 'quote')
+  const methods = scopeMarks.filter((m) => resolveCategory(m) === 'method')
+  const diagrams = scopeMarks.filter((m) => resolveCategory(m) === 'diagram')
+  const questions = scopeMarks.filter((m) => resolveCategory(m) === 'question')
 
   const filteredMarks = marks.filter((m) => {
+    if (scope === 'chapter' && canScopeByChapter) {
+      if (chapterKeyOf(m) !== currentChapterKey) return false
+    }
     if (activeTab === 'all') return true
     return resolveCategory(m) === activeTab
   })
+  const chapterCount = useMemo(() => {
+    if (!canScopeByChapter) return 0
+    return marks.filter((m) => chapterKeyOf(m) === currentChapterKey).length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marks, canScopeByChapter, currentChapterKey])
 
   const allCollapsed = marks.length > 0 && marks.every((m) => m.collapsed)
 
   // 卡片按文档位置排序：纵序对齐正文（章序优先，同章保序，无归属沉底）
-  const chapterKeyOf = useMemo(() => {
-    const fn = chapterOfMark
-    return (m: ReadingMark): string | null => {
-      try {
-        return fn?.(m)?.key ?? null
-      } catch {
-        return null
-      }
-    }
-  }, [chapterOfMark])
   const positionedMarks = useMemo(
     () => sortMarksByDocumentPosition(filteredMarks, chapterOrder ?? [], chapterKeyOf),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,17 +126,46 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
-  useEffect(() => {
-    if (readingFraction === undefined) return
+  // 把书级分数映射为轨滚动（瞬间完成，无动画；手动滚动 3 秒内不抢）
+  const applyRailFraction = useCallback((fraction: number) => {
+    if (!Number.isFinite(fraction)) return
     if (Date.now() - lastManualScrollRef.current < 3000) return
     const el = railRef.current
     if (!el) return
     const max = el.scrollHeight - el.clientHeight
     if (max <= 0) return
-    const f = Math.min(1, Math.max(0, readingFraction))
+    const f = Math.min(1, Math.max(0, fraction))
     programmaticScrollRef.current = Date.now()
     el.scrollTop = f * max
-  }, [readingFraction])
+  }, [])
+  useEffect(() => {
+    if (readingFraction === undefined) return
+    applyRailFraction(readingFraction)
+  }, [readingFraction, applyRailFraction])
+  // 逐帧跟随通道：Foliate 文档滚动直驱（统一通道，无 React 重渲染），
+  // 与上面的分数 prop 同一入口，手动暂停规则一致
+  useEffect(() => {
+    return subscribeRailFollow((f) => applyRailFraction(f))
+  }, [applyRailFraction])
+  // 反向联动：正文标记被点击 → 滚动到对应卡并闪现 2.5s
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const focusTimerRef = useRef<number | null>(null)
+  useEffect(() => {
+    return subscribeRailFocus((markId) => {
+      const el = railRef.current?.querySelector(`[data-card-id="${markId}"]`)
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      setFocusedId(markId)
+      if (focusTimerRef.current !== null) window.clearTimeout(focusTimerRef.current)
+      focusTimerRef.current = window.setTimeout(() => {
+        setFocusedId((cur) => (cur === markId ? null : cur))
+      }, 2500)
+    })
+  }, [])
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current !== null) window.clearTimeout(focusTimerRef.current)
+    }
+  }, [])
 
   return (
     <aside
@@ -132,7 +181,7 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
             <Bookmark className="w-3.5 h-3.5 text-primary" />
             <span>知识卡片</span>
             <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-mono">
-              {marks.length}
+              {scopeMarks.length}
             </span>
           </div>
 
@@ -178,6 +227,34 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
           </div>
         </div>
 
+        {/* 作用域：本章（默认，随正文走）/ 全部（跨章回顾） */}
+        {canScopeByChapter && (
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setScope('chapter')}
+              className={`px-2 py-0.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                scope === 'chapter'
+                  ? 'bg-primary/15 text-primary font-semibold border border-primary/30'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              本章 ({chapterCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope('all')}
+              className={`px-2 py-0.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                scope === 'all'
+                  ? 'bg-muted text-foreground font-semibold border border-border'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              全书 ({marks.length})
+            </button>
+          </div>
+        )}
+
         {/* 分类筛选药丸 */}
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[11px]">
           <button
@@ -189,7 +266,7 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            全部 ({marks.length})
+            全部 ({scopeMarks.length})
           </button>
           <button
             type="button"
@@ -280,7 +357,7 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
 
       {/* 卡片流（已按文档位置排序，纵序对齐正文） */}
       <div className="space-y-2.5">
-        {positionedMarks.map((mark) => {
+        {positionedMarks.map((mark, idx) => {
           const isHighlighted =
             activeAnchor &&
             ((mark.excerpt && mark.excerpt.includes(activeAnchor)) ||
@@ -295,21 +372,39 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
           }
           const inCurrentChapter =
             !currentChapterKey || !chapter || chapter.key === currentChapterKey
+          // 章首分隔：同章卡片成组，组前标出章节名（卡片归属可视化）
+          let prevChapterKey: string | null = null
+          try {
+            prevChapterKey = idx > 0 ? (chapterKeyOf(positionedMarks[idx - 1]!) ?? null) : null
+          } catch {
+            prevChapterKey = null
+          }
+          const showChapterDivider =
+            !!chapter && (idx === 0 || prevChapterKey !== chapter.key)
 
           return (
+            <div key={mark.id}>
+              {showChapterDivider && chapter && (
+                <div className="flex items-center gap-2 pb-1.5 pt-2 text-[10px] text-muted-foreground">
+                  <span className="h-px flex-1 bg-border/60" />
+                  <span className="max-w-[180px] truncate font-medium">{chapter.label}</span>
+                  <span className="h-px flex-1 bg-border/60" />
+                </div>
+              )}
             <div
-              key={mark.id}
               className={`flex items-start gap-1 transition-opacity ${inCurrentChapter ? '' : 'opacity-55'}`}
             >
               <BracketConnector
                 isCollapsed={!!mark.collapsed}
                 isActive={!!isHighlighted}
                 className="mt-0.5 shrink-0"
+                onActivate={() => onMarkClick(mark)}
+                onHover={(hovering) => onHoverAnchor?.(hovering ? mark.excerpt : undefined)}
               />
               <div className="min-w-0 flex-1">
                 <KnowledgeCardItem
                   mark={mark}
-                  isActive={!!isHighlighted}
+                  isActive={!!isHighlighted || focusedId === mark.id}
                   sourceLabel={chapter?.label}
                   onToggleCollapse={() => onToggleCardCollapse(mark.id)}
                   onPolish={onPolishCard ? () => onPolishCard(mark.id) : undefined}
@@ -321,12 +416,15 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
                 />
               </div>
             </div>
+            </div>
           )
         })}
 
         {filteredMarks.length === 0 && (
           <div className="py-12 text-center text-xs text-muted-foreground/70">
-            暂无该分类的知识卡片
+            {scope === 'chapter' && canScopeByChapter
+              ? '本章暂无卡片，划选正文即可制卡'
+              : '暂无该分类的知识卡片'}
           </div>
         )}
       </div>

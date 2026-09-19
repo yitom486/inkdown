@@ -19,6 +19,30 @@ export type ReadingMarkKind = 'bookmark' | 'highlight' | 'note'
 export type ReadingDocumentFormat = 'pdf' | 'epub' | 'mobi' | 'web'
 
 /**
+ * 章节键（品牌类型）：目录 matchKey 的归一化形式，是跨阅读器比较章节归属的
+ * 唯一合法载体。禁止用裸字符串比较章节（曾因此出现 `3:text/x` vs `text/x`
+ * 恒不等，导致本章过滤全灭；见单测 `resolve-mark-chapter.test.ts` 回归项）。
+ * 构造只能走 `toChapterKey()`。
+ */
+export type ChapterKey = string & { readonly __chapterKeyBrand: unique symbol }
+
+export function toChapterKey(raw: string): ChapterKey {
+  return raw as ChapterKey
+}
+
+/**
+ * 卡片章节归属（写入时固化）：创建卡片的那一刻由创建方按当时目录解析一次，
+ * 此后所有消费方（过滤/致灰/出处行/排序）只读该字段，不再现场 resolve。
+ * 解析失败记 null（脏卡可查可清，不丢失）；DB 时代对应 `marks.chapter_id`。
+ */
+export interface MarkChapterRef {
+  key: ChapterKey
+  label: string
+  /** 目录下标；回退项为 -1 */
+  index: number
+}
+
+/**
  * V1 兼容的渲染层归一化矩形。
  *
  * 当前 PDF 选择实现从 `Range.getClientRects()` 读取它，并相对于
@@ -186,6 +210,8 @@ export interface ReadingMark {
   tags?: string[]
   collapsed?: boolean
   diagramId?: string
+  /** 写入时固化的章节归属；缺省（老数据）由消费方回落运行时解析 */
+  chapter?: MarkChapterRef | null
   createdAt: number
   updatedAt: number
 }
@@ -206,6 +232,8 @@ export interface CreateReadingMarkPayload {
   tags?: string[]
   collapsed?: boolean
   diagramId?: string
+  /** 创建方按当时目录解析的章节归属；缺省由消费方回落运行时解析 */
+  chapter?: MarkChapterRef | null
 }
 
 export interface UpdateReadingMarkPayload {
@@ -221,4 +249,6 @@ export interface UpdateReadingMarkPayload {
   tags?: string[]
   collapsed?: boolean
   diagramId?: string
+  /** 锚点变更时由调用方重算后传入；缺省保持原值 */
+  chapter?: MarkChapterRef | null
 }

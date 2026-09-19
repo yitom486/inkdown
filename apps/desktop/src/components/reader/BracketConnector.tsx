@@ -4,6 +4,11 @@ export interface BracketConnectorProps {
   isCollapsed: boolean
   isActive?: boolean
   className?: string
+  /** 点击括号跳转正文（与卡片点击同义，让指引箭头有真实功能） */
+  onActivate?: () => void
+  activateTitle?: string
+  /** 悬停括号同样照亮正文（与卡片悬停同义） */
+  onHover?: (hovering: boolean) => void
 }
 
 /**
@@ -17,17 +22,35 @@ export const BracketConnector: React.FC<BracketConnectorProps> = ({
   isCollapsed,
   isActive = false,
   className = '',
+  onActivate,
+  activateTitle = '在正文中定位',
+  onHover,
 }) => {
   const strokeColor = isActive
     ? 'var(--primary)'
     : 'var(--border)'
+  // 有跳转行为时渲染为按钮（可点击、可悬停），否则保持装饰性 div
+  const Tag: React.ElementType = onActivate ? 'button' : 'div'
+  const interactiveProps = onActivate
+    ? {
+        type: 'button' as const,
+        onClick: (e: React.MouseEvent) => {
+          e.stopPropagation()
+          onActivate()
+        },
+        onMouseEnter: () => onHover?.(true),
+        onMouseLeave: () => onHover?.(false),
+        title: activateTitle,
+        'aria-label': activateTitle,
+      }
+    : { 'aria-hidden': true } as const
 
   // 1. 单行折叠态：极细直连虚实线
   if (isCollapsed) {
     return (
-      <div
-        className={`w-7 xl:w-9 h-9 flex items-center justify-center shrink-0 select-none ${className}`}
-        aria-hidden="true"
+      <Tag
+        {...interactiveProps}
+        className={`w-7 xl:w-9 h-9 flex items-center justify-center shrink-0 select-none ${onActivate ? 'cursor-pointer hover:opacity-100' : ''} ${className}`}
       >
         <svg
           className="w-full h-4 overflow-visible"
@@ -47,15 +70,15 @@ export const BracketConnector: React.FC<BracketConnectorProps> = ({
           <circle cx="2" cy="8" r="2" fill={strokeColor} opacity={isActive ? '1' : '0.7'} />
           <circle cx="34" cy="8" r="1.5" fill={strokeColor} opacity={isActive ? '0.9' : '0.5'} />
         </svg>
-      </div>
+      </Tag>
     )
   }
 
   // 2. 完整展开态：抱合式右向开口微光弧线
   return (
-    <div
-      className={`w-7 xl:w-9 h-full min-h-[90px] flex items-center justify-center shrink-0 relative select-none ${className}`}
-      aria-hidden="true"
+    <Tag
+      {...interactiveProps}
+      className={`w-7 xl:w-9 h-full min-h-[90px] flex items-center justify-center shrink-0 relative select-none ${onActivate ? 'cursor-pointer' : ''} ${className}`}
     >
       <svg
         className="w-full h-full overflow-visible"
@@ -91,6 +114,6 @@ export const BracketConnector: React.FC<BracketConnectorProps> = ({
         <circle cx="35" cy="50" r="1.5" fill={strokeColor} opacity={isActive ? '0.8' : '0.45'} />
         <circle cx="35" cy="88" r="1.5" fill={strokeColor} opacity={isActive ? '0.8' : '0.45'} />
       </svg>
-    </div>
+    </Tag>
   )
 }

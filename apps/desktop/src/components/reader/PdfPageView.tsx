@@ -5,7 +5,8 @@ import {
   createPdfPageViewport,
   isPdfRenderCancelled,
 } from '@/lib/reader/pdf/pdf-render'
-import { renderPdfMarkOverlays } from '@/lib/reader/marks/pdf-reading-marks'
+import { findPdfMarksAtPoint, renderPdfMarkOverlays } from '@/lib/reader/marks/pdf-reading-marks'
+import { emitRailFocus } from '@/lib/reader/rail-follow'
 import {
   loadPdfTextLayerBuilder,
   type PdfTextLayerBuilderInstance,
@@ -224,6 +225,15 @@ export function PdfPageView({
       className="pdf-page-wrapper relative shadow-md"
       data-page={pageNumber}
       onMouseDown={(event) => onPointerOrigin?.(event.clientX, event.clientY)}
+      onClick={(event) => {
+        // 点击高亮标记 → 卡片轨滚动到对应卡并闪现（反向联动）；拖选文字走正常流程
+        const selection = window.getSelection()
+        if (selection && !selection.isCollapsed) return
+        const pageElement = wrapperRef.current
+        if (!pageElement) return
+        const hit = findPdfMarksAtPoint(marks, pageNumber, event.clientX, event.clientY, pageElement)
+        if (hit.length > 0) emitRailFocus(hit[0]!.id)
+      }}
       onMouseUp={(event) => {
         const pageElement = wrapperRef.current
         if (pageElement) onMouseUp?.(pageNumber, pageElement, event)

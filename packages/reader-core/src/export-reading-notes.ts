@@ -1,6 +1,8 @@
 import type { ReadingMark } from '@inkdown/contracts'
-import { isWebDocumentPath } from '@inkdown/contracts'
+import { isWebDocumentPath, toChapterKey } from '@inkdown/contracts'
+import type { MarkChapterRef, ReadingAnchor } from '@inkdown/contracts'
 import { normalizeLoadKey } from './reader-viewport-nav'
+import { isSameSpineBase } from './foliate-section-nav'
 import { normalizeWebDocNavUrl } from './web-doc-toc'
 import {
   highlightSortKey,
@@ -204,10 +206,18 @@ export function resolveMobiChapter(
   if (mark.anchor.format !== 'mobi') {
     return unknownChapter()
   }
-  const matchKey = mark.anchor.chapterId
-  const hit = pickTocByMatchKey(toc, matchKey)
-  if (hit) return hit
-  return unknownChapter(matchKey || 'unknown', matchKey || '未分章')
+  const anchor = mark.anchor
+  const direct = pickTocByMatchKey(toc, anchor.chapterId)
+  if (direct) return direct
+  // 章节 id 与目录 href 同源（spine base）：与导航同步（syncChapterNav）同规则
+  // 取首个匹配，保证"归属判定"与"当前章节判定"同构，从根上消除 id↔href 口径差
+  if (anchor.chapterId) {
+    const hit = toc.find((entry) =>
+      isSameSpineBase(entry.matchKey || entry.key, anchor.chapterId, normalizeLoadKey),
+    )
+    if (hit) return hit
+  }
+  return unknownChapter(anchor.chapterId || 'unknown', anchor.chapterId || '未分章')
 }
 
 export function resolveWebChapter(
@@ -273,6 +283,60 @@ export function resolvePdfChapter(
     return unknownChapter()
   }
   return resolvePdfChapterByPage(mark.anchor.page, toc)
+}
+
+/**
+ * 章节解析单入口：按 anchor.format 分发到各格式 resolver。
+ * 纯未知（key === 'unknown'）返回 null，调用方回落运行时解析或标脏；
+ * 其余回退项（如 PDF 按页）保留（label 可用）。
+ * 所有调用方禁止再各自拼 key 比较——比较只允许发生在 canonical key 上。
+ */
+export function resolveMarkChapter(
+  anchor: ReadingAnchor,
+  toc: ReadingNotesChapterRef[],
+): ReadingNotesChapterRef | null {
+  const probe = { anchor } as ReadingMark
+  let ref: ReadingNotesChapterRef
+  switch (anchor.format) {
+    case 'epub':
+      ref = resolveEpubChapter(probe, toc)
+      break
+    case 'mobi':
+      ref = resolveMobiChapter(probe, toc)
+      break
+    case 'pdf':
+      ref = resolvePdfChapter(probe, toc)
+      break
+    case 'web':
+      ref = resolveWebChapter(probe, toc)
+      break
+    default:
+      return null
+  }
+  if (!ref || ref.key === 'unknown') return null
+  return ref
+}
+
+/**
+ * 创建时固化章节归属：toc 命中则取其 matchKey 为 canonical key，
+ * label/index 一并记录；未命中返回 null（调用方不写 chapter 字段）。
+ * canonical key 恒为 matchKey 形态（无 index 前缀），与
+ * `normalizeLoadKey(currentUnitId)` 同构——这正是曾经 `3:text/x` vs `text/x`
+ * 恒不等的根因，本函数是唯一的合法 key 生产点。
+ */
+export function toCanonicalChapter(
+  anchor: ReadingAnchor,
+  toc: ReadingNotesChapterRef[],
+): MarkChapterRef | null {
+  const ref = resolveMarkChapter(anchor, toc)
+  if (!ref) return null
+  const rawKey = ref.matchKey || ref.key
+  if (!rawKey) return null
+  return {
+    key: toChapterKey(normalizeLoadKey(rawKey)),
+    label: ref.label,
+    index: toc.indexOf(ref),
+  }
 }
 
 export function tocFromPdfUnits(

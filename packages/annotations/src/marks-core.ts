@@ -62,6 +62,7 @@ export function buildReadingMark(input: {
     tags: payload.tags,
     collapsed: payload.collapsed,
     diagramId: normalizeOptionalText(payload.diagramId),
+    chapter: payload.chapter ?? undefined,
     createdAt: now,
     updatedAt: now,
   }
@@ -86,6 +87,7 @@ export function applyReadingMarkUpdate(
     tags: payload.tags !== undefined ? payload.tags : current.tags,
     collapsed: payload.collapsed !== undefined ? payload.collapsed : current.collapsed,
     diagramId: payload.diagramId !== undefined ? payload.diagramId.trim() || undefined : current.diagramId,
+    chapter: payload.chapter !== undefined ? (payload.chapter ?? undefined) : current.chapter,
     updatedAt: now,
   }
   if (payload.note !== undefined && !payload.note.trim() && payload.kind === undefined) {
