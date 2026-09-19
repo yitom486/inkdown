@@ -953,6 +953,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         const element = document.createElement('foliate-view') as unknown as FoliateViewElement
         element.style.width = '100%'
         element.style.height = '100%'
+        element.style.display = 'block'
         container.appendChild(element)
         view = element
         viewRef.current = element
@@ -968,6 +969,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         if (cancelled) return
         try {
           element.renderer?.setAttribute('flow', 'scrolled')
+          element.renderer?.setAttribute('max-inline-size', '1040px')
         } catch {
           // paginated 回退：保持默认分页
         }

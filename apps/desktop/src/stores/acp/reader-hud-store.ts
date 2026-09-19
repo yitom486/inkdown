@@ -63,10 +63,10 @@ const getDefaultFloatingPosition = () => {
   if (typeof window !== 'undefined') {
     return {
       x: Math.max(20, window.innerWidth - 470),
-      y: Math.max(20, window.innerHeight - 690),
+      y: Math.max(48, window.innerHeight - 620),
     }
   }
-  return { x: 800, y: 120 }
+  return { x: 800, y: 56 }
 }
 
 export const useReaderHudUiStore = create<ReaderHudUiState>()(

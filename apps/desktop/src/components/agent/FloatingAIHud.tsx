@@ -176,7 +176,7 @@ export const FloatingAIHud = memo(function FloatingAIHud({
       const dx = e.clientX - dragRef.current.startX
       const dy = e.clientY - dragRef.current.startY
       const newX = Math.max(16, Math.min(window.innerWidth - 460, dragRef.current.posX + dx))
-      const newY = Math.max(16, Math.min(window.innerHeight - 200, dragRef.current.posY + dy))
+      const newY = Math.max(48, Math.min(window.innerHeight - 200, dragRef.current.posY + dy))
       setFloatingPosition({ x: newX, y: newY })
     }
 
@@ -290,7 +290,7 @@ export const FloatingAIHud = memo(function FloatingAIHud({
       onMouseDown={handleMouseDown}
       className={cn(
         'fixed z-40 flex flex-col',
-        'w-[450px] max-w-[calc(100vw-2rem)] h-[660px] max-h-[calc(100vh-4rem)]',
+        'w-[450px] max-w-[calc(100vw-2rem)] h-[580px] max-h-[calc(100vh-4.5rem)]',
         'overflow-hidden rounded-2xl border border-border/80 dark:border-white/10 bg-card/95 dark:bg-[#0c0c10]/95 shadow-2xl backdrop-blur-2xl ring-1 ring-black/5 dark:ring-white/5',
         isDragging ? 'cursor-grabbing shadow-[0_25px_60px_-15px_rgba(0,0,0,0.4)]' : 'transition-all duration-150',
       )}

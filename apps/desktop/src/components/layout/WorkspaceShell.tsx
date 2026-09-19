@@ -254,7 +254,7 @@ export function WorkspaceShell({
 
           {isSidebarVisible ? <ResizableHandle withHandle /> : null}
 
-          <ResizablePanel id="main" defaultSize="57%" minSize="30%" className="min-w-0">
+          <ResizablePanel id="main" defaultSize={isDockedPanelVisible ? '57%' : '72%'} minSize="30%" className="min-w-0">
             {children}
           </ResizablePanel>
 

@@ -184,31 +184,20 @@ export function ReaderToolbarShell({
             type="button"
             onClick={handleCycleHudMode}
             className={cn(
-              'flex h-7 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
+              'flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
               panelOpen
-                ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 shadow-xs'
+                ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 shadow-xs'
                 : 'border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
             )}
-            title={`当前伴读：${
-              !panelOpen
-                ? '已收起（点击唤起）'
-                : hudDisplayMode === 'docked'
-                  ? '侧栏停靠（点击切为悬浮 HUD）'
-                  : hudDisplayMode === 'floating'
-                    ? '悬浮窗体（点击切为极简胶囊）'
-                    : '极简胶囊（点击切为侧栏停靠）'
-            }`}
+            aria-label="AI 伴读模态切换"
           >
             <Sparkles className="size-3.5 text-primary" />
-            <span className="hidden md:inline">
-              {!panelOpen
-                ? '唤起伴读'
-                : hudDisplayMode === 'docked'
-                  ? '侧栏伴读'
-                  : hudDisplayMode === 'floating'
-                    ? '悬浮 HUD'
-                    : '胶囊伴读'}
-            </span>
+            <span className="hidden md:inline font-medium">AI 伴读</span>
+            {panelOpen && (
+              <span className="text-[10px] opacity-75 font-mono hidden lg:inline">
+                {hudDisplayMode === 'docked' ? '· 侧栏' : hudDisplayMode === 'floating' ? '· 悬浮' : '· 胶囊'}
+              </span>
+            )}
             {/* 伴读运行状态微型指示点 */}
             <span
               className={cn(
