@@ -34,6 +34,11 @@ import type {
 } from '../types/reading-mark'
 import type { QuizSessionRecord } from '../types/quiz'
 import type {
+  AppendFlashcardReviewPayload,
+  DueFlashcard,
+  ListDueFlashcardsPayload,
+} from '../types/flashcard'
+import type {
   AcpAuthPreflightPayload,
   AcpAuthPreflightResult,
   AcpAuthenticatePayload,
@@ -264,6 +269,18 @@ export interface ElectronAPI {
   listReadingMarksByChapter: (
     payload: MarksListByChapterPayload,
   ) => Promise<Result<ReadingMark[], AppError>>
+  /* ===== 记忆卡片复习态 ===== */
+  /** 本书待复习列表（未复习优先、其次最久未复习） */
+  listDueFlashcards: (
+    payload: ListDueFlashcardsPayload,
+  ) => Promise<Result<DueFlashcard[], AppError>>
+  /**
+   * 记一次复习评分；true=已落盘，false=未落盘（未知卡片/file 回滚后端；
+   * 调用方本地评分态照常推进，不打断复习流）。
+   */
+  appendFlashcardReview: (
+    payload: AppendFlashcardReviewPayload,
+  ) => Promise<Result<boolean, AppError>>
   /* ===== ACP Agent：运行时/认证/session/prompt/权限/快照/推送 ===== */
   /** 列出可用 ACP Agent 运行时 */
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>

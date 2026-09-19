@@ -1,6 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { ReadingMark } from '@inkdown/contracts'
-import type { FlashcardKind, FlashcardReviewRating } from '@inkdown/annotations'
+import type {
+  DueFlashcard,
+  FlashcardReviewRating,
+  ReadingMark,
+} from '@inkdown/contracts'
+import type { FlashcardKind } from '@inkdown/annotations'
 import { isHighlightPassage, passageExcerpt, passageNote } from '@inkdown/reader-core'
 
 /**
@@ -138,29 +142,20 @@ export function appendReviewRow(
   return true
 }
 
-export interface DueFlashcard {
-  id: string
-  markId: string
-  kind: FlashcardKind
-  front: string
-  back: string
-  tags: string[]
-  chapterKey: string
-  orphaned: boolean
-  lastReviewed: number | null
-  reviewCount: number
+export interface DueFlashcardRow extends FlashcardRow {
+  last_reviewed: number | null
+  review_count: number
 }
 
-function toDueFlashcard(row: FlashcardRow & { last_reviewed: number | null; review_count: number }): DueFlashcard {
+function toDueFlashcard(row: DueFlashcardRow): DueFlashcard {
   return {
     id: row.id,
     markId: row.mark_id,
-    kind: row.kind as FlashcardKind,
+    kind: row.kind as DueFlashcard['kind'],
     front: row.front,
     back: row.back,
     tags: parseTags(row.tags),
     chapterKey: row.chapter_key,
-    orphaned: row.orphaned === 1,
     lastReviewed: row.last_reviewed,
     reviewCount: row.review_count,
   }
@@ -180,7 +175,7 @@ export function listDueFlashcardRows(db: DatabaseSync, limit = 50): DueFlashcard
        ORDER BY last_reviewed ASC, f.updated_at DESC
        LIMIT ?`,
     )
-    .all(limit) as unknown as Array<FlashcardRow & { last_reviewed: number | null; review_count: number }>
+    .all(limit) as unknown as DueFlashcardRow[]
   return rows.map(toDueFlashcard)
 }
 

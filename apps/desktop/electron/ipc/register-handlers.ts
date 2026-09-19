@@ -16,7 +16,9 @@ import type {
 } from '@inkdown/contracts'
 import type { RendererErrorPayload } from '@inkdown/contracts'
 import type {
+  AppendFlashcardReviewPayload,
   CreateReadingMarkPayload,
+  ListDueFlashcardsPayload,
   MarksListByChapterPayload,
   MarksSearchPayload,
   UpdateReadingMarkPayload,
@@ -117,8 +119,10 @@ import type {
 import { applyWindowTitle } from '../window/window-title'
 import { setVerboseRendererLogs } from '../services/runtime-state'
 import {
+  appendFlashcardReview,
   createReadingMark,
   deleteReadingMark,
+  listDueFlashcards,
   listReadingMarks,
   listReadingMarksByChapter,
   searchReadingMarks,
@@ -572,6 +576,15 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.MARKS_LIST_BY_CHAPTER, (_event, payload: MarksListByChapterPayload) =>
     listReadingMarksByChapter(payload),
+  )
+
+  // --- 记忆卡片复习态 ---
+  ipcMain.handle(IPC.FLASHCARDS_LIST_DUE, (_event, payload: ListDueFlashcardsPayload) =>
+    listDueFlashcards(payload),
+  )
+  ipcMain.handle(
+    IPC.FLASHCARDS_APPEND_REVIEW,
+    (_event, payload: AppendFlashcardReviewPayload) => appendFlashcardReview(payload),
   )
 
   // --- AI 测验与答题打分记录 (JSONL) ---

@@ -137,6 +137,9 @@ const electronAPI: ElectronAPI = {
   searchReadingMarks: (payload) => ipcRenderer.invoke(IPC.MARKS_SEARCH, payload),
   listReadingMarksByChapter: (payload) =>
     ipcRenderer.invoke(IPC.MARKS_LIST_BY_CHAPTER, payload),
+  listDueFlashcards: (payload) => ipcRenderer.invoke(IPC.FLASHCARDS_LIST_DUE, payload),
+  appendFlashcardReview: (payload) =>
+    ipcRenderer.invoke(IPC.FLASHCARDS_APPEND_REVIEW, payload),
   listAcpRuntimes: () => ipcRenderer.invoke(IPC.ACP_LIST_RUNTIMES),
   acpAuthPreflight: (payload) => ipcRenderer.invoke(IPC.ACP_AUTH_PREFLIGHT, payload),
   acpConnect: (payload) => ipcRenderer.invoke(IPC.ACP_CONNECT, payload),

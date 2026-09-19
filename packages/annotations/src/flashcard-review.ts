@@ -1,4 +1,7 @@
-export type FlashcardReviewRating = 'again' | 'hard' | 'good'
+// 评分字面归 contracts 所有（线上传输单源）；本包 re-export，调用方零改。
+import type { FlashcardReviewRating } from '@inkdown/contracts'
+
+export type { FlashcardReviewRating }
 
 export interface FlashcardReviewStats {
   total: number

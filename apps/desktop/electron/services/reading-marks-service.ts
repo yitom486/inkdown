@@ -6,7 +6,10 @@ import { app } from 'electron'
 import { toAppError, type AppError } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type {
+  AppendFlashcardReviewPayload,
   CreateReadingMarkPayload,
+  DueFlashcard,
+  ListDueFlashcardsPayload,
   MarksListByChapterPayload,
   MarksSearchPayload,
   ReadingMark,
@@ -20,12 +23,14 @@ import {
   validateReadingAnchor,
 } from '@inkdown/annotations'
 import {
+  appendFlashcardReview as appendFlashcardReviewInDb,
   dropFlashcardForMark,
   exportMarksStore,
   findMarkDb,
   getMarkRow,
   importMarksStore,
   insertMarkRow,
+  listDueFlashcards as listDueFlashcardsInDb,
   listLiveMarkRows,
   listMarkRowsByChapter,
   migrateMarksStoreToDb,
@@ -212,8 +217,7 @@ export async function searchReadingMarks(
  * DB 后端返回固化命中 + `chapter_key = ''` 未固化候选，调用方按
  * MarginaliaBar 同规则窄化（固化优先、缺失回落运行时解析）；
  * file 后端返回本书全量（同 `list`），调用方走同一窄化函数，双后端输出一致。
- */
-export async function listReadingMarksByChapter(
+ */export async function listReadingMarksByChapter(
   payload: MarksListByChapterPayload,
 ): Promise<Result<ReadingMark[], AppError>> {
   try {
@@ -343,5 +347,53 @@ export async function deleteReadingMark(id: string): Promise<Result<void, AppErr
     return ok(undefined)
   } catch (error) {
     return err(toAppError(error, '删除书签失败'))
+  }
+}
+
+/**
+ * 本书待复习列表（UI 批接线）。
+ * file 回滚后端无快照表，返回空（调用方回落内存派生，今日行为）。
+ */
+export async function listDueFlashcards(
+  payload: ListDueFlashcardsPayload,
+): Promise<Result<DueFlashcard[], AppError>> {
+  try {
+    if (useFileMarksBackend()) return ok([])
+    await ensureMarksMigrated()
+    const userDataDir = app.getPath('userData')
+    const fingerprint = resolveFingerprintForFile(userDataDir, payload.filePath)
+    if (!fingerprint) return ok([])
+    const limit = Math.min(Math.max(payload.limit ?? 50, 1), 200)
+    return ok(listDueFlashcardsInDb(userDataDir, fingerprint, limit))
+  } catch (error) {
+    return err(toAppError(error, '读取待复习卡片失败'))
+  }
+}
+
+/**
+ * 记一次复习评分（UI 批接线）。
+ * true=已落盘；false=未落盘（未知卡片/file 回滚后端/指纹配不上，
+ * 调用方本地评分态照常推进，不打断复习流）。
+ */
+export async function appendFlashcardReview(
+  payload: AppendFlashcardReviewPayload,
+): Promise<Result<boolean, AppError>> {
+  try {
+    if (useFileMarksBackend()) return ok(false)
+    await ensureMarksMigrated()
+    const userDataDir = app.getPath('userData')
+    const fingerprint = resolveFingerprintForFile(userDataDir, payload.filePath)
+    if (!fingerprint) return ok(false)
+    return ok(
+      appendFlashcardReviewInDb(
+        userDataDir,
+        fingerprint,
+        payload.cardId,
+        payload.rating,
+        Date.now(),
+      ),
+    )
+  } catch (error) {
+    return err(toAppError(error, '保存复习评分失败'))
   }
 }

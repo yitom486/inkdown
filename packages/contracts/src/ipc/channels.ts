@@ -127,6 +127,14 @@ export const IPC = {
   MARKS_LIST_BY_CHAPTER: 'marks:list-by-chapter',
 
   /* ================================================================
+   * 记忆卡片复习态（flashcards:*，本书库 flashcards + review_log）
+   * ================================================================ */
+  /** invoke：本书待复习列表（未复习优先、其次最久未复习） */
+  FLASHCARDS_LIST_DUE: 'flashcards:list-due',
+  /** invoke：记一次复习评分 */
+  FLASHCARDS_APPEND_REVIEW: 'flashcards:append-review',
+
+  /* ================================================================
    * ACP Agent（acp:*）：协议见 @inkdown/acp，默认运行时 codex-acp
    * ================================================================ */
   /** invoke：列出可用 ACP Agent 运行时（如 codex-acp） */

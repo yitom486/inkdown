@@ -21,6 +21,10 @@ import {
   updateReadingMark,
 } from './reading-marks-service'
 import {
+  appendFlashcardReview as appendFlashcardReviewService,
+  listDueFlashcards as listDueFlashcardsService,
+} from './reading-marks-service'
+import {
   appendFlashcardReview,
   clearFlashcardsBackfillCache,
   countDueFlashcardsForBook,
@@ -303,5 +307,68 @@ describe('flashcards-db（[2]-02b 记忆卡片复习态）', () => {
     })
     expect(isOk(created)).toBe(true)
     expect(existsSync(join(tempUserData, 'book-index'))).toBe(false)
+  })
+
+  it('UI批 service：待复习列表与评分落盘（含 file 后端回空）', async () => {
+    const created = await createReadingMark({
+      filePath: 'D:\\books\\svc.epub',
+      fileFingerprint: 'fp-svc',
+      kind: 'highlight',
+      anchor: { format: 'epub', cfi: 'cfi-svc' },
+      excerpt: '待复习摘录内容',
+      note: '待复习提问',
+    })
+    expect(isOk(created)).toBe(true)
+    if (!isOk(created)) return
+    const id = created.value.id
+
+    const due = await listDueFlashcardsService({ filePath: 'D:\\books\\svc.epub' })
+    expect(isOk(due)).toBe(true)
+    if (!isOk(due)) return
+    expect(due.value).toHaveLength(1)
+    expect(due.value[0]).toMatchObject({
+      id,
+      markId: id,
+      kind: 'basic',
+      front: '待复习提问',
+      lastReviewed: null,
+      reviewCount: 0,
+    })
+
+    const persisted = await appendFlashcardReviewService({
+      filePath: 'D:\\books\\svc.epub',
+      cardId: id,
+      rating: 'good',
+    })
+    expect(isOk(persisted)).toBe(true)
+    if (!isOk(persisted)) return
+    expect(persisted.value).toBe(true)
+
+    const after = await listDueFlashcardsService({ filePath: 'D:\\books\\svc.epub' })
+    expect(isOk(after)).toBe(true)
+    if (!isOk(after)) return
+    expect(after.value[0]).toMatchObject({ reviewCount: 1 })
+
+    // 未知卡/未知书：落盘 false、列表空（不抛错，不断复习流）
+    const ghost = await appendFlashcardReviewService({
+      filePath: 'D:\\books\\svc.epub',
+      cardId: 'ghost',
+      rating: 'good',
+    })
+    expect(isOk(ghost) && ghost.value).toBe(false)
+    const ghostBook = await listDueFlashcardsService({ filePath: 'D:\\books\\ghost.epub' })
+    expect(isOk(ghostBook) && ghostBook.value).toEqual([])
+  })
+
+  it('UI批 service file 后端：列表空、落盘 false（调用方回落内存）', async () => {
+    process.env.INKDOWN_MARKS_BACKEND = 'file'
+    const due = await listDueFlashcardsService({ filePath: 'D:\\books\\demo.epub' })
+    expect(isOk(due) && due.value).toEqual([])
+    const persisted = await appendFlashcardReviewService({
+      filePath: 'D:\\books\\demo.epub',
+      cardId: 'any',
+      rating: 'good',
+    })
+    expect(isOk(persisted) && persisted.value).toBe(false)
   })
 })

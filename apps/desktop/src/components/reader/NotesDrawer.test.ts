@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NotesDrawer } from './NotesDrawer'
+import { NotesDrawer, type NotesDrawerProps } from './NotesDrawer'
 import type { ReadingMark } from '@inkdown/contracts'
 
 ;(globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
@@ -29,7 +29,7 @@ describe('NotesDrawer', () => {
     queryClient.clear()
   })
 
-  function renderDrawer(props: Record<string, unknown>) {
+  function renderDrawer(props: NotesDrawerProps) {
     return createElement(
       QueryClientProvider,
       { client: queryClient },

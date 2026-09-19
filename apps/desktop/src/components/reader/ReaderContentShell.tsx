@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Bookmark, ChevronLeft } from 'lucide-react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
@@ -12,6 +12,9 @@ import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { preserveScrollAnchor } from '@/lib/reader/scroll-anchor'
 import type { Flashcard } from '@inkdown/annotations'
+import type { FlashcardReviewRating } from '@inkdown/annotations'
+import { flashcardsApi } from '@/api/flashcards-api'
+import { sortCardsByDueOrder } from '@/lib/reader/marks/review-order'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   findCurrentChapterRef,
@@ -181,9 +184,41 @@ export function ReaderContentShell({
       return
     }
 
-    setReviewCards(exportResult.cards)
+    // 待复习排序（UI批）：due id 顺序 ∩ 派生卡；不在 due 中的新卡缀尾（不静默丢失）；
+    // IPC 失败回落派生顺序（今日行为）。
+    setReviewCards(sortCardsByDueOrder(exportResult.cards, await fetchDueOrder()))
     setReviewOpen(true)
   }
+
+  /** 拉本书待复习顺序；失败返回 null（调用方回落派生顺序） */
+  const fetchDueOrder = async (): Promise<string[] | null> => {
+    if (!filePath) return null
+    try {
+      const result = await flashcardsApi.listDue({ filePath, limit: 200 })
+      if (!isOk(result)) return null
+      return result.value.map((card) => card.id)
+    } catch {
+      return null
+    }
+  }
+
+  /** 评分落盘（UI批）：失败 toast 但不打断复习流（Dialog 本地态照常推进） */
+  const handlePersistRating = useCallback(
+    (cardId: string, rating: FlashcardReviewRating) => {
+      if (!filePath) return
+      void (async () => {
+        try {
+          const result = await flashcardsApi.appendReview({ filePath, cardId, rating })
+          if (!isOk(result)) {
+            toast.error('评分未能存入本地，复习进度可能丢失')
+          }
+        } catch {
+          toast.error('评分未能存入本地，复习进度可能丢失')
+        }
+      })()
+    },
+    [filePath],
+  )
 
   const handleNavigateToMark = (markId: string) => {
     const mark = marks.find((m) => m.id === markId)
@@ -395,6 +430,7 @@ export function ReaderContentShell({
         cards={reviewCards}
         bookTitle={displayTitle}
         onNavigateToMark={handleNavigateToMark}
+        onRate={handlePersistRating}
       />
 
       <AiQuizDialog

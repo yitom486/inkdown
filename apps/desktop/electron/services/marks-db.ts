@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type {
+  DueFlashcard,
+  FlashcardReviewRating,
   MarkChapterRef,
   ReadingAnchor,
   ReadingMark,
@@ -10,7 +12,6 @@ import type {
 } from '@inkdown/contracts'
 import {
   normalizeMarkFilePath as normalizeMarkFilePathCore,
-  type FlashcardReviewRating,
   type SyncMarksPayload,
 } from '@inkdown/annotations'
 import type { ReadingMarksFile } from './reading-marks-service'
@@ -21,7 +22,6 @@ import {
   listDueFlashcardRows,
   markFlashcardOrphaned,
   upsertFlashcardForMark,
-  type DueFlashcard,
 } from './flashcards-db'
 
 /**
