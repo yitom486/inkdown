@@ -10,10 +10,19 @@ import type {
 } from '@inkdown/contracts'
 import {
   normalizeMarkFilePath as normalizeMarkFilePathCore,
+  type FlashcardReviewRating,
   type SyncMarksPayload,
 } from '@inkdown/annotations'
 import type { ReadingMarksFile } from './reading-marks-service'
-import { openBookDb } from './book-db/open-book-db'
+import { getBookDbDir, openBookDb } from './book-db/open-book-db'
+import {
+  appendReviewRow,
+  countDueFlashcards,
+  listDueFlashcardRows,
+  markFlashcardOrphaned,
+  upsertFlashcardForMark,
+  type DueFlashcard,
+} from './flashcards-db'
 
 /**
  * 卡片 SQL 后端（[2]-01）：各书 `book.db` v5 的 marks 表。
@@ -376,6 +385,8 @@ export function importMarksStore(userDataDir: string, store: SyncMarksPayload): 
     } else {
       insertMarkRow(db, mark)
     }
+    // 同步复活的卡一并解 orphan，快照跟随最新
+    syncFlashcardForMark(userDataDir, mark.fileFingerprint, db, mark)
   }
   const overflow: Record<string, number> = {}
   for (const [markId, deletedAt] of Object.entries(store.tombstones ?? {})) {
@@ -385,6 +396,8 @@ export function importMarksStore(userDataDir: string, store: SyncMarksPayload): 
       found.db
         .prepare('INSERT OR REPLACE INTO marks_tombstones (mark_id, deleted_at) VALUES (?, ?)')
         .get(markId, deletedAt)
+      // 远端删的卡本地标脏（复习日志保留，待复习排除）
+      markFlashcardOrphaned(found.db, markId, deletedAt)
     } else {
       overflow[markId] = deletedAt
     }
@@ -412,6 +425,7 @@ export function migrateMarksStoreToDb(
       continue
     }
     insertMarkRow(db, mark)
+    syncFlashcardForMark(userDataDir, mark.fileFingerprint, db, mark)
     migrated += 1
   }
   for (const [markId, deletedAt] of Object.entries(store.tombstones ?? {})) {
@@ -420,7 +434,89 @@ export function migrateMarksStoreToDb(
       found.db
         .prepare('INSERT OR REPLACE INTO marks_tombstones (mark_id, deleted_at) VALUES (?, ?)')
         .get(markId, deletedAt)
+      markFlashcardOrphaned(found.db, markId, deletedAt)
     }
   }
   return { migrated, skipped }
+}
+
+/** 回填过的本书库目录（进程内记忆，跨书互不干扰） */
+const flashcardsBackfilledDirs = new Set<string>()
+
+/** 仅单测用：模拟新进程（marker 文件才是 durable guard） */
+export function clearFlashcardsBackfillCache(): void {
+  flashcardsBackfilledDirs.clear()
+}
+
+/**
+ * 存量回填（[2]-02b）：v6 前已存在的卡（01 时代写入）逐卡派生快照。
+ * 02b 起所有写入路径 inline 跟随，回填只服务升级上来的旧书。
+ */
+export function backfillFlashcardsForBook(
+  userDataDir: string,
+  fingerprint: string,
+): { cards: number } {
+  const db = openBookDb(userDataDir, fingerprint)
+  for (const row of listLiveMarkRows(db)) upsertFlashcardForMark(db, rowToReadingMark(row))
+  return { cards: countDueFlashcards(db) }
+}
+
+function ensureFlashcardsBackfilled(userDataDir: string, fingerprint: string): void {
+  const dir = getBookDbDir(userDataDir, fingerprint)
+  if (flashcardsBackfilledDirs.has(dir)) return
+  flashcardsBackfilledDirs.add(dir)
+  const marker = join(dir, 'flashcards-backfilled.json')
+  if (existsSync(marker)) return
+  const stats = backfillFlashcardsForBook(userDataDir, fingerprint)
+  writeFileSync(marker, JSON.stringify({ at: Date.now(), ...stats }))
+}
+
+/** 写入路径单入口：先保回填，再跟随单卡 */
+export function syncFlashcardForMark(
+  userDataDir: string,
+  fingerprint: string,
+  db: DatabaseSync,
+  mark: ReadingMark,
+): void {
+  ensureFlashcardsBackfilled(userDataDir, fingerprint)
+  upsertFlashcardForMark(db, mark)
+}
+
+/** 删除路径单入口：先保回填，再标脏 */
+export function dropFlashcardForMark(
+  userDataDir: string,
+  fingerprint: string,
+  db: DatabaseSync,
+  markId: string,
+  at: number,
+): void {
+  ensureFlashcardsBackfilled(userDataDir, fingerprint)
+  markFlashcardOrphaned(db, markId, at)
+}
+
+/** 读路径（UI 接线用，02b 暂无调用方，单测覆盖）：先保回填 */
+export function listDueFlashcards(
+  userDataDir: string,
+  fingerprint: string,
+  limit = 50,
+): DueFlashcard[] {
+  ensureFlashcardsBackfilled(userDataDir, fingerprint)
+  return listDueFlashcardRows(openBookDb(userDataDir, fingerprint), limit)
+}
+
+export function countDueFlashcardsForBook(userDataDir: string, fingerprint: string): number {
+  ensureFlashcardsBackfilled(userDataDir, fingerprint)
+  return countDueFlashcards(openBookDb(userDataDir, fingerprint))
+}
+
+/** 复习评分落盘（UI 接线用，02b 暂无调用方，单测覆盖） */
+export function appendFlashcardReview(
+  userDataDir: string,
+  fingerprint: string,
+  cardId: string,
+  rating: FlashcardReviewRating,
+  reviewedAt: number,
+): boolean {
+  ensureFlashcardsBackfilled(userDataDir, fingerprint)
+  return appendReviewRow(openBookDb(userDataDir, fingerprint), cardId, rating, reviewedAt)
 }

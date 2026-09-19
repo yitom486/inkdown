@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
   },
 }))
 
-import { migrateBookDb } from './book-db/schema'
+import { BOOK_DB_SCHEMA_VERSION, migrateBookDb } from './book-db/schema'
 import { closeAllBookDbs, openBookDb } from './book-db/open-book-db'
 import {
   createReadingMark,
@@ -44,7 +44,7 @@ describe('marks-db（[2]-01 卡片 SQL 后端）', () => {
     const db = new DatabaseSync(':memory:')
     try {
       const result = migrateBookDb(db)
-      expect(result.version).toBe(5)
+      expect(result.version).toBe(BOOK_DB_SCHEMA_VERSION)
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'trigger')")
         .all() as Array<{ name: string }>

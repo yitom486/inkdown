@@ -18,6 +18,7 @@ import {
   validateReadingAnchor,
 } from '@inkdown/annotations'
 import {
+  dropFlashcardForMark,
   exportMarksStore,
   findMarkDb,
   getMarkRow,
@@ -27,6 +28,7 @@ import {
   migrateMarksStoreToDb,
   resolveFingerprintForFile,
   rowToReadingMark,
+  syncFlashcardForMark,
   updateMarkRow,
 } from './marks-db'
 import { openBookDb } from './book-db/open-book-db'
@@ -191,8 +193,11 @@ export async function createReadingMark(
       return ok(mark)
     }
     await ensureMarksMigrated()
-    const db = openBookDb(app.getPath('userData'), payload.fileFingerprint)
+    const userDataDir = app.getPath('userData')
+    const db = openBookDb(userDataDir, payload.fileFingerprint)
     insertMarkRow(db, mark)
+    // 记忆卡快照跟随（书签/无摘录卡内部 noop；02b 起回填由 ensure 兜底）
+    syncFlashcardForMark(userDataDir, payload.fileFingerprint, db, mark)
     return ok(mark)
   } catch (error) {
     return err(toAppError(error, '创建书签失败'))
@@ -226,6 +231,8 @@ export async function updateReadingMark(
     }
     const next: ReadingMark = applyReadingMarkUpdate(rowToReadingMark(row), payload, Date.now())
     updateMarkRow(found.db, next)
+    // 快照跟随批注/摘录改动；改到失格（转书签/摘录清空）则标脏
+    syncFlashcardForMark(app.getPath('userData'), found.fingerprint, found.db, next)
     return ok(next)
   } catch (error) {
     return err(toAppError(error, '更新书签失败'))
@@ -253,9 +260,12 @@ export async function deleteReadingMark(id: string): Promise<Result<void, AppErr
       return err({ code: 'FILE_NOT_FOUND', message: '书签不存在' })
     }
     found.db.prepare('DELETE FROM marks WHERE id = ?').get(id)
+    const now = Date.now()
     found.db
       .prepare('INSERT OR REPLACE INTO marks_tombstones (mark_id, deleted_at) VALUES (?, ?)')
-      .get(id, Date.now())
+      .get(id, now)
+    // 删卡标脏（复习日志保留，待复习排除）
+    dropFlashcardForMark(app.getPath('userData'), found.fingerprint, found.db, id, now)
     return ok(undefined)
   } catch (error) {
     return err(toAppError(error, '删除书签失败'))

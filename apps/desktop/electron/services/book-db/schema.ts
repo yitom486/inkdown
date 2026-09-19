@@ -8,7 +8,7 @@ import type { DatabaseSync } from 'node:sqlite'
  * 但 SQLite 表恒有隐式 rowid，marks_fts 挂 content_rowid='rowid' 照样成立。
  */
 
-export const BOOK_DB_SCHEMA_VERSION = 5
+export const BOOK_DB_SCHEMA_VERSION = 6
 
 const MIGRATION_V1 = `
 CREATE TABLE IF NOT EXISTS books (
@@ -150,6 +150,34 @@ CREATE TRIGGER IF NOT EXISTS marks_au AFTER UPDATE ON marks BEGIN
   INSERT INTO marks_fts(rowid, title, excerpt, note, ai_summary)
   VALUES (new.rowid, new.title, new.excerpt, new.note, new.ai_summary);
 END;`,
+  // v6：flashcards + review_log（记忆卡片复习态，[2]-02b，随书走）。
+  // flashcards.id = 来源 mark.id（复习 UI 身份不变，可直跳原书）；
+  // mark_id 存同值，兼容 03 DDL 草案的查询口径。
+  // 与 03 草案两处差异：补 chapter_key（与 marks 主联动键对齐，便于按章查卡）；
+  // 加 orphaned（来源卡片删除/失格后标脏；物理删会连带 review_log，不可取）。
+  // 快照只存复习必需字段（kind/front/back/tags/chapter_key）；
+  // Anki 导出仍按需从 marks 全量派生（文件方式不变）。
+  6: `CREATE TABLE IF NOT EXISTS flashcards (
+  id TEXT PRIMARY KEY,
+  mark_id TEXT UNIQUE,
+  kind TEXT NOT NULL,
+  front TEXT NOT NULL,
+  back TEXT NOT NULL,
+  tags TEXT,
+  chapter_key TEXT NOT NULL DEFAULT '',
+  chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  orphaned INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_flashcards_chapter_key ON flashcards (chapter_key);
+CREATE TABLE IF NOT EXISTS review_log (
+  id INTEGER PRIMARY KEY,
+  card_id TEXT NOT NULL REFERENCES flashcards(id) ON DELETE CASCADE,
+  rating TEXT NOT NULL,
+  reviewed_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_review_log_card_time ON review_log (card_id, reviewed_at);`,
 }
 
 export function getBookDbVersion(db: DatabaseSync): number {
