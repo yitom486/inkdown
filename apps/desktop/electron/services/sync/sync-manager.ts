@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { BrowserWindow, app } from 'electron'
 import { IPC } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
@@ -16,7 +16,7 @@ import { readMarksStore, writeMarksStore } from '../reading-marks-service'
 import { mergeReadingMarks, type SyncMarksPayload } from '@inkdown/annotations'
 import { readLocalProgress, writeLocalProgress } from './reading-progress-sync'
 import { mergeReadingProgress, type ReadingProgressSnapshot } from './mergers/progress-merger'
-import { getQuizFilePath } from '../quiz-service'
+import { readQuizJsonlForSync, writeQuizJsonlForSync } from '../quiz-service'
 import { mergeQuizSessions } from './mergers/quiz-merger'
 
 class SyncManager {
@@ -172,12 +172,11 @@ class SyncManager {
       // 广播给渲染进程热载入最新进度
       this.broadcastRemoteProgress(progressMerge.merged)
 
-      // 4. 同步 AI 测验档案 (quiz-records.jsonl)
+      // 4. 同步 AI 测验档案 (quiz-records.jsonl；本地后端可能是 inkdown.db，传输格式不变)
       const remoteQuizPath = `${remoteDir}/quiz-records.jsonl`
-      const quizFilePath = getQuizFilePath()
       let localQuizJsonl = ''
       try {
-        localQuizJsonl = await readFile(quizFilePath, 'utf-8')
+        localQuizJsonl = await readQuizJsonlForSync()
       } catch {}
 
       let remoteQuizJsonl = ''
@@ -190,7 +189,7 @@ class SyncManager {
       stats.quizAdded = quizMerge.addedCount
 
       await mkdir(app.getPath('userData'), { recursive: true })
-      await writeFile(quizFilePath, quizMerge.mergedJsonl, 'utf-8')
+      await writeQuizJsonlForSync(quizMerge.mergedJsonl)
       const uploadQuizRes = await adapter.uploadFile(remoteQuizPath, quizMerge.mergedJsonl)
       if (!uploadQuizRes.ok) throw new Error(uploadQuizRes.error.message)
 
