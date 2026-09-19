@@ -7,6 +7,7 @@ import {
   UnfoldVertical,
 } from 'lucide-react'
 import type { ReadingMark, ReadingMarkCategory } from '@inkdown/contracts'
+import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { KnowledgeCardItem } from './KnowledgeCardItem'
 
 export interface MarginaliaBarProps {
@@ -41,10 +42,7 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
   const [activeTab, setActiveTab] = useState<'all' | ReadingMarkCategory>('all')
 
   const resolveCategory = (m: ReadingMark): ReadingMarkCategory => {
-    if (m.category) return m.category
-    if (m.diagramId) return 'diagram'
-    if (m.kind === 'note') return 'concept'
-    return 'quote'
+    return resolveCardMeta(m).category
   }
 
   const concepts = marks.filter((m) => resolveCategory(m) === 'concept')

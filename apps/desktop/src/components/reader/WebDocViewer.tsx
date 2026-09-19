@@ -24,6 +24,7 @@ import { useWebDocToc } from '@/hooks/reader/useWebDocToc'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
+import { parseNoteToCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
@@ -404,8 +405,9 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         text: snapshot.text,
         pageUrl: normalizedPageUrl,
       })
+      const meta = parseNoteToCardMeta(note)
       if (existing) {
-        const trimmed = note.trim()
+        const trimmed = meta.note?.trim()
         const result = await updateMark({
           id: existing.id,
           color,
@@ -415,6 +417,11 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
                 kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
               }
             : {}),
+          ...(meta.category ? { category: meta.category } : {}),
+          ...(meta.title ? { title: meta.title } : {}),
+          ...(meta.aiSummary ? { aiSummary: meta.aiSummary } : {}),
+          ...(meta.keyPoints ? { keyPoints: meta.keyPoints } : {}),
+          ...(meta.diagramId ? { diagramId: meta.diagramId } : {}),
         })
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
@@ -437,7 +444,12 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           rects: snapshot.rects,
         },
         excerpt: snapshot.text,
-        note: note || undefined,
+        note: meta.note,
+        category: meta.category,
+        title: meta.title,
+        aiSummary: meta.aiSummary,
+        keyPoints: meta.keyPoints,
+        diagramId: meta.diagramId,
         color,
       })
 

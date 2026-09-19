@@ -34,6 +34,7 @@ import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/adapter/foliate-book-adapter'
+import { parseNoteToCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { parse as parseFoliateCfi, toRange as foliateCfiToRange } from '@foliate/epubcfi.js'
 import type { FoliateViewElement } from '@foliate/view.js'
 import type { OverlayerDrawFn } from '@foliate/overlayer.js'
@@ -487,8 +488,9 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         text: snapshot.text,
         cfiRange: snapshot.cfiRange,
       })
+      const meta = parseNoteToCardMeta(note)
       if (existing) {
-        const trimmed = note.trim()
+        const trimmed = meta.note?.trim()
         const result = await updateMark({
           id: existing.id,
           color,
@@ -498,6 +500,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
                 kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
               }
             : {}),
+          ...(meta.category ? { category: meta.category } : {}),
+          ...(meta.title ? { title: meta.title } : {}),
+          ...(meta.aiSummary ? { aiSummary: meta.aiSummary } : {}),
+          ...(meta.keyPoints ? { keyPoints: meta.keyPoints } : {}),
+          ...(meta.diagramId ? { diagramId: meta.diagramId } : {}),
         })
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
@@ -515,7 +522,12 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         kind: note ? 'note' : 'highlight',
         anchor,
         excerpt: snapshot.text,
-        note: note || undefined,
+        note: meta.note,
+        category: meta.category,
+        title: meta.title,
+        aiSummary: meta.aiSummary,
+        keyPoints: meta.keyPoints,
+        diagramId: meta.diagramId,
         color,
       })
       if (!isOk(result)) {

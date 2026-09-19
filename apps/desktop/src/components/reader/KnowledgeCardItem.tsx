@@ -11,6 +11,7 @@ import {
   Network,
 } from 'lucide-react'
 import type { ReadingMark, ReadingMarkCategory } from '@inkdown/contracts'
+import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 
 export interface KnowledgeCardItemProps {
   mark: ReadingMark
@@ -36,15 +37,8 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
   onHover,
 }) => {
   const [copied, setCopied] = useState(false)
-
-  const resolveCategory = (m: ReadingMark): ReadingMarkCategory => {
-    if (m.category) return m.category
-    if (m.diagramId) return 'diagram'
-    if (m.kind === 'note') return 'concept'
-    return 'quote'
-  }
-
-  const category = resolveCategory(mark)
+  const resolved = resolveCardMeta(mark)
+  const category = resolved.category
 
   const getBadgeStyle = (cat: ReadingMarkCategory) => {
     switch (cat) {
@@ -85,9 +79,9 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const titleText = mark.title || mark.label || mark.excerpt || '知识卡片'
-    const textToCopy = `【${titleText}】\n${mark.note || mark.excerpt || ''}${
-      mark.aiSummary ? `\nAI 研判：${mark.aiSummary}` : ''
+    const titleText = resolved.title || mark.label || mark.excerpt || '知识卡片'
+    const textToCopy = `【${titleText}】\n${resolved.displayNote || mark.excerpt || ''}${
+      resolved.aiSummary ? `\nAI 研判：${resolved.aiSummary}` : ''
     }`
     navigator.clipboard.writeText(textToCopy)
     setCopied(true)
@@ -125,7 +119,7 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
             {badge.label}
           </span>
           <span className="text-[11px] text-foreground truncate">
-            {mark.title || mark.label || mark.excerpt || '札记'}
+            {resolved.title || mark.label || mark.excerpt || '札记'}
           </span>
         </div>
 
@@ -172,9 +166,12 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
           >
             {badge.label}
           </span>
-          {(mark.title || mark.label) && (
-            <span className="font-semibold text-[11px] text-foreground truncate max-w-[140px]">
-              {mark.title || mark.label}
+          {(resolved.title || mark.label) && (
+            <span
+              className="font-semibold text-[11px] text-foreground truncate max-w-[150px]"
+              title={resolved.title || mark.label}
+            >
+              {resolved.title || mark.label}
             </span>
           )}
         </div>
@@ -249,17 +246,17 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
         </div>
       )}
 
-      {/* 卡片正文 */}
-      {mark.note && (
+      {/* 卡片正文（普通笔记，若为结构化序列化内容则已自动提炼至各属性，不展示 raw JSON） */}
+      {resolved.displayNote && (
         <p className="text-foreground text-[11px] leading-relaxed mb-2">
-          {mark.note}
+          {resolved.displayNote}
         </p>
       )}
 
-      {/* 核心概念标签 */}
-      {mark.keyPoints && mark.keyPoints.length > 0 && (
+      {/* 核心概念与规约标签 */}
+      {resolved.keyPoints && resolved.keyPoints.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          {mark.keyPoints.map((kp, idx) => (
+          {resolved.keyPoints.map((kp, idx) => (
             <span
               key={idx}
               className="px-1.5 py-0.5 rounded text-[9.5px] bg-muted/60 text-muted-foreground border border-border/50"
@@ -271,18 +268,18 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
       )}
 
       {/* AI 研判洞见 Callout */}
-      {mark.aiSummary && (
+      {resolved.aiSummary && (
         <div className="p-2 rounded-lg bg-muted/40 border border-border/60 text-[10.5px] text-muted-foreground leading-normal space-y-1 mb-2">
           <div className="flex items-center gap-1 font-medium text-primary text-[10px]">
             <Sparkles className="w-3 h-3" />
             <span>AI 研读洞见</span>
           </div>
-          <div>{mark.aiSummary}</div>
+          <div>{resolved.aiSummary}</div>
         </div>
       )}
 
       {/* 时序/流转图谱交互入口 */}
-      {mark.diagramId && (
+      {(resolved.diagramId || resolved.category === 'diagram') && (
         <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between">
           <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1">
             <Network className="w-3 h-3" />
@@ -292,7 +289,7 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              onOpenDiagram?.(mark.diagramId!)
+              onOpenDiagram?.(resolved.diagramId || mark.id)
             }}
             className="flex items-center gap-1 text-[10.5px] text-primary hover:text-primary/80 font-medium cursor-pointer"
           >
