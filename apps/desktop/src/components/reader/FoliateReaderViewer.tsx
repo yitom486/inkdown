@@ -7,6 +7,7 @@ import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { PdfBookSearch } from '@/components/reader/PdfBookSearch'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
@@ -87,6 +88,8 @@ interface FoliateReaderViewerProps {
   filePath: string
   documentKind: 'epub' | 'mobi'
   theme: AppTheme
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
 const READING_PROGRESS_SAVE_MS = 400
@@ -117,7 +120,7 @@ function themeRulesToCss(rules: Record<string, Record<string, string>>): string 
     .join('\n')
 }
 
-export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateReaderViewerProps) {
+export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRoot }: FoliateReaderViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<FoliateViewElement | null>(null)
   const adapterRef = useRef<FoliateBookAdapter | null>(null)
@@ -125,6 +128,8 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   const chapterSectionsRef = useRef<Array<number | null>>([])
   const [chapters, setChapters] = useState<EpubChapter[]>([])
   const nav = useReaderNavigationStore((state) => state.nav)
+  // docked 侧栏挂载于内框行（工具栏之下、底导航之上），与正文同属左大块
+  const dockedAgentVisible = useIsDockedAgentVisible()
   const { tocOpen, marksOpen, toggleToc, toggleMarks, closeToc, closeMarks } = useReaderSidePanels()
   const [ready, setReady] = useState(false)
   const [globalProgress, setGlobalProgress] = useState(0)
@@ -399,6 +404,53 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     void view.addAnnotation({ value: snapshot.cfiRange }).catch(() => undefined)
   }, [editingNoteMark])
 
+  // 卡片悬停→正文高亮：CSS Custom Highlight API，无 DOM 改动，移出即清除。
+  // 与 BracketConnector 的卡片侧高亮呼应，完成悬停方向的双向联动。
+  const hoverStyleInjectedRef = useRef<WeakSet<Document>>(new WeakSet())
+  const handleHoverExcerpt = useCallback((excerpt: string | undefined) => {
+    let docs: Array<{ doc: Document }> = []
+    try {
+      const renderer = viewRef.current?.renderer as unknown as {
+        getContents: () => Array<{ doc: Document }>
+      } | null
+      docs = renderer?.getContents() ?? []
+    } catch {
+      return
+    }
+    for (const { doc } of docs) {
+      try {
+        const viewWindow = doc.defaultView as unknown as {
+          CSS?: { highlights?: { set: (name: string, highlight: object) => void; delete: (name: string) => void } }
+          Highlight?: new (...ranges: AbstractRange[]) => object
+        } | null
+        const registry = viewWindow?.CSS?.highlights
+        const HighlightCtor = viewWindow?.Highlight
+        if (!registry || !HighlightCtor) continue
+        if (!excerpt?.trim()) {
+          registry.delete('inkdown-hover')
+          continue
+        }
+        if (!hoverStyleInjectedRef.current.has(doc)) {
+          const style = doc.createElement('style')
+          style.setAttribute('data-inkdown-hover', '')
+          style.textContent =
+            '::highlight(inkdown-hover){background:rgba(139,92,246,.32);border-radius:2px;}'
+          ;(doc.head ?? doc.documentElement)?.appendChild(style)
+          hoverStyleInjectedRef.current.add(doc)
+        }
+        const body = doc.body
+        if (!body) continue
+        const range = findTextRangeInRoot(body, excerpt.trim())
+        registry.delete('inkdown-hover')
+        if (range) {
+          registry.set('inkdown-hover', new HighlightCtor(range))
+        }
+      } catch {
+        // 高亮失败时静默忽略，不干扰阅读
+      }
+    }
+  }, [])
+
   const handleSelectMark = useCallback((mark: ReadingMark) => {
     const view = viewRef.current
     if (!view) return
@@ -414,6 +466,46 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     if (anchor.format === 'mobi') {
       const index = adapterRef.current?.sections.findIndex((s) => s.id === anchor.chapterId) ?? -1
       if (index >= 0) void view.goTo(index).catch(() => undefined)
+    }
+    // 原文兜底：无 CFI 时按 excerpt 在已渲染章节中定位、滚动并选中，
+    // 与卡片侧的 BracketConnector 高亮呼应，完成卡片↔原文双向对应。
+    const excerpt = mark.excerpt?.trim()
+    if (excerpt) {
+      void (async () => {
+        let docs: Array<{ doc: Document }> = []
+        try {
+          const renderer = viewRef.current?.renderer as unknown as {
+            getContents: () => Array<{ doc: Document }>
+          } | null
+          docs = renderer?.getContents() ?? []
+        } catch {
+          docs = []
+        }
+        for (const { doc } of docs) {
+          const body = doc.body
+          if (!body) continue
+          let range: Range | null = null
+          try {
+            range = findTextRangeInRoot(body, excerpt)
+          } catch {
+            range = null
+          }
+          if (!range) continue
+          try {
+            const host =
+              range.startContainer instanceof Element
+                ? range.startContainer
+                : range.startContainer.parentElement
+            host?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            const selection = doc.defaultView?.getSelection()
+            selection?.removeAllRanges()
+            selection?.addRange(range.cloneRange())
+          } catch {
+            // 定位失败时静默忽略，保持当前阅读位置
+          }
+          return
+        }
+      })()
     }
   }, [])
 
@@ -1290,8 +1382,10 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         }
       />
 
-      <ReaderContentShell
-        filePath={filePath}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航在行下通栏 */}
+      <div className="flex min-h-0 flex-1">
+        <ReaderContentShell
+          filePath={filePath}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -1312,6 +1406,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           )
           goToChapter(unit, index >= 0 ? index : undefined)
         }}
+        onHoverExcerpt={handleHoverExcerpt}
       >
         <PaneErrorBoundary name={isEpub ? 'EPUB 阅读' : 'MOBI 阅读'} filePath={filePath}>
           <div
@@ -1327,7 +1422,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
             )}
           </div>
         </PaneErrorBoundary>
-      </ReaderContentShell>
+        </ReaderContentShell>
+        {dockedAgentVisible ? (
+          <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
+        ) : null}
+      </div>
 
       <ReaderFooterNav
         ready={ready}

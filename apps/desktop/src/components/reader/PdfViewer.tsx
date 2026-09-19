@@ -9,6 +9,7 @@ import { PdfPageView } from '@/components/reader/PdfPageView'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
@@ -154,9 +155,13 @@ import '@/styles/pdf-viewer.css'
 interface PdfViewerProps {
   filePath: string
   theme: AppTheme
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
-export function PdfViewer({ filePath, theme }: PdfViewerProps) {
+export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
+  // docked 侧栏挂载于内框行（工具栏之下、底导航之上），与正文同属左大块
+  const dockedAgentVisible = useIsDockedAgentVisible()
   const containerRef = useRef<HTMLDivElement>(null)
   const pageAnchorRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null)
@@ -2200,8 +2205,10 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         }
       />
 
-      <ReaderContentShell
-        filePath={filePath}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航在行下通栏 */}
+      <div className="flex min-h-0 flex-1">
+        <ReaderContentShell
+          filePath={filePath}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -2312,7 +2319,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             )}
           </PaneErrorBoundary>
         </div>
-      </ReaderContentShell>
+        </ReaderContentShell>
+        {dockedAgentVisible ? (
+          <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
+        ) : null}
+      </div>
 
       <ReaderFooterNav
         ready={ready}

@@ -16,6 +16,7 @@ import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
@@ -115,10 +116,14 @@ interface WebDocViewerProps {
   pageUrl: string
   theme: AppTheme
   onOutlineChange?: (state: EditorOutlineState) => void
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
 export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
-  function WebDocViewer({ pageUrl, theme, onOutlineChange }, ref) {
+  function WebDocViewer({ pageUrl, theme, onOutlineChange, workspaceRoot }, ref) {
+  // docked 侧栏挂载于内框行（工具栏之下、底导航之上），与正文同属左大块
+  const dockedAgentVisible = useIsDockedAgentVisible()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const saveProgressTimerRef = useRef<number | null>(null)
   const themeRef = useRef(theme)
@@ -1056,8 +1061,10 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         }
       />
 
-      <ReaderContentShell
-        bookTitle={displayTitle}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航在行下通栏 */}
+      <div className="flex min-h-0 flex-1">
+        <ReaderContentShell
+          bookTitle={displayTitle}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -1075,7 +1082,11 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         onSelectUnit={(unit) => navigateToUrl(unit.href)}
       >
         {readerHost}
-      </ReaderContentShell>
+        </ReaderContentShell>
+        {dockedAgentVisible ? (
+          <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
+        ) : null}
+      </div>
 
       <ReaderFooterNav ready={ready && units.length > 0} onPrevious={goPrevious} onNext={goNext} />
 

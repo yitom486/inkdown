@@ -158,4 +158,31 @@ describe('MarginaliaBar', () => {
     })
     expect(onOpenDiagram).toHaveBeenCalledWith('diag-123')
   })
+
+  it('shows chapter source and dims cards outside current chapter', async () => {
+    const chapterOfMark = (mark: ReadingMark) =>
+      mark.id === 'mark-concept-1'
+        ? { key: 'ch1', label: '第一章 北美的外貌' }
+        : { key: 'ch2', label: '第二章 民主的起源' }
+
+    await act(async () => {
+      root.render(
+        createElement(MarginaliaBar, {
+          marks: mockMarks,
+          onMarkClick: vi.fn(),
+          onToggleCardCollapse: vi.fn(),
+          onToggleAllCollapse: vi.fn(),
+          chapterOfMark,
+          currentChapterKey: 'ch1',
+        })
+      )
+    })
+
+    // 主人露脸：每张卡都标出章节归属
+    expect(container.textContent).toContain('第一章 北美的外貌')
+    expect(container.textContent).toContain('第二章 民主的起源')
+    // 非本章卡致灰
+    const other = container.querySelector('#card-mark-quote-1')?.parentElement?.parentElement
+    expect(other?.className).toContain('opacity-55')
+  })
 })

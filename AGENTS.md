@@ -114,6 +114,8 @@ Zustand selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand
 - 准则与架构 → 本文件 + `.cursor/rules/`
 - 可执行清单 → 本地 `.plan/*.md`（gitignore，勿提交）
 - 不擅自新建计划文件；优先追加现有路线图
+- 执行总序 → `.plan/00-roadmap.md`：UI 联动先行，落库紧随，库能力收尾；
+  全部完成并合并回 `master` 后，按该文件末尾「完成后删除」清理计划文档
 
 ## 与 inkdown-ui 原型项目的组件联动机制（⚠️ 阶段性联调说明：工作树合并回 master 时必须删除）
 

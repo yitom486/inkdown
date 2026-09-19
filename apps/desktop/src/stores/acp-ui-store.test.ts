@@ -339,4 +339,15 @@ describe('acp-ui-store history + plan', () => {
     expect(useAcpUiStore.getState().panelOpen).toBe(true)
     expect(useAcpUiStore.getState().hudDisplayMode).toBe('floating')
   })
+
+  it('setChatScroll 按线程记忆滚动，deleteThread 连带清理', () => {
+    const threadId = useAcpUiStore.getState().activeThreadId
+    useAcpUiStore.getState().setChatScroll(threadId, { scrollTop: 123, pinned: false })
+    expect(useAcpUiStore.getState().chatScrollByThread[threadId]).toEqual({
+      scrollTop: 123,
+      pinned: false,
+    })
+    useAcpUiStore.getState().deleteThread(threadId)
+    expect(useAcpUiStore.getState().chatScrollByThread[threadId]).toBeUndefined()
+  })
 })

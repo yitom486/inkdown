@@ -15,6 +15,7 @@ import {
   Sun,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useReaderNavTitles } from '@/stores/reader-navigation-store'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
@@ -32,6 +33,20 @@ interface ReaderToolbarShellProps {
   addBookmarkDisabled?: boolean
   center?: ReactNode
   trailing?: ReactNode
+}
+
+/**
+ * 工具栏提示统一向下弹出（side="bottom"），避免原生 title 向上遮挡窗口标题栏。
+ */
+function ToolbarTip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function ReaderToolbarShell({
@@ -54,26 +69,15 @@ export function ReaderToolbarShell({
   const zenMode = useReaderHudUiStore((s) => s.zenMode)
   const toggleZenMode = useReaderHudUiStore((s) => s.toggleZenMode)
 
-  const hudDisplayMode = useAcpUiStore((s) => s.hudDisplayMode)
   const setHudDisplayMode = useAcpUiStore((s) => s.setHudDisplayMode)
   const panelOpen = useAcpUiStore((s) => s.panelOpen)
   const setPanelOpen = useAcpUiStore((s) => s.setPanelOpen)
   const acpStatus = useAcpUiStore((s) => s.status)
 
-  // 循环切换伴读 HUD 模态（侧栏 -> 悬浮 -> 胶囊 -> 侧栏）
-  const handleCycleHudMode = () => {
-    if (!panelOpen) {
-      setPanelOpen(true)
-      setHudDisplayMode('docked')
-      return
-    }
-    if (hudDisplayMode === 'docked') {
-      setHudDisplayMode('floating')
-    } else if (hudDisplayMode === 'floating') {
-      setHudDisplayMode('capsule')
-    } else {
-      setHudDisplayMode('docked')
-    }
+  // 打开 AI 伴读悬浮窗（单一功能：只负责打开；侧栏/胶囊/关闭在 HUD 自身头部切换，对齐原版）
+  const handleOpenHud = () => {
+    setPanelOpen(true)
+    setHudDisplayMode('floating')
   }
 
   const isAcpConnected = acpStatus === 'connected'
@@ -82,52 +86,54 @@ export function ReaderToolbarShell({
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background/85 px-3 py-1.5 backdrop-blur-md select-none transition-colors">
       {/* 左侧：导航与目录组 */}
       <div className="flex min-w-0 items-center gap-1.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 rounded-lg px-2 text-xs hover:bg-muted/80"
-          disabled={!ready || tocDisabled}
-          onClick={onTocToggle}
-          title="展开 / 收起目录"
-        >
-          <List className="size-3.5 text-muted-foreground" />
-          <span>目录</span>
-        </Button>
+        <ToolbarTip label="展开 / 收起目录">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 rounded-lg px-2 text-xs hover:bg-muted/80"
+            disabled={!ready || tocDisabled}
+            onClick={onTocToggle}
+          >
+            <List className="size-3.5 text-muted-foreground" />
+            <span>目录</span>
+          </Button>
+        </ToolbarTip>
 
         {!marksHidden ? (
           <>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 rounded-lg px-2 text-xs hover:bg-muted/80"
-              disabled={!ready}
-              onClick={onMarksToggle}
-              title="传统批注列表面板"
-            >
-              <Bookmark className="size-3.5 text-muted-foreground" />
-              <span>批注簿</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1 rounded-lg px-2 text-xs hover:bg-muted/80"
-              disabled={!ready || addBookmarkDisabled}
-              onClick={onAddBookmark}
-              title="在当前阅读位置添加书签"
-            >
-              <BookmarkPlus className="size-3.5 text-muted-foreground" />
-              <span className="hidden sm:inline">加书签</span>
-            </Button>
+            <ToolbarTip label="传统批注列表面板">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 rounded-lg px-2 text-xs hover:bg-muted/80"
+                disabled={!ready}
+                onClick={onMarksToggle}
+              >
+                <Bookmark className="size-3.5 text-muted-foreground" />
+                <span>批注簿</span>
+              </Button>
+            </ToolbarTip>
+            <ToolbarTip label="在当前阅读位置添加书签">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 rounded-lg px-2 text-xs hover:bg-muted/80"
+                disabled={!ready || addBookmarkDisabled}
+                onClick={onAddBookmark}
+              >
+                <BookmarkPlus className="size-3.5 text-muted-foreground" />
+                <span className="hidden sm:inline">加书签</span>
+              </Button>
+            </ToolbarTip>
           </>
         ) : null}
 
         {currentTitle ? (
-          <span
-            className="ml-1.5 hidden max-w-[240px] truncate text-xs font-medium text-muted-foreground md:inline-block lg:max-w-[340px]"
-            title={currentTitle}
-          >
-            {currentTitle}
-          </span>
+          <ToolbarTip label={currentTitle}>
+            <span className="ml-1.5 hidden max-w-[240px] truncate text-xs font-medium text-muted-foreground md:inline-block lg:max-w-[340px]">
+              {currentTitle}
+            </span>
+          </ToolbarTip>
         ) : null}
       </div>
 
@@ -147,123 +153,126 @@ export function ReaderToolbarShell({
         {/* 先锋微晶控制胶囊组 */}
         <div className="flex items-center gap-1">
           {/* 知识卡轨切换 */}
-          <Button
-            variant={isCardRailOpen ? 'secondary' : 'ghost'}
-            size="sm"
-            className={cn(
-              'h-7 gap-1.5 rounded-lg px-2 text-xs transition-all duration-150',
-              isCardRailOpen
-                ? 'border border-primary/20 bg-primary/10 text-primary font-medium hover:bg-primary/15'
-                : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
-            )}
-            onClick={() => preserveScrollAnchor(() => toggleCardRail())}
-            title={isCardRailOpen ? '收起右侧知识卡轨' : '展开右侧知识卡轨'}
-          >
-            {isCardRailOpen ? (
-              <PanelRightClose className="size-3.5" />
-            ) : (
-              <PanelRightOpen className="size-3.5" />
-            )}
-            <span>卡片流</span>
-          </Button>
+          <ToolbarTip label={isCardRailOpen ? '收起右侧知识卡轨' : '展开右侧知识卡轨'}>
+            <Button
+              variant={isCardRailOpen ? 'secondary' : 'ghost'}
+              size="sm"
+              className={cn(
+                'h-7 gap-1.5 rounded-lg px-2 text-xs transition-all duration-150',
+                isCardRailOpen
+                  ? 'border border-primary/20 bg-primary/10 text-primary font-medium hover:bg-primary/15'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+              )}
+              onClick={() => preserveScrollAnchor(() => toggleCardRail())}
+            >
+              {isCardRailOpen ? (
+                <PanelRightClose className="size-3.5" />
+              ) : (
+                <PanelRightOpen className="size-3.5" />
+              )}
+              <span>卡片流</span>
+            </Button>
+          </ToolbarTip>
 
           {/* 全书札记中心 */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-            onClick={() => setIsNotesDrawerOpen(true)}
-            title="查看全书札记中心与闪卡"
-          >
-            <FileText className="size-3.5" />
-            <span className="hidden sm:inline">札记箱</span>
-          </Button>
+          <ToolbarTip label="查看全书札记中心与闪卡">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+              onClick={() => setIsNotesDrawerOpen(true)}
+            >
+              <FileText className="size-3.5" />
+              <span className="hidden sm:inline">札记箱</span>
+            </Button>
+          </ToolbarTip>
 
-          {/* AI 伴读模式切换胶囊 */}
-          <button
-            type="button"
-            onClick={handleCycleHudMode}
-            className={cn(
-              'flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
-              panelOpen
-                ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 shadow-xs'
-                : 'border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-            )}
-            aria-label="AI 伴读模态切换"
-          >
+          {/* AI 伴读：只负责打开悬浮窗，不兼任模式循环 */}
+          <ToolbarTip label="打开 AI 伴读悬浮窗">
+            <button
+              type="button"
+              onClick={handleOpenHud}
+              className={cn(
+                'flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
+                panelOpen
+                  ? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 shadow-xs'
+                  : 'border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+              )}
+              aria-label="AI 伴读模态切换"
+            >
             <Sparkles className="size-3.5 text-primary" />
             <span className="hidden md:inline font-medium">AI 伴读</span>
-            {panelOpen && (
-              <span className="text-[10px] opacity-75 font-mono hidden lg:inline">
-                {hudDisplayMode === 'docked' ? '· 侧栏' : hudDisplayMode === 'floating' ? '· 悬浮' : '· 胶囊'}
-              </span>
-            )}
             {/* 伴读运行状态微型指示点 */}
-            <span
-              className={cn(
-                'size-1.5 rounded-full',
-                isAcpConnected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]' : 'bg-muted-foreground/40',
-              )}
-            />
-          </button>
+              <span
+                className={cn(
+                  'size-1.5 rounded-full',
+                  isAcpConnected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]' : 'bg-muted-foreground/40',
+                )}
+              />
+            </button>
+          </ToolbarTip>
 
           {/* 沉浸禅模式 */}
-          <Button
-            variant={zenMode ? 'secondary' : 'ghost'}
-            size="icon"
-            className={cn(
-              'size-7 rounded-lg transition-all',
-              zenMode
-                ? 'border border-primary/30 bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
-            )}
-            onClick={() => toggleZenMode()}
-            title={zenMode ? '退出沉浸禅模式 (Esc)' : '开启沉浸禅模式 (Ctrl+Alt+Z)'}
-          >
-            {zenMode ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-          </Button>
+          <ToolbarTip label={zenMode ? '退出沉浸禅模式 (Esc)' : '开启沉浸禅模式 (Ctrl+Alt+Z)'}>
+            <Button
+              variant={zenMode ? 'secondary' : 'ghost'}
+              size="icon"
+              className={cn(
+                'size-7 rounded-lg transition-all',
+                zenMode
+                  ? 'border border-primary/30 bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+              )}
+              onClick={() => toggleZenMode()}
+            >
+              {zenMode ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            </Button>
+          </ToolbarTip>
 
           {/* 三态微晶主题切换胶囊 (纸质白 / 羊皮纸暖调 / 石墨暗晶) */}
           <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/60">
-            <button
-              type="button"
-              onClick={() => useEditorUiStore.getState().setTheme('light')}
-              className={cn(
-                'p-1 rounded-md transition-all cursor-pointer',
-                useEditorUiStore((s) => s.theme) === 'light'
-                  ? 'bg-card text-foreground shadow-xs font-semibold'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-              title="纸质明亮模式"
-            >
-              <Sun className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => useEditorUiStore.getState().setTheme('sepia')}
-              className={cn(
-                'p-1 rounded-md transition-all cursor-pointer',
-                useEditorUiStore((s) => s.theme) === 'sepia'
-                  ? 'bg-card text-foreground shadow-xs font-semibold'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-              title="羊皮纸暖调模式"
-            >
-              <Coffee className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => useEditorUiStore.getState().setTheme('dark')}
-              className={cn(
-                'p-1 rounded-md transition-all cursor-pointer',
-                useEditorUiStore((s) => s.theme) === 'dark'
-                  ? 'bg-card text-foreground shadow-xs font-semibold'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-              title="极夜深色模式"
-            >
-              <Moon className="w-3.5 h-3.5" />
-            </button>
+            <ToolbarTip label="纸质明亮模式">
+              <button
+                type="button"
+                onClick={() => useEditorUiStore.getState().setTheme('light')}
+                className={cn(
+                  'p-1 rounded-md transition-all cursor-pointer',
+                  useEditorUiStore((s) => s.theme) === 'light'
+                    ? 'bg-card text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Sun className="w-3.5 h-3.5" />
+              </button>
+            </ToolbarTip>
+            <ToolbarTip label="羊皮纸暖调模式">
+              <button
+                type="button"
+                onClick={() => useEditorUiStore.getState().setTheme('sepia')}
+                className={cn(
+                  'p-1 rounded-md transition-all cursor-pointer',
+                  useEditorUiStore((s) => s.theme) === 'sepia'
+                    ? 'bg-card text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Coffee className="w-3.5 h-3.5" />
+              </button>
+            </ToolbarTip>
+            <ToolbarTip label="极夜深色模式">
+              <button
+                type="button"
+                onClick={() => useEditorUiStore.getState().setTheme('dark')}
+                className={cn(
+                  'p-1 rounded-md transition-all cursor-pointer',
+                  useEditorUiStore((s) => s.theme) === 'dark'
+                    ? 'bg-card text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Moon className="w-3.5 h-3.5" />
+              </button>
+            </ToolbarTip>
           </div>
         </div>
       </div>

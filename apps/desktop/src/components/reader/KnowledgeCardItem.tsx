@@ -8,6 +8,7 @@ import {
   Copy,
   Check,
   ArrowUpRight,
+  MapPin,
   Network,
 } from 'lucide-react'
 import type { ReadingMark, ReadingMarkCategory } from '@inkdown/contracts'
@@ -23,6 +24,8 @@ export interface KnowledgeCardItemProps {
   onAnchorClick?: () => void
   onCardClick?: () => void
   onHover?: (hovering: boolean) => void
+  /** 出处：卡片主人的章节归属（如“第一章 北美的外貌”），缺省不显示 */
+  sourceLabel?: string
 }
 
 export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
@@ -35,6 +38,7 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
   onAnchorClick,
   onCardClick,
   onHover,
+  sourceLabel,
 }) => {
   const [copied, setCopied] = useState(false)
   const resolved = resolveCardMeta(mark)
@@ -233,6 +237,22 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
           )}
         </div>
       </div>
+
+      {/* 出处：卡片主人的章节归属，点击同样定位正文 */}
+      {sourceLabel && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAnchorClick?.()
+          }}
+          title={`定位到${sourceLabel}`}
+          className="mb-1.5 flex max-w-full items-center gap-1 text-[10px] text-muted-foreground/80 transition-colors hover:text-primary cursor-pointer"
+        >
+          <MapPin className="w-3 h-3 shrink-0" />
+          <span className="truncate">{sourceLabel}</span>
+        </button>
+      )}
 
       {/* 原文摘录引文 */}
       {mark.excerpt && (

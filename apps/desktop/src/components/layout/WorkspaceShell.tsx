@@ -4,7 +4,7 @@ import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { ActivityBar } from '@/components/layout/ActivityBar'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { AgentPanel } from '@/components/agent/AgentPanel'
+import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
 import { FloatingAIHud } from '@/components/agent/FloatingAIHud'
 import {
   ResizableHandle,
@@ -63,6 +63,11 @@ export interface WorkspaceShellProps {
   onNewWindow: () => void
   onQuit: () => void
   children: ReactNode
+  /**
+   * 阅读器模式由各 viewer 在内框行自行挂载 docked 侧栏（工具栏之下、底导航之上），
+   * 外壳此时不再于主区右侧挂载，避免底导航被顶穿。编辑器等模式保持外壳挂载。
+   */
+  suppressDockedAgent?: boolean
 }
 
 /**
@@ -104,6 +109,7 @@ export function WorkspaceShell({
   onNewWindow,
   onQuit,
   children,
+  suppressDockedAgent = false,
 }: WorkspaceShellProps) {
   const sidebarVisible = useEditorUiStore((state) => state.sidebarVisible)
   const setSidebarVisible = useEditorUiStore((state) => state.setSidebarVisible)
@@ -111,7 +117,8 @@ export function WorkspaceShell({
   const outlineExpanded = useEditorUiStore((state) => state.outlineExpanded)
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
   const agentPanelOpen = useAcpUiStore((state) => state.panelOpen)
-  const hudDisplayMode = useAcpUiStore((state) => state.hudDisplayMode)
+  const dockedAgentVisible = useIsDockedAgentVisible()
+  const isDockedPanelVisible = dockedAgentVisible && !suppressDockedAgent
   const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
   const isNotesDrawerOpen = useReaderHudUiStore((state) => state.isNotesDrawerOpen)
   const setIsNotesDrawerOpen = useReaderHudUiStore((state) => state.setIsNotesDrawerOpen)
@@ -123,7 +130,6 @@ export function WorkspaceShell({
   const setZenMode = useReaderHudUiStore((state) => state.setZenMode)
   const toggleZenMode = useReaderHudUiStore((state) => state.toggleZenMode)
 
-  const isDockedPanelVisible = !zenMode && agentPanelOpen && hudDisplayMode === 'docked'
   const isSidebarVisible = !zenMode && sidebarVisible
 
   const { marks, deleteMark } = useReadingMarks(activeFilePath || '')
@@ -254,7 +260,7 @@ export function WorkspaceShell({
 
           {isSidebarVisible ? <ResizableHandle withHandle /> : null}
 
-          <ResizablePanel id="main" defaultSize={isDockedPanelVisible ? '57%' : '72%'} minSize="30%" className="min-w-0">
+          <ResizablePanel id="main" defaultSize={isDockedPanelVisible ? '57%' : '75%'} minSize="30%" className="min-w-0">
             {children}
           </ResizablePanel>
 

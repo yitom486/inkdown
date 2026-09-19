@@ -1,6 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowUpRight,
   BookMarked,
   Bookmark,
   Check,
@@ -22,6 +21,7 @@ import { KnowledgeCardItem } from '@/components/reader/KnowledgeCardItem'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
+import { useAcpActiveMessages } from '@/stores/acp/acp-store'
 import { useReaderHudUiStore, type HudActiveTab } from '@/stores/acp/reader-hud-store'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
@@ -33,6 +33,107 @@ import { BUILTIN_ACP_RUNTIMES, type ReadingMarkCategory } from '@inkdown/contrac
 interface FloatingAIHudProps {
   workspaceRoot?: string
   activeFilePath?: string
+}
+
+export interface RfcHit {
+  level: 'MUST' | 'SHOULD' | 'MAY'
+  quote: string
+  context: string
+}
+
+const RFC_PATTERNS: Array<{ level: RfcHit['level']; re: RegExp }> = [
+  { level: 'MUST', re: /\bMUST\b|必须|强制/g },
+  { level: 'SHOULD', re: /\bSHOULD\b|应当|建议/g },
+  { level: 'MAY', re: /\bMAY\b|可选|允许/g },
+]
+
+/**
+ * 从正文抽取规约命中原句：原文大小写保留，前后各取 36 字上下文，每级至多 2 条。
+ * 纯函数，可单测；无命中时返回 []，调用方展示空态。
+ */
+export function collectRfcHits(text: string, perLevel = 2, contextRadius = 36): RfcHit[] {
+  const hits: RfcHit[] = []
+  const normalized = text.replace(/\s+/g, ' ')
+  for (const { level, re } of RFC_PATTERNS) {
+    re.lastIndex = 0
+    let taken = 0
+    let m: RegExpExecArray | null
+    while (taken < perLevel && (m = re.exec(normalized)) !== null) {
+      const start = Math.max(0, m.index - contextRadius)
+      const end = Math.min(normalized.length, m.index + m[0].length + contextRadius)
+      hits.push({
+        level,
+        quote: m[0],
+        context: `${start > 0 ? '…' : ''}${normalized.slice(start, end).trim()}${end < normalized.length ? '…' : ''}`,
+      })
+      taken += 1
+      // 防止零宽匹配死循环
+      if (m[0].length === 0) re.lastIndex += 1
+    }
+  }
+  return hits
+}
+
+export interface TocProposalView {
+  id: string
+  type: 'add' | 'rename' | 'reorder'
+  proposedTitle: string
+  targetChapter: string
+  status: 'pending' | 'accepted' | 'rejected'
+}
+
+/**
+ * 从对话工具调用历史派生编目提案：只认 toc_upsert_entry（标题或内容 JSON 中的 entry）。
+ * 执行状态直映工具状态（pending→待审，completed→已执行，failed/cancelled→失败），
+ * 审批动作本身发生在对话卡片中，此处只做视图，不伪造采纳。
+ */
+export function deriveTocProposals(
+  messages: Array<{
+    id?: string
+    role?: string
+    toolTitle?: string
+    toolContentText?: string
+    toolStatus?: string
+    toolCallId?: string
+  }>,
+): TocProposalView[] {
+  const views: TocProposalView[] = []
+  messages.forEach((m, idx) => {
+    if (m.role !== 'tool') return
+    const title = m.toolTitle ?? ''
+    const text = m.toolContentText ?? ''
+    if (!/toc_upsert_entry|Update TOC entry/i.test(`${title} ${text.slice(0, 200)}`)) return
+    let entry: { title?: unknown; printedPage?: unknown; level?: unknown } | null = null
+    try {
+      const parsed = JSON.parse(text) as {
+        entry?: unknown
+        input?: { entry?: unknown }
+      }
+      const candidate = parsed?.entry ?? parsed?.input?.entry
+      if (candidate && typeof candidate === 'object') {
+        entry = candidate as { title?: unknown; printedPage?: unknown; level?: unknown }
+      }
+    } catch {
+      // 非 JSON 文本：无法提取条目则跳过
+    }
+    if (!entry || typeof entry.title !== 'string' || !entry.title.trim()) return
+    const printedPage = typeof entry.printedPage === 'number' ? entry.printedPage : null
+    const level = typeof entry.level === 'number' ? entry.level : null
+    views.push({
+      id: m.toolCallId || m.id || `toc-tool-${idx}`,
+      type: 'add',
+      proposedTitle: entry.title.trim(),
+      targetChapter:
+        printedPage !== null ? `第 ${printedPage} 页` : level !== null ? `层级 ${level}` : '目录',
+      status:
+        m.toolStatus === 'completed'
+          ? 'accepted'
+          : m.toolStatus === 'failed' || m.toolStatus === 'cancelled'
+            ? 'rejected'
+            : 'pending',
+    })
+  })
+  return views
 }
 
 export const FloatingAIHud = memo(function FloatingAIHud({
@@ -68,6 +169,10 @@ export const FloatingAIHud = memo(function FloatingAIHud({
   const [isProbing, setIsProbing] = useState(false)
   const [realWordCount, setRealWordCount] = useState<number | null>(null)
   const [rfcStats, setRfcStats] = useState<{ must: number; should: number; may: number } | null>(null)
+  /** 探针命中的规约原句（真数据：正文扫描的上下文切片，每级至多 2 条） */
+  const [rfcHits, setRfcHits] = useState<
+    Array<{ level: 'MUST' | 'SHOULD' | 'MAY'; quote: string; context: string }>
+  >([])
 
   const docTitle = useMemo(() => {
     if (!activeFilePath) return '当前研读卷宗'
@@ -102,6 +207,8 @@ export const FloatingAIHud = memo(function FloatingAIHud({
             should: Math.max(1, shouldCount),
             may: Math.max(1, mayCount),
           })
+          // 同步抽取命中原句：原文大小写保留，前后各取 36 字上下文，每级至多 2 条
+          setRfcHits(collectRfcHits(text))
         }
       }
     } catch {
@@ -112,44 +219,10 @@ export const FloatingAIHud = memo(function FloatingAIHud({
     }
   }
 
-  // AI 编目提案状态
-  const [tocProposals, setTocProposals] = useState<
-    Array<{
-      id: string
-      type: 'add' | 'rename' | 'reorder'
-      proposedTitle: string
-      targetChapter: string
-      status: 'pending' | 'accepted' | 'rejected'
-    }>
-  >([
-    {
-      id: 'toc-1',
-      type: 'add',
-      proposedTitle: '核心状态机生命周期流转拓扑',
-      targetChapter: '协议握手与初始化',
-      status: 'pending',
-    },
-    {
-      id: 'toc-2',
-      type: 'rename',
-      proposedTitle: '双向能力协商与异常熔断机制',
-      targetChapter: '客户端与 Agent 协商',
-      status: 'pending',
-    },
-  ])
-
-  const handleAcceptToc = (id: string) => {
-    setTocProposals((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: 'accepted' as const } : p)),
-    )
-    toast.success('已采纳编目提案，大纲目录已更新')
-  }
-
-  const handleRejectToc = (id: string) => {
-    setTocProposals((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: 'rejected' as const } : p)),
-    )
-  }
+  // AI 编目提案：由对话工具调用历史真实派生（toc_upsert_entry），无调用时留空。
+  // 历史遗留的写死示例（toc-1/toc-2）已清扫，不再伪造待审数据。
+  const activeMessages = useAcpActiveMessages()
+  const tocProposals = useMemo(() => deriveTocProposals(activeMessages), [activeMessages])
 
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; posX: number; posY: number } | null>(null)
@@ -547,63 +620,63 @@ export const FloatingAIHud = memo(function FloatingAIHud({
               </div>
 
               <div className="space-y-2">
-                <div className="p-2.5 rounded-xl bg-card border border-rose-500/25 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/20">
-                      MUST (强制遵循)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        toast.message('正在定位强制约束条约原句')
-                        window.dispatchEvent(
-                          new CustomEvent('inkdown:anchor-highlight', {
-                            detail: 'initialize 请求',
-                          }),
-                        )
-                      }}
-                      className="px-2 py-0.5 rounded text-[10.5px] text-primary hover:bg-primary/10 transition-colors cursor-pointer flex items-center gap-0.5"
-                    >
-                      <span>定位</span>
-                      <ArrowUpRight className="size-3" />
-                    </button>
+                {rfcHits.length === 0 ? (
+                  <div className="p-3 rounded-xl border border-dashed border-border/60 text-center space-y-1">
+                    <p className="text-[11px] text-muted-foreground">暂未命中规约约束条目</p>
+                    <p className="text-[10px] text-muted-foreground/70">
+                      运行「重新探针」后将按 MUST / SHOULD / MAY 列出正文原句
+                    </p>
                   </div>
-                  <div className="text-[11px] font-serif text-foreground font-medium">
-                    "客户端在建立双向能力协商前，必须显式发送 initialize 请求，携带 clientInfo 与能力沙箱声明。"
-                  </div>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    状态机前置约束，防范未经鉴权的外部命令越权穿透。
-                  </p>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-card border border-amber-500/25 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                      SHOULD (强烈建议)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        toast.message('正在定位建议规约原句')
-                        window.dispatchEvent(
-                          new CustomEvent('inkdown:anchor-highlight', {
-                            detail: 'clientInfo',
-                          }),
-                        )
-                      }}
-                      className="px-2 py-0.5 rounded text-[10.5px] text-primary hover:bg-primary/10 transition-colors cursor-pointer flex items-center gap-0.5"
-                    >
-                      <span>定位</span>
-                      <ArrowUpRight className="size-3" />
-                    </button>
-                  </div>
-                  <div className="text-[11px] font-serif text-foreground font-medium">
-                    "客户端与 Agent 应当在请求中附加自身的运行环境指纹，便于跨平台诊断与幂等追踪。"
-                  </div>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    用于多端一致性恢复，确保断网重连后无感知复原。
-                  </p>
-                </div>
+                ) : (
+                  rfcHits.map((hit, idx) => {
+                    const badge =
+                      hit.level === 'MUST'
+                        ? 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/20'
+                        : hit.level === 'SHOULD'
+                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                          : 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20'
+                    const frame =
+                      hit.level === 'MUST'
+                        ? 'border-rose-500/25'
+                        : hit.level === 'SHOULD'
+                          ? 'border-amber-500/25'
+                          : 'border-blue-500/25'
+                    return (
+                      <div
+                        key={`${hit.level}-${idx}`}
+                        className={`p-2.5 rounded-xl bg-card border ${frame} space-y-1.5`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold border ${badge}`}
+                          >
+                            {hit.level}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              toast.message('正在定位规约原句')
+                              window.dispatchEvent(
+                                new CustomEvent('inkdown:anchor-highlight', {
+                                  detail: hit.quote,
+                                }),
+                              )
+                            }}
+                            className="px-2 py-0.5 rounded text-[10.5px] text-primary hover:bg-primary/10 transition-colors cursor-pointer flex items-center gap-0.5"
+                          >
+                            <span>定位</span>
+                          </button>
+                        </div>
+                        <div className="text-[11px] font-serif text-foreground font-medium">
+                          “{hit.quote}”
+                        </div>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          {hit.context}
+                        </p>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
 
@@ -630,23 +703,42 @@ export const FloatingAIHud = memo(function FloatingAIHud({
               </Button>
             </div>
 
-            {/* Key Entities & Terms */}
+            {/* 要点分类聚合：由真实批注实时统计，无批注时留空态 */}
             <div className="space-y-1.5 pt-1">
               <span className="text-[10.5px] font-medium text-muted-foreground">
-                核心协议实体与关键词云
+                要点分类聚合
               </span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {['MCP 协议', '状态机约束', '双向能力协商', '视口锚点锁', '零拷贝快照', '时序图谱'].map(
-                  (ent) => (
-                    <span
-                      key={ent}
-                      className="px-2 py-0.5 rounded-md text-[10px] bg-muted/40 border border-border/60 text-muted-foreground font-mono"
-                    >
-                      {ent}
-                    </span>
-                  ),
-                )}
-              </div>
+              {marks.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground/70">
+                  暂无批注要点，划选制卡后自动聚合
+                </p>
+              ) : (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(
+                    [
+                      ['concept', '概念'],
+                      ['quote', '引用'],
+                      ['method', '方法'],
+                      ['diagram', '时序图谱'],
+                      ['question', '思考'],
+                    ] as Array<[ReadingMarkCategory, string]>
+                  )
+                    .map(([cat, label]) => ({
+                      cat,
+                      label,
+                      count: marks.filter((m) => m.category === cat).length,
+                    }))
+                    .filter((c) => c.count > 0)
+                    .map((c) => (
+                      <span
+                        key={c.cat}
+                        className="px-2 py-0.5 rounded-md text-[10px] bg-muted/40 border border-border/60 text-muted-foreground font-mono"
+                      >
+                        {c.label} ×{c.count}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -716,7 +808,12 @@ export const FloatingAIHud = memo(function FloatingAIHud({
               </div>
 
               <div className="space-y-2">
-                {tocProposals.map((prop) => {
+                {tocProposals.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground p-2 border border-dashed border-border/60 rounded-xl text-center">
+                    暂无编目提案，AI 产生 toc_upsert_entry 后将在此列出待审
+                  </p>
+                ) : (
+                  tocProposals.map((prop) => {
                   const isAccepted = prop.status === 'accepted'
                   const isRejected = prop.status === 'rejected'
 
@@ -745,38 +842,29 @@ export const FloatingAIHud = memo(function FloatingAIHud({
 
                       <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[10.5px]">
                         <span className="text-muted-foreground">
-                          {isAccepted ? '已合并至大纲草稿' : isRejected ? '已忽略此建议' : '待读者裁定'}
+                          {isAccepted ? '工具已执行' : isRejected ? '工具未成功' : '等待对话审批'}
                         </span>
 
                         {prop.status === 'pending' ? (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-[10.5px] text-muted-foreground hover:text-foreground"
-                              onClick={() => handleRejectToc(prop.id)}
-                            >
-                              忽略
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="h-6 px-2.5 text-[10.5px] bg-primary text-primary-foreground hover:bg-primary/90 gap-1"
-                              onClick={() => handleAcceptToc(prop.id)}
-                            >
-                              <Check className="size-3" />
-                              <span>采纳编目</span>
-                            </Button>
-                          </div>
+                          <Button
+                            size="sm"
+                            className="h-6 px-2.5 text-[10.5px] bg-primary text-primary-foreground hover:bg-primary/90 gap-1"
+                            onClick={() => setHudActiveTab('chat')}
+                          >
+                            <span>去对话审批</span>
+                          </Button>
                         ) : isAccepted ? (
                           <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-0.5">
                             <Check className="size-3" />
-                            <span>已采纳</span>
+                            <span>已执行</span>
                           </span>
-                        ) : null}
+                        ) : (
+                          <span className="text-muted-foreground">未执行</span>
+                        )}
                       </div>
                     </div>
                   )
-                })}
+                }))}
               </div>
             </div>
           </div>

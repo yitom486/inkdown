@@ -43,7 +43,7 @@ export interface AcpChatThread {
 
 export interface AcpUiStore {
   panelOpen: boolean
-  /** 伴读 HUD 模式：docked=侧栏分栏（默认），floating=悬浮伴读小窗，capsule=极简药丸胶囊 */
+  /** 伴读 HUD 模式：docked=侧栏分栏（HUD 内可选），floating=悬浮伴读小窗（默认），capsule=极简药丸胶囊 */
   hudDisplayMode: AcpHudDisplayMode
   setHudDisplayMode: (mode: AcpHudDisplayMode) => void
   selectedRuntimeId: string
@@ -58,6 +58,8 @@ export interface AcpUiStore {
   threads: AcpChatThread[]
   activeThreadId: string
   historyOpen: boolean
+  /** 各线程聊天滚动记忆（scrollTop + 是否贴底），悬浮/侧栏共用（persist） */
+  chatScrollByThread: Record<string, { scrollTop: number; pinned: boolean }>
   /**
    * 各运行时下用户选过的 Mode / Model 等（persist）。
    * 连接后写回 Agent，避免每次重开都回到默认。
@@ -109,6 +111,7 @@ export interface AcpUiStore {
   switchThread: (threadId: string) => void
   deleteThread: (threadId: string) => void
   renameThread: (threadId: string, title: string) => void
+  setChatScroll: (threadId: string, scroll: { scrollTop: number; pinned: boolean }) => void
 }
 
 /**

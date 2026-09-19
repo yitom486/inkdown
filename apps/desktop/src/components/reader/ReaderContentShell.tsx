@@ -49,6 +49,8 @@ interface ReaderContentShellProps {
   outlineNotice?: string
   tocAside?: ReactNode
   children: ReactNode
+  /** 卡片悬停时透出原文 excerpt（EPUB 用 CSS 高亮 API 照亮正文，PDF 画布暂不支持） */
+  onHoverExcerpt?: (excerpt: string | undefined) => void
 }
 
 export function ReaderContentShell({
@@ -73,6 +75,7 @@ export function ReaderContentShell({
   outlineNotice,
   tocAside,
   children,
+  onHoverExcerpt,
 }: ReaderContentShellProps) {
   // 知识卡轨与伴读联动状态
   const isCardRailOpen = useReaderHudUiStore((s) => s.isCardRailOpen)
@@ -246,6 +249,20 @@ export function ReaderContentShell({
         <MarginaliaBar
           marks={enhancedMarks}
           onMarkClick={onSelectMark}
+          onHoverAnchor={onHoverExcerpt}
+          chapterOfMark={
+            marksToc && marksResolveChapter
+              ? (m) => {
+                  try {
+                    const ref = marksResolveChapter(m, marksToc)
+                    return { key: ref.key, label: ref.label }
+                  } catch {
+                    return null
+                  }
+                }
+              : undefined
+          }
+          currentChapterKey={marksCurrentChapterKey}
           onDeleteMark={(id) => {
             const m = marks.find((item) => item.id === id)
             if (m) onDeleteMark(m)

@@ -36,11 +36,18 @@ import {
   titleFromMessages,
 } from './chat-helpers'
 
+export interface ChatScrollState {
+  scrollTop: number
+  pinned: boolean
+}
+
 export interface ChatSlice {
   threads: AcpChatThread[]
   activeThreadId: string
   historyOpen: boolean
   pendingMarkProposalSnapshotContents: string[]
+  /** 各线程的聊天滚动记忆（scrollTop + 是否贴底），悬浮/侧栏共用，关闭重开原位恢复 */
+  chatScrollByThread: Record<string, ChatScrollState>
 
   setHistoryOpen: (open: boolean) => void
   appendUserMessage: (text: string, attachments?: AcpMessageAttachment[]) => void
@@ -56,6 +63,7 @@ export interface ChatSlice {
   deleteThread: (threadId: string) => void
   renameThread: (threadId: string, title: string) => void
   applySessionUpdate: (update: Record<string, unknown>) => void
+  setChatScroll: (threadId: string, scroll: ChatScrollState) => void
 }
 
 export const initialThread = createEmptyThread()
@@ -70,6 +78,12 @@ export const createChatSlice: StateCreator<
   activeThreadId: initialThread.id,
   historyOpen: false,
   pendingMarkProposalSnapshotContents: [],
+  chatScrollByThread: {},
+
+  setChatScroll: (threadId, scroll) =>
+    set((s) => ({
+      chatScrollByThread: { ...s.chatScrollByThread, [threadId]: scroll },
+    })),
 
   setHistoryOpen: (open) => set({ historyOpen: open }),
 
@@ -259,6 +273,8 @@ export const createChatSlice: StateCreator<
   deleteThread: (threadId) =>
     set((s) => {
       let threads = s.threads.filter((t) => t.id !== threadId)
+      const chatScrollByThread = { ...s.chatScrollByThread }
+      delete chatScrollByThread[threadId]
       const currentRuntimeId = s.selectedRuntimeId
       const runtimeThreads = threads.filter(
         (t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === currentRuntimeId,
@@ -270,11 +286,12 @@ export const createChatSlice: StateCreator<
           threads,
           activeThreadId: fresh.id,
           prompting: false,
+          chatScrollByThread,
         }
       }
       const activeThreadId =
         s.activeThreadId === threadId ? runtimeThreads[0]!.id : s.activeThreadId
-      return { threads, activeThreadId, prompting: false }
+      return { threads, activeThreadId, prompting: false, chatScrollByThread }
     }),
 
   renameThread: (threadId, title) =>

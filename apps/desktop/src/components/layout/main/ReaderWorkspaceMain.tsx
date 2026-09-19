@@ -16,12 +16,15 @@ interface ReaderWorkspaceMainProps {
   filePath: string
   documentKind: ReaderDocumentKind
   theme: AppTheme
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
 export function ReaderWorkspaceMain({
   filePath,
   documentKind,
   theme,
+  workspaceRoot,
 }: ReaderWorkspaceMainProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -36,9 +39,9 @@ export function ReaderWorkspaceMain({
           }
         >
           {documentKind === 'pdf' ? (
-            <PdfViewer filePath={filePath} theme={theme} />
+            <PdfViewer filePath={filePath} theme={theme} workspaceRoot={workspaceRoot} />
           ) : (
-            <FoliateReaderViewer filePath={filePath} documentKind={documentKind} theme={theme} />
+            <FoliateReaderViewer filePath={filePath} documentKind={documentKind} theme={theme} workspaceRoot={workspaceRoot} />
           )}
         </Suspense>
       </main>

@@ -72,7 +72,7 @@ const getDefaultFloatingPosition = () => {
 export const useReaderHudUiStore = create<ReaderHudUiState>()(
   persist(
     (set, get) => ({
-      hudDisplayMode: 'docked',
+      hudDisplayMode: 'floating',
       panelOpen: false,
       floatingPosition: getDefaultFloatingPosition(),
       isDragging: false,

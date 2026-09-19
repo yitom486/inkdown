@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Loader2 } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,18 @@ export const AgentMessageList = memo(function AgentMessageList({
   const timeline = useMemo(() => groupAgentMessages(messages), [messages])
 
   const streamingAny = messages.some((m) => m.streaming) || prompting
+  // 滚动记忆归属：只订阅线程 id（极少变化），快照读写走 getState，不引入额外订阅
+  const threadId = useAcpUiStore((s) => s.activeThreadId)
+  const loadChatScroll = useCallback(
+    () => useAcpUiStore.getState().chatScrollByThread[threadId],
+    [threadId],
+  )
+  const saveChatScroll = useCallback(
+    (next: { scrollTop: number; pinned: boolean }) => {
+      useAcpUiStore.getState().setChatScroll(threadId, next)
+    },
+    [threadId],
+  )
   const stickToBottomState = useMemo(
     () => ({
       messageCount: messages.length,
@@ -63,6 +75,9 @@ export const AgentMessageList = memo(function AgentMessageList({
     contentRef: messagesRef,
     messageState: stickToBottomState,
     streaming: streamingAny,
+    threadId,
+    loadScroll: loadChatScroll,
+    saveScroll: saveChatScroll,
   })
 
   const pendingOrphan = shouldShowOrphanPermissionCard(pendingPermission, messages)

@@ -489,6 +489,7 @@ function App() {
         onAbout={() => setAboutOpen(true)}
         onNewWindow={() => appApi.newWindow()}
         onQuit={quitApp}
+        suppressDockedAgent={(isReader && !!readerDocumentKind) || (isWebDoc && !!webPageUrl)}
       >
         {isWebDoc && webPageUrl ? (
           <WebDocWorkspaceMain
@@ -498,12 +499,14 @@ function App() {
             recentUrls={recentWebUrls}
             onNavigateUrl={handleOpenWebDoc}
             onOutlineChange={handleOutlineChange}
+            workspaceRoot={workspaceRoot}
           />
         ) : isReader && readerDocumentKind && filePath ? (
           <ReaderWorkspaceMain
             filePath={filePath}
             documentKind={readerDocumentKind}
             theme={theme}
+            workspaceRoot={workspaceRoot}
           />
         ) : (
           <EditorWorkspaceMain

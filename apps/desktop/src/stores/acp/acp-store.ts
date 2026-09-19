@@ -34,6 +34,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
         selectedRuntimeId: state.selectedRuntimeId,
         preferredConfigByRuntime: state.preferredConfigByRuntime,
         activeThreadId: state.activeThreadId,
+        chatScrollByThread: state.chatScrollByThread,
         threads: pruneBlankThreads(state.threads)
           .map((t) => ({
             ...t,
@@ -64,7 +65,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           ...current,
           ...p,
           panelOpen: Boolean(p.panelOpen),
-          hudDisplayMode: (p.hudDisplayMode as AcpHudDisplayMode) ?? 'docked',
+          hudDisplayMode: (p.hudDisplayMode as AcpHudDisplayMode) ?? 'floating',
           threads: ensured,
           activeThreadId,
           preferredConfigByRuntime,

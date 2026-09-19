@@ -38,6 +38,7 @@ import { useAcpSession } from '@/hooks/agent/useAcpSession'
 import { useHighlightTheme } from '@/hooks/preview/useHighlightTheme'
 import { cn } from '@/lib/utils'
 import { useAcpChatShell, useAcpUiStore } from '@/stores/acp-ui-store'
+import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
 import { isOk } from '@inkdown/contracts'
@@ -53,6 +54,19 @@ interface AgentPanelProps {
   floating?: boolean
   onToggleFloating?: () => void
   onMinimizeToCapsule?: () => void
+  /** 嵌入阅读器内框行时限定宽度（如 w-[340px] shrink-0），默认占满父容器 */
+  className?: string
+}
+
+/**
+ * docked 侧栏可见性单一真相源：面板开 + 侧栏态 + 非禅模式。
+ * WorkspaceShell 与各阅读器共用，保证两处挂载点互斥、状态一致。
+ */
+export function useIsDockedAgentVisible(): boolean {
+  const panelOpen = useAcpUiStore((s) => s.panelOpen)
+  const hudDisplayMode = useAcpUiStore((s) => s.hudDisplayMode)
+  const zenMode = useReaderHudUiStore((s) => s.zenMode)
+  return panelOpen && hudDisplayMode === 'docked' && !zenMode
 }
 
 export const AgentPanel = memo(function AgentPanel({
@@ -60,6 +74,7 @@ export const AgentPanel = memo(function AgentPanel({
   floating = false,
   onToggleFloating,
   onMinimizeToCapsule,
+  className,
 }: AgentPanelProps) {
   const view = useAcpChatShell()
   const setSelectedRuntimeId = useAcpUiStore((s) => s.setSelectedRuntimeId)
@@ -227,13 +242,18 @@ export const AgentPanel = memo(function AgentPanel({
 
   return (
     <aside
-      className="flex h-full w-full min-w-0 flex-col border-l border-border/50 bg-sidebar/95 backdrop-blur-sm"
+      className={cn(
+        'flex h-full w-full min-w-0 flex-col overflow-hidden bg-transparent',
+        className,
+      )}
       role="region"
       aria-label="Agent 聊天"
       data-testid="agent-panel"
       data-keep-reader-selection
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/50 px-3">
+      {/* 内嵌子卡：侧栏是工作区内框的孩子，不再顶天立地贴边 */}
+      <div className="m-2 ml-1 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-sm backdrop-blur-sm">
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/50 px-3">
         <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <AgentMark className="size-4" />
         </div>
@@ -454,6 +474,47 @@ export const AgentPanel = memo(function AgentPanel({
       />
 
       <div className="shrink-0 space-y-1.5 p-3 pt-2">
+        {/* 底部快捷动作：真实 Agent 请求（经 MCP 工具执行），非本地 mock */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {(
+            [
+              {
+                key: 'cross-ref',
+                label: '跨章引证',
+                hint: '调用交叉引用分析当前阅读位置',
+                text: '请对当前阅读位置做跨章节引证分析：调用 inkdown_cross_reference 工具，找出与当前内容相关的章节与实体，给出可跳转的结论。',
+              },
+              {
+                key: 'probe',
+                label: '全篇探针',
+                hint: '扫描全篇字数与规约约束',
+                text: '请对当前文档做全篇探针扫描：统计总字数与预估通读用时，并列出正文中 MUST / SHOULD / MAY 规约约束原句及分布。',
+              },
+              {
+                key: 'resume',
+                label: '续读脉络',
+                hint: '总结会话并给出续读建议',
+                text: '请基于当前会话总结已研读要点，并给出下一步续读建议。',
+              },
+            ] as const
+          ).map((action) => (
+            <button
+              key={action.key}
+              type="button"
+              title={action.hint}
+              disabled={view.status !== 'connected' || view.prompting}
+              onClick={() =>
+                void sendPrompt({
+                  text: action.text,
+                  prompt: [{ type: 'text', text: action.text }],
+                })
+              }
+              className="shrink-0 rounded-full border border-border/60 bg-muted/40 px-2.5 py-1 text-[10.5px] text-muted-foreground transition-all hover:border-primary/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
         <AgentComposer
           disabled={
             view.status === 'connecting' ||
@@ -671,6 +732,8 @@ export const AgentPanel = memo(function AgentPanel({
           <p className="px-3 pb-2 text-[10px] text-destructive">{view.statusError}</p>
         ) : null}
       </div>
+      </div>
+      {/* ↑ 内嵌子卡结束；以下弹窗保持与卡片同级，避免被圆角裁剪 */}
 
       <AgentAuthDialog
         open={authOpen}

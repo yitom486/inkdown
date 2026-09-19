@@ -24,7 +24,7 @@ export const createHudSlice: StateCreator<
   HudSlice
 > = (set, get) => ({
   panelOpen: false,
-  hudDisplayMode: 'docked',
+  hudDisplayMode: 'floating',
   composerFocusNonce: 0,
   composerInsertNonce: 0,
 
