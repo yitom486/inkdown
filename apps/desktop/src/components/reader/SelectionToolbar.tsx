@@ -33,6 +33,8 @@ export interface SelectionToolbarProps {
   onAddToChat?: () => void
   /** 将当前选区存为高亮；颜色由色点选择，默认黄 */
   onHighlight?: (color: HighlightColorId) => void
+  /** 启发式智能制卡并自动展开卡轨 */
+  onGenerateCard?: () => void
   onDismiss: () => void
 }
 
@@ -47,6 +49,7 @@ export function SelectionToolbar({
   onAskAgent,
   onAddToChat,
   onHighlight,
+  onGenerateCard,
   onDismiss,
 }: SelectionToolbarProps) {
   const [copied, setCopied] = useState(false)
@@ -146,6 +149,19 @@ export function SelectionToolbar({
         <MessageSquarePlus className="size-3.5 text-muted-foreground" />
         <span>批注</span>
       </Button>
+
+      {onGenerateCard ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 rounded-lg border border-primary/25 bg-primary/10 px-2 text-xs font-medium text-primary shadow-xs hover:bg-primary/20"
+          title="启发式智能提炼为微晶知识卡片并展开右侧卡轨"
+          onClick={onGenerateCard}
+        >
+          <Sparkles className="size-3.5" />
+          <span>智能制卡</span>
+        </Button>
+      ) : null}
 
       {onAddToChat ? (
         <Button

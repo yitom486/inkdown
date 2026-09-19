@@ -1359,6 +1359,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onGenerateCard={selectionActions.handleGenerateCard}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}

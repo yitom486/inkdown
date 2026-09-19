@@ -2343,6 +2343,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onGenerateCard={selectionActions.handleGenerateCard}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}

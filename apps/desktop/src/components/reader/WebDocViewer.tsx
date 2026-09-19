@@ -1104,6 +1104,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onGenerateCard={selectionActions.handleGenerateCard}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}

@@ -6,6 +6,8 @@ import {
 } from '@/lib/agent/context/focus-agent-composer'
 import { copyTextToClipboard } from '@inkdown/reader-core'
 import type { HighlightColorId } from '@inkdown/reader-core'
+import { heuristicClassifyMark } from '@/lib/reader/marks/heuristic-card-classifier'
+import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 
 /**
  * 三阅读器（PDF / Foliate / WebDoc）划选工具条的共享动作。
@@ -35,6 +37,7 @@ export interface ReaderSelectionActions {
   handleHighlight: (color: HighlightColorId) => void
   handleAddToChat: () => void
   handleAskAgent: () => void
+  handleGenerateCard: () => void
   handleDismiss: () => void
 }
 
@@ -94,12 +97,44 @@ export function useReaderSelectionActions(
     dimTextSelection()
   }, [dimTextSelection])
 
+  const handleGenerateCard = useCallback(() => {
+    if (hasSelection && !hasSelection()) {
+      toast.error('当前没有可用选区，请先划选文本')
+      return
+    }
+    const text = snapshotText ?? ''
+    if (!text.trim()) {
+      toast.error('选中文本为空')
+      return
+    }
+    const result = heuristicClassifyMark(text)
+    retainSelection?.()
+    const pending = saveHighlight(
+      JSON.stringify({
+        title: result.title,
+        category: result.category,
+        aiSummary: result.aiSummary,
+        keyPoints: result.keyPoints,
+      }),
+      result.color,
+    )
+    if (onHighlightError) {
+      void pending.catch(onHighlightError)
+    } else {
+      void pending
+    }
+    useReaderHudUiStore.getState().setIsCardRailOpen(true)
+    toast.success(`已生成【${result.title}】知识卡片`)
+    clearTextSelection()
+  }, [hasSelection, snapshotText, retainSelection, saveHighlight, onHighlightError, clearTextSelection])
+
   return {
     handleCopy,
     handleAnnotate,
     handleHighlight,
     handleAddToChat,
     handleAskAgent,
+    handleGenerateCard,
     handleDismiss: clearTextSelection,
   }
 }
