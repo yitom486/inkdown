@@ -4,9 +4,11 @@ import type { DatabaseSync } from 'node:sqlite'
  * 罗盘索引 schema（单书一库）。
  * books/chapters/blocks + trigram FTS；blocks.id 为 INTEGER rowid，
  * FTS 外部内容表才能用 content_rowid 挂接。
+ * v5 新增 marks（卡片住本书库，见 .plan/marks-sqlite/01）：marks.id 为 TEXT 主键，
+ * 但 SQLite 表恒有隐式 rowid，marks_fts 挂 content_rowid='rowid' 照样成立。
  */
 
-export const BOOK_DB_SCHEMA_VERSION = 4
+export const BOOK_DB_SCHEMA_VERSION = 5
 
 const MIGRATION_V1 = `
 CREATE TABLE IF NOT EXISTS books (
@@ -87,6 +89,67 @@ CREATE INDEX IF NOT EXISTS idx_toc_entries_book ON toc_entries (book_id, toc_ind
   4: `ALTER TABLE blocks ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown';
 ALTER TABLE blocks ADD COLUMN extract_version TEXT NOT NULL DEFAULT '';
 UPDATE blocks SET source = CASE WHEN bbox IS NULL THEN 'native' ELSE 'ocr' END;`,
+  // v5：marks（卡片搬迁，[2]-01）。anchor 双份：anchor_json 保真 blob，
+  // 抽取列供查。chapter_key 是主联动键（ChapterKey 品牌值，创建时固化优先，
+  // 见 .plan/marks-sqlite/01）；chapter_id 整数外键只在能对上 chapters 行时
+  // 回填（chapters 表无 key 列，01 期恒为 NULL，不阻塞主链路）。
+  // chapter_json 原样保留 MarkChapterRef（含 label/index），保证导出 round-trip。
+  // marks_tombstones 供同步合并（mergeReadingMarks 的 tombstones 在此落盘）。
+  // flashcards/review_log 留给 02（v6），不在本期。
+  5: `CREATE TABLE IF NOT EXISTS marks (
+  id TEXT PRIMARY KEY,
+  file_fingerprint TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  category TEXT,
+  title TEXT,
+  label TEXT,
+  note TEXT,
+  excerpt TEXT,
+  ai_summary TEXT,
+  key_points TEXT,
+  tags TEXT,
+  color TEXT,
+  collapsed INTEGER NOT NULL DEFAULT 0,
+  diagram_id TEXT,
+  anchor_json TEXT NOT NULL,
+  anchor_format TEXT NOT NULL,
+  chapter_key TEXT NOT NULL DEFAULT '',
+  chapter_json TEXT,
+  chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+  page_hint INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_marks_chapter_key ON marks (chapter_key);
+CREATE INDEX IF NOT EXISTS idx_marks_chapter ON marks (chapter_id);
+CREATE INDEX IF NOT EXISTS idx_marks_category ON marks (category);
+CREATE INDEX IF NOT EXISTS idx_marks_updated ON marks (updated_at);
+CREATE INDEX IF NOT EXISTS idx_marks_file_path ON marks (file_fingerprint, file_path);
+CREATE TABLE IF NOT EXISTS marks_tombstones (
+  mark_id TEXT PRIMARY KEY,
+  deleted_at INTEGER NOT NULL
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS marks_fts USING fts5(
+  title, excerpt, note, ai_summary,
+  content='marks', content_rowid='rowid',
+  tokenize='trigram'
+);
+CREATE TRIGGER IF NOT EXISTS marks_ai AFTER INSERT ON marks BEGIN
+  INSERT INTO marks_fts(rowid, title, excerpt, note, ai_summary)
+  VALUES (new.rowid, new.title, new.excerpt, new.note, new.ai_summary);
+END;
+CREATE TRIGGER IF NOT EXISTS marks_ad AFTER DELETE ON marks BEGIN
+  INSERT INTO marks_fts(marks_fts, rowid, title, excerpt, note, ai_summary)
+  VALUES ('delete', old.rowid, old.title, old.excerpt, old.note, old.ai_summary);
+END;
+CREATE TRIGGER IF NOT EXISTS marks_au AFTER UPDATE ON marks BEGIN
+  INSERT INTO marks_fts(marks_fts, rowid, title, excerpt, note, ai_summary)
+  VALUES ('delete', old.rowid, old.title, old.excerpt, old.note, old.ai_summary);
+  INSERT INTO marks_fts(rowid, title, excerpt, note, ai_summary)
+  VALUES (new.rowid, new.title, new.excerpt, new.note, new.ai_summary);
+END;`,
 }
 
 export function getBookDbVersion(db: DatabaseSync): number {

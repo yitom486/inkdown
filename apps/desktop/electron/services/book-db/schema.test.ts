@@ -81,7 +81,7 @@ describe('book-db schema', () => {
        VALUES (?, NULL, -1, ?, 'paragraph', ?, ?, ?, ?)`,
     ).run(bookId, 1, 'OCR 段落', 2, '{"x":1,"y":2,"width":3,"height":4}', 0.9)
     const migrated = migrateBookDb(db)
-    expect(migrated).toEqual({ migrated: true, version: 4 })
+    expect(migrated).toEqual({ migrated: true, version: BOOK_DB_SCHEMA_VERSION })
     const rows = db
       .prepare('SELECT content AS c, source AS s FROM blocks ORDER BY id')
       .all() as { c: string; s: string }[]

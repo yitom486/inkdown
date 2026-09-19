@@ -21,10 +21,13 @@ import { isOk } from '@inkdown/contracts'
 
 describe('reading-marks-service', () => {
   beforeEach(async () => {
+    // 本文件锁定文件后端（同时证明回滚开关有效）；DB 后端由 marks-db.test.ts 覆盖
+    process.env.INKDOWN_MARKS_BACKEND = 'file'
     tempUserData = await mkdtemp(join(tmpdir(), 'reading-marks-'))
   })
 
   afterEach(() => {
+    delete process.env.INKDOWN_MARKS_BACKEND
     tempUserData = ''
   })
 

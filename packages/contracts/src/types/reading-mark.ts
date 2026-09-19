@@ -33,7 +33,8 @@ export function toChapterKey(raw: string): ChapterKey {
 /**
  * 卡片章节归属（写入时固化）：创建卡片的那一刻由创建方按当时目录解析一次，
  * 此后所有消费方（过滤/致灰/出处行/排序）只读该字段，不再现场 resolve。
- * 解析失败记 null（脏卡可查可清，不丢失）；DB 时代对应 `marks.chapter_id`。
+ * 解析失败记 null（脏卡可查可清，不丢失）；DB 时代对应 `marks.chapter_key`
+ *（主联动键）+ `marks.chapter_json`（含 label/index 的原样 round-trip）。
  */
 export interface MarkChapterRef {
   key: ChapterKey
