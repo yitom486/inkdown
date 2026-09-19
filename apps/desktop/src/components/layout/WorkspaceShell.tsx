@@ -267,7 +267,7 @@ export function WorkspaceShell({
         </ResizablePanelGroup>
       </div>
 
-      <FloatingAIHud workspaceRoot={workspaceRoot} />
+      <FloatingAIHud workspaceRoot={workspaceRoot} activeFilePath={activeFilePath} />
 
       <DiagramModal
         isOpen={!!selectedDiagram}
