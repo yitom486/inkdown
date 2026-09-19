@@ -6,8 +6,8 @@ import { useAppSettingsStore } from '@/stores/app-settings-store'
 /** 编辑区布局：仅源码 / 仅预览 / 左右分栏 */
 export type EditorViewMode = 'editor' | 'preview' | 'split'
 
-/** 应用外观；与 next-themes 等持久化主题对齐 */
-export type AppTheme = 'dark' | 'light'
+/** 应用外观；支持纸张白、石墨极夜、羊皮纸暖调三态 */
+export type AppTheme = 'light' | 'dark' | 'sepia'
 
 export interface FileUiState {
   viewMode: EditorViewMode
@@ -34,6 +34,7 @@ interface EditorUiStore {
   fileStates: Record<string, FileUiState>
   setTheme: (theme: AppTheme) => void
   toggleTheme: () => void
+  cycleTheme: () => void
   setOutlineExpanded: (expanded: boolean) => void
   setSidebarVisible: (visible: boolean) => void
   toggleSidebar: () => void
@@ -49,14 +50,24 @@ interface EditorUiStore {
 export const useEditorUiStore = create<EditorUiStore>()(
   persist(
     (set, get) => ({
-      theme: 'dark',
+      theme: 'light',
       outlineExpanded: false,
       sidebarVisible: true,
       fileStates: {},
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () =>
-        set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
+        set((state) => {
+          if (state.theme === 'light') return { theme: 'sepia' }
+          if (state.theme === 'sepia') return { theme: 'dark' }
+          return { theme: 'light' }
+        }),
+      cycleTheme: () =>
+        set((state) => {
+          if (state.theme === 'light') return { theme: 'sepia' }
+          if (state.theme === 'sepia') return { theme: 'dark' }
+          return { theme: 'light' }
+        }),
 
       setOutlineExpanded: (expanded) => set({ outlineExpanded: expanded }),
 

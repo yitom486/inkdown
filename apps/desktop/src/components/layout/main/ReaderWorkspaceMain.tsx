@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react'
 import { Loader2 } from 'lucide-react'
 import { FileBreadcrumb } from '@/components/layout/panels/FileBreadcrumb'
 import type { ReaderDocumentKind } from '@inkdown/contracts'
+import type { AppTheme } from '@/stores/editor-ui-store'
 
 // 阅读器按格式懒加载：foliate 统一承载 EPUB/MOBI，pdfjs 承载 PDF，首屏不付成本。
 const PdfViewer = lazy(() =>
@@ -14,7 +15,7 @@ const FoliateReaderViewer = lazy(() =>
 interface ReaderWorkspaceMainProps {
   filePath: string
   documentKind: ReaderDocumentKind
-  theme: 'dark' | 'light'
+  theme: AppTheme
 }
 
 export function ReaderWorkspaceMain({

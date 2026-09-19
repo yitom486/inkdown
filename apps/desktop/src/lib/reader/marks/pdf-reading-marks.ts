@@ -98,7 +98,7 @@ function appendUnderline(
   layer: SVGSVGElement,
   quad: ReturnType<typeof quadToViewport> | ReturnType<typeof rectToViewportQuad>,
   mark: ReadingMark,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
 ): void {
   const [start, end] = underlineEndpoints(quad)
   const line = document.createElementNS(SVG_NS, 'line')
@@ -156,7 +156,7 @@ export function renderPdfMarkOverlays(
   layer: SVGSVGElement,
   marks: ReadingMark[],
   pageNum: number,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
   viewport: PageViewport,
   transientSelection?: PdfSelectionSnapshot | null,
   pageElement?: HTMLElement | null,

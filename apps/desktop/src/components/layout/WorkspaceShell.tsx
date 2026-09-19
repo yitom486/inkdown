@@ -23,8 +23,10 @@ import { LibraryDrawer } from '@/components/reader/LibraryDrawer'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 export interface WorkspaceShellProps {
-  theme: 'dark' | 'light'
+  theme: AppTheme
   workspaceRoot?: string
   fileTree: FileTreeNode[]
   activeFilePath?: string
@@ -178,6 +180,7 @@ export function WorkspaceShell({
         onToggleSidebar={handleToggleSidebar}
         onToggleAgentPanel={handleToggleAgentPanel}
         onToggleTheme={onToggleTheme}
+        onSetTheme={(t) => useEditorUiStore.getState().setTheme(t)}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
         onQuickOpen={onQuickOpen}

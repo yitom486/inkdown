@@ -2,19 +2,23 @@ import type { ReactNode } from 'react'
 import {
   Bookmark,
   BookmarkPlus,
+  Coffee,
   Columns2,
   FileText,
   List,
   Maximize2,
   Minimize2,
+  Moon,
   PanelRightClose,
   PanelRightOpen,
   Sparkles,
+  Sun,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useReaderNavTitles } from '@/stores/reader-navigation-store'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
+import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { cn } from '@/lib/utils'
 
 interface ReaderToolbarShellProps {
@@ -228,6 +232,49 @@ export function ReaderToolbarShell({
           >
             {zenMode ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
           </Button>
+
+          {/* 三态微晶主题切换胶囊 (纸质白 / 羊皮纸暖调 / 石墨暗晶) */}
+          <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/60">
+            <button
+              type="button"
+              onClick={() => useEditorUiStore.getState().setTheme('light')}
+              className={cn(
+                'p-1 rounded-md transition-all cursor-pointer',
+                useEditorUiStore((s) => s.theme) === 'light'
+                  ? 'bg-card text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              title="纸质明亮模式"
+            >
+              <Sun className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => useEditorUiStore.getState().setTheme('sepia')}
+              className={cn(
+                'p-1 rounded-md transition-all cursor-pointer',
+                useEditorUiStore((s) => s.theme) === 'sepia'
+                  ? 'bg-card text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              title="羊皮纸暖调模式"
+            >
+              <Coffee className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => useEditorUiStore.getState().setTheme('dark')}
+              className={cn(
+                'p-1 rounded-md transition-all cursor-pointer',
+                useEditorUiStore((s) => s.theme) === 'dark'
+                  ? 'bg-card text-foreground shadow-xs font-semibold'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              title="极夜深色模式"
+            >
+              <Moon className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -5,13 +5,15 @@ import { WebDocAddressBar } from '@/components/layout/web-doc/WebDocAddressBar'
 import type { EditorOutlineState } from '@/components/layout/main/EditorWorkspaceMain'
 import type { MarkdownHeading } from '@/lib/editor/markdown-headings'
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 export interface WebDocWorkspaceMainHandle {
   selectHeading: (heading: MarkdownHeading) => void
 }
 
 interface WebDocWorkspaceMainProps {
   pageUrl: string
-  theme: 'dark' | 'light'
+  theme: AppTheme
   recentUrls?: string[]
   onNavigateUrl: (url: string) => void
   onOutlineChange?: (state: EditorOutlineState) => void

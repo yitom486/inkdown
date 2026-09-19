@@ -81,10 +81,12 @@ declare global {
   }
 }
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 interface FoliateReaderViewerProps {
   filePath: string
   documentKind: 'epub' | 'mobi'
-  theme: 'dark' | 'light'
+  theme: AppTheme
 }
 
 const READING_PROGRESS_SAVE_MS = 400
@@ -1312,10 +1314,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         <PaneErrorBoundary name={isEpub ? 'EPUB 阅读' : 'MOBI 阅读'} filePath={filePath}>
           <div
             ref={containerRef}
-            className={cn(
-              'foliate-reader-host relative h-full min-h-0 overflow-hidden',
-              theme === 'dark' ? 'bg-[#18181b]' : 'bg-[#fafafa]',
-            )}
+            className="foliate-reader-host relative h-full min-h-0 overflow-hidden bg-[var(--color-bg-base)]"
             data-theme={theme}
           >
             {isLoading && (

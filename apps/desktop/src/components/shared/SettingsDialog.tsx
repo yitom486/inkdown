@@ -196,8 +196,9 @@ export function SettingsDialog({ open, onOpenChange, onOpenErrorLog, onOpenAbout
   }
 
   const themeOptions: Array<{ value: AppTheme; label: string }> = [
-    { value: 'dark', label: '深色' },
-    { value: 'light', label: '浅色' },
+    { value: 'light', label: '纸质白' },
+    { value: 'sepia', label: '羊皮纸' },
+    { value: 'dark', label: '石墨黑' },
   ]
 
   const recentLimitOptions = RECENT_FILES_LIMIT_OPTIONS.map((value) => ({

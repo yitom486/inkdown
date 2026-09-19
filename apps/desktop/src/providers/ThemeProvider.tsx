@@ -5,7 +5,8 @@ import { useEditorUiStore, type AppTheme } from '@/stores/editor-ui-store'
 export function useApplyTheme(theme: AppTheme) {
   useEffect(() => {
     const root = document.documentElement
-    root.classList.toggle('dark', theme === 'dark')
+    root.classList.remove('light', 'sepia', 'dark')
+    root.classList.add(theme)
   }, [theme])
 }
 

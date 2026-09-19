@@ -452,7 +452,7 @@ function App() {
 
   return (
     <>
-      <Toaster theme={theme} richColors closeButton position="top-right" />
+      <Toaster theme={theme === 'dark' ? 'dark' : 'light'} richColors closeButton position="top-right" />
       <UpdatePromptHost />
 
       <WorkspaceShell

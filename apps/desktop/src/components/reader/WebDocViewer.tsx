@@ -109,9 +109,11 @@ export interface WebDocViewerHandle {
   selectHeading: (heading: MarkdownHeading) => void
 }
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 interface WebDocViewerProps {
   pageUrl: string
-  theme: 'dark' | 'light'
+  theme: AppTheme
   onOutlineChange?: (state: EditorOutlineState) => void
 }
 
@@ -1001,7 +1003,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const readerHost = (
     <PaneErrorBoundary name="在线文档" filePath={pageUrl}>
-      <div className={cn('web-doc-viewer-host relative h-full min-h-0', `theme-${theme}`)} data-theme={theme}>
+      <div className={cn('web-doc-viewer-host relative h-full min-h-0 bg-[var(--color-bg-base)]', `theme-${theme}`)} data-theme={theme}>
         {isLoading && !data ? (
           <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />

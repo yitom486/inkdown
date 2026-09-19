@@ -147,12 +147,13 @@ import type { AppError } from '@inkdown/contracts'
 import type { ReadingMark } from '@inkdown/contracts'
 import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
+import type { AppTheme } from '@/stores/editor-ui-store'
 import { appApi } from '@/api/app-api'
 import '@/styles/pdf-viewer.css'
 
 interface PdfViewerProps {
   filePath: string
-  theme: 'dark' | 'light'
+  theme: AppTheme
 }
 
 export function PdfViewer({ filePath, theme }: PdfViewerProps) {
@@ -2248,7 +2249,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       >
         <div
           ref={containerRef}
-          className={`h-full min-h-0 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
+          className="h-full min-h-0 overflow-auto bg-[var(--color-bg-base)]"
           onMouseMove={handlePdfMarkHoverMove}
           onMouseLeave={handlePdfMarkHoverLeave}
         >

@@ -21,11 +21,13 @@ import {
 import { reportAppError } from '@/lib/workspace/report-error'
 import type { ReadingMark } from '@inkdown/contracts'
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 interface PdfPageViewProps {
   pdf: PDFDocumentProxy
   pageNumber: number
   scale: number
-  theme: 'dark' | 'light'
+  theme: AppTheme
   marks: ReadingMark[]
   ocrPageCache?: PdfOcrPageCache | null
   /** W3：无原生层又无词缓存时通知调用方（由调用方决定是否自动识别本页） */

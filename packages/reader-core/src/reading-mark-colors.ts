@@ -58,7 +58,7 @@ export function highlightSwatch(color?: string): string {
   return HIGHLIGHT_COLORS.find((item) => item.id === id)!.swatch
 }
 
-export function highlightFill(color: string | undefined, theme: 'dark' | 'light'): string {
+export function highlightFill(color: string | undefined, theme: 'dark' | 'light' | 'sepia'): string {
   const id = normalizeHighlightColor(color)
   const entry = HIGHLIGHT_COLORS.find((item) => item.id === id)!
   return theme === 'dark' ? entry.dark : entry.light
@@ -67,7 +67,7 @@ export function highlightFill(color: string | undefined, theme: 'dark' | 'light'
 export function applyHighlightSurface(
   element: HTMLElement,
   color: string | undefined,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
 ): void {
   const id = normalizeHighlightColor(color)
   element.dataset.color = id
