@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DARK_UNIFORM_MARK_SWATCH,
   DEFAULT_HIGHLIGHT_COLOR,
   highlightFill,
   highlightSwatch,
@@ -37,6 +38,17 @@ describe('reading-mark-colors', () => {
     ).toBe('#123456')
     expect(resolveMarkCategorySwatch('method', () => undefined)).toBe(
       MARK_CATEGORY_SWATCH_FALLBACK.method,
+    )
+  })
+
+  it('Q4 决议：深色主题统一荧光黄，不分分类', () => {
+    expect(resolveMarkCategorySwatch('concept', undefined, 'dark')).toBe(DARK_UNIFORM_MARK_SWATCH)
+    expect(resolveMarkCategorySwatch('method', undefined, 'dark')).toBe(DARK_UNIFORM_MARK_SWATCH)
+    expect(resolveMarkCategorySwatch('concept', undefined, 'light')).toBe(
+      MARK_CATEGORY_SWATCH_FALLBACK.concept,
+    )
+    expect(resolveMarkCategorySwatch('concept', undefined, 'sepia')).toBe(
+      MARK_CATEGORY_SWATCH_FALLBACK.concept,
     )
   })
 })

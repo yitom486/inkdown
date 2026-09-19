@@ -403,7 +403,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     const getVar = (name: string) => rootCS?.getPropertyValue(name).trim() || undefined
     const palette: Record<string, string> = {}
     for (const cat of Object.keys(MARK_CATEGORY_SWATCH_FALLBACK)) {
-      palette[cat] = resolveMarkCategorySwatch(cat, getVar)
+      palette[cat] = resolveMarkCategorySwatch(cat, getVar, themeRef.current)
     }
     const sig = Object.values(palette).join('|')
     const buckets = new Map<string, Range[]>()
@@ -487,7 +487,10 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     for (const { doc, index } of contents) {
       try {
         doc.querySelectorAll('[data-inkdown-flag]').forEach((el) => el.remove())
-        const host = doc.body ?? doc.documentElement
+        // 旗标挂 documentElement 而非 body：主题 CSS 所有全宽 static 规则
+        // 全是 `body ...` 作用域，挂根元素天然免疫，新旧版本通吃；
+        // 行内 !important 再保一层，双保险。
+        const host = doc.documentElement
         if (!host) continue
         let placed = 0
         for (const mark of marksRef.current) {
@@ -517,18 +520,32 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
             }
           }
           if (!range) continue
-          let rect: DOMRect
-          try {
-            rect = range.getBoundingClientRect()
-          } catch {
-            continue
-          }
+          // 取首行矩形定圆心（多行引用的外接矩形中点会落在行缝里，视觉偏上）
+          const lineRect = ((): DOMRect | null => {
+            try {
+              const list = range.getClientRects()
+              if (list.length > 0) return list[0] as DOMRect
+              return range.getBoundingClientRect()
+            } catch {
+              return null
+            }
+          })()
+          if (!lineRect) continue
+          const rect = lineRect
           if (rect.width <= 0 && rect.height <= 0) continue
           const cat = (mark.category ?? resolveCardMeta(mark).category) as string
           const size = 12
           const flag = doc.createElement('div')
           flag.setAttribute('data-inkdown-flag', mark.id)
-          flag.style.cssText = `position:fixed;left:${Math.max(2, rect.left - size - 4)}px;top:${rect.top + rect.height / 2 - size / 2}px;width:${size}px;height:${size}px;border-radius:9999px;background:${resolveMarkCategorySwatch(cat, getVar)};border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer;z-index:5;padding:0;margin:0;`
+          // 关键几何用行内 !important：行内 important 高于样式表 important，
+          // 任何版本/缓存的主题 CSS（body > div 全宽 static 规则）都压不住，
+          // HMR 新旧混搭时也不再躺成条。
+          flag.style.cssText = `border-radius:9999px;background:${resolveMarkCategorySwatch(cat, getVar, themeRef.current)};border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer;z-index:5;padding:0;margin:0;`
+          flag.style.setProperty('position', 'fixed', 'important')
+          flag.style.setProperty('left', `${Math.max(2, rect.left - size - 8)}px`, 'important')
+          flag.style.setProperty('top', `${rect.top + rect.height / 2 - size / 2}px`, 'important')
+          flag.style.setProperty('width', `${size}px`, 'important')
+          flag.style.setProperty('height', `${size}px`, 'important')
           flag.addEventListener('click', (event) => {
             event.stopPropagation()
             emitRailFocus(mark.id)

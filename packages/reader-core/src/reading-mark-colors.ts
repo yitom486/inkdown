@@ -100,10 +100,16 @@ export const MARK_CATEGORY_SWATCH_FALLBACK: Record<string, string> = {
   question: '#c2703d',
 }
 
+/** 深色主题标记统一色（荧光黄，深底对比；Q4 决议） */
+export const DARK_UNIFORM_MARK_SWATCH = '#fde047'
+
 export function resolveMarkCategorySwatch(
   category: string | undefined,
   getVar?: (name: string) => string | undefined,
+  theme?: string,
 ): string {
+  // Q4 决议：深色主题标记统一荧光黄（分类色在深底对比不足），light/sepia 沿用分类色
+  if (theme === 'dark') return DARK_UNIFORM_MARK_SWATCH
   const key = (category ?? '').trim() || 'quote'
   const fallback = MARK_CATEGORY_SWATCH_FALLBACK[key] ?? MARK_CATEGORY_SWATCH_FALLBACK.quote!
   if (!getVar) return fallback

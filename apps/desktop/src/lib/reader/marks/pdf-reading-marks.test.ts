@@ -314,6 +314,23 @@ describe('renderPdfMarkOverlays', () => {
     expect(Number(flags[0]?.getAttribute('cx'))).toBeLessThan(10)
   })
 
+  it('Q4 决议：深色主题旗标统一荧光黄', () => {
+    const layer = createLayer()
+    const mark = createMark({
+      kind: 'highlight',
+      category: 'concept',
+      anchor: {
+        format: 'pdf',
+        page: 1,
+        rects: [{ x: 0.2, y: 0.3, width: 0.3, height: 0.04 }],
+      },
+    })
+    renderPdfMarkOverlays(layer, [mark], 1, 'dark', viewport)
+    expect(layer.querySelector('circle.pdf-mark-flag')?.getAttribute('fill')).toBe('#fde047')
+    renderPdfMarkOverlays(layer, [mark], 1, 'light', viewport)
+    expect(layer.querySelector('circle.pdf-mark-flag')?.getAttribute('fill')).toBe('#7c6aed')
+  })
+
   it('M2 旗标：点击圆点命中标记，单页上限 40', () => {
     const page = document.createElement('div')
     page.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100)

@@ -241,7 +241,7 @@ export function renderPdfMarkOverlays(
           layer,
           spot,
           mark,
-          resolveMarkCategorySwatch(markFlagCategory(mark), getVar),
+          resolveMarkCategorySwatch(markFlagCategory(mark), getVar, theme),
         )
         flagsDrawn += 1
       }
