@@ -86,3 +86,30 @@ export function liveSelectionCss(): string {
     }
   `
 }
+
+/**
+ * 卡片分类色（M2 页边旗标 / M1 行内标记共用口径）。
+ * 运行时优先读主题 CSS 变量 `--card-<category>-text`，取不到时回落字面值，
+ * 保证 EPUB（iframe 内）与 PDF（主文档）两端颜色同源。
+ */
+export const MARK_CATEGORY_SWATCH_FALLBACK: Record<string, string> = {
+  concept: '#7c6aed',
+  quote: '#b07d2b',
+  method: '#2f9e6e',
+  diagram: '#8a6bbf',
+  question: '#c2703d',
+}
+
+export function resolveMarkCategorySwatch(
+  category: string | undefined,
+  getVar?: (name: string) => string | undefined,
+): string {
+  const key = (category ?? '').trim() || 'quote'
+  const fallback = MARK_CATEGORY_SWATCH_FALLBACK[key] ?? MARK_CATEGORY_SWATCH_FALLBACK.quote!
+  if (!getVar) return fallback
+  try {
+    return getVar(`--card-${key}-text`)?.trim() || fallback
+  } catch {
+    return fallback
+  }
+}

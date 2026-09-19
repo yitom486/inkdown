@@ -3,7 +3,9 @@ import {
   DEFAULT_HIGHLIGHT_COLOR,
   highlightFill,
   highlightSwatch,
+  MARK_CATEGORY_SWATCH_FALLBACK,
   normalizeHighlightColor,
+  resolveMarkCategorySwatch,
 } from '@inkdown/reader-core'
 
 describe('reading-mark-colors', () => {
@@ -22,5 +24,19 @@ describe('reading-mark-colors', () => {
       expect(alpha).toBeGreaterThan(0)
       expect(alpha).toBeLessThanOrEqual(0.4)
     }
+  })
+
+  it('分类色：主题变量优先、缺失回落字面值（EPUB/PDF 同口径）', () => {
+    expect(resolveMarkCategorySwatch('concept')).toBe(MARK_CATEGORY_SWATCH_FALLBACK.concept)
+    expect(resolveMarkCategorySwatch('unknown-cat')).toBe(MARK_CATEGORY_SWATCH_FALLBACK.quote)
+    expect(resolveMarkCategorySwatch(undefined)).toBe(MARK_CATEGORY_SWATCH_FALLBACK.quote)
+    expect(
+      resolveMarkCategorySwatch('method', (name) =>
+        name === '--card-method-text' ? '  #123456  ' : undefined,
+      ),
+    ).toBe('#123456')
+    expect(resolveMarkCategorySwatch('method', () => undefined)).toBe(
+      MARK_CATEGORY_SWATCH_FALLBACK.method,
+    )
   })
 })

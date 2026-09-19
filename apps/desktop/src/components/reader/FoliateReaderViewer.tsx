@@ -49,6 +49,8 @@ import {
 import { normalizeLoadKey } from '@inkdown/reader-core'
 import {
   isSameSpineBase,
+  MARK_CATEGORY_SWATCH_FALLBACK,
+  resolveMarkCategorySwatch,
   scrollFoliateSectionToFragment,
   splitChapterFragment,
 } from '@inkdown/reader-core'
@@ -109,6 +111,9 @@ function overlayerKeyForMark(mark: ReadingMark): string | null {
 function findMarkByOverlayerKey(marks: ReadingMark[], key: string): ReadingMark | undefined {
   return marks.find((mark) => overlayerKeyForMark(mark) === key)
 }
+
+/** M2 页边旗标：每渲染文档上限（与 M1 行内着色同 cap，不乱标） */
+const EPUB_MARK_FLAGS_PER_DOC_CAP = 40
 
 /** epub.js themes 规则（selector→props）转可注入 CSS 文本 */
 function themeRulesToCss(rules: Record<string, Record<string, string>>): string {
@@ -395,14 +400,10 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     }
     if (docs.length === 0) return
     const rootCS = document.defaultView?.getComputedStyle(document.documentElement)
-    const pickVar = (name: string, fallback: string) =>
-      rootCS?.getPropertyValue(name).trim() || fallback
-    const palette: Record<string, string> = {
-      concept: pickVar('--card-concept-text', '#7c6aed'),
-      quote: pickVar('--card-quote-text', '#b07d2b'),
-      method: pickVar('--card-method-text', '#2f9e6e'),
-      diagram: pickVar('--card-diagram-text', '#8a6bbf'),
-      question: pickVar('--card-question-text', '#c2703d'),
+    const getVar = (name: string) => rootCS?.getPropertyValue(name).trim() || undefined
+    const palette: Record<string, string> = {}
+    for (const cat of Object.keys(MARK_CATEGORY_SWATCH_FALLBACK)) {
+      palette[cat] = resolveMarkCategorySwatch(cat, getVar)
     }
     const sig = Object.values(palette).join('|')
     const buckets = new Map<string, Range[]>()
@@ -458,6 +459,82 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
           } catch {
             // 单个失败不影响其余分类
           }
+        }
+      } catch {
+        // 单文档失败不影响其余文档
+      }
+    }
+  }, [])
+
+  // M2 页边旗标：每渲染文档内 fixed 圆点（相对 iframe 视口定位，随文档滚动天然跟随，
+  // 只在 relocation/载入/标记变更/主题字号变化时重算）。定位与 M1 同口径
+  //（CFI 优先、excerpt 兜底，无合法坐标不画）；点击直达卡片（rail-follow 通道）。
+  const syncMarkFlags = useCallback(() => {
+    const view = viewRef.current
+    if (!view) return
+    let contents: Array<{ doc: Document; index: number }> = []
+    try {
+      const renderer = view.renderer as unknown as {
+        getContents: () => Array<{ doc: Document; index: number }>
+      } | null
+      contents = renderer?.getContents() ?? []
+    } catch {
+      return
+    }
+    if (contents.length === 0) return
+    const rootCS = document.defaultView?.getComputedStyle(document.documentElement)
+    const getVar = (name: string) => rootCS?.getPropertyValue(name).trim() || undefined
+    for (const { doc, index } of contents) {
+      try {
+        doc.querySelectorAll('[data-inkdown-flag]').forEach((el) => el.remove())
+        const host = doc.body ?? doc.documentElement
+        if (!host) continue
+        let placed = 0
+        for (const mark of marksRef.current) {
+          if (placed >= EPUB_MARK_FLAGS_PER_DOC_CAP) break
+          if (mark.kind === 'bookmark') continue
+          let range: Range | null = null
+          const anchor = mark.anchor
+          const cfi =
+            anchor.format === 'epub' || anchor.format === 'mobi'
+              ? (anchor.cfiRange ?? anchor.cfi)
+              : undefined
+          if (cfi) {
+            try {
+              const resolved = view.resolveCFI(cfi)
+              if (resolved.index === index) range = resolved.anchor(doc)
+            } catch {
+              range = null
+            }
+          }
+          if (!range) {
+            const excerpt = mark.excerpt?.trim()
+            if (!excerpt || !doc.body) continue
+            try {
+              range = findTextRangeInRoot(doc.body, excerpt)
+            } catch {
+              range = null
+            }
+          }
+          if (!range) continue
+          let rect: DOMRect
+          try {
+            rect = range.getBoundingClientRect()
+          } catch {
+            continue
+          }
+          if (rect.width <= 0 && rect.height <= 0) continue
+          const cat = (mark.category ?? resolveCardMeta(mark).category) as string
+          const size = 12
+          const flag = doc.createElement('div')
+          flag.setAttribute('data-inkdown-flag', mark.id)
+          flag.style.cssText = `position:fixed;left:${Math.max(2, rect.left - size - 4)}px;top:${rect.top + rect.height / 2 - size / 2}px;width:${size}px;height:${size}px;border-radius:9999px;background:${resolveMarkCategorySwatch(cat, getVar)};border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer;z-index:5;padding:0;margin:0;`
+          flag.addEventListener('click', (event) => {
+            event.stopPropagation()
+            emitRailFocus(mark.id)
+          })
+          host.appendChild(flag)
+          placed += 1
         }
       } catch {
         // 单文档失败不影响其余文档
@@ -1108,7 +1185,8 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     if (!ready) return
     syncVisualMarks()
     syncMarkHighlights()
-  }, [marks, ready, readerFontSize, readerLineHeight, syncVisualMarks, syncMarkHighlights, theme])
+    syncMarkFlags()
+  }, [marks, ready, readerFontSize, readerLineHeight, syncVisualMarks, syncMarkHighlights, syncMarkFlags, theme])
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -1157,10 +1235,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
       setGlobalProgress(resolveGlobalProgress(fraction))
       syncChapterNav(sectionIndex, detail.cfi)
       schedulePersistReadingProgress(sectionIndex, fraction, detail.cfi)
-      // 切节时重绘卡片常驻标记（节内滚动文档集合不变，无需重算）
+      // 切节时重绘卡片常驻标记与旗标（节内滚动文档集合不变，无需重算）
       if (lastMarkSectionRef.current !== sectionIndex) {
         lastMarkSectionRef.current = sectionIndex
         syncMarkHighlights()
+        syncMarkFlags()
       }
       // 节内分片细化：用 foliate 自带的可见 TOC 项（与其渲染一致），而非自测矩形
       const tocHref = detail.tocItem?.href
@@ -1195,6 +1274,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
       syncVisualMarks()
       lastMarkSectionRef.current = -1
       syncMarkHighlights()
+      syncMarkFlags()
     }
 
     const onLink = (event: CustomEvent) => {
