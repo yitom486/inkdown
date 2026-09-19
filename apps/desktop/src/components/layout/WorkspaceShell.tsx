@@ -308,6 +308,7 @@ export function WorkspaceShell({
         onClose={() => setIsNotesDrawerOpen(false)}
         marks={marks ?? []}
         bookTitle={activeFilePath ? activeFilePath.split(/[/\\]/).pop() : undefined}
+        filePath={activeFilePath ?? undefined}
         onDeleteMark={(id) => void deleteMark(id)}
       />
 

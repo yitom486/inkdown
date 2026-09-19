@@ -1,5 +1,7 @@
 import type {
   CreateReadingMarkPayload,
+  MarksListByChapterPayload,
+  MarksSearchPayload,
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '@inkdown/contracts'
@@ -39,5 +41,21 @@ export const readingMarksApi = {
     const api = requireElectronAPI()
     if (!api.ok) return api
     return api.value.deleteReadingMark(id)
+  },
+
+  /** 本书内卡片全文搜（空 query 调主进程直接回空，调用方展示全量） */
+  async search(payload: MarksSearchPayload): Promise<Result<ReadingMark[], AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.searchReadingMarks(payload)
+  },
+
+  /** 按章查卡（固化命中 + 未固化候选，调用方窄化；见 chapter-scope） */
+  async listByChapter(
+    payload: MarksListByChapterPayload,
+  ): Promise<Result<ReadingMark[], AppError>> {
+    const api = requireElectronAPI()
+    if (!api.ok) return api
+    return api.value.listReadingMarksByChapter(payload)
   },
 }

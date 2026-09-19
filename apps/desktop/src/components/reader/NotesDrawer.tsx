@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useDeferredValue, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   BookmarkCheck,
   Check,
@@ -11,6 +12,9 @@ import {
   X,
 } from 'lucide-react'
 import type { ReadingMark, ReadingMarkCategory } from '@inkdown/contracts'
+import { isOk } from '@inkdown/contracts'
+import { queryKeys } from '@/api/query-keys'
+import { readingMarksApi } from '@/api/reading-marks-api'
 import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { Button } from '@/components/ui/button'
 
@@ -19,6 +23,8 @@ export interface NotesDrawerProps {
   onClose: () => void
   marks: ReadingMark[]
   bookTitle?: string
+  /** 本书路径：有则搜索框走 FTS（marks:search），缺省回落内存过滤 */
+  filePath?: string
   onDeleteMark?: (id: string) => void
   onScrollToAnchor?: (excerpt: string) => void
   onOpenFlashcards?: () => void
@@ -29,6 +35,7 @@ export const NotesDrawer: React.FC<NotesDrawerProps> = ({
   onClose,
   marks,
   bookTitle = '当前研读专卷',
+  filePath,
   onDeleteMark,
   onScrollToAnchor,
   onOpenFlashcards,
@@ -38,6 +45,76 @@ export const NotesDrawer: React.FC<NotesDrawerProps> = ({
   const [copied, setCopied] = useState(false)
 
   if (!isOpen) return null
+
+  return (
+    <NotesDrawerBody
+      marks={marks}
+      bookTitle={bookTitle}
+      filePath={filePath}
+      activeCategory={activeCategory}
+      onActiveCategoryChange={setActiveCategory}
+      search={search}
+      onSearchChange={setSearch}
+      copied={copied}
+      onCopiedChange={setCopied}
+      onClose={onClose}
+      onDeleteMark={onDeleteMark}
+      onScrollToAnchor={onScrollToAnchor}
+      onOpenFlashcards={onOpenFlashcards}
+    />
+  )
+}
+
+/**
+ * 抽屉主体（hooks 安全区：外层 early-return 后挂 hooks 会打乱顺序，故拆出）。
+ * 搜索框优先走 FTS（marks:search，经 useDeferredValue 不挡输入）；
+ * IPC 不可用/无 filePath/查询中/失败时回落内存 includes（今日行为）。
+ */
+function NotesDrawerBody({
+  marks,
+  bookTitle = '当前研读专卷',
+  filePath,
+  activeCategory,
+  onActiveCategoryChange,
+  search,
+  onSearchChange,
+  copied,
+  onCopiedChange,
+  onClose,
+  onDeleteMark,
+  onScrollToAnchor,
+  onOpenFlashcards,
+}: {
+  marks: ReadingMark[]
+  bookTitle?: string
+  filePath?: string
+  activeCategory: 'all' | ReadingMarkCategory
+  onActiveCategoryChange: (value: 'all' | ReadingMarkCategory) => void
+  search: string
+  onSearchChange: (value: string) => void
+  copied: boolean
+  onCopiedChange: (value: boolean) => void
+  onClose: () => void
+  onDeleteMark?: (id: string) => void
+  onScrollToAnchor?: (excerpt: string) => void
+  onOpenFlashcards?: () => void
+}) {
+  const deferredSearch = useDeferredValue(search)
+  const trimmedQuery = deferredSearch.trim()
+  const ftsQuery = useQuery({
+    queryKey: queryKeys.marksSearch(filePath ?? '', trimmedQuery),
+    queryFn: async (): Promise<Set<string>> => {
+      const result = await readingMarksApi.search({
+        filePath: filePath ?? '',
+        query: trimmedQuery,
+      })
+      if (!isOk(result)) throw result.error
+      return new Set(result.value.map((mark) => mark.id))
+    },
+    enabled: Boolean(filePath) && trimmedQuery.length > 0,
+    staleTime: 30_000,
+  })
+  const ftsIds = ftsQuery.data ?? null
 
   const resolveCategory = (m: ReadingMark): ReadingMarkCategory => {
     if (m.category) return m.category
@@ -50,17 +127,17 @@ export const NotesDrawer: React.FC<NotesDrawerProps> = ({
     if (activeCategory !== 'all' && resolveCategory(m) !== activeCategory) {
       return false
     }
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      const textMatch =
-        (m.title && m.title.toLowerCase().includes(q)) ||
-        (m.note && m.note.toLowerCase().includes(q)) ||
-        (resolveCardMeta(m).displayNote?.toLowerCase().includes(q) ?? false) ||
-        (m.excerpt && m.excerpt.toLowerCase().includes(q)) ||
-        (m.label && m.label.toLowerCase().includes(q))
-      if (!textMatch) return false
-    }
-    return true
+    if (!trimmedQuery) return true
+    // FTS 命中即收；查询中/失败/无 filePath 时回落内存 includes（今日行为）
+    if (ftsIds) return ftsIds.has(m.id)
+    const q = trimmedQuery.toLowerCase()
+    return (
+      (m.title && m.title.toLowerCase().includes(q)) ||
+      (m.note && m.note.toLowerCase().includes(q)) ||
+      (resolveCardMeta(m).displayNote?.toLowerCase().includes(q) ?? false) ||
+      (m.excerpt && m.excerpt.toLowerCase().includes(q)) ||
+      (m.label && m.label.toLowerCase().includes(q))
+    )
   })
 
   const exportAsMarkdown = () => {
@@ -81,8 +158,8 @@ ${m.aiSummary ? `- **AI 洞见**: ${m.aiSummary}` : ''}
   .join('\n---\n\n')}
 `
     navigator.clipboard.writeText(md)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    onCopiedChange(true)
+    setTimeout(() => onCopiedChange(false), 2000)
   }
 
   return (
@@ -161,7 +238,7 @@ ${m.aiSummary ? `- **AI 洞见**: ${m.aiSummary}` : ''}
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => onSearchChange(e.target.value)}
               placeholder="搜索卡片摘录、心得或 AI 洞见..."
               className="w-full pl-9 pr-3 py-1.5 rounded-xl text-xs bg-background text-foreground placeholder:text-muted-foreground border border-border/60 focus:outline-none focus:border-primary"
             />
@@ -181,7 +258,7 @@ ${m.aiSummary ? `- **AI 洞见**: ${m.aiSummary}` : ''}
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setActiveCategory(cat.id)}
+                onClick={() => onActiveCategoryChange(cat.id)}
                 className={`px-2 py-0.5 rounded-lg transition-colors cursor-pointer shrink-0 text-[11px] ${
                   activeCategory === cat.id
                     ? 'bg-primary text-primary-foreground font-semibold shadow-xs'

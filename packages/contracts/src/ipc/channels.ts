@@ -121,6 +121,10 @@ export const IPC = {
   MARKS_UPDATE: 'marks:update',
   /** invoke：删除阅读书签/批注 */
   MARKS_DELETE: 'marks:delete',
+  /** invoke：本书内卡片全文搜（标题/摘录/批注/AI 洞见，走 marks_fts） */
+  MARKS_SEARCH: 'marks:search',
+  /** invoke：按章查卡（走 chapter_key 索引，另捎带未固化卡由调用方窄化） */
+  MARKS_LIST_BY_CHAPTER: 'marks:list-by-chapter',
 
   /* ================================================================
    * ACP Agent（acp:*）：协议见 @inkdown/acp，默认运行时 codex-acp

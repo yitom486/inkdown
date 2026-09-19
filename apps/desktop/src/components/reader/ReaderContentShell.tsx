@@ -21,6 +21,9 @@ import {
 } from '@inkdown/reader-core'
 import { passageExcerpt } from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
+import { isOk } from '@inkdown/contracts'
+import { readingMarksApi } from '@/api/reading-marks-api'
+import { narrowChapterScopeMarks } from '@/lib/reader/marks/chapter-scope'
 import type { DiagramVisualStep } from '@/components/agent/tools/DiagramViewerCard'
 import { toast } from 'sonner'
 
@@ -125,7 +128,7 @@ export function ReaderContentShell({
     (filePath ? filePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') : undefined) ||
     '当前书籍'
 
-  const handleReviewFlashcards = (scope: ReadingNotesScope) => {
+  const handleReviewFlashcards = async (scope: ReadingNotesScope) => {
     const toc = marksToc ?? []
     const currentChapter = findCurrentChapterRef(toc, marksCurrentChapterKey)
     const resolveChapter =
@@ -137,11 +140,34 @@ export function ReaderContentShell({
         level: 1,
       }))
 
+    // 本章 scope 走 chapter_key 索引（[3]）；窄化规则见 chapter-scope，
+    // IPC 失败回落内存过滤（今日行为）。已窄化后按全书走，避免二次过滤。
+    let scopedMarks = marks
+    let preNarrowed = false
+    if (scope === 'chapter' && currentChapter && filePath) {
+      const chapterKeys = [currentChapter.key, currentChapter.matchKey].filter(Boolean)
+      try {
+        const result = await readingMarksApi.listByChapter({ filePath, chapterKeys })
+        if (isOk(result)) {
+          scopedMarks = narrowChapterScopeMarks({
+            candidates: result.value,
+            chapterKeys,
+            toc,
+            current: currentChapter,
+            resolveChapter,
+          })
+          preNarrowed = true
+        }
+      } catch {
+        // 回落内存过滤
+      }
+    }
+
     const exportResult = buildAnkiCardsExport({
-      marks,
+      marks: scopedMarks,
       bookTitle: displayTitle,
-      scope,
-      currentChapter: scope === 'chapter' ? currentChapter : null,
+      scope: preNarrowed ? 'book' : scope,
+      currentChapter: preNarrowed ? null : scope === 'chapter' ? currentChapter : null,
       toc,
       resolveChapter,
     })
@@ -166,16 +192,45 @@ export function ReaderContentShell({
     }
   }
 
-  const handleOpenQuiz = (mark?: ReadingMark, scope?: 'mark' | 'chapter' | 'book') => {
+  const handleOpenQuiz = async (mark?: ReadingMark, scope?: 'mark' | 'chapter' | 'book') => {
     if (scope === 'chapter') {
       let chapterLabel = '当前章节'
-      const targetMarks = marks.filter((m) => {
-        if (passageExcerpt(m).trim().length === 0) return false
-        if (marksToc && marksResolveChapter && marksCurrentChapterKey) {
-          const ch = marksResolveChapter(m, marksToc)
-          return ch.key === marksCurrentChapterKey || ch.matchKey === marksCurrentChapterKey
+      // 本章 scope 走 chapter_key 索引（[3]）；失败回落内存过滤（今日行为）
+      let candidates = marks
+      const toc = marksToc ?? []
+      const currentChapter = findCurrentChapterRef(toc, marksCurrentChapterKey)
+      if (currentChapter && filePath && marksResolveChapter) {
+        const chapterKeys = [currentChapter.key, currentChapter.matchKey].filter(Boolean)
+        try {
+          const result = await readingMarksApi.listByChapter({ filePath, chapterKeys })
+          if (isOk(result)) {
+            candidates = narrowChapterScopeMarks({
+              candidates: result.value,
+              chapterKeys,
+              toc,
+              current: currentChapter,
+              resolveChapter: marksResolveChapter,
+            })
+          } else {
+            candidates = marks
+          }
+        } catch {
+          candidates = marks
         }
-        return true
+      }
+      const inChapterScope =
+        candidates !== marks
+          ? () => true
+          : (m: ReadingMark) => {
+              if (marksToc && marksResolveChapter && marksCurrentChapterKey) {
+                const ch = marksResolveChapter(m, marksToc)
+                return ch.key === marksCurrentChapterKey || ch.matchKey === marksCurrentChapterKey
+              }
+              return true
+            }
+      const targetMarks = candidates.filter((m) => {
+        if (passageExcerpt(m).trim().length === 0) return false
+        return inChapterScope(m)
       })
       const combinedExcerpt = targetMarks.map((m) => passageExcerpt(m).trim()).join('\n\n')
       if (!combinedExcerpt) {

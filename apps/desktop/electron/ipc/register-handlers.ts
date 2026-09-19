@@ -17,6 +17,8 @@ import type {
 import type { RendererErrorPayload } from '@inkdown/contracts'
 import type {
   CreateReadingMarkPayload,
+  MarksListByChapterPayload,
+  MarksSearchPayload,
   UpdateReadingMarkPayload,
 } from '@inkdown/contracts'
 import type {
@@ -118,6 +120,8 @@ import {
   createReadingMark,
   deleteReadingMark,
   listReadingMarks,
+  listReadingMarksByChapter,
+  searchReadingMarks,
   updateReadingMark,
 } from '../services/reading-marks-service'
 import {
@@ -563,6 +567,12 @@ export function registerIpcHandlers(): void {
     updateReadingMark(payload),
   )
   ipcMain.handle(IPC.MARKS_DELETE, (_event, id: string) => deleteReadingMark(id))
+  ipcMain.handle(IPC.MARKS_SEARCH, (_event, payload: MarksSearchPayload) =>
+    searchReadingMarks(payload),
+  )
+  ipcMain.handle(IPC.MARKS_LIST_BY_CHAPTER, (_event, payload: MarksListByChapterPayload) =>
+    listReadingMarksByChapter(payload),
+  )
 
   // --- AI 测验与答题打分记录 (JSONL) ---
   ipcMain.handle(IPC.QUIZ_APPEND_SESSION, (_event, session: QuizSessionRecord) =>

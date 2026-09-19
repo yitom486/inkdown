@@ -19,12 +19,16 @@ import {
   createReadingMark,
   deleteReadingMark,
   listReadingMarks,
+  listReadingMarksByChapter,
+  searchReadingMarks,
   updateReadingMark,
 } from './reading-marks-service'
 import {
   exportMarksStore,
   importMarksStore,
+  listMarkRowsByChapter,
   resolveFingerprintForFile,
+  rowToReadingMark,
   searchMarks,
 } from './marks-db'
 import { isOk } from '@inkdown/contracts'
@@ -278,5 +282,95 @@ describe('marks-db（[2]-01 卡片 SQL 后端）', () => {
     // 该书从未索引（books 表为空），靠 marks.file_path 兜底定位
     expect(resolveFingerprintForFile(tempUserData, 'D:\\books\\loose.epub')).toBe('fp-loose')
     expect(resolveFingerprintForFile(tempUserData, 'D:\\books\\ghost.epub')).toBeNull()
+  })
+
+  it('[3] 按章查询走索引：固化命中 + 未固化捎带，软删除排除', async () => {
+    const seed = async (
+      id: string,
+      chapter?: { key: ReturnType<typeof toChapterKey>; label: string; index: number },
+    ): Promise<void> => {
+      const created = await createReadingMark({
+        filePath: 'D:\\books\\chap.epub',
+        fileFingerprint: 'fp-chap',
+        kind: 'highlight',
+        anchor: { format: 'epub', cfi: `cfi-${id}` },
+        excerpt: `摘录${id}`,
+        ...(chapter ? { chapter } : {}),
+      })
+      expect(isOk(created)).toBe(true)
+    }
+    await seed('a', { key: toChapterKey('text/part1'), label: '第一部分', index: 0 })
+    await seed('b', { key: toChapterKey('text/part2'), label: '第二部分', index: 1 })
+    await seed('u')
+    const doomed = await createReadingMark({
+      filePath: 'D:\\books\\chap.epub',
+      fileFingerprint: 'fp-chap',
+      kind: 'highlight',
+      anchor: { format: 'epub', cfi: 'cfi-doomed' },
+      excerpt: '待删摘录',
+      chapter: { key: toChapterKey('text/part1'), label: '第一部分', index: 0 },
+    })
+    expect(isOk(doomed)).toBe(true)
+    if (!isOk(doomed)) return
+    expect(isOk(await deleteReadingMark(doomed.value.id))).toBe(true)
+
+    const db = openBookDb(tempUserData, 'fp-chap')
+    const rows = listMarkRowsByChapter(db, ['0:text/part1', 'text/part1']).map(rowToReadingMark)
+    // part1 固化卡 + 未固化候选；part2 与已删除不在其中
+    expect(rows.map((mark) => mark.excerpt).sort()).toEqual(['摘录a', '摘录u'])
+
+    // 空 keys 直接回空，不碰库
+    expect(listMarkRowsByChapter(db, ['  '])).toEqual([])
+
+    // EXPLAIN：chapter_key 条件走索引
+    const plan = db
+      .prepare(
+        `EXPLAIN QUERY PLAN SELECT * FROM marks
+         WHERE deleted_at IS NULL AND (chapter_key IN (?, ?) OR chapter_key = '')`,
+      )
+      .all('0:text/part1', 'text/part1') as Array<{ detail: string }>
+    expect(plan.some((row) => /idx_marks_chapter_key/i.test(row.detail))).toBe(true)
+  })
+
+  it('[3] service 搜索与按章查询：FTS/索引 + 未知书/空串', async () => {
+    const created = await createReadingMark({
+      filePath: 'D:\\books\\svc.epub',
+      fileFingerprint: 'fp-svc',
+      kind: 'note',
+      anchor: { format: 'epub', cfi: 'cfi-svc' },
+      excerpt: '荒野求生指南全本',
+      note: '托克维尔的观察笔记',
+      chapter: { key: toChapterKey('text/s1'), label: '首章', index: 0 },
+    })
+    expect(isOk(created)).toBe(true)
+
+    const hit = await searchReadingMarks({ filePath: 'D:\\books\\svc.epub', query: '托克维尔' })
+    expect(isOk(hit)).toBe(true)
+    if (!isOk(hit)) return
+    expect(hit.value).toHaveLength(1)
+
+    // 短词 LIKE 兜底 + 空串/未知书回空
+    const shortHit = await searchReadingMarks({ filePath: 'D:\\books\\svc.epub', query: '荒野' })
+    expect(isOk(shortHit) && shortHit.value).toHaveLength(1)
+    const emptyQuery = await searchReadingMarks({ filePath: 'D:\\books\\svc.epub', query: '   ' })
+    expect(isOk(emptyQuery) && emptyQuery.value).toEqual([])
+    const ghost = await searchReadingMarks({ filePath: 'D:\\books\\ghost.epub', query: '荒野' })
+    expect(isOk(ghost) && ghost.value).toEqual([])
+
+    const byChapter = await listReadingMarksByChapter({
+      filePath: 'D:\\books\\svc.epub',
+      chapterKeys: ['text/s1'],
+    })
+    expect(isOk(byChapter)).toBe(true)
+    if (!isOk(byChapter)) return
+    expect(byChapter.value).toHaveLength(1)
+
+    const noKeys = await listReadingMarksByChapter({ filePath: 'D:\\books\\svc.epub', chapterKeys: [] })
+    expect(isOk(noKeys) && noKeys.value).toEqual([])
+    const ghostChapter = await listReadingMarksByChapter({
+      filePath: 'D:\\books\\ghost.epub',
+      chapterKeys: ['text/s1'],
+    })
+    expect(isOk(ghostChapter) && ghostChapter.value).toEqual([])
   })
 })

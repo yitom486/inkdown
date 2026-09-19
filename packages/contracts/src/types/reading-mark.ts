@@ -253,3 +253,20 @@ export interface UpdateReadingMarkPayload {
   /** 锚点变更时由调用方重算后传入；缺省保持原值 */
   chapter?: MarkChapterRef | null
 }
+
+/** `marks:search` 请求：本书内全文搜（标题/摘录/批注/AI 洞见走 FTS） */
+export interface MarksSearchPayload {
+  filePath: string
+  query: string
+}
+
+/**
+ * `marks:list-by-chapter` 请求：按章查卡（走 `chapter_key` 索引）。
+ * `chapterKeys` 传当前章的 key + matchKey（去空，`toChapterKey` 品牌值亦可）；
+ * 服务端额外捎带 `chapter_key = ''` 的未固化卡，调用方按 MarginaliaBar
+ * 同规则（固化优先、缺失回落运行时解析）窄化，保证 DB/file 双后端输出一致。
+ */
+export interface MarksListByChapterPayload {
+  filePath: string
+  chapterKeys: string[]
+}

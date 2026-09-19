@@ -185,6 +185,25 @@ export function listLiveMarkRows(db: DatabaseSync): MarksRow[] {
     .all() as unknown as MarksRow[]
 }
 
+/**
+ * 按章查卡（[3] 索引化章节查询）：`chapter_key IN (...)` 走
+ * `idx_marks_chapter_key`；另捎带 `chapter_key = ''` 的未固化卡，
+ * 调用方按 MarginaliaBar 同规则窄化（固化优先、缺失回落运行时解析），
+ * 保证 DB/file 双后端输出一致。空 keys 直接返回空（调用方无章可查）。
+ */
+export function listMarkRowsByChapter(db: DatabaseSync, chapterKeys: string[]): MarksRow[] {
+  const keys = [...new Set(chapterKeys.map((key) => key.trim()).filter(Boolean))]
+  if (keys.length === 0) return []
+  const placeholders = keys.map(() => '?').join(',')
+  return db
+    .prepare(
+      `SELECT * FROM marks
+       WHERE deleted_at IS NULL AND (chapter_key IN (${placeholders}) OR chapter_key = '')
+       ORDER BY updated_at DESC`,
+    )
+    .all(...keys) as unknown as MarksRow[]
+}
+
 function normalizeFilePath(filePath: string): string {
   return normalizeMarkFilePathCore(filePath, process.platform)
 }

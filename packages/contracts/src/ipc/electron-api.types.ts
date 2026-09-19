@@ -27,6 +27,8 @@ import type { RendererErrorPayload } from '../types/error-log'
 import type { Result } from '../core/result'
 import type {
   CreateReadingMarkPayload,
+  MarksListByChapterPayload,
+  MarksSearchPayload,
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '../types/reading-mark'
@@ -256,6 +258,12 @@ export interface ElectronAPI {
   updateReadingMark: (payload: UpdateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
   /** 删除阅读书签/批注 */
   deleteReadingMark: (id: string) => Promise<Result<void, AppError>>
+  /** 本书内卡片全文搜（标题/摘录/批注/AI 洞见，走 marks_fts） */
+  searchReadingMarks: (payload: MarksSearchPayload) => Promise<Result<ReadingMark[], AppError>>
+  /** 按章查卡（走 chapter_key 索引，另捎带未固化卡由调用方窄化） */
+  listReadingMarksByChapter: (
+    payload: MarksListByChapterPayload,
+  ) => Promise<Result<ReadingMark[], AppError>>
   /* ===== ACP Agent：运行时/认证/session/prompt/权限/快照/推送 ===== */
   /** 列出可用 ACP Agent 运行时 */
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>

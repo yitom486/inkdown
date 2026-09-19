@@ -134,6 +134,9 @@ const electronAPI: ElectronAPI = {
   createReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_CREATE, payload),
   updateReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_UPDATE, payload),
   deleteReadingMark: (id: string) => ipcRenderer.invoke(IPC.MARKS_DELETE, id),
+  searchReadingMarks: (payload) => ipcRenderer.invoke(IPC.MARKS_SEARCH, payload),
+  listReadingMarksByChapter: (payload) =>
+    ipcRenderer.invoke(IPC.MARKS_LIST_BY_CHAPTER, payload),
   listAcpRuntimes: () => ipcRenderer.invoke(IPC.ACP_LIST_RUNTIMES),
   acpAuthPreflight: (payload) => ipcRenderer.invoke(IPC.ACP_AUTH_PREFLIGHT, payload),
   acpConnect: (payload) => ipcRenderer.invoke(IPC.ACP_CONNECT, payload),

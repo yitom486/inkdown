@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NotesDrawer } from './NotesDrawer'
 import type { ReadingMark } from '@inkdown/contracts'
@@ -10,11 +11,14 @@ import type { ReadingMark } from '@inkdown/contracts'
 describe('NotesDrawer', () => {
   let container: HTMLDivElement
   let root: Root
+  let queryClient: QueryClient
 
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
+    // 组件内 FTS 搜索走 useQuery；单测自备 client（应用根平时由 providers 提供）
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   })
 
   afterEach(() => {
@@ -22,7 +26,16 @@ describe('NotesDrawer', () => {
       root.unmount()
     })
     container.remove()
+    queryClient.clear()
   })
+
+  function renderDrawer(props: Record<string, unknown>) {
+    return createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(NotesDrawer, props),
+    )
+  }
 
   const mockMarks: ReadingMark[] = [
     {
@@ -58,7 +71,7 @@ describe('NotesDrawer', () => {
 
     await act(async () => {
       root.render(
-        createElement(NotesDrawer, {
+        renderDrawer({
           isOpen: true,
           onClose,
           marks: mockMarks,
@@ -78,7 +91,7 @@ describe('NotesDrawer', () => {
 
     await act(async () => {
       root.render(
-        createElement(NotesDrawer, {
+        renderDrawer({
           isOpen: true,
           onClose,
           marks: mockMarks,
@@ -103,7 +116,7 @@ describe('NotesDrawer', () => {
   it('does not render when isOpen is false', async () => {
     await act(async () => {
       root.render(
-        createElement(NotesDrawer, {
+        renderDrawer({
           isOpen: false,
           onClose: vi.fn(),
           marks: mockMarks,
@@ -112,5 +125,31 @@ describe('NotesDrawer', () => {
     })
 
     expect(container.textContent).toBe('')
+  })
+
+  it('falls back to in-memory filtering when FTS IPC is unavailable', async () => {
+    // 单测无 window.electronAPI：FTS 查询失败，回落内存 includes（今日行为）
+    await act(async () => {
+      root.render(
+        renderDrawer({
+          isOpen: true,
+          onClose: vi.fn(),
+          marks: mockMarks,
+          filePath: '/book.pdf',
+        })
+      )
+    })
+
+    const input = container.querySelector('input[type="text"]')
+    expect(input).not.toBeNull()
+    await act(async () => {
+      input!.setAttribute('value', 'CAP')
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+      // 等 deferred 查询失败回落
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+
+    expect(container.textContent).toContain('分布式真理')
+    expect(container.textContent).not.toContain('Paxos 核心共识')
   })
 })

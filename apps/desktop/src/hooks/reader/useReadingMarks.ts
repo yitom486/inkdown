@@ -22,6 +22,8 @@ export function useReadingMarks(filePath: string) {
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.readingMarks(filePath) })
+    // 札记箱 FTS 搜索缓存同失效（按文件前缀匹配该书全部搜索词）
+    void queryClient.invalidateQueries({ queryKey: queryKeys.marksSearchPrefix(filePath) })
   }
 
   const createMutation = useMutation({

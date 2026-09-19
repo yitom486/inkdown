@@ -7,6 +7,8 @@ import { toAppError, type AppError } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
 import type {
   CreateReadingMarkPayload,
+  MarksListByChapterPayload,
+  MarksSearchPayload,
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '@inkdown/contracts'
@@ -25,9 +27,11 @@ import {
   importMarksStore,
   insertMarkRow,
   listLiveMarkRows,
+  listMarkRowsByChapter,
   migrateMarksStoreToDb,
   resolveFingerprintForFile,
   rowToReadingMark,
+  searchMarks,
   syncFlashcardForMark,
   updateMarkRow,
 } from './marks-db'
@@ -162,6 +166,76 @@ async function listReadingMarksFile(
     return ok(marks.sort((a, b) => b.updatedAt - a.updatedAt))
   } catch (error) {
     return err(toAppError(error, '读取书签失败'))
+  }
+}
+
+/**
+ * 本书内卡片全文搜（[3] 库独占能力）。
+ * 空 query 返回空（调用方无词时展示全量，不走本函数）。
+ * file 后端走内存 includes（字段与 FTS 索引列对齐：标题/摘录/批注/AI 洞见/label），
+ * 保证双后端输出一致（FTS 多出的相关性排序在单书量级下与更新倒序无可感差异）。
+ */
+export async function searchReadingMarks(
+  payload: MarksSearchPayload,
+): Promise<Result<ReadingMark[], AppError>> {
+  try {
+    const query = payload.query.trim()
+    if (!query) return ok([])
+    if (useFileMarksBackend()) {
+      const store = await readMarksStoreFile()
+      const normalized = payload.filePath.trim()
+      const keyword = query.toLowerCase()
+      const hits = store.marks.filter((mark) => {
+        if (normalizeMarkFilePath(mark.filePath) !== normalizeMarkFilePath(normalized)) return false
+        return [mark.title, mark.excerpt, mark.note, mark.aiSummary, mark.label].some((field) =>
+          field?.toLowerCase().includes(keyword),
+        )
+      })
+      return ok(hits.sort((a, b) => b.updatedAt - a.updatedAt))
+    }
+    await ensureMarksMigrated()
+    const userDataDir = app.getPath('userData')
+    const fingerprint = resolveFingerprintForFile(userDataDir, payload.filePath)
+    if (!fingerprint) return ok([])
+    const normalized = payload.filePath.trim()
+    const hits = searchMarks(userDataDir, fingerprint, query).filter(
+      (mark) => normalizeMarkFilePath(mark.filePath) === normalizeMarkFilePath(normalized),
+    )
+    return ok(hits)
+  } catch (error) {
+    return err(toAppError(error, '搜索书签失败'))
+  }
+}
+
+/**
+ * 按章查卡（[3] 索引化章节查询）。
+ * DB 后端返回固化命中 + `chapter_key = ''` 未固化候选，调用方按
+ * MarginaliaBar 同规则窄化（固化优先、缺失回落运行时解析）；
+ * file 后端返回本书全量（同 `list`），调用方走同一窄化函数，双后端输出一致。
+ */
+export async function listReadingMarksByChapter(
+  payload: MarksListByChapterPayload,
+): Promise<Result<ReadingMark[], AppError>> {
+  try {
+    const keys = [...new Set(payload.chapterKeys.map((key) => key.trim()).filter(Boolean))]
+    if (keys.length === 0) return ok([])
+    if (useFileMarksBackend()) {
+      return listReadingMarksFile(payload.filePath)
+    }
+    await ensureMarksMigrated()
+    const userDataDir = app.getPath('userData')
+    const fingerprint = resolveFingerprintForFile(userDataDir, payload.filePath)
+    if (!fingerprint) return ok([])
+    const db = openBookDb(userDataDir, fingerprint)
+    const normalized = payload.filePath.trim()
+    const marks = listMarkRowsByChapter(db, keys)
+      .map(rowToReadingMark)
+      .filter(
+        (mark) => normalizeMarkFilePath(mark.filePath) === normalizeMarkFilePath(normalized),
+      )
+    return ok(marks.sort((a, b) => b.updatedAt - a.updatedAt))
+  } catch (error) {
+    return err(toAppError(error, '按章读取书签失败'))
   }
 }
 
