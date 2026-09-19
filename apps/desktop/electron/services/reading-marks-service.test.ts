@@ -1,4 +1,5 @@
 import { mkdtemp, readFile } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -28,6 +29,8 @@ describe('reading-marks-service', () => {
 
   afterEach(() => {
     delete process.env.INKDOWN_MARKS_BACKEND
+    // 文件后端无 DB 句柄，直接删目录；用后即焚，不留 tmp 堆积
+    if (tempUserData) rmSync(tempUserData, { recursive: true, force: true })
     tempUserData = ''
   })
 

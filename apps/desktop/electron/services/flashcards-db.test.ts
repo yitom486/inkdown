@@ -38,6 +38,8 @@ describe('flashcards-db（[2]-02b 记忆卡片复习态）', () => {
 
   afterEach(() => {
     closeAllBookDbs()
+    // 先关句柄再删目录（Windows 占文件删不掉）；用后即焚，不留 tmp 堆积
+    if (tempUserData) rmSync(tempUserData, { recursive: true, force: true })
     delete process.env.INKDOWN_MARKS_BACKEND
     tempUserData = ''
   })

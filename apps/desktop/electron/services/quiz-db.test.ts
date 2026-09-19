@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
@@ -96,6 +97,8 @@ describe('quiz-db（[2]-02a 测验全局库后端）', () => {
   afterEach(() => {
     closeAllInkdownDbs()
     closeAllBookDbs()
+    // 先关句柄再删目录（Windows 占文件删不掉）；用后即焚，不留 tmp 堆积
+    if (tempUserData) rmSync(tempUserData, { recursive: true, force: true })
     delete process.env.INKDOWN_QUIZ_BACKEND
     tempUserData = ''
   })
@@ -258,6 +261,7 @@ describe('quiz-db（[2]-02a 测验全局库后端）', () => {
       ])
     } finally {
       closeAllInkdownDbs()
+      rmSync(fresh, { recursive: true, force: true })
     }
   })
 

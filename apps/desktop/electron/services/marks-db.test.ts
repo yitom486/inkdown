@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
@@ -37,6 +38,8 @@ describe('marks-db（[2]-01 卡片 SQL 后端）', () => {
 
   afterEach(() => {
     closeAllBookDbs()
+    // 先关句柄再删目录（Windows 占文件删不掉）；用后即焚，不留 tmp 堆积
+    if (tempUserData) rmSync(tempUserData, { recursive: true, force: true })
     tempUserData = ''
   })
 
@@ -260,6 +263,7 @@ describe('marks-db（[2]-01 卡片 SQL 后端）', () => {
       expect(check.tombstones?.[created.value.id]).toBe(exportedTombs[created.value.id])
     } finally {
       closeAllBookDbs()
+      rmSync(fresh, { recursive: true, force: true })
     }
   })
 
