@@ -9,6 +9,7 @@ import {
 import type { ReadingMark, ReadingMarkCategory } from '@inkdown/contracts'
 import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { KnowledgeCardItem } from './KnowledgeCardItem'
+import { BracketConnector } from './BracketConnector'
 
 export interface MarginaliaBarProps {
   marks: ReadingMark[]
@@ -226,18 +227,26 @@ export const MarginaliaBar: React.FC<MarginaliaBarProps> = ({
               activeAnchor.includes(mark.excerpt || ''))
 
           return (
-            <KnowledgeCardItem
-              key={mark.id}
-              mark={mark}
-              isActive={!!isHighlighted}
-              onToggleCollapse={() => onToggleCardCollapse(mark.id)}
-              onPolish={onPolishCard ? () => onPolishCard(mark.id) : undefined}
-              onDelete={onDeleteMark ? () => onDeleteMark(mark.id) : undefined}
-              onOpenDiagram={onOpenDiagram}
-              onAnchorClick={() => onMarkClick(mark)}
-              onCardClick={() => onMarkClick(mark)}
-              onHover={(hovering) => onHoverAnchor?.(hovering ? mark.excerpt : undefined)}
-            />
+            <div key={mark.id} className="flex items-start gap-1">
+              <BracketConnector
+                isCollapsed={!!mark.collapsed}
+                isActive={!!isHighlighted}
+                className="mt-0.5 shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <KnowledgeCardItem
+                  mark={mark}
+                  isActive={!!isHighlighted}
+                  onToggleCollapse={() => onToggleCardCollapse(mark.id)}
+                  onPolish={onPolishCard ? () => onPolishCard(mark.id) : undefined}
+                  onDelete={onDeleteMark ? () => onDeleteMark(mark.id) : undefined}
+                  onOpenDiagram={onOpenDiagram}
+                  onAnchorClick={() => onMarkClick(mark)}
+                  onCardClick={() => onMarkClick(mark)}
+                  onHover={(hovering) => onHoverAnchor?.(hovering ? mark.excerpt : undefined)}
+                />
+              </div>
+            </div>
           )
         })}
 

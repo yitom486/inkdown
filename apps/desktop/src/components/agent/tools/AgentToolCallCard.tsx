@@ -42,6 +42,14 @@ import {
   type CrossReferencePayload,
 } from '@/components/agent/tools/CrossReferenceCard'
 import {
+  ContentAuditCard,
+  type ContentAuditPayload,
+} from '@/components/agent/tools/ContentAuditCard'
+import {
+  ChapterSuggestionCard,
+  type SuggestChaptersPayload,
+} from '@/components/agent/tools/ChapterSuggestionCard'
+import {
   isToolActiveStatus,
   type AcpChatMessage,
   type AcpToolLocation,
@@ -79,6 +87,36 @@ function parseCrossReferencePayload(text?: string, title?: string): CrossReferen
       typeof obj.entity === 'string'
     ) {
       return obj as CrossReferencePayload
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function parseContentAuditPayload(text?: string, title?: string): ContentAuditPayload | null {
+  if (!text || (!text.includes('"hits"') && !title?.includes('inkdown_inspect_content'))) {
+    return null
+  }
+  try {
+    const obj = JSON.parse(text)
+    if (obj && typeof obj === 'object' && Array.isArray(obj.hits) && typeof obj.query === 'string') {
+      return obj as ContentAuditPayload
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function parseSuggestChaptersPayload(text?: string, title?: string): SuggestChaptersPayload | null {
+  if (!text || (!text.includes('"chapters"') && !title?.includes('inkdown_suggest_chapters'))) {
+    return null
+  }
+  try {
+    const obj = JSON.parse(text)
+    if (obj && typeof obj === 'object' && Array.isArray(obj.chapters)) {
+      return obj as SuggestChaptersPayload
     }
   } catch {
     return null
@@ -145,12 +183,22 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
     () => parseCrossReferencePayload(detail, message.toolTitle),
     [detail, message.toolTitle],
   )
+  const auditPayload = useMemo(
+    () => parseContentAuditPayload(detail, message.toolTitle),
+    [detail, message.toolTitle],
+  )
+  const suggestionPayload = useMemo(
+    () => parseSuggestChaptersPayload(detail, message.toolTitle),
+    [detail, message.toolTitle],
+  )
   const active =
     Boolean(message.streaming) ||
     isToolActiveStatus(message.toolStatus) ||
     needsApproval ||
     Boolean(diagramPayload) ||
-    Boolean(crossRefPayload)
+    Boolean(crossRefPayload) ||
+    Boolean(auditPayload) ||
+    Boolean(suggestionPayload)
   const [open, setOpen] = useAgentChatOpen(active)
   const locations = message.toolLocations ?? []
   const failed = message.toolStatus === 'failed'
@@ -178,7 +226,9 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
     Boolean(failureGuide) ||
     Boolean(failureExplain) ||
     Boolean(diagramPayload) ||
-    Boolean(crossRefPayload)
+    Boolean(crossRefPayload) ||
+    Boolean(auditPayload) ||
+    Boolean(suggestionPayload)
   const title = message.toolTitle || '工具调用'
   const locationHint =
     diffs.length === 1
@@ -290,7 +340,32 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
               />
             </div>
           ) : null}
-          {!diagramPayload && !crossRefPayload && hasTextDetail ? (
+          {auditPayload ? (
+            <div className="mt-1">
+              <ContentAuditCard
+                payload={auditPayload}
+                onHighlightAnchor={(anchor: string) => {
+                  toast.message(`正在定位原句：「${anchor.slice(0, 24)}...」`)
+                  window.dispatchEvent(
+                    new CustomEvent('inkdown:anchor-highlight', { detail: anchor }),
+                  )
+                }}
+              />
+            </div>
+          ) : null}
+          {suggestionPayload ? (
+            <div className="mt-1">
+              <ChapterSuggestionCard
+                payload={suggestionPayload}
+                onSelectChapter={(item) => {
+                  if (item.flatIndex != null) {
+                    void openChapterForMarkRecovery(item.flatIndex)
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+          {!diagramPayload && !crossRefPayload && !auditPayload && !suggestionPayload && hasTextDetail ? (
             <pre className={AGENT_CHAT_PRE_CLASS}>{detail}</pre>
           ) : null}
           {failureGuide ? (

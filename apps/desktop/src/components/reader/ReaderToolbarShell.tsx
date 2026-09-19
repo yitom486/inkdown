@@ -19,6 +19,7 @@ import { useReaderNavTitles } from '@/stores/reader-navigation-store'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
+import { preserveScrollAnchor } from '@/lib/reader/scroll-anchor'
 import { cn } from '@/lib/utils'
 
 interface ReaderToolbarShellProps {
@@ -155,7 +156,7 @@ export function ReaderToolbarShell({
                 ? 'border border-primary/20 bg-primary/10 text-primary font-medium hover:bg-primary/15'
                 : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
             )}
-            onClick={() => toggleCardRail()}
+            onClick={() => preserveScrollAnchor(() => toggleCardRail())}
             title={isCardRailOpen ? '收起右侧知识卡轨' : '展开右侧知识卡轨'}
           >
             {isCardRailOpen ? (

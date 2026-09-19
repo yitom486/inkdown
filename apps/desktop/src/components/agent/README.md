@@ -31,9 +31,11 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 
 | 文件 | 功能 |
 |------|------|
-| `AgentToolCallCard` | 工具调用卡（含权限子卡、图表卡、跨章实体卡挂接） |
+| `AgentToolCallCard` | 工具调用卡（含权限子卡、图表卡、跨章实体卡、内容审计探针与导读建议挂接） |
 | `DiagramViewerCard` | 交互式双模图表卡（时序步骤流 / 实体概览 / Mermaid 原生出图 / 正文穿透 / 钉入） |
 | `CrossReferenceCard` | 跨章节实体概念流转轨迹卡（章节分布热力权重条 / 证据折叠 / 跨章定位） |
+| `ContentAuditCard` | 深度内容审计探针卡（命中条目来源标识 / 原文取证高亮 / 一键正文穿透定位） |
+| `ChapterSuggestionCard` | 智能导读与续读推荐卡（章节关联度分数 / 推荐理由 / 一键切章研读） |
 | `AgentDiffPreview` | diff 预览 |
 | `AgentPlanCard` | 计划条目卡 |
 | `AgentBlockRenderer` | 兼容入口（tool 消息） |

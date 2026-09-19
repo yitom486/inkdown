@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { Bookmark, ChevronLeft } from 'lucide-react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
 import { MarginaliaBar } from '@/components/reader/MarginaliaBar'
@@ -9,6 +10,7 @@ import { QuizHistoryDialog } from '@/components/quiz/QuizHistoryDialog'
 import { buildAnkiCardsExport } from '@/lib/reader/marks/export-anki-cards'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
+import { preserveScrollAnchor } from '@/lib/reader/scroll-anchor'
 import type { Flashcard } from '@inkdown/annotations'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
@@ -75,6 +77,9 @@ export function ReaderContentShell({
   // 知识卡轨与伴读联动状态
   const isCardRailOpen = useReaderHudUiStore((s) => s.isCardRailOpen)
   const setIsCardRailOpen = useReaderHudUiStore((s) => s.setIsCardRailOpen)
+  const hudDisplayMode = useReaderHudUiStore((s) => s.hudDisplayMode)
+  const panelOpen = useReaderHudUiStore((s) => s.panelOpen)
+  const zenMode = useReaderHudUiStore((s) => s.zenMode)
   const setSelectedDiagram = useReaderHudUiStore((s) => s.setSelectedDiagram)
   const openPanelAndFocusComposer = useAcpUiStore((s) => s.openPanelAndFocusComposer)
 
@@ -283,11 +288,27 @@ export function ReaderContentShell({
           }}
           onToggleCardCollapse={handleToggleCardCollapse}
           onToggleAllCollapse={handleToggleAllCollapse}
-          onCloseRail={() => setIsCardRailOpen(false)}
+          onCloseRail={() => preserveScrollAnchor(() => setIsCardRailOpen(false))}
           onGenerateAiCard={() => openPanelAndFocusComposer()}
           className="h-full"
         />
       ) : null}
+
+      {/* 知识卡轨折叠收起时，右边沿悬浮微晶书签浮纽 */}
+      {!zenMode && !isCardRailOpen && marks.length > 0 && (
+        <button
+          type="button"
+          onClick={() => preserveScrollAnchor(() => setIsCardRailOpen(true))}
+          className={`fixed top-20 z-40 px-3 py-1.5 rounded-full bg-background/90 backdrop-blur-md border border-border shadow-lg hover:border-primary text-foreground hover:text-primary transition-all cursor-pointer flex items-center gap-1.5 text-xs font-serif group animate-in fade-in ${
+            panelOpen && hudDisplayMode === 'docked' ? 'right-[400px]' : 'right-4'
+          }`}
+          title="展开知识卡片栏"
+        >
+          <Bookmark className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
+          <span>知识卡片 ({marks.length})</span>
+          <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+        </button>
+      )}
 
       <FlashcardReviewDialog
         open={reviewOpen}

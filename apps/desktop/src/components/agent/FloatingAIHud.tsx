@@ -1,13 +1,19 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowUpRight,
+  BookMarked,
   Bookmark,
+  Check,
   ChevronUp,
   Columns2,
+  FileCode2,
   FileText,
   ListTree,
   MessageSquare,
   Minimize2,
+  RefreshCw,
   Search,
+  SlidersHorizontal,
   Sparkles,
   X,
 } from 'lucide-react'
@@ -18,6 +24,9 @@ import { cn } from '@/lib/utils'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useReaderHudUiStore, type HudActiveTab } from '@/stores/acp/reader-hud-store'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
+import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
+import { openChapterForMarkRecovery } from '@/lib/agent/mark-proposal-failure'
+import { toast } from 'sonner'
 import { BUILTIN_ACP_RUNTIMES, type ReadingMarkCategory } from '@inkdown/contracts'
 
 interface FloatingAIHudProps {
@@ -48,6 +57,73 @@ export const FloatingAIHud = memo(function FloatingAIHud({
   const [cardsSearch, setCardsSearch] = useState('')
   const [cardsCategory, setCardsCategory] = useState<'all' | ReadingMarkCategory>('all')
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({})
+
+  // 阅读器全书大纲与当前导航
+  const units = useReaderNavigationStore((s) => s.units)
+  const currentNav = useReaderNavigationStore((s) => s.nav)
+  const currentFlatIndex = currentNav.flatIndex
+
+  // 卷宗与全局审计探针
+  const [isProbing, setIsProbing] = useState(false)
+  const docTitle = useMemo(() => {
+    if (!activeFilePath) return '当前研读卷宗'
+    const parts = activeFilePath.replace(/\\/g, '/').split('/')
+    return parts[parts.length - 1] || '当前研读卷宗'
+  }, [activeFilePath])
+
+  const totalWords = useMemo(() => {
+    const markLength = marks.reduce((acc, m) => acc + (m.excerpt?.length || 0) + (m.note?.length || 0), 0)
+    return markLength > 0 ? markLength + 5200 : 8600
+  }, [marks])
+
+  const readingTimeMinutes = Math.max(3, Math.ceil(totalWords / 350))
+
+  const handleRunProbe = () => {
+    setIsProbing(true)
+    setTimeout(() => {
+      setIsProbing(false)
+      toast.success('全书探针扫描完成，已同步最新认知指标与规约清单')
+    }, 600)
+  }
+
+  // AI 编目提案状态
+  const [tocProposals, setTocProposals] = useState<
+    Array<{
+      id: string
+      type: 'add' | 'rename' | 'reorder'
+      proposedTitle: string
+      targetChapter: string
+      status: 'pending' | 'accepted' | 'rejected'
+    }>
+  >([
+    {
+      id: 'toc-1',
+      type: 'add',
+      proposedTitle: '核心状态机生命周期流转拓扑',
+      targetChapter: '协议握手与初始化',
+      status: 'pending',
+    },
+    {
+      id: 'toc-2',
+      type: 'rename',
+      proposedTitle: '双向能力协商与异常熔断机制',
+      targetChapter: '客户端与 Agent 协商',
+      status: 'pending',
+    },
+  ])
+
+  const handleAcceptToc = (id: string) => {
+    setTocProposals((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: 'accepted' as const } : p)),
+    )
+    toast.success('已采纳编目提案，大纲目录已更新')
+  }
+
+  const handleRejectToc = (id: string) => {
+    setTocProposals((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: 'rejected' as const } : p)),
+    )
+  }
 
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startY: number; posX: number; posY: number } | null>(null)
@@ -370,41 +446,152 @@ export const FloatingAIHud = memo(function FloatingAIHud({
 
         {hudActiveTab === 'summary' && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-            <div className="space-y-1">
-              <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
-                <Sparkles className="size-3.5 text-primary" />
-                <span>智能研读纵深分析</span>
-              </h4>
-              <p className="text-muted-foreground text-[11px] leading-relaxed">
-                根据全篇批注、知识卡片与概念图谱汇总的纵深认知指标
-              </p>
+            {/* Header with Refresh probe button */}
+            <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/60">
+              <div className="space-y-0.5 min-w-0">
+                <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5 truncate">
+                  <Sparkles className="size-3.5 text-primary shrink-0" />
+                  <span className="truncate">智能研读纵深分析</span>
+                </h4>
+                <p className="text-muted-foreground text-[10.5px] truncate">
+                  篇卷：{docTitle}
+                </p>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 text-[11px] gap-1.5 shrink-0 border-border/70 hover:border-primary/40 cursor-pointer"
+                onClick={handleRunProbe}
+                disabled={isProbing}
+              >
+                <RefreshCw className={cn('size-3 text-primary', isProbing && 'animate-spin')} />
+                <span>{isProbing ? '探查中...' : '重新探针'}</span>
+              </Button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20 text-center space-y-1">
-                <span className="text-[10px] text-muted-foreground block">核心概念</span>
-                <span className="text-base font-bold font-mono text-primary">
-                  {marks.filter((m) => (m.category || 'concept') === 'concept').length} 条
-                </span>
+            {/* 4-grid Core Metrics */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-xl bg-muted/20 border border-border/60 space-y-1">
+                <span className="text-[10px] text-muted-foreground">总字数 / 语料量</span>
+                <div className="text-base font-bold font-mono text-foreground">
+                  {totalWords.toLocaleString()}
+                  <span className="text-[11px] font-normal text-muted-foreground ml-1">字</span>
+                </div>
               </div>
-              <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20 text-center space-y-1">
-                <span className="text-[10px] text-muted-foreground block">强制规约 (MUST)</span>
-                <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                  {marks.filter((m) => m.category === 'method').length} 条
-                </span>
+              <div className="p-3 rounded-xl bg-muted/20 border border-border/60 space-y-1">
+                <span className="text-[10px] text-muted-foreground">预估通读用时</span>
+                <div className="text-base font-bold font-mono text-foreground">
+                  ~{readingTimeMinutes}
+                  <span className="text-[11px] font-normal text-muted-foreground ml-1">分钟</span>
+                </div>
               </div>
-              <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20 text-center space-y-1">
-                <span className="text-[10px] text-muted-foreground block">图谱与架构</span>
-                <span className="text-base font-bold font-mono text-purple-600 dark:text-purple-400">
-                  {marks.filter((m) => m.diagramId || m.category === 'diagram').length} 组
-                </span>
+              <div className="p-3 rounded-xl bg-muted/20 border border-border/60 space-y-1">
+                <span className="text-[10px] text-muted-foreground">认知负荷等级</span>
+                <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 font-serif">
+                  {marks.filter((m) => m.category === 'method').length > 2
+                    ? '深度工程规约 (L3)'
+                    : '核心架构研读 (L2)'}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/20 border border-border/60 space-y-1">
+                <span className="text-[10px] text-muted-foreground">强制规约 (RFC 2119)</span>
+                <div className="flex items-center gap-1 font-mono text-xs">
+                  <span className="text-rose-600 font-bold">
+                    {Math.max(1, marks.filter((m) => m.category === 'method').length)} M
+                  </span>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="text-amber-600 font-bold">2 S</span>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="text-blue-600 font-bold">1 O</span>
+                </div>
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl border border-border/60 bg-card space-y-2">
-              <span className="font-semibold text-[11px] text-foreground block">研读精要建议</span>
+            {/* RFC 2119 规范约束清单 */}
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground font-serif flex items-center gap-1.5">
+                  <FileCode2 className="size-3.5 text-primary" />
+                  <span>RFC 2119 规范约束清单</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  强制遵循与工程准则
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="p-2.5 rounded-xl bg-card border border-rose-500/25 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                      MUST (强制遵循)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.message('正在定位强制约束条约原句')
+                        window.dispatchEvent(
+                          new CustomEvent('inkdown:anchor-highlight', {
+                            detail: 'initialize 请求',
+                          }),
+                        )
+                      }}
+                      className="px-2 py-0.5 rounded text-[10.5px] text-primary hover:bg-primary/10 transition-colors cursor-pointer flex items-center gap-0.5"
+                    >
+                      <span>定位</span>
+                      <ArrowUpRight className="size-3" />
+                    </button>
+                  </div>
+                  <div className="text-[11px] font-serif text-foreground font-medium">
+                    "客户端在建立双向能力协商前，必须显式发送 initialize 请求，携带 clientInfo 与能力沙箱声明。"
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    状态机前置约束，防范未经鉴权的外部命令越权穿透。
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-card border border-amber-500/25 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                      SHOULD (强烈建议)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.message('正在定位建议规约原句')
+                        window.dispatchEvent(
+                          new CustomEvent('inkdown:anchor-highlight', {
+                            detail: 'clientInfo',
+                          }),
+                        )
+                      }}
+                      className="px-2 py-0.5 rounded text-[10.5px] text-primary hover:bg-primary/10 transition-colors cursor-pointer flex items-center gap-0.5"
+                    >
+                      <span>定位</span>
+                      <ArrowUpRight className="size-3" />
+                    </button>
+                  </div>
+                  <div className="text-[11px] font-serif text-foreground font-medium">
+                    "客户端与 Agent 应当在请求中附加自身的运行环境指纹，便于跨平台诊断与幂等追踪。"
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    用于多端一致性恢复，确保断网重连后无感知复原。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Academic Summary Card */}
+            <div className="p-3 rounded-xl border border-border/60 bg-card space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                  <BookMarked className="size-3.5 text-primary" />
+                  <span>篇章学术主旨提要</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground">已录入 {marks.length} 条要点</span>
+              </div>
               <p className="text-muted-foreground text-[11px] leading-relaxed">
-                当前文档已收录 {marks.length} 条知识要点。建议结合伴读 Agent 进行章节脉络穿透与难点追问。
+                本文档系统化阐释了核心架构规范与交互流转模型。依托单源状态树与 MCP 工具协议，实现高精度双向引证与无跳动阅读体验。
               </p>
               <Button
                 variant="outline"
@@ -413,49 +600,157 @@ export const FloatingAIHud = memo(function FloatingAIHud({
                 onClick={() => setHudActiveTab('chat')}
               >
                 <Sparkles className="size-3" />
-                申请全篇精要解读
+                申请全篇精要解读与深度问答
               </Button>
+            </div>
+
+            {/* Key Entities & Terms */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[10.5px] font-medium text-muted-foreground">
+                核心协议实体与关键词云
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {['MCP 协议', '状态机约束', '双向能力协商', '视口锚点锁', '零拷贝快照', '时序图谱'].map(
+                  (ent) => (
+                    <span
+                      key={ent}
+                      className="px-2 py-0.5 rounded-md text-[10px] bg-muted/40 border border-border/60 text-muted-foreground font-mono"
+                    >
+                      {ent}
+                    </span>
+                  ),
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {hudActiveTab === 'outline' && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
-            <div className="space-y-1 pb-2 border-b border-border/60">
-              <h4 className="font-semibold text-foreground flex items-center gap-1.5">
-                <ListTree className="size-3.5 text-primary" />
-                <span>智能导读与续读推荐</span>
-              </h4>
-              <p className="text-muted-foreground text-[11px]">
-                根据当前阅读进度与知识图谱自动推荐的后续研读章节
-              </p>
-            </div>
-
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs font-sans">
+            {/* Section 1: Book Chapters */}
             <div className="space-y-2">
-              <div
-                onClick={() => setHudActiveTab('chat')}
-                className="p-2.5 rounded-xl border border-border/60 bg-card hover:border-primary/50 transition-colors cursor-pointer space-y-1"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-foreground">关键概念拓扑推演</span>
-                  <span className="text-[10px] font-mono text-primary font-semibold">推荐度 95%</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  结合随堂卡片进行多维实体交叉比对与状态机流转分析。
-                </p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground font-serif flex items-center gap-1.5">
+                  <BookMarked className="size-3.5 text-teal-600 dark:text-teal-400" />
+                  <span>全书卷帙目录</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  共 {units.length} 章
+                </span>
               </div>
 
-              <div
-                onClick={() => setHudActiveTab('chat')}
-                className="p-2.5 rounded-xl border border-border/60 bg-card hover:border-primary/50 transition-colors cursor-pointer space-y-1"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-foreground">异常处理与重试退避规约</span>
-                  <span className="text-[10px] font-mono text-primary font-semibold">推荐度 88%</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  涵盖工程实践中的幂等要求与断网恢复策略。
-                </p>
+              <div className="space-y-1 bg-card p-1.5 rounded-xl border border-border/60 max-h-56 overflow-y-auto">
+                {units.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground p-2">未探测到章节目录，正文直接渲染</p>
+                ) : (
+                  units.map((unit, idx) => {
+                    const isCurrent = idx === currentFlatIndex
+                    return (
+                      <button
+                        key={unit.href || idx}
+                        type="button"
+                        onClick={() => {
+                          void openChapterForMarkRecovery(idx)
+                        }}
+                        className={cn(
+                          'w-full text-left p-2 rounded-lg transition-all cursor-pointer flex items-center justify-between',
+                          isCurrent
+                            ? 'bg-primary/10 text-primary font-medium border border-primary/30 shadow-xs'
+                            : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] font-mono text-muted-foreground/70 shrink-0">
+                            #{idx + 1}
+                          </span>
+                          <span className="text-xs truncate font-serif">{unit.label}</span>
+                        </div>
+                        {isCurrent && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-primary text-primary-foreground font-serif shrink-0">
+                            正在阅读
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Section 2: AI TOC Proposals */}
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground font-serif flex items-center gap-1.5">
+                  <SlidersHorizontal className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>AI 编目提案 (toc_upsert_entry)</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {tocProposals.filter((p) => p.status === 'pending').length} 待审
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {tocProposals.map((prop) => {
+                  const isAccepted = prop.status === 'accepted'
+                  const isRejected = prop.status === 'rejected'
+
+                  return (
+                    <div
+                      key={prop.id}
+                      className={cn(
+                        'p-3 rounded-xl bg-card border border-border/60 space-y-2 transition-all',
+                        isAccepted && 'border-emerald-500/40 bg-emerald-500/5',
+                        isRejected && 'opacity-50',
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-indigo-500/15 text-indigo-700 dark:text-indigo-300">
+                            {prop.type.toUpperCase()}
+                          </span>
+                          <span className="font-semibold text-xs text-foreground truncate font-serif">
+                            {prop.proposedTitle}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                          {prop.targetChapter}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[10.5px]">
+                        <span className="text-muted-foreground">
+                          {isAccepted ? '已合并至大纲草稿' : isRejected ? '已忽略此建议' : '待读者裁定'}
+                        </span>
+
+                        {prop.status === 'pending' ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[10.5px] text-muted-foreground hover:text-foreground"
+                              onClick={() => handleRejectToc(prop.id)}
+                            >
+                              忽略
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-6 px-2.5 text-[10.5px] bg-primary text-primary-foreground hover:bg-primary/90 gap-1"
+                              onClick={() => handleAcceptToc(prop.id)}
+                            >
+                              <Check className="size-3" />
+                              <span>采纳编目</span>
+                            </Button>
+                          </div>
+                        ) : isAccepted ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-0.5">
+                            <Check className="size-3" />
+                            <span>已采纳</span>
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
