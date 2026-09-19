@@ -77,8 +77,8 @@ export function ReaderContentShell({
   // 知识卡轨与伴读联动状态
   const isCardRailOpen = useReaderHudUiStore((s) => s.isCardRailOpen)
   const setIsCardRailOpen = useReaderHudUiStore((s) => s.setIsCardRailOpen)
-  const hudDisplayMode = useReaderHudUiStore((s) => s.hudDisplayMode)
-  const panelOpen = useReaderHudUiStore((s) => s.panelOpen)
+  const hudDisplayMode = useAcpUiStore((s) => s.hudDisplayMode)
+  const panelOpen = useAcpUiStore((s) => s.panelOpen)
   const zenMode = useReaderHudUiStore((s) => s.zenMode)
   const setSelectedDiagram = useReaderHudUiStore((s) => s.setSelectedDiagram)
   const openPanelAndFocusComposer = useAcpUiStore((s) => s.openPanelAndFocusComposer)

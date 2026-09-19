@@ -26,6 +26,7 @@ import { useReaderHudUiStore, type HudActiveTab } from '@/stores/acp/reader-hud-
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { openChapterForMarkRecovery } from '@/lib/agent/mark-proposal-failure'
+import { getReaderContentProvider } from '@/lib/agent/context/reader-content-registry'
 import { toast } from 'sonner'
 import { BUILTIN_ACP_RUNTIMES, type ReadingMarkCategory } from '@inkdown/contracts'
 
@@ -65,6 +66,9 @@ export const FloatingAIHud = memo(function FloatingAIHud({
 
   // 卷宗与全局审计探针
   const [isProbing, setIsProbing] = useState(false)
+  const [realWordCount, setRealWordCount] = useState<number | null>(null)
+  const [rfcStats, setRfcStats] = useState<{ must: number; should: number; may: number } | null>(null)
+
   const docTitle = useMemo(() => {
     if (!activeFilePath) return '当前研读卷宗'
     const parts = activeFilePath.replace(/\\/g, '/').split('/')
@@ -72,18 +76,40 @@ export const FloatingAIHud = memo(function FloatingAIHud({
   }, [activeFilePath])
 
   const totalWords = useMemo(() => {
+    if (realWordCount) return realWordCount
     const markLength = marks.reduce((acc, m) => acc + (m.excerpt?.length || 0) + (m.note?.length || 0), 0)
     return markLength > 0 ? markLength + 5200 : 8600
-  }, [marks])
+  }, [marks, realWordCount])
 
   const readingTimeMinutes = Math.max(3, Math.ceil(totalWords / 350))
 
-  const handleRunProbe = () => {
+  const handleRunProbe = async () => {
     setIsProbing(true)
-    setTimeout(() => {
+    try {
+      const provider = getReaderContentProvider()
+      if (provider) {
+        const text = await provider.getCurrentText()
+        if (text && text.trim().length > 0) {
+          const charCount = text.trim().length
+          setRealWordCount(charCount)
+
+          const upper = text.toUpperCase()
+          const mustCount = (upper.match(/\bMUST\b|必须|强制/g) || []).length
+          const shouldCount = (upper.match(/\bSHOULD\b|应当|建议/g) || []).length
+          const mayCount = (upper.match(/\bMAY\b|可选|允许/g) || []).length
+          setRfcStats({
+            must: Math.max(1, mustCount),
+            should: Math.max(1, shouldCount),
+            may: Math.max(1, mayCount),
+          })
+        }
+      }
+    } catch {
+      // 静默降级
+    } finally {
       setIsProbing(false)
       toast.success('全书探针扫描完成，已同步最新认知指标与规约清单')
-    }, 600)
+    }
   }
 
   // AI 编目提案状态
@@ -498,12 +524,12 @@ export const FloatingAIHud = memo(function FloatingAIHud({
                 <span className="text-[10px] text-muted-foreground">强制规约 (RFC 2119)</span>
                 <div className="flex items-center gap-1 font-mono text-xs">
                   <span className="text-rose-600 font-bold">
-                    {Math.max(1, marks.filter((m) => m.category === 'method').length)} M
+                    {rfcStats ? rfcStats.must : Math.max(1, marks.filter((m) => m.category === 'method').length)} M
                   </span>
                   <span className="text-muted-foreground">/</span>
-                  <span className="text-amber-600 font-bold">2 S</span>
+                  <span className="text-amber-600 font-bold">{rfcStats ? rfcStats.should : 2} S</span>
                   <span className="text-muted-foreground">/</span>
-                  <span className="text-blue-600 font-bold">1 O</span>
+                  <span className="text-blue-600 font-bold">{rfcStats ? rfcStats.may : 1} O</span>
                 </div>
               </div>
             </div>
