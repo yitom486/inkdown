@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { Minimize2 } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { ActivityBar } from '@/components/layout/ActivityBar'
@@ -111,7 +112,6 @@ export function WorkspaceShell({
   const setOutlineExpanded = useEditorUiStore((state) => state.setOutlineExpanded)
   const agentPanelOpen = useAcpUiStore((state) => state.panelOpen)
   const hudDisplayMode = useAcpUiStore((state) => state.hudDisplayMode)
-  const isDockedPanelVisible = agentPanelOpen && hudDisplayMode === 'docked'
   const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
   const isNotesDrawerOpen = useReaderHudUiStore((state) => state.isNotesDrawerOpen)
   const setIsNotesDrawerOpen = useReaderHudUiStore((state) => state.setIsNotesDrawerOpen)
@@ -123,9 +123,12 @@ export function WorkspaceShell({
   const setZenMode = useReaderHudUiStore((state) => state.setZenMode)
   const toggleZenMode = useReaderHudUiStore((state) => state.toggleZenMode)
 
+  const isDockedPanelVisible = !zenMode && agentPanelOpen && hudDisplayMode === 'docked'
+  const isSidebarVisible = !zenMode && sidebarVisible
+
   const { marks, deleteMark } = useReadingMarks(activeFilePath || '')
 
-  const sidebarPanelRef = useCollapsiblePanelSync(sidebarVisible)
+  const sidebarPanelRef = useCollapsiblePanelSync(isSidebarVisible)
   const agentPanelRef = useCollapsiblePanelSync(isDockedPanelVisible)
 
   const shellLayout = useDefaultLayout({
@@ -152,12 +155,12 @@ export function WorkspaceShell({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && zenMode) {
-        setZenMode(false)
+        preserveScrollAnchor(() => setZenMode(false))
         return
       }
       if ((event.ctrlKey || event.metaKey) && event.altKey && event.key.toLowerCase() === 'z') {
         event.preventDefault()
-        toggleZenMode()
+        preserveScrollAnchor(() => toggleZenMode())
         return
       }
       if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
@@ -200,14 +203,16 @@ export function WorkspaceShell({
       />
 
       <div className="flex min-h-0 flex-1">
-        <ActivityBar
-          sidebarVisible={sidebarVisible}
-          agentPanelOpen={agentPanelOpen}
-          onToggleSidebar={handleToggleSidebar}
-          onToggleAgentPanel={handleToggleAgentPanel}
-          onOpenLibrary={() => setIsLibraryOpen(true)}
-          onOpenNotes={() => setIsNotesDrawerOpen(true)}
-        />
+        {!zenMode && (
+          <ActivityBar
+            sidebarVisible={sidebarVisible}
+            agentPanelOpen={agentPanelOpen}
+            onToggleSidebar={handleToggleSidebar}
+            onToggleAgentPanel={handleToggleAgentPanel}
+            onOpenLibrary={() => setIsLibraryOpen(true)}
+            onOpenNotes={() => setIsNotesDrawerOpen(true)}
+          />
+        )}
 
         <ResizablePanelGroup
           id="workspace-shell"
@@ -247,7 +252,7 @@ export function WorkspaceShell({
             />
           </ResizablePanel>
 
-          {sidebarVisible ? <ResizableHandle withHandle /> : null}
+          {isSidebarVisible ? <ResizableHandle withHandle /> : null}
 
           <ResizablePanel id="main" defaultSize="57%" minSize="30%" className="min-w-0">
             {children}
@@ -270,7 +275,21 @@ export function WorkspaceShell({
         </ResizablePanelGroup>
       </div>
 
-      <FloatingAIHud workspaceRoot={workspaceRoot} activeFilePath={activeFilePath} />
+      {!zenMode && (
+        <FloatingAIHud workspaceRoot={workspaceRoot} activeFilePath={activeFilePath} />
+      )}
+
+      {zenMode && (
+        <button
+          type="button"
+          onClick={() => preserveScrollAnchor(() => setZenMode(false))}
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/85 hover:bg-background border border-border shadow-lg text-xs text-muted-foreground hover:text-foreground backdrop-blur-md transition-all cursor-pointer group animate-in fade-in"
+          title="退出沉浸禅模式 (Esc)"
+        >
+          <Minimize2 className="size-3.5 text-primary group-hover:scale-110 transition-transform" />
+          <span>退出禅模式 (Esc)</span>
+        </button>
+      )}
 
       <DiagramModal
         isOpen={!!selectedDiagram}
