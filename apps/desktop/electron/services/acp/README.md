@@ -6,7 +6,7 @@ ACP Agent 主进程侧 wiring：拉起 `codex-acp`、连接生命周期、权限
 
 | 组 | 文件 | 功能 |
 |----|------|------|
-| 入口 | `acp-client.ts` / `process-manager.ts` 留守；`@inkdown/acp` 的 `packages/acp/src/transport/jsonrpc-transport.ts` 已迁 | 连接生命周期、子进程、stdio JSON-RPC；同 runtime 温进程常驻复用（断开保温、退出树杀），冷启动前清扫 `_MEI`/`.tmp` 残留（`antigravity-temp-sweep.ts`） |
+| 入口 | `acp-client.ts` / `process-manager.ts` 留守；`@inkdown/acp` 的 `packages/acp/src/transport/jsonrpc-transport.ts` 已迁 | 连接生命周期、子进程、stdio JSON-RPC；同 runtime 温进程常驻复用（断开保温、退出树杀），冷启动经通用 `onColdStart` 钩子（如 antigravity 清扫 `_MEI`/`.tmp` 残留，见 `runtimes/antigravity/antigravity-temp-sweep.ts`） |
 | cwd | `agent-sandbox-cwd.ts` | 无用户工作区时 ACP 沙箱 cwd（`userData/agent-sandbox`） |
 | 注册 | `@inkdown/acp`：`packages/acp/src/session/agent-registry.ts` | 可用运行时（默认 `codex-acp`） |
 | 运行时 | `runtimes/`（`antigravity/`、`codex/`） | Codex 自定义供应商/隔离与 Antigravity 自动凭据桥接（Windows Credential Manager）、服务发现、专享代理及认证守门员 |

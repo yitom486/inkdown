@@ -57,7 +57,6 @@ import { disposeAllAcpProcesses, getLiveAcpProcess, isSpawnedAcpProcessAlive, sp
 import { ensureBunForCommand, mapSpawnErrorToAppError } from '../bun-runtime'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { sweepStaleAntigravityTempDirs } from './antigravity-temp-sweep'
 
 const PROTOCOL_VERSION = 1
 
@@ -474,14 +473,10 @@ export async function connectAcp(payload: {
   }
 
   try {
-    if (!warmHandle && runtime.id === ANTIGRAVITY_ACP_RUNTIME_ID) {
-      // 冷启动前清扫已死进程的 _MEI/.tmp 残留。
-      // 温进程与 Zed 共存实例的目录因新鲜（或被 DLL 锁占用）会被豁免。
-      try {
-        await sweepStaleAntigravityTempDirs()
-      } catch {
-        // 清扫失败不阻塞连接
-      }
+    // 冷启动才做 runtime 级副作用（如 antigravity 清扫 _MEI/.tmp 残留）；
+    // 温进程复用路径跳过，追求毫秒级重连。
+    if (!warmHandle) {
+      await adapter.onColdStart?.()
     }
     if (warmHandle) {
       // 温进程复用：跳过 spawn，直接用原 stdio 建新传输并走握手
