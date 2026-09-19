@@ -17,6 +17,11 @@ import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { FileTreeNode } from '@inkdown/contracts'
 import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
 import { preserveScrollAnchor } from '@/lib/reader/scroll-anchor'
+import { DiagramModal } from '@/components/agent/DiagramModal'
+import { NotesDrawer } from '@/components/reader/NotesDrawer'
+import { LibraryDrawer } from '@/components/reader/LibraryDrawer'
+import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
+import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 
 export interface WorkspaceShellProps {
   theme: 'dark' | 'light'
@@ -106,6 +111,18 @@ export function WorkspaceShell({
   const hudDisplayMode = useAcpUiStore((state) => state.hudDisplayMode)
   const isDockedPanelVisible = agentPanelOpen && hudDisplayMode === 'docked'
   const toggleAgentPanel = useAcpUiStore((state) => state.togglePanel)
+  const isNotesDrawerOpen = useReaderHudUiStore((state) => state.isNotesDrawerOpen)
+  const setIsNotesDrawerOpen = useReaderHudUiStore((state) => state.setIsNotesDrawerOpen)
+  const isLibraryOpen = useReaderHudUiStore((state) => state.isLibraryOpen)
+  const setIsLibraryOpen = useReaderHudUiStore((state) => state.setIsLibraryOpen)
+  const selectedDiagram = useReaderHudUiStore((state) => state.selectedDiagram)
+  const setSelectedDiagram = useReaderHudUiStore((state) => state.setSelectedDiagram)
+  const zenMode = useReaderHudUiStore((state) => state.zenMode)
+  const setZenMode = useReaderHudUiStore((state) => state.setZenMode)
+  const toggleZenMode = useReaderHudUiStore((state) => state.toggleZenMode)
+
+  const { marks, deleteMark } = useReadingMarks(activeFilePath || '')
+
   const sidebarPanelRef = useCollapsiblePanelSync(sidebarVisible)
   const agentPanelRef = useCollapsiblePanelSync(isDockedPanelVisible)
 
@@ -132,6 +149,15 @@ export function WorkspaceShell({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && zenMode) {
+        setZenMode(false)
+        return
+      }
+      if ((event.ctrlKey || event.metaKey) && event.altKey && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        toggleZenMode()
+        return
+      }
       if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
       if (event.key.toLowerCase() !== 'a') return
       event.preventDefault()
@@ -139,7 +165,7 @@ export function WorkspaceShell({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleToggleAgentPanel])
+  }, [handleToggleAgentPanel, zenMode, setZenMode, toggleZenMode])
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -176,6 +202,8 @@ export function WorkspaceShell({
           agentPanelOpen={agentPanelOpen}
           onToggleSidebar={handleToggleSidebar}
           onToggleAgentPanel={handleToggleAgentPanel}
+          onOpenLibrary={() => setIsLibraryOpen(true)}
+          onOpenNotes={() => setIsNotesDrawerOpen(true)}
         />
 
         <ResizablePanelGroup
@@ -240,6 +268,32 @@ export function WorkspaceShell({
       </div>
 
       <FloatingAIHud workspaceRoot={workspaceRoot} />
+
+      <DiagramModal
+        isOpen={!!selectedDiagram}
+        onClose={() => setSelectedDiagram(null)}
+        diagram={selectedDiagram}
+      />
+
+      <NotesDrawer
+        isOpen={isNotesDrawerOpen}
+        onClose={() => setIsNotesDrawerOpen(false)}
+        marks={marks ?? []}
+        bookTitle={activeFilePath ? activeFilePath.split(/[/\\]/).pop() : undefined}
+        onDeleteMark={(id) => void deleteMark(id)}
+      />
+
+      <LibraryDrawer
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        recentFiles={recentFiles}
+        activeFilePath={activeFilePath}
+        onSelectFile={onSelectFile}
+        recentWebUrls={recentWebUrls}
+        webPageUrl={webPageUrl}
+        onOpenWebDoc={onOpenWebDoc}
+        onOpenFile={onOpenFile}
+      />
     </div>
   )
 }

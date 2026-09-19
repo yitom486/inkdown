@@ -15,6 +15,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 | `AgentProviderDialog` | 自定义模型供应商配置（base URL + API Key + 模型，Key 只存主进程） |
 | `AgentHistoryMenu` | 历史线程切换 |
 | `AgentBunInstallBanner` | 缺 Bun 运行时提示与一键安装横幅 |
+| `DiagramModal` | 大图全屏交互检视模态框（缩放、平移、Mermaid 源码查看、SVG 导出） |
 
 ## chat/ 消息列表渲染
 

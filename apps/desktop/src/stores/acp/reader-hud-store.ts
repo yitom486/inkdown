@@ -30,6 +30,8 @@ export interface ReaderHudUiState {
   approveForMe: boolean
   /** 历史会话抽屉/下拉是否开启 */
   historyOpen: boolean
+  /** 沉浸禅模式（隐藏多栏与边框，居中聚焦正文） */
+  zenMode: boolean
   /** 递增以触发 AgentComposer 聚焦 */
   composerFocusNonce: number
   /** 递增以在输入框追加「选区」短标记 */
@@ -50,6 +52,8 @@ export interface ReaderHudUiState {
   setApproveForMe: (approve: boolean) => void
   toggleApproveForMe: () => void
   setHistoryOpen: (open: boolean) => void
+  setZenMode: (zen: boolean) => void
+  toggleZenMode: () => void
   requestComposerFocus: () => void
   openPanelAndFocusComposer: () => void
   insertComposerSelectionMarker: () => void
@@ -79,6 +83,7 @@ export const useReaderHudUiStore = create<ReaderHudUiState>()(
       selectedDiagram: null,
       approveForMe: false,
       historyOpen: false,
+      zenMode: false,
       composerFocusNonce: 0,
       composerInsertNonce: 0,
 
@@ -102,6 +107,8 @@ export const useReaderHudUiStore = create<ReaderHudUiState>()(
       setApproveForMe: (approve) => set({ approveForMe: approve }),
       toggleApproveForMe: () => set((s) => ({ approveForMe: !s.approveForMe })),
       setHistoryOpen: (open) => set({ historyOpen: open }),
+      setZenMode: (zen) => set({ zenMode: zen }),
+      toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
 
       requestComposerFocus: () => {
         if (!get().panelOpen) return

@@ -2,10 +2,13 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
+import { MarginaliaBar } from '@/components/reader/MarginaliaBar'
 import { FlashcardReviewDialog } from '@/components/reader/FlashcardReviewDialog'
 import { AiQuizDialog } from '@/components/quiz/AiQuizDialog'
 import { QuizHistoryDialog } from '@/components/quiz/QuizHistoryDialog'
 import { buildAnkiCardsExport } from '@/lib/reader/marks/export-anki-cards'
+import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { Flashcard } from '@inkdown/annotations'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
@@ -16,6 +19,7 @@ import {
 } from '@inkdown/reader-core'
 import { passageExcerpt } from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
+import type { DiagramVisualStep } from '@/components/agent/tools/DiagramViewerCard'
 import { toast } from 'sonner'
 
 interface ReaderContentShellProps {
@@ -68,6 +72,31 @@ export function ReaderContentShell({
   tocAside,
   children,
 }: ReaderContentShellProps) {
+  // 知识卡轨与伴读联动状态
+  const isCardRailOpen = useReaderHudUiStore((s) => s.isCardRailOpen)
+  const setIsCardRailOpen = useReaderHudUiStore((s) => s.setIsCardRailOpen)
+  const setSelectedDiagram = useReaderHudUiStore((s) => s.setSelectedDiagram)
+  const openPanelAndFocusComposer = useAcpUiStore((s) => s.openPanelAndFocusComposer)
+
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({})
+
+  const handleToggleCardCollapse = (id: string) => {
+    setCollapsedMap((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const handleToggleAllCollapse = (collapse: boolean) => {
+    const next: Record<string, boolean> = {}
+    for (const m of marks) {
+      next[m.id] = collapse
+    }
+    setCollapsedMap(next)
+  }
+
+  const enhancedMarks = marks.map((m) => ({
+    ...m,
+    collapsed: collapsedMap[m.id] ?? m.collapsed,
+  }))
+
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewCards, setReviewCards] = useState<Flashcard[]>([])
 
@@ -207,6 +236,58 @@ export function ReaderContentShell({
         </aside>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+
+      {isCardRailOpen ? (
+        <MarginaliaBar
+          marks={enhancedMarks}
+          onMarkClick={onSelectMark}
+          onDeleteMark={(id) => {
+            const m = marks.find((item) => item.id === id)
+            if (m) onDeleteMark(m)
+          }}
+          onOpenDiagram={(diagramId) => {
+            const m = marks.find((item) => item.diagramId === diagramId)
+            const fallbackSteps: DiagramVisualStep[] =
+              m?.keyPoints && m.keyPoints.length > 0
+                ? m.keyPoints.map((kp, idx) => ({
+                    from: `阶段 ${idx + 1}`,
+                    to: `推演 ${idx + 2}`,
+                    action: kp,
+                    desc: kp,
+                  }))
+                : [
+                    {
+                      from: '概念源起',
+                      to: '核心脉络',
+                      action: '提炼核心概念',
+                      desc: m?.excerpt ?? '概念正文解构',
+                    },
+                    {
+                      from: '核心脉络',
+                      to: '认知图景',
+                      action: '多维穿透解析',
+                      desc: m?.aiSummary ?? '时序流转分析',
+                    },
+                  ]
+
+            setSelectedDiagram({
+              diagramId,
+              diagramType: 'sequence',
+              title: m?.title ?? '时序流转交互图谱',
+              mermaidCode: m?.note?.includes('mermaid')
+                ? m.note.replace(/```mermaid\n?|\n?```/g, '').trim()
+                : 'sequenceDiagram\n  autonumber\n  Reader->>AI: 提出概念追问\n  AI-->>Reader: 返回分步交互图解',
+              summary: m?.aiSummary ?? m?.excerpt,
+              visualSteps: fallbackSteps,
+            })
+          }}
+          onToggleCardCollapse={handleToggleCardCollapse}
+          onToggleAllCollapse={handleToggleAllCollapse}
+          onCloseRail={() => setIsCardRailOpen(false)}
+          onGenerateAiCard={() => openPanelAndFocusComposer()}
+          className="h-full"
+        />
+      ) : null}
 
       <FlashcardReviewDialog
         open={reviewOpen}

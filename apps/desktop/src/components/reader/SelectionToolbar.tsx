@@ -1,7 +1,16 @@
-import { useEffect } from 'react'
-import { BotMessageSquare, ClipboardPaste, Copy, MessageSquarePlus, Quote } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  BotMessageSquare,
+  Check,
+  ClipboardPaste,
+  Copy,
+  MessageSquarePlus,
+  Quote,
+  Sparkles,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isMarkdownEditorFocused } from '@/lib/editor/editor-focus'
+import { cn } from '@/lib/utils'
 import { shouldHandleReaderCopyShortcut } from '@inkdown/reader-core'
 import {
   HIGHLIGHT_COLORS,
@@ -40,6 +49,14 @@ export function SelectionToolbar({
   onHighlight,
   onDismiss,
 }: SelectionToolbarProps) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    onCopy()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1200)
+  }
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -51,7 +68,7 @@ export function SelectionToolbar({
       if (shouldHandleReaderCopyShortcut(event, event.target, hasSelectionForCopy)) {
         // 对齐系统 Ctrl+C：复制后保留选区与工具条，不清
         event.preventDefault()
-        onCopy()
+        handleCopy()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -66,7 +83,7 @@ export function SelectionToolbar({
 
   return (
     <div
-      className="fixed z-50 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border/70 bg-card/90 backdrop-blur-md p-1 shadow-lg ring-1 ring-border/30 animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-50 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-border/80 bg-background/90 p-1 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 select-none animate-in fade-in zoom-in-95 duration-150"
       style={{ left: x, top: Math.max(8, y - 48) }}
       role="toolbar"
       aria-label="选区操作"
@@ -75,73 +92,83 @@ export function SelectionToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 gap-1 px-2 text-xs rounded-lg hover:bg-muted/80"
-        onClick={onCopy}
+        className={cn(
+          'h-7 gap-1 rounded-lg px-2 text-xs transition-colors',
+          copied && 'text-emerald-500 font-medium',
+        )}
+        onClick={handleCopy}
       >
-        <Copy className="size-3.5" />
-        复制
+        {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+        <span>{copied ? '已复制' : '复制'}</span>
       </Button>
+
       {readOnly ? null : (
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 gap-1 px-2 text-xs"
+          className="h-7 gap-1 rounded-lg px-2 text-xs"
           onClick={() => undefined}
         >
           <ClipboardPaste className="size-3.5" />
           粘贴
         </Button>
       )}
+
       {onHighlight ? (
         <div
-          className="mx-0.5 flex items-center gap-1 border-l border-border/70 pl-1.5 pr-1"
+          className="mx-0.5 flex items-center gap-1.5 border-l border-border/60 pl-2 pr-1.5"
           role="group"
           aria-label="划重点"
         >
-          <span className="text-[10px] text-muted-foreground">划重点</span>
-          {HIGHLIGHT_COLORS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="size-3.5 rounded-full ring-1 ring-black/25 dark:ring-white/30"
-              style={{ backgroundColor: item.swatch }}
-              title={`划重点 · ${item.label}`}
-              aria-label={`划重点 ${item.label}`}
-              onClick={() => onHighlight(item.id)}
-            />
-          ))}
+          <span className="text-[10.5px] font-medium text-muted-foreground">高亮</span>
+          <div className="flex items-center gap-1">
+            {HIGHLIGHT_COLORS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="size-3.5 rounded-full ring-1 ring-black/20 dark:ring-white/30 transition-transform duration-150 hover:scale-125 cursor-pointer shadow-xs"
+                style={{ backgroundColor: item.swatch }}
+                title={`划重点 · ${item.label}`}
+                aria-label={`划重点 ${item.label}`}
+                onClick={() => onHighlight(item.id)}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
+
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 gap-1 px-2 text-xs"
+        className="h-7 gap-1 rounded-lg px-2 text-xs hover:bg-muted/80"
         onClick={onAnnotate}
       >
-        <MessageSquarePlus className="size-3.5" />
-        批注
+        <MessageSquarePlus className="size-3.5 text-muted-foreground" />
+        <span>批注</span>
       </Button>
+
       {onAddToChat ? (
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 gap-1 px-2 text-xs"
+          className="h-7 gap-1 rounded-lg px-2 text-xs hover:bg-muted/80"
           title="在输入框插入「选区」标记，正文由 Agent 读取"
           onClick={onAddToChat}
         >
-          <Quote className="size-3.5" />
-          加入对话
+          <Quote className="size-3.5 text-muted-foreground" />
+          <span>引用</span>
         </Button>
       ) : null}
+
       {onAskAgent ? (
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 gap-1 px-2 text-xs"
+          className="h-7 gap-1.5 rounded-lg border border-primary/25 bg-primary/10 px-2.5 text-xs font-medium text-primary shadow-xs hover:bg-primary/20"
           onClick={onAskAgent}
         >
-          <BotMessageSquare className="size-3.5" />
-          问 Agent
+          <Sparkles className="size-3.5" />
+          <span>深度问答</span>
         </Button>
       ) : null}
     </div>

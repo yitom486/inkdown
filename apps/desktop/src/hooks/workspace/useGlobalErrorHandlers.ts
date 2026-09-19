@@ -18,6 +18,14 @@ export function useGlobalErrorHandlers(filePath?: string): void {
     }
 
     const onWindowError = (event: ErrorEvent) => {
+      const msg = event.message || event.error?.message || ''
+      if (
+        msg.includes('ResizeObserver') ||
+        msg.includes('ResizeObserver loop completed') ||
+        msg.includes('ResizeObserver loop limit exceeded')
+      ) {
+        return
+      }
       reportRuntimeError(event.error ?? event.message, { source: 'window.error', filePath })
     }
 
