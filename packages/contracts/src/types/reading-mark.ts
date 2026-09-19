@@ -167,6 +167,8 @@ export interface WebReadingAnchor {
 
 export type ReadingAnchor = PdfReadingAnchor | EpubReadingAnchor | MobiReadingAnchor | WebReadingAnchor
 
+export type ReadingMarkCategory = 'concept' | 'quote' | 'method' | 'diagram' | 'question'
+
 export interface ReadingMark {
   id: string
   filePath: string
@@ -177,6 +179,13 @@ export interface ReadingMark {
   note?: string
   excerpt?: string
   color?: string
+  category?: ReadingMarkCategory
+  title?: string
+  aiSummary?: string
+  keyPoints?: string[]
+  tags?: string[]
+  collapsed?: boolean
+  diagramId?: string
   createdAt: number
   updatedAt: number
 }
@@ -190,6 +199,13 @@ export interface CreateReadingMarkPayload {
   note?: string
   excerpt?: string
   color?: string
+  category?: ReadingMarkCategory
+  title?: string
+  aiSummary?: string
+  keyPoints?: string[]
+  tags?: string[]
+  collapsed?: boolean
+  diagramId?: string
 }
 
 export interface UpdateReadingMarkPayload {
@@ -198,4 +214,11 @@ export interface UpdateReadingMarkPayload {
   label?: string
   note?: string
   color?: string
+  category?: ReadingMarkCategory
+  title?: string
+  aiSummary?: string
+  keyPoints?: string[]
+  tags?: string[]
+  collapsed?: boolean
+  diagramId?: string
 }

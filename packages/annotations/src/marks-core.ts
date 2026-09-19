@@ -55,6 +55,13 @@ export function buildReadingMark(input: {
     note: normalizeOptionalText(payload.note),
     excerpt: normalizeOptionalText(payload.excerpt),
     color: payload.color,
+    category: payload.category,
+    title: normalizeOptionalText(payload.title),
+    aiSummary: normalizeOptionalText(payload.aiSummary),
+    keyPoints: payload.keyPoints,
+    tags: payload.tags,
+    collapsed: payload.collapsed,
+    diagramId: normalizeOptionalText(payload.diagramId),
     createdAt: now,
     updatedAt: now,
   }
@@ -72,6 +79,13 @@ export function applyReadingMarkUpdate(
     label: payload.label !== undefined ? payload.label.trim() || undefined : current.label,
     note: payload.note !== undefined ? payload.note.trim() || undefined : current.note,
     color: payload.color ?? current.color,
+    category: payload.category !== undefined ? payload.category : current.category,
+    title: payload.title !== undefined ? payload.title.trim() || undefined : current.title,
+    aiSummary: payload.aiSummary !== undefined ? payload.aiSummary.trim() || undefined : current.aiSummary,
+    keyPoints: payload.keyPoints !== undefined ? payload.keyPoints : current.keyPoints,
+    tags: payload.tags !== undefined ? payload.tags : current.tags,
+    collapsed: payload.collapsed !== undefined ? payload.collapsed : current.collapsed,
+    diagramId: payload.diagramId !== undefined ? payload.diagramId.trim() || undefined : current.diagramId,
     updatedAt: now,
   }
   if (payload.note !== undefined && !payload.note.trim() && payload.kind === undefined) {

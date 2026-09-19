@@ -16,6 +16,7 @@ import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import type { FileTreeNode } from '@inkdown/contracts'
 import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
+import { preserveScrollAnchor } from '@/lib/reader/scroll-anchor'
 
 export interface WorkspaceShellProps {
   theme: 'dark' | 'light'
@@ -113,16 +114,32 @@ export function WorkspaceShell({
     panelIds: ['sidebar', 'main', 'agent'],
   })
 
+  const handleToggleSidebar = () => {
+    preserveScrollAnchor(() => toggleSidebar())
+  }
+
+  const handleSetSidebarVisible = (visible: boolean) => {
+    preserveScrollAnchor(() => setSidebarVisible(visible))
+  }
+
+  const handleToggleAgentPanel = () => {
+    preserveScrollAnchor(() => toggleAgentPanel())
+  }
+
+  const handleLayoutChanged: typeof shellLayout.onLayoutChanged = (layout, meta) => {
+    preserveScrollAnchor(() => shellLayout.onLayoutChanged(layout, meta))
+  }
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) return
       if (event.key.toLowerCase() !== 'a') return
       event.preventDefault()
-      toggleAgentPanel()
+      handleToggleAgentPanel()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [toggleAgentPanel])
+  }, [handleToggleAgentPanel])
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -132,8 +149,8 @@ export function WorkspaceShell({
         sidebarVisible={sidebarVisible}
         agentPanelOpen={agentPanelOpen}
         readOnly={readOnly}
-        onToggleSidebar={toggleSidebar}
-        onToggleAgentPanel={toggleAgentPanel}
+        onToggleSidebar={handleToggleSidebar}
+        onToggleAgentPanel={handleToggleAgentPanel}
         onToggleTheme={onToggleTheme}
         onOpenFile={onOpenFile}
         onOpenFolder={onOpenFolder}
@@ -157,15 +174,15 @@ export function WorkspaceShell({
         <ActivityBar
           sidebarVisible={sidebarVisible}
           agentPanelOpen={agentPanelOpen}
-          onToggleSidebar={toggleSidebar}
-          onToggleAgentPanel={toggleAgentPanel}
+          onToggleSidebar={handleToggleSidebar}
+          onToggleAgentPanel={handleToggleAgentPanel}
         />
 
         <ResizablePanelGroup
           id="workspace-shell"
           orientation="horizontal"
           defaultLayout={shellLayout.defaultLayout}
-          onLayoutChanged={shellLayout.onLayoutChanged}
+          onLayoutChanged={handleLayoutChanged}
           className="min-h-0 min-w-0 flex-1"
         >
           <ResizablePanel
@@ -194,7 +211,7 @@ export function WorkspaceShell({
               isRescanningWorkspace={isRescanningWorkspace}
               onSelectFile={onSelectFile}
               onSelectHeading={onSelectHeading ?? (() => undefined)}
-              onHideSidebar={() => setSidebarVisible(false)}
+              onHideSidebar={() => handleSetSidebarVisible(false)}
               treeActions={treeActions}
             />
           </ResizablePanel>

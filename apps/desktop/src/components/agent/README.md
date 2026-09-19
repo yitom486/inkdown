@@ -7,7 +7,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 | 文件 | 功能 |
 |------|------|
 | `AgentPanel` | 右侧 Agent 主面板（壳 + 接线；配置项分类纯逻辑已出库 `lib/agent/acp-config-menu`） |
-| `FloatingAIHud` | 悬浮 AI 伴读浮窗与微型药丸胶囊（支持 docked / floating / capsule 三态平滑切换） |
+| `FloatingAIHud` | 悬浮 AI 伴读浮窗与微型药丸胶囊（支持 docked / floating / capsule 三态切换、四大 Tab 与自由拖拽） |
 | `CompactConfigMenu` | 输入栏旁的紧凑配置下拉（primary 配置项） |
 | `AgentComposer` | 输入框、附件、选区标记 |
 | `AgentMark` | Agent 徽标（布局/TitleBar 共用） |

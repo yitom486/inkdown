@@ -66,7 +66,7 @@ export function SelectionToolbar({
 
   return (
     <div
-      className="fixed z-50 flex -translate-x-1/2 items-center gap-0.5 rounded-md border border-border/80 bg-popover p-1 shadow-md"
+      className="fixed z-50 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-border/70 bg-card/90 backdrop-blur-md p-1 shadow-lg ring-1 ring-border/30 animate-in fade-in zoom-in-95 duration-150"
       style={{ left: x, top: Math.max(8, y - 48) }}
       role="toolbar"
       aria-label="选区操作"
@@ -75,7 +75,7 @@ export function SelectionToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 gap-1 px-2 text-xs"
+        className="h-7 gap-1 px-2 text-xs rounded-lg hover:bg-muted/80"
         onClick={onCopy}
       >
         <Copy className="size-3.5" />
