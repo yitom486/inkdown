@@ -2,13 +2,7 @@ import { acpApi } from '@/api/acp-api'
 import { STREAM_FLUSH_MS, StreamCoalescer, isCoalescableAgentChunk } from '@/lib/agent/stream-coalescer'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { useAnnotationAgentStore, annotationOwnsSessionId } from '@/stores/annotation-agent-store'
-import { quizOwnsSessionId, accumulateQuizSessionUpdate, isQuizPrompting } from '@/lib/quiz/quiz-acp-session'
-import { tocOwnsSessionId, accumulateTocSessionUpdate, isTocPrompting } from '@/lib/agent/toc-ai-session'
-import {
-  cardStudioOwnsSessionId,
-  accumulateCardStudioSessionUpdate,
-  isCardStudioPrompting,
-} from '@/lib/agent/card-studio-session'
+import { subsessionOwnsSessionId, accumulateSubsessionUpdate, isSubsessionPrompting } from '@/lib/agent/acp-subsession'
 
 /**
  * ACP 流式推送应用级宿主（与组件挂载脱钩）。
@@ -102,19 +96,11 @@ export function startAcpStreamHost(): () => void {
       ann.applySessionUpdate(event.update)
       return
     }
-    // 按 sessionId 分流：考官副会话或出题判卷期间绝不进右侧时间线
-    if (quizOwnsSessionId(event.sessionId) || isQuizPrompting()) {
-      accumulateQuizSessionUpdate(event.sessionId, event.update)
-      return
-    }
-    // 按 sessionId 分流：目录 AI 整理副会话绝不进右侧时间线
-    if (tocOwnsSessionId(event.sessionId) || isTocPrompting()) {
-      accumulateTocSessionUpdate(event.sessionId, event.update)
-      return
-    }
-    // 按 sessionId 分流：制卡副会话（一书一会话）绝不进右侧时间线
-    if (cardStudioOwnsSessionId(event.sessionId) || isCardStudioPrompting()) {
-      accumulateCardStudioSessionUpdate(event.sessionId, event.update)
+    // 按 sessionId 分流：统一副会话工厂（quiz 单例 / toc 每次新建 / 制卡一书一键）
+    // 归属任一副会话的增量绝不进右侧时间线，各自回填其 replyBuffer；
+    // 任一副会话 prompting 期间的短窗口同样截获（沿旧三路 `|| isXxxPrompting()` 语义）
+    if (subsessionOwnsSessionId(event.sessionId) || isSubsessionPrompting()) {
+      accumulateSubsessionUpdate(event.sessionId, event.update)
       return
     }
     const chunkText = isCoalescableAgentChunk(event.update)
