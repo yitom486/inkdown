@@ -254,6 +254,9 @@ const electronAPI: ElectronAPI = {
   getAllQuizSessions: () => ipcRenderer.invoke(IPC.QUIZ_GET_ALL_SESSIONS),
   getQuizSessionsByFile: (filePath: string) =>
     ipcRenderer.invoke(IPC.QUIZ_GET_SESSIONS_BY_FILE, filePath),
+  getAiSession: (payload) => ipcRenderer.invoke(IPC.AI_SESSIONS_GET, payload),
+  putAiSession: (payload) => ipcRenderer.invoke(IPC.AI_SESSIONS_PUT, payload),
+  touchAiSession: (payload) => ipcRenderer.invoke(IPC.AI_SESSIONS_TOUCH, payload),
   getSyncConfig: () => ipcRenderer.invoke(IPC.SYNC_GET_CONFIG),
   saveSyncConfig: (config) => ipcRenderer.invoke(IPC.SYNC_SAVE_CONFIG, config),
   testSyncConnection: (config) => ipcRenderer.invoke(IPC.SYNC_TEST_CONNECTION, config),

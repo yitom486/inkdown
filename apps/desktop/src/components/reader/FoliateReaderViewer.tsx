@@ -952,6 +952,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     },
     showPendingHighlight: showPendingAnnotateHighlight,
     saveHighlight: handleSaveAnnotation,
+    sessionKey: fileFingerprint ?? filePath,
   })
 
   const getRenderedDocs = useCallback((): Array<{ doc: Document; index: number }> => {
@@ -1807,7 +1808,8 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
-          onGenerateCard={selectionActions.handleGenerateCard}
+          onGenerateCardPreset={selectionActions.generateAiCard}
+          cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}

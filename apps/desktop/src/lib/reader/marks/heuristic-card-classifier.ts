@@ -10,6 +10,26 @@ export interface HeuristicCardResult {
 }
 
 /**
+ * 分类→高亮色单源映射（启发式与 AI 制卡共用；模型不定色）。
+ * 与下文各分支 return 的 color 逐字一致，改色只改这里。
+ */
+export function highlightColorForCategory(category: ReadingMarkCategory): HighlightColorId {
+  switch (category) {
+    case 'method':
+      return 'green'
+    case 'diagram':
+      return 'pink'
+    case 'quote':
+      return 'yellow'
+    case 'question':
+      return 'orange'
+    case 'concept':
+    default:
+      return 'blue'
+  }
+}
+
+/**
  * 启发式知识卡片分类与要点提炼引擎。
  * 根据划选文本的语义特征自动识别认知属性，并映射专属莫兰迪柔光色标。
  */
@@ -21,7 +41,7 @@ export function heuristicClassifyMark(text: string): HeuristicCardResult {
       title: '核心要点',
       aiSummary: '随堂要点摘录',
       keyPoints: ['要点摘录'],
-      color: 'blue',
+      color: highlightColorForCategory('concept'),
     }
   }
 
@@ -44,7 +64,7 @@ export function heuristicClassifyMark(text: string): HeuristicCardResult {
       title: extractSummaryTitle(trimmed, '规约约束法则'),
       aiSummary: `规范条目：${trimmed.slice(0, 100)}${trimmed.length > 100 ? '...' : ''}`,
       keyPoints: extractKeyPoints(trimmed),
-      color: 'green',
+      color: highlightColorForCategory('method'),
     }
   }
 
@@ -64,7 +84,7 @@ export function heuristicClassifyMark(text: string): HeuristicCardResult {
       title: extractSummaryTitle(trimmed, '时序架构交互'),
       aiSummary: `流转演进：${trimmed.slice(0, 100)}${trimmed.length > 100 ? '...' : ''}`,
       keyPoints: extractKeyPoints(trimmed),
-      color: 'pink',
+      color: highlightColorForCategory('diagram'),
     }
   }
 
@@ -82,7 +102,7 @@ export function heuristicClassifyMark(text: string): HeuristicCardResult {
       title: extractSummaryTitle(trimmed, '经典引言'),
       aiSummary: `原典摘录：${trimmed.slice(0, 100)}${trimmed.length > 100 ? '...' : ''}`,
       keyPoints: extractKeyPoints(trimmed),
-      color: 'yellow',
+      color: highlightColorForCategory('quote'),
     }
   }
 
@@ -100,7 +120,7 @@ export function heuristicClassifyMark(text: string): HeuristicCardResult {
       title: extractSummaryTitle(trimmed, '研读设问'),
       aiSummary: `待研判问题：${trimmed.slice(0, 100)}${trimmed.length > 100 ? '...' : ''}`,
       keyPoints: extractKeyPoints(trimmed),
-      color: 'orange',
+      color: highlightColorForCategory('question'),
     }
   }
 
@@ -110,7 +130,7 @@ export function heuristicClassifyMark(text: string): HeuristicCardResult {
     title: extractSummaryTitle(trimmed, '核心概念'),
     aiSummary: `概念要义：${trimmed.slice(0, 100)}${trimmed.length > 100 ? '...' : ''}`,
     keyPoints: extractKeyPoints(trimmed),
-    color: 'blue',
+    color: highlightColorForCategory('concept'),
   }
 }
 

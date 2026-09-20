@@ -135,6 +135,16 @@ export const IPC = {
   FLASHCARDS_APPEND_REVIEW: 'flashcards:append-review',
 
   /* ================================================================
+   * AI 会话指针（一书一会话，inkdown.db ai_sessions，只记指针与计数）
+   * ================================================================ */
+  /** invoke：取某书会话行（无则 null，调用方建新会话后 put） */
+  AI_SESSIONS_GET: 'ai-sessions:get',
+  /** invoke：upsert 会话行 */
+  AI_SESSIONS_PUT: 'ai-sessions:put',
+  /** invoke：prompt 成功后计数 + 保活 */
+  AI_SESSIONS_TOUCH: 'ai-sessions:touch',
+
+  /* ================================================================
    * ACP Agent（acp:*）：协议见 @inkdown/acp，默认运行时 codex-acp
    * ================================================================ */
   /** invoke：列出可用 ACP Agent 运行时（如 codex-acp） */

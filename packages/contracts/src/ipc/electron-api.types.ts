@@ -39,6 +39,12 @@ import type {
   ListDueFlashcardsPayload,
 } from '../types/flashcard'
 import type {
+  AiSessionGetPayload,
+  AiSessionPutPayload,
+  AiSessionRecord,
+  AiSessionTouchPayload,
+} from '../types/ai-session'
+import type {
   AcpAuthPreflightPayload,
   AcpAuthPreflightResult,
   AcpAuthenticatePayload,
@@ -281,6 +287,13 @@ export interface ElectronAPI {
   appendFlashcardReview: (
     payload: AppendFlashcardReviewPayload,
   ) => Promise<Result<boolean, AppError>>
+  /* ===== AI 会话指针（一书一会话） ===== */
+  /** 取某书会话行（无则 null） */
+  getAiSession: (payload: AiSessionGetPayload) => Promise<Result<AiSessionRecord | null, AppError>>
+  /** upsert 会话行 */
+  putAiSession: (payload: AiSessionPutPayload) => Promise<Result<void, AppError>>
+  /** prompt 成功后计数 + 保活 */
+  touchAiSession: (payload: AiSessionTouchPayload) => Promise<Result<void, AppError>>
   /* ===== ACP Agent：运行时/认证/session/prompt/权限/快照/推送 ===== */
   /** 列出可用 ACP Agent 运行时 */
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>

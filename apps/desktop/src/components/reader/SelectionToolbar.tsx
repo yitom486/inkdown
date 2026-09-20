@@ -4,11 +4,13 @@ import {
   Check,
   ClipboardPaste,
   Copy,
+  Loader2,
   MessageSquarePlus,
   Quote,
   Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { CardPresetMenuContent } from '@/components/reader/CardPresetMenu'
 import { isMarkdownEditorFocused } from '@/lib/editor/editor-focus'
 import { cn } from '@/lib/utils'
 import { shouldHandleReaderCopyShortcut } from '@inkdown/reader-core'
@@ -33,8 +35,12 @@ export interface SelectionToolbarProps {
   onAddToChat?: () => void
   /** 将当前选区存为高亮；颜色由色点选择，默认黄 */
   onHighlight?: (color: HighlightColorId) => void
-  /** 启发式智能制卡并自动展开卡轨 */
-  onGenerateCard?: () => void
+  /**
+   * AI 制卡（P1 菜单驱动）：presetId 见 card-studio-presets，
+   * customText 仅"更多要求"入口携带；pending 时调用方禁用菜单。
+   */
+  onGenerateCardPreset?: (presetId: string, customText?: string) => void
+  cardPresetPending?: boolean
   onDismiss: () => void
 }
 
@@ -49,10 +55,12 @@ export function SelectionToolbar({
   onAskAgent,
   onAddToChat,
   onHighlight,
-  onGenerateCard,
+  onGenerateCardPreset,
+  cardPresetPending = false,
   onDismiss,
 }: SelectionToolbarProps) {
   const [copied, setCopied] = useState(false)
+  const [cardMenuOpen, setCardMenuOpen] = useState(false)
 
   const handleCopy = () => {
     onCopy()
@@ -150,17 +158,34 @@ export function SelectionToolbar({
         <span>批注</span>
       </Button>
 
-      {onGenerateCard ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 rounded-lg border border-primary/25 bg-primary/10 px-2 text-xs font-medium text-primary shadow-xs hover:bg-primary/20"
-          title="启发式智能提炼为微晶知识卡片并展开右侧卡轨"
-          onClick={onGenerateCard}
-        >
-          <Sparkles className="size-3.5" />
-          <span>智能制卡</span>
-        </Button>
+      {onGenerateCardPreset ? (
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 rounded-lg border border-primary/25 bg-primary/10 px-2 text-xs font-medium text-primary shadow-xs hover:bg-primary/20"
+            title="选方向调 AI 提炼为知识卡片（离线回启发式）"
+            disabled={cardPresetPending}
+            onClick={() => setCardMenuOpen((v) => !v)}
+          >
+            {cardPresetPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            <span>{cardPresetPending ? '制卡中' : '智能制卡'}</span>
+          </Button>
+          {cardMenuOpen ? (
+            <CardPresetMenuContent
+              className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2"
+              pending={cardPresetPending}
+              onPick={(presetId, customText) => {
+                setCardMenuOpen(false)
+                onGenerateCardPreset(presetId, customText)
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {onAddToChat ? (

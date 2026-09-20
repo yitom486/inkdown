@@ -43,6 +43,7 @@ describe('SelectionBubble', () => {
         createElement(SelectionBubble, {
           position: { x: 200, y: 300 },
           selectedText: 'Distributed consensus algorithm',
+          onGenerateCardPreset: vi.fn(),
           onClose: vi.fn(),
         }),
       )
@@ -85,8 +86,8 @@ describe('SelectionBubble', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('triggers onGenerateCard when 生成卡片 is clicked', async () => {
-    const onGenerateCard = vi.fn()
+  it('opens preset menu on 生成卡片 and picks without closing bubble', async () => {
+    const onGenerateCardPreset = vi.fn()
     const onClose = vi.fn()
 
     await act(async () => {
@@ -94,7 +95,7 @@ describe('SelectionBubble', () => {
         createElement(SelectionBubble, {
           position: { x: 200, y: 300 },
           selectedText: 'Core concept excerpt',
-          onGenerateCard,
+          onGenerateCardPreset,
           onClose,
         }),
       )
@@ -108,9 +109,20 @@ describe('SelectionBubble', () => {
     await act(async () => {
       cardBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    // 只开菜单（气泡保留，选区不丢）
+    expect(onGenerateCardPreset).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
 
-    expect(onGenerateCard).toHaveBeenCalledWith('Core concept excerpt')
-    expect(onClose).toHaveBeenCalled()
+    const concept = Array.from(container.querySelectorAll('[role="menuitem"]')).find((b) =>
+      b.textContent?.includes('概念界定'),
+    )
+    expect(concept).toBeDefined()
+    await act(async () => {
+      concept?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onGenerateCardPreset).toHaveBeenCalledTimes(1)
+    expect(onGenerateCardPreset).toHaveBeenCalledWith('concept', undefined)
   })
 
   it('opens color palette and triggers onHighlight when color is selected', async () => {

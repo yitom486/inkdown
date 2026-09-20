@@ -498,6 +498,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     },
     showPendingHighlight: showPendingSelectionHighlight,
     saveHighlight: handleSaveAnnotation,
+    sessionKey: fileFingerprint ?? documentId,
   })
 
   const handleCreateMarkAt = useCallback(
@@ -1142,7 +1143,8 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
-          onGenerateCard={selectionActions.handleGenerateCard}
+          onGenerateCardPreset={selectionActions.generateAiCard}
+          cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}

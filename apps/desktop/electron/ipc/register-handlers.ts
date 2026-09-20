@@ -133,6 +133,16 @@ import {
   readAllQuizSessions,
   readQuizSessionsByFile,
 } from '../services/quiz-service'
+import {
+  getAiSession,
+  putAiSession,
+  touchAiSession,
+} from '../services/ai-session-service'
+import type {
+  AiSessionGetPayload,
+  AiSessionPutPayload,
+  AiSessionTouchPayload,
+} from '@inkdown/contracts'
 import type { QuizSessionRecord } from '@inkdown/contracts'
 import {
   discoverWebDocToc,
@@ -594,6 +604,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.QUIZ_GET_ALL_SESSIONS, () => readAllQuizSessions())
   ipcMain.handle(IPC.QUIZ_GET_SESSIONS_BY_FILE, (_event, filePath: string) =>
     readQuizSessionsByFile(filePath),
+  )
+
+  // --- AI 会话指针（一书一会话） ---
+  ipcMain.handle(IPC.AI_SESSIONS_GET, (_event, payload: AiSessionGetPayload) =>
+    getAiSession(payload),
+  )
+  ipcMain.handle(IPC.AI_SESSIONS_PUT, (_event, payload: AiSessionPutPayload) =>
+    putAiSession(payload),
+  )
+  ipcMain.handle(IPC.AI_SESSIONS_TOUCH, (_event, payload: AiSessionTouchPayload) =>
+    touchAiSession(payload),
   )
 
   // --- 在线文档 ---

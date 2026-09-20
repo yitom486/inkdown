@@ -27,7 +27,7 @@ describe('SelectionToolbar', () => {
     const onCopy = vi.fn()
     const onAnnotate = vi.fn()
     const onHighlight = vi.fn()
-    const onGenerateCard = vi.fn()
+    const onGenerateCardPreset = vi.fn()
     const onAskAgent = vi.fn()
     const onDismiss = vi.fn()
 
@@ -39,7 +39,7 @@ describe('SelectionToolbar', () => {
           onCopy,
           onAnnotate,
           onHighlight,
-          onGenerateCard,
+          onGenerateCardPreset,
           onAskAgent,
           onDismiss,
         }),
@@ -53,8 +53,8 @@ describe('SelectionToolbar', () => {
     expect(container.textContent).toContain('深度问答')
   })
 
-  it('calls onGenerateCard when clicking智能制卡', async () => {
-    const onGenerateCard = vi.fn()
+  it('opens preset menu on智能制卡 and picks a preset', async () => {
+    const onGenerateCardPreset = vi.fn()
     const onCopy = vi.fn()
     const onAnnotate = vi.fn()
     const onDismiss = vi.fn()
@@ -66,7 +66,7 @@ describe('SelectionToolbar', () => {
           y: 200,
           onCopy,
           onAnnotate,
-          onGenerateCard,
+          onGenerateCardPreset,
           onDismiss,
         }),
       )
@@ -76,11 +76,22 @@ describe('SelectionToolbar', () => {
     const cardBtn = buttons.find((b) => b.textContent?.includes('智能制卡'))
     expect(cardBtn).toBeDefined()
 
+    // 点一次只开菜单，不直接制卡（选择题，不抢答）
     await act(async () => {
       cardBtn?.click()
     })
+    expect(onGenerateCardPreset).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('通用提炼')
 
-    expect(onGenerateCard).toHaveBeenCalledTimes(1)
+    const menuButtons = Array.from(container.querySelectorAll('[role="menuitem"]'))
+    const distill = menuButtons.find((b) => b.textContent?.includes('通用提炼'))
+    expect(distill).toBeDefined()
+    await act(async () => {
+      ;(distill as HTMLButtonElement)?.click()
+    })
+
+    expect(onGenerateCardPreset).toHaveBeenCalledTimes(1)
+    expect(onGenerateCardPreset).toHaveBeenCalledWith('distill', undefined)
   })
 
   it('calls onHighlight with color when clicking color dot', async () => {

@@ -15,8 +15,9 @@
 | `ReaderTypographyControls` | 阅读排版控件（字号 / 行距） |
 | `ReadingMarkPanel` / `ReadingMarkPopover` | 书签/批注列表（目录层级、类型筛选、当前章展开；含导出）与点击编辑浮层 |
 | `FlashcardReviewDialog` | 沉浸式 3D 闪卡复习弹窗（挖空遮罩、正反翻转、原书一键秒回与记忆打分） |
-| `SelectionToolbar` | 划选工具条（划重点、问 Agent、批注等） |
+| `SelectionToolbar` | 划选工具条（划重点、问 Agent、批注、AI 制卡预设菜单等） |
 | `SelectionBubble` | 就地划选悬浮微晶气泡（解释/摘要/制卡/对比/追问五大动作、莫兰迪柔光高亮与复制） |
+| `CardPresetMenu` | AI 制卡预设菜单内容（6 方向点选 + 更多要求次级入口，工具条与气泡共用） |
 | `MarginaliaBar` | 右侧知识卡片轨（分类药丸筛选、全部/单项折叠、AI 智能制卡、时序图联动） |
 | `KnowledgeCardItem` | 知识卡片单项（概念/引用/方法/图谱/思考五类微晶卡片、单行与多功能态切换、AI 润色） |
 | `LibraryDrawer` | 馆藏书卷与在线规范侧拉抽屉（本地书库、在线规范快速切换、检索） |

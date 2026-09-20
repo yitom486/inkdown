@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
   addSelectionMarkerToComposer,
@@ -6,8 +6,8 @@ import {
 } from '@/lib/agent/context/focus-agent-composer'
 import { copyTextToClipboard } from '@inkdown/reader-core'
 import type { HighlightColorId } from '@inkdown/reader-core'
-import { heuristicClassifyMark } from '@/lib/reader/marks/heuristic-card-classifier'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
+import { generateAiCardContent } from '@/lib/agent/card-studio'
 
 /**
  * 三阅读器（PDF / Foliate / WebDoc）划选工具条的共享动作。
@@ -29,6 +29,11 @@ export interface ReaderSelectionActionsOptions {
   saveHighlight: (note: string, color: HighlightColorId) => Promise<unknown>
   /** 高亮失败回调；不传则保持原样（rejection 不吞） */
   onHighlightError?: (cause: unknown) => void
+  /**
+   * 制卡会话归属键（本书指纹，缺省回落文件路径，由各 Viewer 传入）。
+   * 决定一书一会话落哪一行；缺省仅内存会话（不断流，但重启不恢复）。
+   */
+  sessionKey?: string
 }
 
 export interface ReaderSelectionActions {
@@ -37,7 +42,12 @@ export interface ReaderSelectionActions {
   handleHighlight: (color: HighlightColorId) => void
   handleAddToChat: () => void
   handleAskAgent: () => void
-  handleGenerateCard: () => void
+  /**
+   * AI 制卡（P1 菜单驱动）：选预设 → 本书会话调模型 → 落卡。
+   * 离线/无响应回启发式并明示；pending 期间调用方禁用菜单。
+   */
+  generateAiCard: (presetId: string, customText?: string) => Promise<void>
+  aiCardPending: boolean
   handleDismiss: () => void
 }
 
@@ -54,6 +64,7 @@ export function useReaderSelectionActions(
     retainSelection,
     saveHighlight,
     onHighlightError,
+    sessionKey,
   } = options
 
   // 对齐系统 Ctrl+C：复制后保留选区与工具条（Escape / 点空白仍清）
@@ -97,36 +108,79 @@ export function useReaderSelectionActions(
     dimTextSelection()
   }, [dimTextSelection])
 
-  const handleGenerateCard = useCallback(() => {
-    if (hasSelection && !hasSelection()) {
-      toast.error('当前没有可用选区，请先划选文本')
-      return
-    }
-    const text = snapshotText ?? ''
-    if (!text.trim()) {
-      toast.error('选中文本为空')
-      return
-    }
-    const result = heuristicClassifyMark(text)
-    retainSelection?.()
-    const pending = saveHighlight(
-      JSON.stringify({
-        title: result.title,
-        category: result.category,
-        aiSummary: result.aiSummary,
-        keyPoints: result.keyPoints,
-      }),
-      result.color,
-    )
-    if (onHighlightError) {
-      void pending.catch(onHighlightError)
-    } else {
-      void pending
-    }
-    useReaderHudUiStore.getState().setIsCardRailOpen(true)
-    toast.success(`已生成【${result.title}】知识卡片`)
-    clearTextSelection()
-  }, [hasSelection, snapshotText, retainSelection, saveHighlight, onHighlightError, clearTextSelection])
+  const [aiCardPending, setAiCardPending] = useState(false)
+
+  const generateAiCard = useCallback(
+    async (presetId: string, customText?: string) => {
+      if (hasSelection && !hasSelection()) {
+        toast.error('当前没有可用选区，请先划选文本')
+        return
+      }
+      const text = snapshotText ?? ''
+      if (!text.trim()) {
+        toast.error('选中文本为空')
+        return
+      }
+      // 会话归属键由 Viewer 传入（指纹优先、路径回落）；缺省不断流但无法建卡
+      const bookKey = sessionKey?.trim()
+      if (!bookKey) {
+        toast.error('本书信息缺失，无法制卡')
+        return
+      }
+      setAiCardPending(true)
+      try {
+        const outcome = await generateAiCardContent({
+          excerpt: text,
+          presetId,
+          customText,
+          bookKey,
+        })
+        if (!outcome) {
+          toast.error('制卡参数异常')
+          return
+        }
+        retainSelection?.()
+        const { card } = outcome
+        try {
+          await saveHighlight(
+            JSON.stringify({
+              title: card.title,
+              category: card.category,
+              aiSummary: card.aiSummary,
+              keyPoints: card.keyPoints,
+            }),
+            card.color,
+          )
+        } catch (cause) {
+          if (onHighlightError) {
+            onHighlightError(cause)
+            return
+          }
+          throw cause
+        }
+        useReaderHudUiStore.getState().setIsCardRailOpen(true)
+        if (outcome.fallback) {
+          toast.warning(`AI 无响应，已用启发式制卡【${card.title}】`)
+        } else {
+          toast.success(`AI 制卡：【${card.title}】`)
+        }
+        clearTextSelection()
+      } catch {
+        toast.error('制卡失败，请重试')
+      } finally {
+        setAiCardPending(false)
+      }
+    },
+    [
+      hasSelection,
+      snapshotText,
+      sessionKey,
+      retainSelection,
+      saveHighlight,
+      onHighlightError,
+      clearTextSelection,
+    ],
+  )
 
   return {
     handleCopy,
@@ -134,7 +188,8 @@ export function useReaderSelectionActions(
     handleHighlight,
     handleAddToChat,
     handleAskAgent,
-    handleGenerateCard,
+    generateAiCard,
+    aiCardPending,
     handleDismiss: clearTextSelection,
   }
 }

@@ -11,7 +11,7 @@ import type { DatabaseSync } from 'node:sqlite'
  * 2. 补 `title` 列：草案漏了 `QuizQuestion.title`，否则丢题干标题。
  */
 
-export const INKDOWN_DB_SCHEMA_VERSION = 1
+export const INKDOWN_DB_SCHEMA_VERSION = 2
 
 const MIGRATION_V1 = `
 CREATE TABLE IF NOT EXISTS quiz_sessions (
@@ -50,6 +50,18 @@ CREATE INDEX IF NOT EXISTS idx_quiz_questions_session ON quiz_questions (session
 
 const MIGRATIONS: Record<number, string> = {
   1: MIGRATION_V1,
+  // v2：ai_sessions（一书一会话指针，见 .plan/ai-cards/01）。
+  // 只记指针与计数，不存消息明文；purpose 预留 quiz 副会话迁入。
+  2: `CREATE TABLE IF NOT EXISTS ai_sessions (
+  book_fingerprint TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT 'card-studio',
+  session_id TEXT NOT NULL,
+  prompt_count INTEGER NOT NULL DEFAULT 0,
+  last_used_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (book_fingerprint, purpose)
+);`,
 }
 
 export function getInkdownDbVersion(db: DatabaseSync): number {

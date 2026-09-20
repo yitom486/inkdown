@@ -1691,6 +1691,7 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
     onHighlightError: (cause) => {
       toast.error(cause instanceof Error ? cause.message : '添加高亮失败')
     },
+    sessionKey: fileFingerprint ?? filePath,
   })
 
   const handleCreateMarkAt = useCallback(
@@ -2377,7 +2378,8 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
-          onGenerateCard={selectionActions.handleGenerateCard}
+          onGenerateCardPreset={selectionActions.generateAiCard}
+          cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}

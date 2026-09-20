@@ -11,11 +11,11 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CardPresetMenuContent } from '@/components/reader/CardPresetMenu'
 
 export type SelectionBubbleAction =
   | 'explain'
   | 'summary'
-  | 'card'
   | 'compare'
   | 'question'
 
@@ -25,7 +25,12 @@ export interface SelectionBubbleProps {
   position: { x: number; y: number } | null
   selectedText: string
   onAskAgent?: (prompt: string) => void
-  onGenerateCard?: (text: string) => void
+  /**
+   * AI 制卡（P1 菜单驱动）：presetId 见 card-studio-presets，
+   * customText 仅"更多要求"入口携带；pending 时调用方禁用菜单。
+   */
+  onGenerateCardPreset?: (presetId: string, customText?: string) => void
+  cardPresetPending?: boolean
   onHighlight?: (text: string, color: HighlightColor) => void
   onCopy?: () => void
   onClose: () => void
@@ -36,13 +41,15 @@ export function SelectionBubble({
   position,
   selectedText,
   onAskAgent,
-  onGenerateCard,
+  onGenerateCardPreset,
+  cardPresetPending = false,
   onHighlight,
   onCopy,
   onClose,
   className,
 }: SelectionBubbleProps) {
   const [showColorPicker, setShowColorPicker] = useState(false)
+  const [showCardMenu, setShowCardMenu] = useState(false)
   const [copied, setCopied] = useState(false)
 
   if (!position || !selectedText) return null
@@ -71,9 +78,7 @@ export function SelectionBubble({
   }
 
   const handleQuickAction = (actionType: SelectionBubbleAction) => {
-    if (actionType === 'card') {
-      onGenerateCard?.(selectedText)
-    } else if (actionType === 'explain') {
+    if (actionType === 'explain') {
       onAskAgent?.(`请深入解释并解构此段核心内涵：“${selectedText}”`)
     } else if (actionType === 'summary') {
       onAskAgent?.(`请提炼此段内容的精要摘要：“${selectedText}”`)
@@ -132,16 +137,31 @@ export function SelectionBubble({
           <span>摘要</span>
         </button>
 
-        {/* 3. 生成卡片 */}
-        <button
-          type="button"
-          onClick={() => handleQuickAction('card')}
-          className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 cursor-pointer"
-          title="抽取为知识卡片并存入页边"
-        >
-          <Layers className="size-3.5 text-primary" />
-          <span>生成卡片</span>
-        </button>
+        {/* 3. 生成卡片（P1 菜单驱动：选方向调 AI，离线回启发式） */}
+        {onGenerateCardPreset ? (
+          <div className="relative">
+            <button
+              type="button"
+              disabled={cardPresetPending}
+              onClick={() => setShowCardMenu((v) => !v)}
+              className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 cursor-pointer disabled:opacity-50"
+              title="选方向调 AI 提炼为知识卡片"
+            >
+              <Layers className="size-3.5 text-primary" />
+              <span>{cardPresetPending ? '制卡中' : '生成卡片'}</span>
+            </button>
+            {showCardMenu ? (
+              <CardPresetMenuContent
+                className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2"
+                pending={cardPresetPending}
+                onPick={(presetId, customText) => {
+                  setShowCardMenu(false)
+                  onGenerateCardPreset(presetId, customText)
+                }}
+              />
+            ) : null}
+          </div>
+        ) : null}
 
         {/* 4. 对比 */}
         <button
