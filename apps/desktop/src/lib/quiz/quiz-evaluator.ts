@@ -458,35 +458,39 @@ export function evaluateFallbackAnswer(
 
 /**
  * 发起 ACP / AI 批量出题（真实调用云端/本地大模型）
+ * `fallback` 为真表示模型无响应，已退回离线启发题库（调用方须如实提示用户）。
  */
 export async function generateQuestionsWithAi(
   passage: string,
   count: number = 3,
   chapterTitle?: string,
   markId?: string,
-): Promise<QuizQuestion[]> {
+): Promise<{ questions: QuizQuestion[]; fallback: boolean }> {
   const promptText = buildBatchQuestionPrompt(passage, count, chapterTitle)
   const rawResponse = await sendQuizPrompt(promptText)
 
   if (!rawResponse) {
-    return generateFallbackQuestions(passage, count, chapterTitle, markId)
+    return { questions: generateFallbackQuestions(passage, count, chapterTitle, markId), fallback: true }
   }
 
   const parsed = parseBatchQuestionsResponse(rawResponse)
   if (!parsed || parsed.length === 0) {
-    return generateFallbackQuestions(passage, count, chapterTitle, markId)
+    return { questions: generateFallbackQuestions(passage, count, chapterTitle, markId), fallback: true }
   }
 
-  return parsed.map((item, idx) => ({
-    id: `q-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-    title: item.title,
-    tag: item.tag,
-    prompt: item.prompt,
-    keyPoints: item.keyPoints,
-    sourceExcerpt: passage.trim(),
-    chapterTitle,
-    markId,
-  }))
+  return {
+    questions: parsed.map((item, idx) => ({
+      id: `q-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+      title: item.title,
+      tag: item.tag,
+      prompt: item.prompt,
+      keyPoints: item.keyPoints,
+      sourceExcerpt: passage.trim(),
+      chapterTitle,
+      markId,
+    })),
+    fallback: false,
+  }
 }
 
 /**
@@ -497,12 +501,14 @@ export async function generateQuestionWithAi(
   chapterTitle?: string,
   markId?: string,
 ): Promise<QuizQuestion> {
-  const qs = await generateQuestionsWithAi(passage, 1, chapterTitle, markId)
-  return qs[0]
+  const { questions } = await generateQuestionsWithAi(passage, 1, chapterTitle, markId)
+  return questions[0]
 }
 
 /**
  * 发起 ACP / AI 批量判卷
+ * `fallback` 为真表示模型无响应，已退回离线启发式判卷（调用方须如实提示用户；
+ * submissions 形状不变，直存测验库无污染）。
  */
 export async function evaluateAnswersWithAi(
   questions: QuizQuestion[],
@@ -512,20 +518,21 @@ export async function evaluateAnswersWithAi(
   totalScore: number
   grade: QuizGrade
   overallFeedback: string
+  fallback: boolean
 }> {
   const promptText = buildBatchEvaluationPrompt(questions, userAnswers)
   const rawResponse = await sendQuizPrompt(promptText)
 
   if (!rawResponse) {
-    return evaluateFallbackAnswers(questions, userAnswers)
+    return { ...evaluateFallbackAnswers(questions, userAnswers), fallback: true }
   }
 
   const parsed = parseBatchEvaluationResponse(rawResponse, questions, userAnswers)
   if (!parsed) {
-    return evaluateFallbackAnswers(questions, userAnswers)
+    return { ...evaluateFallbackAnswers(questions, userAnswers), fallback: true }
   }
 
-  return parsed
+  return { ...parsed, fallback: false }
 }
 
 /**

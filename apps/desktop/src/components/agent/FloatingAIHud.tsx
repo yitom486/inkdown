@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   BookMarked,
   Bookmark,
@@ -29,6 +30,9 @@ import { openChapterForMarkRecovery } from '@/lib/agent/mark-proposal-failure'
 import { getReaderContentProvider } from '@/lib/agent/context/reader-content-registry'
 import { toast } from 'sonner'
 import { BUILTIN_ACP_RUNTIMES, type ReadingMarkCategory } from '@inkdown/contracts'
+import { isOk } from '@inkdown/contracts'
+import { queryKeys } from '@/api/query-keys'
+import { readingMarksApi } from '@/api/reading-marks-api'
 
 interface FloatingAIHudProps {
   workspaceRoot?: string
@@ -159,6 +163,25 @@ export const FloatingAIHud = memo(function FloatingAIHud({
   const [cardsSearch, setCardsSearch] = useState('')
   const [cardsCategory, setCardsCategory] = useState<'all' | ReadingMarkCategory>('all')
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({})
+
+  // 随堂卡片搜索优先走 FTS（marks:search，经 useDeferredValue 不挡输入）；
+  // IPC 不可用/无路径/查询中/失败回落内存 includes（今日行为）
+  const deferredCardsSearch = useDeferredValue(cardsSearch)
+  const trimmedCardsQuery = deferredCardsSearch.trim()
+  const cardsFtsQuery = useQuery({
+    queryKey: queryKeys.marksSearch(activeFilePath ?? '', trimmedCardsQuery),
+    queryFn: async (): Promise<Set<string>> => {
+      const result = await readingMarksApi.search({
+        filePath: activeFilePath ?? '',
+        query: trimmedCardsQuery,
+      })
+      if (!isOk(result)) throw result.error
+      return new Set(result.value.map((mark) => mark.id))
+    },
+    enabled: Boolean(activeFilePath) && trimmedCardsQuery.length > 0,
+    staleTime: 30_000,
+  })
+  const cardsFtsIds = cardsFtsQuery.data ?? null
 
   // 阅读器全书大纲与当前导航
   const units = useReaderNavigationStore((s) => s.units)
@@ -502,8 +525,10 @@ export const FloatingAIHud = memo(function FloatingAIHud({
                 marks
                   .filter((m) => {
                     if (cardsCategory !== 'all' && (m.category || 'concept') !== cardsCategory) return false
-                    if (!cardsSearch.trim()) return true
-                    const q = cardsSearch.toLowerCase()
+                    if (!trimmedCardsQuery) return true
+                    // FTS 命中即收；查询中/失败回落内存 includes
+                    if (cardsFtsIds) return cardsFtsIds.has(m.id)
+                    const q = trimmedCardsQuery.toLowerCase()
                     return (
                       (m.title && m.title.toLowerCase().includes(q)) ||
                       (m.excerpt && m.excerpt.toLowerCase().includes(q)) ||

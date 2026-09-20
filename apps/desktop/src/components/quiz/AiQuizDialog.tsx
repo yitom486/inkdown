@@ -80,8 +80,16 @@ export function AiQuizDialog({
       setViewResultIndex(0)
 
       try {
-        const qs = await generateQuestionsWithAi(passage, count, chapterTitle, markId)
+        const { questions: qs, fallback } = await generateQuestionsWithAi(
+          passage,
+          count,
+          chapterTitle,
+          markId,
+        )
         setQuestions(qs)
+        if (fallback) {
+          toast.warning('AI 无响应，已切换为离线启发题库')
+        }
         setPhase('answering')
       } catch {
         toast.error('出题异常，已切换为离线启发题库')
@@ -152,7 +160,11 @@ export function AiQuizDialog({
       await defaultQuizRepository.appendSession(sessionRecord)
       invalidateQuizSessions(queryClient, filePath)
       setPhase('result')
-      toast.success(`AI 整卷判卷完成！总分：${evalResult.totalScore} 分 (${evalResult.grade})`)
+      if (evalResult.fallback) {
+        toast.warning(`离线启发式判卷完成！总分：${evalResult.totalScore} 分 (${evalResult.grade})`)
+      } else {
+        toast.success(`AI 整卷判卷完成！总分：${evalResult.totalScore} 分 (${evalResult.grade})`)
+      }
     } catch {
       toast.error('判卷过程发生异常，请重试')
       setPhase('answering')
