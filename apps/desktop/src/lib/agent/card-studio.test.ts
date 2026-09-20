@@ -1,5 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseAiCardJson } from './card-studio'
+
+vi.mock('@/lib/agent/card-studio-session', () => ({
+  sendCardStudioPrompt: vi.fn(),
+}))
+
+import { sendCardStudioPrompt } from '@/lib/agent/card-studio-session'
+import { generateAiCardContent } from './card-studio'
+
+const mockedSend = vi.mocked(sendCardStudioPrompt)
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 const valid = JSON.stringify({
   title: '托克维尔的旅行动机',
@@ -45,5 +58,51 @@ describe('parseAiCardJson', () => {
         '摘录',
       ),
     ).toBeNull()
+  })
+})
+
+describe('generateAiCardContent', () => {
+  const valid = JSON.stringify({
+    title: '旅行动机',
+    category: 'concept',
+    aiSummary: '以问题定义旅行者。',
+    keyPoints: ['发问'],
+  })
+
+  it('模型成功走 AI 卡（fallback false）', async () => {
+    mockedSend.mockResolvedValue({ status: 'ok', reply: valid })
+    const outcome = await generateAiCardContent({
+      excerpt: '摘录正文',
+      presetId: 'distill',
+      bookKey: 'fp-1',
+    })
+    expect(outcome).toMatchObject({ fallback: false, reason: null })
+    expect(outcome?.card.title).toBe('旅行动机')
+  })
+
+  it('离线/失败回启发式并带原因（调用方按因提示）', async () => {
+    mockedSend.mockResolvedValue({ status: 'offline', reply: '' })
+    const offline = await generateAiCardContent({
+      excerpt: '摘录正文',
+      presetId: 'distill',
+      bookKey: 'fp-1',
+    })
+    expect(offline).toMatchObject({ fallback: true, reason: 'offline' })
+    // 兜底时预设不生效：分类由启发式自定
+    expect(offline?.card.category).toBe('concept')
+
+    mockedSend.mockResolvedValue({ status: 'failed', reply: '' })
+    const failed = await generateAiCardContent({
+      excerpt: '摘录正文',
+      presetId: 'distill',
+      bookKey: 'fp-1',
+    })
+    expect(failed).toMatchObject({ fallback: true, reason: 'model' })
+  })
+
+  it('入参非法返回 null（调用方 toast 报错）', async () => {
+    expect(await generateAiCardContent({ excerpt: '  ', presetId: 'distill', bookKey: 'fp-1' })).toBeNull()
+    expect(await generateAiCardContent({ excerpt: '摘录', presetId: 'nope', bookKey: 'fp-1' })).toBeNull()
+    expect(mockedSend).not.toHaveBeenCalled()
   })
 })

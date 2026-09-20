@@ -111,7 +111,10 @@ describe('card-studio-session（一书一会话）', () => {
       streamText('sid-card-01', '{"title":"t"}')
       return ok({ stopReason: 'end_turn' })
     })
-    expect(await sendCardStudioPrompt('fp-1', 'prompt')).toContain('{"title":"t"}')
+    expect(await sendCardStudioPrompt('fp-1', 'prompt')).toEqual({
+      status: 'ok',
+      reply: '{"title":"t"}',
+    })
     expect(mockedTouch).toHaveBeenCalledTimes(1)
 
     // prompt 拒收 → 自转建新会话重试一次
@@ -121,8 +124,21 @@ describe('card-studio-session（一书一会话）', () => {
       streamText('sid-card-02', 'retry-ok')
       return ok({ stopReason: 'end_turn' })
     })
-    expect(await sendCardStudioPrompt('fp-1', 'prompt')).toBe('retry-ok')
+    expect(await sendCardStudioPrompt('fp-1', 'prompt')).toEqual({
+      status: 'ok',
+      reply: 'retry-ok',
+    })
     expect(mockedSessionNew).toHaveBeenCalledTimes(2)
+  })
+
+  it('未连接/建会话失败分结局返回（调用方按因提示）', async () => {
+    useAcpUiStore.setState({ status: 'disconnected' })
+    expect(await sendCardStudioPrompt('fp-1', 'prompt')).toEqual({ status: 'offline', reply: '' })
+    expect(mockedSessionNew).not.toHaveBeenCalled()
+
+    useAcpUiStore.setState({ status: 'connected' })
+    mockedSessionNew.mockResolvedValueOnce(err({ code: 'ACP_PROTOCOL_ERROR', message: 'nope' }))
+    expect(await sendCardStudioPrompt('fp-1', 'prompt')).toEqual({ status: 'failed', reply: '' })
   })
 
   it('手动重置后下次建新会话', async () => {

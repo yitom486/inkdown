@@ -33,8 +33,9 @@ export interface AiCardInput {
 
 export interface AiCardOutcome {
   card: HeuristicCardResult
-  /** true=启发式兜底（离线/模型无响应/结果非法） */
+  /** true=启发式兜底（离线/无响应/结果非法）；reason 告诉调用方 toast 说什么 */
   fallback: boolean
+  reason: 'offline' | 'model' | null
 }
 
 interface AiCardJson {
@@ -86,19 +87,26 @@ export async function generateAiCardContent(input: AiCardInput): Promise<AiCardO
   const preset = getCardStudioPreset(input.presetId)
   if (!preset) return null
 
-  const reply = await sendCardStudioPrompt(
+  const sent = await sendCardStudioPrompt(
     input.bookKey,
     buildCardStudioPrompt(excerpt, preset, input.customText),
   )
-  if (reply) {
-    const parsed = parseAiCardJson(reply, preset.category, excerpt)
+  if (sent.status === 'ok' && sent.reply) {
+    const parsed = parseAiCardJson(sent.reply, preset.category, excerpt)
     if (parsed) {
       return {
         card: { ...parsed, color: highlightColorForCategory(parsed.category) },
         fallback: false,
+        reason: null,
       }
     }
+    console.info('[card-studio] parse:invalid-json-fallback')
+  } else if (sent.status === 'offline') {
+    console.info('[card-studio] fallback:offline')
+  } else {
+    console.info('[card-studio] fallback:model-unavailable')
   }
-  // 兜底：今日启发式（离线/无响应/结果非法统一路口）
-  return { card: heuristicClassifyMark(excerpt), fallback: true }
+  // 兜底：今日启发式（离线/无响应/结果非法统一路口；预设此时不生效，分类由启发式自定）
+  const reason = sent.status === 'offline' ? 'offline' : 'model'
+  return { card: heuristicClassifyMark(excerpt), fallback: true, reason }
 }

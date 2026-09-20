@@ -181,7 +181,13 @@ export function useReaderSelectionActions(
         }
         useReaderHudUiStore.getState().setIsCardRailOpen(true)
         if (outcome.fallback) {
-          toast.warning(`AI 无响应，已用启发式制卡【${card.title}】`)
+          if (outcome.reason === 'offline') {
+            toast.warning(`请先连接 AI（Agent 面板），已用启发式制卡【${card.title}】`, {
+              duration: 5000,
+            })
+          } else {
+            toast.warning(`AI 无响应，已用启发式制卡【${card.title}】`)
+          }
         } else {
           toast.success(`AI 制卡：【${card.title}】`)
         }
@@ -226,18 +232,22 @@ export function useReaderSelectionActions(
       })
       setDeepAnswerPending(true)
       try {
-        const reply = await sendCardStudioPrompt(
+        const sent = await sendCardStudioPrompt(
           bookKey,
           buildDeepAnswerPrompt(excerpt, direction),
         )
-        if (!reply) {
-          toast.warning('AI 无响应，请先连接 AI 或稍后重试')
+        if (!sent.reply) {
+          if (sent.status === 'offline') {
+            toast.warning('请先连接 AI（Agent 面板），连上后再问', { duration: 5000 })
+          } else {
+            toast.warning('AI 无响应，稍后重试')
+          }
           setDeepAnswer(null)
           return
         }
         setDeepAnswer((prev) =>
           prev && prev.directionId === direction.id && prev.excerpt === excerpt
-            ? { ...prev, answer: reply }
+            ? { ...prev, answer: sent.reply }
             : prev,
         )
       } finally {

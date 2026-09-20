@@ -157,30 +157,57 @@ export async function getOrCreateCardStudioSessionId(bookKey: string): Promise<s
 }
 
 /**
- * 经本书会话发制卡 prompt，返回模型正文（null=走启发式兜底）。
- * 旧会话已死（prompt 拒收）时自转一次重试；仍失败返回 null。
- * 成功（无论正文空否）记一次 touch。
+ * 经本书会话发制卡 prompt。
+ * 结局：ok（有正文）/ offline（ACP 未连接）/ failed（建会话/发送/恢复失败）。
+ * 成功（无论正文空否）记一次 touch；旧会话已死自转一次重试。
+ * 每次关键节点打 console.info（[card-studio]，devtools 可查；不记原文与指纹全文）。
  */
+export type CardStudioSendStatus = 'ok' | 'offline' | 'failed'
+
+export interface CardStudioSendResult {
+  status: CardStudioSendStatus
+  reply: string
+}
+
 export async function sendCardStudioPrompt(
   bookKey: string,
   promptText: string,
-): Promise<string | null> {
+): Promise<CardStudioSendResult> {
+  if (!(await waitForConnected())) {
+    console.info(`[card-studio] send:abort book=${bookKey.slice(-8)} reason=offline`)
+    return { status: 'offline', reply: '' }
+  }
   const first = await getOrCreateCardStudioSessionId(bookKey)
-  if (!first) return null
+  if (!first) {
+    console.info(`[card-studio] send:abort book=${bookKey.slice(-8)} reason=session-new-failed`)
+    return { status: 'failed', reply: '' }
+  }
   const reply = await promptOnce(bookKey, first, promptText)
   if (reply !== null) {
     await aiSessionApi.touch({ bookFingerprint: bookKey })
-    return reply
+    console.info(
+      `[card-studio] send:return book=${bookKey.slice(-8)} outcome=ok replyChars=${reply.length}`,
+    )
+    return { status: 'ok', reply }
   }
   // 自转重试一次（覆盖"库里有、运行时侧已死"的重启后首次调用）
+  console.info(`[card-studio] send:retry book=${bookKey.slice(-8)} reason=prompt-rejected`)
   entries.delete(bookKey)
   const second = await createSession(bookKey)
-  if (!second) return null
+  if (!second) {
+    console.info(`[card-studio] send:abort book=${bookKey.slice(-8)} reason=rotate-failed`)
+    return { status: 'failed', reply: '' }
+  }
   const retried = await promptOnce(bookKey, second, promptText)
   if (retried !== null) {
     await aiSessionApi.touch({ bookFingerprint: bookKey })
+    console.info(
+      `[card-studio] send:return book=${bookKey.slice(-8)} outcome=ok-after-rotate replyChars=${retried.length}`,
+    )
+    return { status: 'ok', reply: retried }
   }
-  return retried
+  console.info(`[card-studio] send:return book=${bookKey.slice(-8)} outcome=failed`)
+  return { status: 'failed', reply: '' }
 }
 
 async function promptOnce(
