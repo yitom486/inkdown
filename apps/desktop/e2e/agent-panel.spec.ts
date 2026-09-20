@@ -23,12 +23,15 @@ test.describe('Agent 面板壳', () => {
         .or(activityBar.getByRole('button', { name: '关闭 Agent 面板' }))
       await expect(agentToggle).toBeVisible({ timeout: 10_000 })
 
-      const panel = window.getByRole('region', { name: 'Agent 聊天' })
-      if (!(await panel.isVisible().catch(() => false))) {
+      // docked 面板常驻挂载（折叠不断挂），floating 开启时再挂第二个：
+      // 全页 role 定位必然撞车，只认当前可见的那个（HUD 双形态设计如此）。
+      const panel = window.locator('aside[aria-label="Agent 聊天"]:visible')
+      if ((await panel.count()) === 0) {
         await activityBar.getByRole('button', { name: '打开 Agent 面板' }).click()
       }
-      await expect(panel).toBeVisible({ timeout: 10_000 })
-      await expect(panel.getByText('Agent', { exact: true }).first()).toBeVisible()
+      await expect(panel.first()).toBeVisible({ timeout: 10_000 })
+      // 面板头已改为运行时名（旧 "Agent" 字样是阶段 9 前的叫法）：断言运行时切换器
+      await expect(panel.getByTitle('点击切换 Agent 运行时')).toBeVisible()
 
       const connectOrHint = panel
         .getByRole('button', { name: '连接' })
