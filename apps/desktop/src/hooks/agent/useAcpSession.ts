@@ -16,134 +16,14 @@ import {
 import { resetTurnContextTracker } from '@/lib/agent/context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
-import { STREAM_FLUSH_MS, StreamCoalescer, isCoalescableAgentChunk } from '@/lib/agent/stream-coalescer'
+import { flushAcpStreamBuffer, registerStreamAuthReset } from '@/lib/agent/acp-stream-host'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
 import { selectActiveThreadAgentSessionId } from '@/stores/acp-ui-store'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
-import { useAnnotationAgentStore, annotationOwnsSessionId } from '@/stores/annotation-agent-store'
-import { quizOwnsSessionId, accumulateQuizSessionUpdate, isQuizPrompting } from '@/lib/quiz/quiz-acp-session'
-import { tocOwnsSessionId, accumulateTocSessionUpdate, isTocPrompting } from '@/lib/agent/toc-ai-session'
-import {
-  cardStudioOwnsSessionId,
-  accumulateCardStudioSessionUpdate,
-  isCardStudioPrompting,
-} from '@/lib/agent/card-studio-session'
 
 function activeThreadAgentSessionId(): string | undefined {
   return selectActiveThreadAgentSessionId(useAcpUiStore.getState())
-}
-
-/**
- * 流式 IPC 订阅单例（模块级）。
- *
- * 背景：docked 侧栏常驻挂载 AgentPanel，floating HUD 打开时再挂一个，
- * 两个 hook 实例会订阅出两份 onSessionUpdate——同一 chunk 进两遍合并器，
- * 时间线翻倍、体感就是"复读"。此前"多管道"的观感即来源于此。
- * 本单例保证进程内只有一份订阅、一个合并器；各实例只注册清理回调
- *（认证弹窗等实例级 UI 状态），卸载时引用计数归零才真正退订。
- */
-interface StreamSubscriptionHost {
-  resetAuthUi: () => void
-}
-
-const streamSubscriptionHosts = new Set<StreamSubscriptionHost>()
-let releaseStreamSubscription: (() => void) | null = null
-let sharedStreamBuffer: {
-  coalescer: StreamCoalescer
-  timer: ReturnType<typeof setTimeout> | null
-} | null = null
-
-function flushSharedStreamBuffer(): void {
-  const buf = sharedStreamBuffer
-  if (!buf) return
-  if (buf.timer) {
-    clearTimeout(buf.timer)
-    buf.timer = null
-  }
-  const text = buf.coalescer.flush()
-  if (text) {
-    useAcpUiStore.getState().applySessionUpdate({
-      sessionUpdate: 'agent_message_chunk',
-      content: [{ type: 'text', text }],
-    })
-  }
-}
-
-function scheduleSharedStreamFlush(): void {
-  const buf = sharedStreamBuffer
-  if (!buf || buf.timer) return
-  buf.timer = setTimeout(() => flushSharedStreamBuffer(), STREAM_FLUSH_MS)
-}
-
-function ensureStreamSubscription(host: StreamSubscriptionHost): () => void {
-  streamSubscriptionHosts.add(host)
-  if (!releaseStreamSubscription) {
-    sharedStreamBuffer = { coalescer: new StreamCoalescer(), timer: null }
-    const offStatus = acpApi.onStatusChanged((event) => {
-      const store = useAcpUiStore.getState()
-      store.setStatus(event.status, event.errorMessage)
-      if (event.sessionId) store.setSession(event.sessionId)
-      if (event.status === 'disconnected') {
-        // 清「当前连接」；勿清 thread.agentSessionIds（setSession(null) 已按运行时保留）
-        store.setSession(null)
-        flushSharedStreamBuffer()
-        store.finishStreaming()
-        for (const h of streamSubscriptionHosts) h.resetAuthUi()
-        // 批注：保留 agentSessionIds，仅标记 stale，重连后 session/load 续上
-        useAnnotationAgentStore.getState().markSessionsStale()
-      }
-    })
-    const offUpdate = acpApi.onSessionUpdate((event) => {
-      const ann = useAnnotationAgentStore.getState()
-      // 按 sessionId 分流：批注副会话绝不进右侧时间线
-      if (annotationOwnsSessionId(ann, event.sessionId)) {
-        ann.applySessionUpdate(event.update)
-        return
-      }
-      // 兼容：副会话刚创建、尚未 bind 前的短窗口
-      if (ann.capturing) {
-        ann.applySessionUpdate(event.update)
-        return
-      }
-      // 按 sessionId 分流：考官副会话或出题判卷期间绝不进右侧时间线
-      if (quizOwnsSessionId(event.sessionId) || isQuizPrompting()) {
-        accumulateQuizSessionUpdate(event.sessionId, event.update)
-        return
-      }
-      // 按 sessionId 分流：目录 AI 整理副会话绝不进右侧时间线
-      if (tocOwnsSessionId(event.sessionId) || isTocPrompting()) {
-        accumulateTocSessionUpdate(event.sessionId, event.update)
-        return
-      }
-      // 按 sessionId 分流：制卡副会话（一书一会话）绝不进右侧时间线
-      if (cardStudioOwnsSessionId(event.sessionId) || isCardStudioPrompting()) {
-        accumulateCardStudioSessionUpdate(event.sessionId, event.update)
-        return
-      }
-      const chunkText = isCoalescableAgentChunk(event.update)
-      if (chunkText) {
-        sharedStreamBuffer?.coalescer.push(chunkText)
-        scheduleSharedStreamFlush()
-        return
-      }
-      flushSharedStreamBuffer()
-      useAcpUiStore.getState().applySessionUpdate(event.update)
-    })
-    releaseStreamSubscription = () => {
-      offStatus()
-      offUpdate()
-      sharedStreamBuffer = null
-    }
-  }
-  return () => {
-    streamSubscriptionHosts.delete(host)
-    if (streamSubscriptionHosts.size === 0) {
-      flushSharedStreamBuffer()
-      releaseStreamSubscription?.()
-      releaseStreamSubscription = null
-    }
-  }
 }
 
 /** 连接就绪后：把 Zustand 里记住的 Mode/Model 等写回当前 ACP session */
@@ -209,15 +89,16 @@ export function useAcpSession(workspaceRoot?: string) {
     connectionEpochRef.current += 1
     return connectionEpochRef.current
   }, [])
-  // 接收冲刷走共享单例（见本文件顶部）；各发送/取消/断开路径先冲刷再收尾，
+  // 接收冲刷走应用级宿主（`acp-stream-host`）；各发送/取消/断开路径先冲刷再收尾，
   // 否则尾部 chunk 可能丢失或错序
   const flushBufferedChunks = useCallback(() => {
-    flushSharedStreamBuffer()
+    flushAcpStreamBuffer()
   }, [])
 
   useEffect(() => {
-    // 本实例只注册清理回调（认证弹窗是实例级 UI），IPC 订阅走进程单例
-    return ensureStreamSubscription({
+    // 本实例只登记认证弹窗清理回调；IPC 订阅的生命周期归应用宿主，
+    // 与本组件挂载与否无关（见 `acp-stream-host.ts`）
+    return registerStreamAuthReset({
       resetAuthUi: () => {
         setAuthOpen(false)
         setAuthMethods([])

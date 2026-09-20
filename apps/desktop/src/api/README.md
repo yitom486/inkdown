@@ -12,7 +12,6 @@
 | `reading-marks-api.ts` | 书签 / 高亮 / 批注 CRUD + 本书全文搜 + 按章查询 |
 | `flashcards-api.ts` | 记忆卡片：待复习列表、复习评分落盘 |
 | `ai-session-api.ts` | AI 会话指针（一书一会话）：行存取，轮转决策在调用方 |
-| `ai-session-api.ts` | AI 会话指针（一书一会话）：行存取，轮转决策在调用方 |
 | `quiz-api.ts` | AI 测验与答题打分记录持久化（全局 `inkdown.db`，API 签名自 JSONL 时代未变） |
 | `sync-api.ts` | 云端同步（WebDAV 配置、连接测试、双向同步） |
 | `web-doc-api.ts` | 在线文档：抓取页面、发现目录 |

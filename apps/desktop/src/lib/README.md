@@ -105,6 +105,10 @@
 | `throttled-storage` | persist 节流写入（1.5s 合并落盘） |
 | `annotation-note-prompts` | 批注 AI 意图/改写 chip 与草稿抽取 |
 | `toc-ai-session` | 目录 AI 整理专用副会话（每次新建防跨书串扰、无头累积、不进时间线） |
+| `acp-stream-host` | ACP 流式推送应用级宿主（单订阅单合并器 + 认证清理回调注册表；`acp-transport` 直连等待） |
+| `acp-transport` | 子会话传输等待器（未连发直连信令，等 connected/auth-required，无驱动 1s 收兵） |
+| `card-studio-session` / `card-studio-presets` / `card-studio` | AI 制卡一书一会话 + 六预设拼装 + 结果校验（失败无卡，不兜底） |
+| `deep-answer` | 一键深度问答三方向拼装（答案落对话框，不进时间线） |
 | `enrich-tool-message` | tool 消息 enrich（提议卡 + 章级建议） |
 | `tool-failure-message` | 工具失败 → 聊天气泡内业务说明（折叠标题 + 展开正文） |
 | `parse-chapter-mark-plan` / `promote-chapter-mark-plans` | 章级划重点 tool 解析与 promote |
