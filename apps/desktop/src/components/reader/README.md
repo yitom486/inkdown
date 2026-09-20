@@ -18,6 +18,8 @@
 | `SelectionToolbar` | 划选工具条（划重点、问 Agent、批注、AI 制卡预设菜单等） |
 | `SelectionBubble` | 就地划选悬浮微晶气泡（解释/摘要/制卡/对比/追问五大动作、莫兰迪柔光高亮与复制） |
 | `CardPresetMenu` | AI 制卡预设菜单内容（6 方向点选 + 更多要求次级入口，工具条与气泡共用） |
+| `DeepAnswerMenu` | 一键深度问答菜单内容（三方向点即直答 + composer 追问入口保留） |
+| `DeepAnswerDialog` | 一键深度问答对话框（同会话直答选段、不进右侧时间线，可存为卡片批注） |
 | `MarginaliaBar` | 右侧知识卡片轨（分类药丸筛选、全部/单项折叠、AI 智能制卡、时序图联动） |
 | `KnowledgeCardItem` | 知识卡片单项（概念/引用/方法/图谱/思考五类微晶卡片、单行与多功能态切换、AI 润色） |
 | `LibraryDrawer` | 馆藏书卷与在线规范侧拉抽屉（本地书库、在线规范快速切换、检索） |

@@ -20,6 +20,7 @@ import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPan
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
+import { DeepAnswerDialog } from '@/components/reader/DeepAnswerDialog'
 import { useWebDocPage } from '@/hooks/reader/useWebDocPage'
 import { useWebDocToc } from '@/hooks/reader/useWebDocToc'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
@@ -1143,11 +1144,21 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onAskDeepAnswer={selectionActions.askDeepAnswer}
+          deepAnswerPending={selectionActions.deepAnswerPending}
           onGenerateCardPreset={selectionActions.generateAiCard}
           cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
+
+      <DeepAnswerDialog
+        data={selectionActions.deepAnswer}
+        pending={selectionActions.deepAnswerPending}
+        onClose={selectionActions.dismissDeepAnswer}
+        onRetry={selectionActions.retryDeepAnswer}
+        onSaveAsNote={selectionActions.saveDeepAnswerAsNote}
+      />
 
       <AnnotationNoteDialog
         open={noteDialogOpen}

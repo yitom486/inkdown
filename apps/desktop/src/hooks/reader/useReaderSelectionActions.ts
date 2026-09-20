@@ -8,6 +8,12 @@ import { copyTextToClipboard } from '@inkdown/reader-core'
 import type { HighlightColorId } from '@inkdown/reader-core'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { generateAiCardContent } from '@/lib/agent/card-studio'
+import { sendCardStudioPrompt } from '@/lib/agent/card-studio-session'
+import {
+  buildDeepAnswerPrompt,
+  getDeepAnswerDirection,
+  type DeepAnswerDirectionId,
+} from '@/lib/agent/deep-answer'
 
 /**
  * 三阅读器（PDF / Foliate / WebDoc）划选工具条的共享动作。
@@ -48,6 +54,21 @@ export interface ReaderSelectionActions {
    */
   generateAiCard: (presetId: string, customText?: string) => Promise<void>
   aiCardPending: boolean
+  /**
+   * 一键深度问答（P2）：同会话直答选段，答案落对话框；
+   * composer 追问入口（handleAskAgent）原样保留。
+   */
+  deepAnswer: {
+    directionId: DeepAnswerDirectionId
+    directionLabel: string
+    excerpt: string
+    answer: string
+  } | null
+  deepAnswerPending: boolean
+  askDeepAnswer: (directionId: string) => Promise<void>
+  retryDeepAnswer: () => Promise<void>
+  saveDeepAnswerAsNote: () => Promise<void>
+  dismissDeepAnswer: () => void
   handleDismiss: () => void
 }
 
@@ -182,6 +203,107 @@ export function useReaderSelectionActions(
     ],
   )
 
+  const [deepAnswer, setDeepAnswer] = useState<{
+    directionId: DeepAnswerDirectionId
+    directionLabel: string
+    excerpt: string
+    answer: string
+  } | null>(null)
+  const [deepAnswerPending, setDeepAnswerPending] = useState(false)
+
+  const runDeepAnswer = useCallback(
+    async (directionId: string, excerpt: string, bookKey: string) => {
+      const direction = getDeepAnswerDirection(directionId)
+      if (!direction) {
+        toast.error('问答方向异常')
+        return
+      }
+      setDeepAnswer({
+        directionId: direction.id,
+        directionLabel: direction.label,
+        excerpt,
+        answer: '',
+      })
+      setDeepAnswerPending(true)
+      try {
+        const reply = await sendCardStudioPrompt(
+          bookKey,
+          buildDeepAnswerPrompt(excerpt, direction),
+        )
+        if (!reply) {
+          toast.warning('AI 无响应，请先连接 AI 或稍后重试')
+          setDeepAnswer(null)
+          return
+        }
+        setDeepAnswer((prev) =>
+          prev && prev.directionId === direction.id && prev.excerpt === excerpt
+            ? { ...prev, answer: reply }
+            : prev,
+        )
+      } finally {
+        setDeepAnswerPending(false)
+      }
+    },
+    [],
+  )
+
+  const askDeepAnswer = useCallback(
+    async (directionId: string) => {
+      if (hasSelection && !hasSelection()) {
+        toast.error('当前没有可用选区，请先划选文本')
+        return
+      }
+      const text = snapshotText ?? ''
+      if (!text.trim()) {
+        toast.error('选中文本为空')
+        return
+      }
+      const bookKey = sessionKey?.trim()
+      if (!bookKey) {
+        toast.error('本书信息缺失，无法问答')
+        return
+      }
+      retainSelection?.()
+      await runDeepAnswer(directionId, text.trim(), bookKey)
+    },
+    [hasSelection, snapshotText, sessionKey, retainSelection, runDeepAnswer],
+  )
+
+  const retryDeepAnswer = useCallback(async () => {
+    if (!deepAnswer) return
+    const bookKey = sessionKey?.trim()
+    if (!bookKey) {
+      toast.error('本书信息缺失，无法问答')
+      return
+    }
+    await runDeepAnswer(deepAnswer.directionId, deepAnswer.excerpt, bookKey)
+  }, [deepAnswer, sessionKey, runDeepAnswer])
+
+  const dismissDeepAnswer = useCallback(() => {
+    setDeepAnswer(null)
+  }, [])
+
+  const saveDeepAnswerAsNote = useCallback(async () => {
+    if (!deepAnswer || !deepAnswer.answer.trim()) {
+      toast.error('答案为空，无法存为批注')
+      return
+    }
+    try {
+      await saveHighlight(deepAnswer.answer.trim(), 'yellow')
+    } catch (cause) {
+      if (onHighlightError) {
+        onHighlightError(cause)
+        return
+      }
+      toast.error('存为批注失败')
+      return
+    }
+    useReaderHudUiStore.getState().setIsCardRailOpen(true)
+    toast.success('答案已存为批注卡片')
+    setDeepAnswer(null)
+    clearTextSelection()
+  }, [deepAnswer, saveHighlight, onHighlightError, clearTextSelection])
+
   return {
     handleCopy,
     handleAnnotate,
@@ -190,6 +312,12 @@ export function useReaderSelectionActions(
     handleAskAgent,
     generateAiCard,
     aiCardPending,
+    deepAnswer,
+    deepAnswerPending,
+    askDeepAnswer,
+    retryDeepAnswer,
+    saveDeepAnswerAsNote,
+    dismissDeepAnswer,
     handleDismiss: clearTextSelection,
   }
 }

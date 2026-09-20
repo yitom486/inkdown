@@ -94,6 +94,59 @@ describe('SelectionToolbar', () => {
     expect(onGenerateCardPreset).toHaveBeenCalledWith('distill', undefined)
   })
 
+  it('opens answer menu on深度问答, picks direction or composer', async () => {
+    const onAskDeepAnswer = vi.fn()
+    const onAskAgent = vi.fn()
+    const onCopy = vi.fn()
+    const onAnnotate = vi.fn()
+    const onDismiss = vi.fn()
+
+    await act(async () => {
+      root.render(
+        createElement(SelectionToolbar, {
+          x: 100,
+          y: 200,
+          onCopy,
+          onAnnotate,
+          onAskAgent,
+          onAskDeepAnswer,
+          onDismiss,
+        }),
+      )
+    })
+
+    const buttons = Array.from(container.querySelectorAll('button'))
+    const askBtn = buttons.find((b) => b.textContent?.includes('深度问答'))
+    expect(askBtn).toBeDefined()
+    await act(async () => {
+      askBtn?.click()
+    })
+    expect(onAskDeepAnswer).not.toHaveBeenCalled()
+
+    const explain = Array.from(container.querySelectorAll('[role="menuitem"]')).find((b) =>
+      b.textContent?.includes('深入解释'),
+    )
+    expect(explain).toBeDefined()
+    await act(async () => {
+      ;(explain as HTMLButtonElement)?.click()
+    })
+    expect(onAskDeepAnswer).toHaveBeenCalledTimes(1)
+    expect(onAskDeepAnswer).toHaveBeenCalledWith('explain')
+
+    // composer 入口保留（交互式不动）：重开菜单点末项
+    await act(async () => {
+      askBtn?.click()
+    })
+    const composer = Array.from(container.querySelectorAll('[role="menu"] button')).find((b) =>
+      b.textContent?.includes('去 Agent 面板细问'),
+    )
+    expect(composer).toBeDefined()
+    await act(async () => {
+      ;(composer as HTMLButtonElement)?.click()
+    })
+    expect(onAskAgent).toHaveBeenCalledTimes(1)
+  })
+
   it('calls onHighlight with color when clicking color dot', async () => {
     const onHighlight = vi.fn()
     const onCopy = vi.fn()

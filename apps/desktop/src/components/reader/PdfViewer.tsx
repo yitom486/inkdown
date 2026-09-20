@@ -12,6 +12,7 @@ import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
 import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
+import { DeepAnswerDialog } from '@/components/reader/DeepAnswerDialog'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
@@ -2378,11 +2379,21 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onAskDeepAnswer={selectionActions.askDeepAnswer}
+          deepAnswerPending={selectionActions.deepAnswerPending}
           onGenerateCardPreset={selectionActions.generateAiCard}
           cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
+
+      <DeepAnswerDialog
+        data={selectionActions.deepAnswer}
+        pending={selectionActions.deepAnswerPending}
+        onClose={selectionActions.dismissDeepAnswer}
+        onRetry={selectionActions.retryDeepAnswer}
+        onSaveAsNote={selectionActions.saveDeepAnswerAsNote}
+      />
 
       <AnnotationNoteDialog
         open={noteDialogOpen}

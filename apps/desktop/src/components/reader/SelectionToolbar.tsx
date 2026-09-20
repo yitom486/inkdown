@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CardPresetMenuContent } from '@/components/reader/CardPresetMenu'
+import { DeepAnswerMenuContent } from '@/components/reader/DeepAnswerMenu'
 import { isMarkdownEditorFocused } from '@/lib/editor/editor-focus'
 import { cn } from '@/lib/utils'
 import { shouldHandleReaderCopyShortcut } from '@inkdown/reader-core'
@@ -31,6 +32,12 @@ export interface SelectionToolbarProps {
   onAnnotate: () => void
   /** 打开 Agent 面板并带着当前选区去提问 */
   onAskAgent?: () => void
+  /**
+   * 一键深度问答（P2 菜单驱动）：directionId 见 deep-answer，
+   * 答案落对话框；composer 追问入口保留在菜单末项。
+   */
+  onAskDeepAnswer?: (directionId: string) => void
+  deepAnswerPending?: boolean
   /** 在输入框插入「选区」短标记（不贴正文） */
   onAddToChat?: () => void
   /** 将当前选区存为高亮；颜色由色点选择，默认黄 */
@@ -53,6 +60,8 @@ export function SelectionToolbar({
   keyEventDocs,
   onAnnotate,
   onAskAgent,
+  onAskDeepAnswer,
+  deepAnswerPending = false,
   onAddToChat,
   onHighlight,
   onGenerateCardPreset,
@@ -61,6 +70,7 @@ export function SelectionToolbar({
 }: SelectionToolbarProps) {
   const [copied, setCopied] = useState(false)
   const [cardMenuOpen, setCardMenuOpen] = useState(false)
+  const [answerMenuOpen, setAnswerMenuOpen] = useState(false)
 
   const handleCopy = () => {
     onCopy()
@@ -201,16 +211,37 @@ export function SelectionToolbar({
         </Button>
       ) : null}
 
-      {onAskAgent ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 rounded-lg border border-primary/25 bg-primary/10 px-2.5 text-xs font-medium text-primary shadow-xs hover:bg-primary/20"
-          onClick={onAskAgent}
-        >
-          <Sparkles className="size-3.5" />
-          <span>深度问答</span>
-        </Button>
+      {onAskDeepAnswer || onAskAgent ? (
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 rounded-lg border border-primary/25 bg-primary/10 px-2.5 text-xs font-medium text-primary shadow-xs hover:bg-primary/20"
+            disabled={deepAnswerPending}
+            onClick={() => setAnswerMenuOpen((v) => !v)}
+          >
+            {deepAnswerPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            <span>{deepAnswerPending ? '问答中' : '深度问答'}</span>
+          </Button>
+          {answerMenuOpen ? (
+            <DeepAnswerMenuContent
+              className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2"
+              pending={deepAnswerPending}
+              onPick={(directionId) => {
+                setAnswerMenuOpen(false)
+                onAskDeepAnswer?.(directionId)
+              }}
+              onOpenComposer={() => {
+                setAnswerMenuOpen(false)
+                onAskAgent?.()
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
