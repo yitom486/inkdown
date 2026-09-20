@@ -36,7 +36,7 @@ describe('parseAiCardJson', () => {
     expect(parsed.category).toBe('quote')
   })
 
-  it('auto 下非法分类整个打回（调用方回启发式）', () => {
+  it('auto 下非法分类整个打回（无卡，不充数）', () => {
     const raw = JSON.stringify({
       title: '题',
       category: 'nope',
@@ -69,35 +69,41 @@ describe('generateAiCardContent', () => {
     keyPoints: ['发问'],
   })
 
-  it('模型成功走 AI 卡（fallback false）', async () => {
+  it('模型成功出卡', async () => {
     mockedSend.mockResolvedValue({ status: 'ok', reply: valid })
     const outcome = await generateAiCardContent({
       excerpt: '摘录正文',
       presetId: 'distill',
       bookKey: 'fp-1',
     })
-    expect(outcome).toMatchObject({ fallback: false, reason: null })
-    expect(outcome?.card.title).toBe('旅行动机')
+    expect(outcome).toEqual({
+      ok: true,
+      card: {
+        title: '旅行动机',
+        category: 'concept',
+        aiSummary: '以问题定义旅行者。',
+        keyPoints: ['发问'],
+        color: 'blue',
+      },
+    })
   })
 
-  it('离线/失败回启发式并带原因（调用方按因提示）', async () => {
-    mockedSend.mockResolvedValue({ status: 'offline', reply: '' })
-    const offline = await generateAiCardContent({
-      excerpt: '摘录正文',
-      presetId: 'distill',
-      bookKey: 'fp-1',
-    })
-    expect(offline).toMatchObject({ fallback: true, reason: 'offline' })
-    // 兜底时预设不生效：分类由启发式自定
-    expect(offline?.card.category).toBe('concept')
+  it('失败无卡：按因返回，不拿假卡充数', async () => {
+    mockedSend.mockResolvedValue({ status: 'auth-required', reply: '' })
+    expect(
+      await generateAiCardContent({ excerpt: '摘录正文', presetId: 'distill', bookKey: 'fp-1' }),
+    ).toEqual({ ok: false, reason: 'auth-required' })
 
     mockedSend.mockResolvedValue({ status: 'failed', reply: '' })
-    const failed = await generateAiCardContent({
-      excerpt: '摘录正文',
-      presetId: 'distill',
-      bookKey: 'fp-1',
-    })
-    expect(failed).toMatchObject({ fallback: true, reason: 'model' })
+    expect(
+      await generateAiCardContent({ excerpt: '摘录正文', presetId: 'distill', bookKey: 'fp-1' }),
+    ).toEqual({ ok: false, reason: 'failed' })
+
+    // 非法 JSON 同样无卡
+    mockedSend.mockResolvedValue({ status: 'ok', reply: 'not json' })
+    expect(
+      await generateAiCardContent({ excerpt: '摘录正文', presetId: 'distill', bookKey: 'fp-1' }),
+    ).toEqual({ ok: false, reason: 'failed' })
   })
 
   it('入参非法返回 null（调用方 toast 报错）', async () => {

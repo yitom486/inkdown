@@ -350,4 +350,10 @@ describe('acp-ui-store history + plan', () => {
     useAcpUiStore.getState().deleteThread(threadId)
     expect(useAcpUiStore.getState().chatScrollByThread[threadId]).toBeUndefined()
   })
+
+  it('requestConnect 只发 nonce 信令（连接本身由 useAcpSession 驱动）', () => {
+    expect(useAcpUiStore.getState().connectRequestedAt).toBe(0)
+    useAcpUiStore.getState().requestConnect()
+    expect(useAcpUiStore.getState().connectRequestedAt).toBeGreaterThan(0)
+  })
 })

@@ -50,7 +50,7 @@ export interface ReaderSelectionActions {
   handleAskAgent: () => void
   /**
    * AI 制卡（P1 菜单驱动）：选预设 → 本书会话调模型 → 落卡。
-   * 离线/无响应回启发式并明示；pending 期间调用方禁用菜单。
+   * 调不通直接报错（无启发式兜底）；pending 期间调用方禁用菜单。
    */
   generateAiCard: (presetId: string, customText?: string) => Promise<void>
   aiCardPending: boolean
@@ -160,6 +160,15 @@ export function useReaderSelectionActions(
           toast.error('制卡参数异常')
           return
         }
+        if (!outcome.ok) {
+          // 无兜底：调不通就是调不通，不拿假卡充数
+          if (outcome.reason === 'auth-required') {
+            toast.warning('请在 Agent 登录弹窗完成认证后重试', { duration: 5000 })
+          } else {
+            toast.error('AI 制卡失败（连接异常），请稍后重试')
+          }
+          return
+        }
         retainSelection?.()
         const { card } = outcome
         try {
@@ -180,17 +189,7 @@ export function useReaderSelectionActions(
           throw cause
         }
         useReaderHudUiStore.getState().setIsCardRailOpen(true)
-        if (outcome.fallback) {
-          if (outcome.reason === 'offline') {
-            toast.warning(`请先连接 AI（Agent 面板），已用启发式制卡【${card.title}】`, {
-              duration: 5000,
-            })
-          } else {
-            toast.warning(`AI 无响应，已用启发式制卡【${card.title}】`)
-          }
-        } else {
-          toast.success(`AI 制卡：【${card.title}】`)
-        }
+        toast.success(`AI 制卡：【${card.title}】`)
         clearTextSelection()
       } catch {
         toast.error('制卡失败，请重试')
@@ -236,9 +235,9 @@ export function useReaderSelectionActions(
           bookKey,
           buildDeepAnswerPrompt(excerpt, direction),
         )
-        if (!sent.reply) {
-          if (sent.status === 'offline') {
-            toast.warning('请先连接 AI（Agent 面板），连上后再问', { duration: 5000 })
+        if (sent.status !== 'ok' || !sent.reply) {
+          if (sent.status === 'auth-required') {
+            toast.warning('请在 Agent 登录弹窗完成认证后重试', { duration: 5000 })
           } else {
             toast.warning('AI 无响应，稍后重试')
           }

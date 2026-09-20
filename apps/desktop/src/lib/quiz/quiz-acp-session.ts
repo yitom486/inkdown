@@ -3,6 +3,7 @@ import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { isOk } from '@inkdown/contracts'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { extractTextFromContent } from '@/stores/acp-chat-types'
+import { ensureAcpTransport } from '@/lib/agent/acp-transport'
 
 interface QuizSessionState {
   sessionId: string | null
@@ -70,20 +71,13 @@ function resolvePreferredAgentCwd(): string | undefined {
 }
 
 /**
- * 获取或按需轮转考官会话（单例持续会话 + 定期平滑轮转）
+ * 获取或按需轮转考官会话（单例持续会话 + 定期平滑轮转）。
+ * 未连时先发直连信令再等（沿制卡同链路）；仍未就绪返回 null，
+ * 调用方回诚实标注的离线启发式（行文必带"离线"字样，不许冒充 AI）。
  */
 export async function getOrCreateQuizSessionId(): Promise<string | null> {
-  let acpState = useAcpUiStore.getState()
-  if (acpState.status === 'connecting') {
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 100))
-      acpState = useAcpUiStore.getState()
-      if (acpState.status === 'connected') break
-      if (acpState.status === 'error' || acpState.status === 'disconnected') break
-    }
-  }
-
-  if (acpState.status !== 'connected') {
+  const transport = await ensureAcpTransport(8000)
+  if (transport !== 'connected') {
     sessionState.sessionId = null
     return null
   }
@@ -113,6 +107,7 @@ export async function getOrCreateQuizSessionId(): Promise<string | null> {
   sessionState.promptCount = 0
 
   // 继承右侧用户的模型与配置偏好 (Model / Mode)
+  const acpState = useAcpUiStore.getState()
   const runtimeId = acpState.selectedRuntimeId
   const preferred = acpState.preferredConfigByRuntime[runtimeId] ?? undefined
   const patches = listPreferredConfigPatches(created.value.configOptions ?? [], preferred)

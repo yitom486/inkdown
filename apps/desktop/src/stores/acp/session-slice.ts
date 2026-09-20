@@ -35,6 +35,13 @@ export interface SessionSlice {
     configId: string,
     value: string | boolean,
   ) => void
+  /**
+   * 子会话（制卡/测验）的连接请求信令：nonce，0=无请求。
+   * 故意不进 persist（重启不自连）；`useAcpSession` 监听并驱动完整 connect
+   *（含认证弹窗），子会话只管发信号、不碰 auth 状态机。
+   */
+  connectRequestedAt: number
+  requestConnect: () => void
 }
 
 export const createSessionSlice: StateCreator<
@@ -51,6 +58,7 @@ export const createSessionSlice: StateCreator<
   prompting: false,
   promptCapabilities: {},
   preferredConfigByRuntime: {},
+  connectRequestedAt: 0,
 
   setSelectedRuntimeId: (id) =>
     set((s) => {
@@ -132,4 +140,5 @@ export const createSessionSlice: StateCreator<
         value,
       ),
     })),
+  requestConnect: () => set({ connectRequestedAt: Date.now() }),
 })

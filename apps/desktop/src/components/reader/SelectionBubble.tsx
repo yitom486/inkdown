@@ -137,7 +137,7 @@ export function SelectionBubble({
           <span>摘要</span>
         </button>
 
-        {/* 3. 生成卡片（P1 菜单驱动：选方向调 AI，离线回启发式） */}
+        {/* 3. 生成卡片（P1 菜单驱动：选方向调 AI 建卡） */}
         {onGenerateCardPreset ? (
           <div className="relative">
             <button

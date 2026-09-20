@@ -73,6 +73,12 @@ export interface AcpUiStore {
   composerFocusNonce: number
   /** 递增以在输入框追加「选区」短标记（不持久化） */
   composerInsertNonce: number
+  /**
+   * 子会话（制卡/测验）的连接请求信令：nonce，0=无请求（不持久化）。
+   * `useAcpSession` 监听并驱动完整 connect（含认证弹窗），子会话只发信号。
+   */
+  connectRequestedAt: number
+  requestConnect: () => void
   setPanelOpen: (open: boolean) => void
   togglePanel: () => void
   /** 面板已打开时聚焦输入框；不会强行打开面板（阅读器划选等场景） */

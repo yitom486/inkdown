@@ -174,7 +174,7 @@ export function SelectionToolbar({
             variant="ghost"
             size="sm"
             className="h-7 gap-1 rounded-lg border border-primary/25 bg-primary/10 px-2 text-xs font-medium text-primary shadow-xs hover:bg-primary/20"
-            title="选方向调 AI 提炼为知识卡片（离线回启发式）"
+            title="选方向调 AI 提炼为知识卡片（未连接自动直连）"
             disabled={cardPresetPending}
             onClick={() => setCardMenuOpen((v) => !v)}
           >

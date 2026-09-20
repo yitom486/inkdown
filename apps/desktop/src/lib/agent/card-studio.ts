@@ -1,18 +1,17 @@
 import type { ReadingMarkCategory } from '@inkdown/contracts'
-import type { HeuristicCardResult } from '@/lib/reader/marks/heuristic-card-classifier'
-import { highlightColorForCategory } from '@/lib/reader/marks/heuristic-card-classifier'
+import type { HeuristicCardResult } from '@/lib/reader/marks/card-shape'
+import { highlightColorForCategory } from '@/lib/reader/marks/card-shape'
 import {
   buildCardStudioPrompt,
   getCardStudioPreset,
 } from '@/lib/agent/card-studio-presets'
 import { sendCardStudioPrompt } from '@/lib/agent/card-studio-session'
 import { extractJsonFromResponse } from '@/lib/quiz/quiz-evaluator'
-import { heuristicClassifyMark } from '@/lib/reader/marks/heuristic-card-classifier'
 
 /**
  * AI 制卡编排（P1）：预设 prompt → 本书会话调模型 → 校验成卡。
  * 返回 null 仅当入参非法（调用方 toast 报错）；
- * 模型无响应/结果非法一律回启发式 + `fallback: true`（调用方如实提示），
+ * 模型无响应/结果非法直接返回失败（无启发式兜底，调用方报错），
  * 形状恒为 `HeuristicCardResult`，下游 `saveHighlight` 零改。
  */
 
@@ -31,12 +30,13 @@ export interface AiCardInput {
   bookKey: string
 }
 
-export interface AiCardOutcome {
-  card: HeuristicCardResult
-  /** true=启发式兜底（离线/无响应/结果非法）；reason 告诉调用方 toast 说什么 */
-  fallback: boolean
-  reason: 'offline' | 'model' | null
-}
+/**
+ * AI 制卡结果：ok 必有卡；失败无卡（启发式兜底已删除——调不通就是调不通，
+ * 调用方按 reason 报错，不许拿假卡充数）。
+ */
+export type AiCardOutcome =
+  | { ok: true; card: HeuristicCardResult }
+  | { ok: false; reason: 'auth-required' | 'failed' }
 
 interface AiCardJson {
   title?: unknown
@@ -94,19 +94,11 @@ export async function generateAiCardContent(input: AiCardInput): Promise<AiCardO
   if (sent.status === 'ok' && sent.reply) {
     const parsed = parseAiCardJson(sent.reply, preset.category, excerpt)
     if (parsed) {
-      return {
-        card: { ...parsed, color: highlightColorForCategory(parsed.category) },
-        fallback: false,
-        reason: null,
-      }
+      return { ok: true, card: { ...parsed, color: highlightColorForCategory(parsed.category) } }
     }
-    console.info('[card-studio] parse:invalid-json-fallback')
-  } else if (sent.status === 'offline') {
-    console.info('[card-studio] fallback:offline')
-  } else {
-    console.info('[card-studio] fallback:model-unavailable')
+    console.info('[card-studio] parse:invalid-json')
+    return { ok: false, reason: 'failed' }
   }
-  // 兜底：今日启发式（离线/无响应/结果非法统一路口；预设此时不生效，分类由启发式自定）
-  const reason = sent.status === 'offline' ? 'offline' : 'model'
-  return { card: heuristicClassifyMark(excerpt), fallback: true, reason }
+  console.info(`[card-studio] model-unavailable status=${sent.status}`)
+  return { ok: false, reason: sent.status === 'auth-required' ? 'auth-required' : 'failed' }
 }

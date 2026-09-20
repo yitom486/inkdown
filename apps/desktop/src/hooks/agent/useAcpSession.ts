@@ -279,6 +279,18 @@ export function useAcpSession(workspaceRoot?: string) {
     workspaceRoot,
   ])
 
+  // 子会话连接请求信令（制卡/测验）：nonce 变化且当前未连/出错时，
+  // 走完整 connect（含认证弹窗与 epoch 防线）。认证仍需用户点一下——
+  // 这是唯一需要主 UI 出面的环节，子会话自己绝不碰 auth 状态机。
+  const connectRequestedAt = useAcpUiStore((s) => s.connectRequestedAt)
+  useEffect(() => {
+    if (!connectRequestedAt) return
+    const statusNow = useAcpUiStore.getState().status
+    if (statusNow === 'disconnected' || statusNow === 'error') {
+      void connect()
+    }
+  }, [connectRequestedAt, connect])
+
   const completeAuth = useCallback(
     async (methodId: string) => {
       // 弹窗打开后用户可能已切换 Agent：归属不一致则拒绝，避免把旧方式发给新服务端

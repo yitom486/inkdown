@@ -4,6 +4,7 @@ import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { isOk } from '@inkdown/contracts'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { extractTextFromContent } from '@/stores/acp-chat-types'
+import { ensureAcpTransport } from '@/lib/agent/acp-transport'
 
 /**
  * AI 制卡一书一会话（P1，见 `.plan/ai-cards/01-card-studio-plan.md`）。
@@ -71,18 +72,7 @@ function resolvePreferredAgentCwd(): string | undefined {
   return undefined
 }
 
-async function waitForConnected(): Promise<boolean> {
-  let acpState = useAcpUiStore.getState()
-  if (acpState.status === 'connecting') {
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 100))
-      acpState = useAcpUiStore.getState()
-      if (acpState.status === 'connected') break
-      if (acpState.status === 'error' || acpState.status === 'disconnected') break
-    }
-  }
-  return acpState.status === 'connected'
-}
+export type CardStudioSessionError = 'auth-required' | 'unavailable'
 
 async function createSession(bookKey: string): Promise<string | null> {
   const created = await acpApi.sessionNew({ cwd: resolvePreferredAgentCwd() })
@@ -113,11 +103,16 @@ async function createSession(bookKey: string): Promise<string | null> {
 }
 
 /**
- * 取本书制卡会话：内存命中且未过期即用；否则读库复用（load），
- * 恢复失败或计数/超时到期则新建。未连接返回 null（调用方回落启发式）。
+ * 取本书制卡会话：传输未就绪先发直连信令（`useAcpSession` 自驱完整 connect，
+ * 认证弹窗自动弹出），再按过期策略复用/恢复/新建。
+ * 认证必须用户点——这是唯一需要主 UI 出面的环节，返回错误由调用方提示重试。
+ * 内存命中且未过期即用；否则读库复用（load），恢复失败或计数/超时到期则新建。
  */
-export async function getOrCreateCardStudioSessionId(bookKey: string): Promise<string | null> {
-  if (!(await waitForConnected())) return null
+export async function getOrCreateCardStudioSessionId(
+  bookKey: string,
+): Promise<{ sessionId: string } | { error: CardStudioSessionError }> {
+  const transport = await ensureAcpTransport(12000)
+  if (transport !== 'connected') return { error: transport }
   const now = Date.now()
   const existing = entryFor(bookKey)
   if (
@@ -126,7 +121,7 @@ export async function getOrCreateCardStudioSessionId(bookKey: string): Promise<s
     existing.promptCount < ROTATE_PROMPT_COUNT
   ) {
     existing.lastUsedAt = now
-    return existing.sessionId
+    return { sessionId: existing.sessionId }
   }
 
   const stored = await aiSessionApi.get({ bookFingerprint: bookKey })
@@ -150,19 +145,21 @@ export async function getOrCreateCardStudioSessionId(bookKey: string): Promise<s
         prompting: false,
         fresh: false,
       })
-      return row.sessionId
+      return { sessionId: row.sessionId }
     }
   }
-  return createSession(bookKey)
+  const created = await createSession(bookKey)
+  if (!created) return { error: 'unavailable' }
+  return { sessionId: created }
 }
 
 /**
  * 经本书会话发制卡 prompt。
- * 结局：ok（有正文）/ offline（ACP 未连接）/ failed（建会话/发送/恢复失败）。
+ * 结局：ok（有正文）/ auth-required（认证弹窗已出，等用户点）/ failed（其他）。
  * 成功（无论正文空否）记一次 touch；旧会话已死自转一次重试。
  * 每次关键节点打 console.info（[card-studio]，devtools 可查；不记原文与指纹全文）。
  */
-export type CardStudioSendStatus = 'ok' | 'offline' | 'failed'
+export type CardStudioSendStatus = 'ok' | 'auth-required' | 'failed'
 
 export interface CardStudioSendResult {
   status: CardStudioSendStatus
@@ -173,15 +170,12 @@ export async function sendCardStudioPrompt(
   bookKey: string,
   promptText: string,
 ): Promise<CardStudioSendResult> {
-  if (!(await waitForConnected())) {
-    console.info(`[card-studio] send:abort book=${bookKey.slice(-8)} reason=offline`)
-    return { status: 'offline', reply: '' }
+  const ensured = await getOrCreateCardStudioSessionId(bookKey)
+  if ('error' in ensured) {
+    console.info(`[card-studio] send:abort book=${bookKey.slice(-8)} reason=${ensured.error}`)
+    return { status: ensured.error === 'auth-required' ? 'auth-required' : 'failed', reply: '' }
   }
-  const first = await getOrCreateCardStudioSessionId(bookKey)
-  if (!first) {
-    console.info(`[card-studio] send:abort book=${bookKey.slice(-8)} reason=session-new-failed`)
-    return { status: 'failed', reply: '' }
-  }
+  const first = ensured.sessionId
   const reply = await promptOnce(bookKey, first, promptText)
   if (reply !== null) {
     await aiSessionApi.touch({ bookFingerprint: bookKey })
