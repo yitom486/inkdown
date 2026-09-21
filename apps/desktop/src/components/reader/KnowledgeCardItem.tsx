@@ -12,7 +12,7 @@ import {
   Network,
 } from 'lucide-react'
 import type { ReadingMark, ReadingMarkCategory } from '@inkdown/contracts'
-import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
+import { filterRedundantKeyPoints, resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 
 export interface KnowledgeCardItemProps {
   mark: ReadingMark
@@ -273,19 +273,22 @@ export const KnowledgeCardItem: React.FC<KnowledgeCardItemProps> = ({
         </p>
       )}
 
-      {/* 核心概念与规约标签 */}
-      {resolved.keyPoints && resolved.keyPoints.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {resolved.keyPoints.map((kp, idx) => (
-            <span
-              key={idx}
-              className="px-1.5 py-0.5 rounded text-[9.5px] bg-muted/60 text-muted-foreground border border-border/50"
-            >
-              {kp}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* 核心概念与规约标签（复读摘录的要点 pill 直接隐藏，见 filterRedundantKeyPoints） */}
+      {(() => {
+        const visibleKeyPoints = filterRedundantKeyPoints(resolved.keyPoints, mark.excerpt)
+        return visibleKeyPoints.length > 0 ? (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {visibleKeyPoints.map((kp, idx) => (
+              <span
+                key={idx}
+                className="px-1.5 py-0.5 rounded text-[9.5px] bg-muted/60 text-muted-foreground border border-border/50"
+              >
+                {kp}
+              </span>
+            ))}
+          </div>
+        ) : null
+      })()}
 
       {/* AI 研判洞见 Callout */}
       {resolved.aiSummary && (

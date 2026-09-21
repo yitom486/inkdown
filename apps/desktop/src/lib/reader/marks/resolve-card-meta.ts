@@ -79,3 +79,35 @@ export function resolveCardMeta(mark: ReadingMark): ResolvedCardMeta {
     diagramId,
   }
 }
+
+/** 归一化（去空白与中英文标点），供冗余判定 */
+function normalizeForCompare(text: string): string {
+  return text.replace(/[\s\p{P}]/gu, '')
+}
+
+/**
+ * 滤掉复读摘录的要点 pill（展示层用，数据不动）。
+ * quote/cloze 类卡的 keyPoints 常是摘录按标点切出来的原句，
+ * 与上方摘录块逐字重复——展示层直接隐藏。
+ * 判定：归一化后要点含于摘录（含）则视为复读丢弃；空串与精确去重一并处理。
+ */
+export function filterRedundantKeyPoints(
+  keyPoints: readonly string[] | undefined,
+  excerpt: string | undefined,
+): string[] {
+  if (!keyPoints || keyPoints.length === 0) return []
+  const seen = new Set<string>()
+  const excerptNorm = normalizeForCompare(excerpt ?? '')
+  const out: string[] = []
+  for (const raw of keyPoints) {
+    const point = (raw ?? '').trim()
+    if (!point) continue
+    const norm = normalizeForCompare(point)
+    if (!norm || seen.has(norm)) continue
+    seen.add(norm)
+    // 摘录为空时无法判定复读，保留（调用方无摘录的卡本就不该有 pill，容错保留）
+    if (excerptNorm && excerptNorm.includes(norm)) continue
+    out.push(point)
+  }
+  return out
+}

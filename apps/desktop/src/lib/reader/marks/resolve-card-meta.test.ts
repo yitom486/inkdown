@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ReadingMark } from '@inkdown/contracts'
-import { parseNoteToCardMeta, resolveCardMeta } from './resolve-card-meta'
+import { filterRedundantKeyPoints, parseNoteToCardMeta, resolveCardMeta } from './resolve-card-meta'
 
 describe('resolveCardMeta', () => {
   const baseMark: ReadingMark = {
@@ -81,5 +81,37 @@ describe('parseNoteToCardMeta', () => {
     const parsed = parseNoteToCardMeta('一段普通笔记')
     expect(parsed.note).toBe('一段普通笔记')
     expect(parsed.title).toBeUndefined()
+  })
+})
+
+describe('filterRedundantKeyPoints', () => {
+  const excerpt = '关于《论美国的民主》，它的时事性经常被讨论的问题。如果我们用时事性一词暗指这一杰出作品仍应当被理解和研究，是完全恰当的。'
+
+  it('摘录原句切出来的要点 pill 全部隐藏', () => {
+    expect(
+      filterRedundantKeyPoints(['作品仍应当被理解和研究'], excerpt),
+    ).toEqual([])
+  })
+
+  it('近义改写不过滤（模型输出质量问题，归 quote 预设 directive 管）', () => {
+    // '其时事性是经常被讨论的问题' vs 摘录'它的时事性经常被讨论的问题'：
+    // 字面不同，过滤器放行；以后靠预设"aiSummary 只写点评不复述"收敛
+    expect(
+      filterRedundantKeyPoints(['其时事性是经常被讨论的问题'], excerpt),
+    ).toEqual(['其时事性是经常被讨论的问题'])
+  })
+
+  it('标点空白差异不影响判定，空串与重复顺手清理', () => {
+    expect(
+      filterRedundantKeyPoints(
+        [' 作品仍应当被理解和研究，', '作品仍应当被理解和研究', '', '真正的新要点'],
+        excerpt,
+      ),
+    ).toEqual(['真正的新要点'])
+  })
+
+  it('无摘录时无法判定，保留（容错）', () => {
+    expect(filterRedundantKeyPoints(['某要点'], undefined)).toEqual(['某要点'])
+    expect(filterRedundantKeyPoints(undefined, excerpt)).toEqual([])
   })
 })

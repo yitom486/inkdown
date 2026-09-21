@@ -50,7 +50,7 @@ export const CARD_STUDIO_PRESETS: readonly CardStudioPreset[] = [
     id: 'quote',
     label: '金句摘存',
     category: 'quote',
-    directive: `title 用出处式短语；aiSummary 先给原典摘录再加一句点评。category 固定填 quote。${OUTPUT_SHAPE}`,
+    directive: `title 用出处式短语；aiSummary 只写一句点评、不复述摘录（摘录由卡片摘录区展示，复述即复读）。category 固定填 quote。${OUTPUT_SHAPE}`,
   },
   {
     id: 'question',
