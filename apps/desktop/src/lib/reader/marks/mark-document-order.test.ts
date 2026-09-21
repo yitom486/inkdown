@@ -62,6 +62,84 @@ describe('sortMarksByDocumentPosition', () => {
     expect(sorted.map((m) => m.id)).toEqual(['older', 'newer'])
   })
 
+  it('EPUB 同章按 href/cfi 位置键排序', () => {
+    const epub = (id: string, href: string, createdAt: number): ReadingMark => ({
+      id,
+      filePath: '/book.epub',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'epub', cfi: 'epubcfi(/6/2)', href },
+      createdAt,
+      updatedAt: createdAt,
+    }) as ReadingMark
+    // 输入创建时间倒序，输出应按 href 字典序
+    const marks = [epub('later', 'ch1-b.xhtml', 2), epub('earlier', 'ch1-a.xhtml', 1)]
+    const sorted = sortMarksByDocumentPosition(marks, ['ch1'], () => 'ch1')
+    expect(sorted.map((m) => m.id)).toEqual(['earlier', 'later'])
+  })
+
+  it('MOBI 同章无细粒度位置，按创建时间排序', () => {
+    const mobi = (id: string, createdAt: number): ReadingMark => ({
+      id,
+      filePath: '/book.mobi',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'mobi', chapterId: 'ch1' },
+      createdAt,
+      updatedAt: createdAt,
+    }) as ReadingMark
+    const marks = [mobi('newer', 2), mobi('older', 1)]
+    const sorted = sortMarksByDocumentPosition(marks, ['ch1'], () => 'ch1')
+    expect(sorted.map((m) => m.id)).toEqual(['older', 'newer'])
+  })
+
+  it('未知章节键与无归属一同沉底', () => {
+    const marks = [mark('unknown', 'chX'), mark('a', 'ch1'), mark('z', null)]
+    const sorted = sortMarksByDocumentPosition(
+      marks,
+      ['ch1', 'ch2'],
+      keyOf({ unknown: 'chX', a: 'ch1', z: null }),
+    )
+    expect(sorted.map((m) => m.id)[0]).toBe('a')
+    expect(sorted.map((m) => m.id).slice(1).sort()).toEqual(['unknown', 'z'])
+  })
+
+  it('章优先于位置键：前章大页仍排前', () => {
+    const pdf = (id: string, page: number): ReadingMark => ({
+      id,
+      filePath: '/book.pdf',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'pdf', page },
+      createdAt: 1,
+      updatedAt: 1,
+    }) as ReadingMark
+    const marks = [pdf('ch2-p1', 1), pdf('ch1-p100', 100)]
+    const sorted = sortMarksByDocumentPosition(
+      marks,
+      ['ch1', 'ch2'],
+      keyOf({ 'ch2-p1': 'ch2', 'ch1-p100': 'ch1' }),
+    )
+    expect(sorted.map((m) => m.id)).toEqual(['ch1-p100', 'ch2-p1'])
+  })
+
+  it('全同键保输入序且不改原数组', () => {
+    const pdf = (id: string): ReadingMark => ({
+      id,
+      filePath: '/book.pdf',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'pdf', page: 5 },
+      createdAt: 1,
+      updatedAt: 1,
+    }) as ReadingMark
+    const marks = [pdf('first'), pdf('second'), pdf('third')]
+    const snapshot = [...marks]
+    const sorted = sortMarksByDocumentPosition(marks, ['ch'], () => 'ch')
+    expect(sorted.map((m) => m.id)).toEqual(['first', 'second', 'third'])
+    expect(marks).toEqual(snapshot)
+  })
+
   it('returns copy in original order when no toc order', () => {
     const marks = [mark('b', 'ch2'), mark('a', 'ch1')]
     const sorted = sortMarksByDocumentPosition(marks, [], keyOf({}))
