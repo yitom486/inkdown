@@ -11,3 +11,4 @@
 | `breadcrumb` / `separator` / `scroll-area` | 导航与布局装饰 |
 | `resizable` | `react-resizable-panels` 封装 |
 | `sonner` | Toast |
+| `tooltip` | 悬停提示 |
