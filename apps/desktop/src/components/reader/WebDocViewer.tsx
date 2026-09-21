@@ -1076,10 +1076,13 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         }
       />
 
-      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航在行下通栏 */}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航收进正文列 */}
       <div className="flex min-h-0 flex-1">
         <ReaderContentShell
           bookTitle={displayTitle}
+        footerNav={
+          <ReaderFooterNav ready={ready && units.length > 0} onPrevious={goPrevious} onNext={goNext} />
+        }
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -1102,8 +1105,6 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
         ) : null}
       </div>
-
-      <ReaderFooterNav ready={ready && units.length > 0} onPrevious={goPrevious} onNext={goNext} />
 
       {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />

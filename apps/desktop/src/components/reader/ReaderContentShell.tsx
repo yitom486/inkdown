@@ -60,6 +60,8 @@ interface ReaderContentShellProps {
   onHoverExcerpt?: (excerpt: string | undefined) => void
   /** 正文书级阅读进度 0~1：卡片轨等比跟随滚动；缺省不同滚 */
   readingFraction?: number
+  /** 底栏翻页：收进正文列（正文下方），不横跨卡片轨；缺省无底栏 */
+  footerNav?: ReactNode
 }
 
 export function ReaderContentShell({
@@ -86,6 +88,8 @@ export function ReaderContentShell({
   children,
   onHoverExcerpt,
   readingFraction,
+  /** 底栏翻页：收进正文列（正文下方），不横跨卡片轨；缺省无底栏 */
+  footerNav,
 }: ReaderContentShellProps) {
   // 知识卡轨与伴读联动状态
   const isCardRailOpen = useReaderHudUiStore((s) => s.isCardRailOpen)
@@ -345,7 +349,10 @@ export function ReaderContentShell({
           />
         </aside>
       ) : null}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        {footerNav}
+      </div>
 
       {isCardRailOpen ? (
         <MarginaliaBar

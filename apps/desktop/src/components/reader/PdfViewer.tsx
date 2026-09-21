@@ -2216,11 +2216,18 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
         }
       />
 
-      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航在行下通栏 */}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航收进正文列 */}
       <div className="flex min-h-0 flex-1">
       <ReaderContentShell
         filePath={filePath}
         readingFraction={numPages > 1 ? (pageNum - 1) / (numPages - 1) : 0}
+        footerNav={
+          <ReaderFooterNav
+            ready={ready}
+            onPrevious={() => nav.previousIndex >= 0 && goToFlatIndex(nav.previousIndex)}
+            onNext={() => nav.nextIndex >= 0 && goToFlatIndex(nav.nextIndex)}
+          />
+        }
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -2336,12 +2343,6 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
           <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
         ) : null}
       </div>
-
-      <ReaderFooterNav
-        ready={ready}
-        onPrevious={() => nav.previousIndex >= 0 && goToFlatIndex(nav.previousIndex)}
-        onNext={() => nav.nextIndex >= 0 && goToFlatIndex(nav.nextIndex)}
-      />
 
       {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
