@@ -31,6 +31,37 @@ describe('sortMarksByDocumentPosition', () => {
     expect(sorted.map((m) => m.id)).toEqual(['a', 'b', 'c', 'z'])
   })
 
+  it('同章内按文档位置（PDF 页码），不再按创建时间', () => {
+    const pdf = (id: string, page: number, createdAt: number): ReadingMark => ({
+      id,
+      filePath: '/book.pdf',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'pdf', page },
+      createdAt,
+      updatedAt: createdAt,
+    }) as ReadingMark
+    // 输入是创建时间倒序，输出应按页码正序
+    const marks = [pdf('p10', 10, 3), pdf('p2', 2, 2), pdf('p1', 1, 1)]
+    const sorted = sortMarksByDocumentPosition(marks, ['ch'], () => 'ch')
+    expect(sorted.map((m) => m.id)).toEqual(['p1', 'p2', 'p10'])
+  })
+
+  it('同章同位按创建时间，同分保输入序', () => {
+    const pdf = (id: string, createdAt: number): ReadingMark => ({
+      id,
+      filePath: '/book.pdf',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'pdf', page: 5 },
+      createdAt,
+      updatedAt: createdAt,
+    }) as ReadingMark
+    const marks = [pdf('newer', 2), pdf('older', 1)]
+    const sorted = sortMarksByDocumentPosition(marks, ['ch'], () => 'ch')
+    expect(sorted.map((m) => m.id)).toEqual(['older', 'newer'])
+  })
+
   it('returns copy in original order when no toc order', () => {
     const marks = [mark('b', 'ch2'), mark('a', 'ch1')]
     const sorted = sortMarksByDocumentPosition(marks, [], keyOf({}))
