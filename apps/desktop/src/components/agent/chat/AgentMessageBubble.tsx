@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronRight, Layers, Loader2, Sparkles } from 'lucide-react'
 import { useMemo } from 'react'
 import { useSmoothStreamingText, useThrottledValue } from '@/hooks/agent/useSmoothStreamingText'
 import {
@@ -246,6 +246,60 @@ export function AgentMessageBubble({
           )}
         />
       )}
+      {(message.steps?.length ?? 0) > 0 ? (
+        <div className="mt-3 space-y-2 pt-2 border-t border-border/40 font-serif">
+          <div className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+            <Layers className="size-3.5 text-primary" />
+            <span>交互经纬流转</span>
+          </div>
+          <div className="space-y-1.5">
+            {message.steps!.map((step) => (
+              <div
+                key={step.num}
+                className="p-2.5 rounded-xl bg-muted/30 border border-border/50 hover:border-border transition-all flex items-start justify-between gap-2"
+              >
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-4 rounded-full bg-primary/10 text-primary font-serif text-[10px] font-bold flex items-center justify-center shrink-0">
+                      {step.num}
+                    </span>
+                    <span className="font-medium text-foreground text-xs truncate">
+                      {step.title}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground pl-5 leading-normal">
+                    {step.desc}
+                  </p>
+                </div>
+
+                {step.anchorId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const escaped = CSS.escape(step.anchorId!)
+                        const el = document.querySelector(`[data-anchor="${escaped}"]`)
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          el.classList.add('animate-anchor-glow')
+                          setTimeout(() => el.classList.remove('animate-anchor-glow'), 2500)
+                        }
+                      } catch {
+                        // ignore selector escape error
+                      }
+                    }}
+                    className="shrink-0 px-2 py-1 rounded-md text-[10px] text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-all flex items-center gap-1 cursor-pointer border border-primary/20"
+                    title="在正文中对照此段章句"
+                  >
+                    <span>对应章句</span>
+                    <ArrowRight className="size-2.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {(message.markProposals?.length ?? 0) > 0 ? (
         <ProposeMarkBlockList
           embedded

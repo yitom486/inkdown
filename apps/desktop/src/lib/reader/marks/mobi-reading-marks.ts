@@ -92,7 +92,7 @@ function wrapMarkRange(
   className: string,
   markId: string,
   color: string | undefined,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
 ): boolean {
   const span = (range.startContainer.ownerDocument ?? document).createElement('span')
   span.className = className
@@ -115,7 +115,7 @@ function wrapMarkRange(
 function applyMobiTextMark(
   root: HTMLElement,
   mark: ReadingMark,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
 ): boolean {
   const searchText = getMarkSearchText(mark)
   if (!searchText) return false
@@ -168,7 +168,7 @@ function appendRectOverlay(
   markId: string,
   interactive: boolean,
   color: string | undefined,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
 ): void {
   const element = layer.ownerDocument.createElement('div')
   element.className = className
@@ -198,7 +198,7 @@ export function renderMobiMarkOverlays(
   container: HTMLElement | null,
   marks: ReadingMark[],
   chapterId: string,
-  theme: 'dark' | 'light' = 'light',
+  theme: 'dark' | 'light' | 'sepia' = 'light',
 ): void {
   renderIframeMarkOverlays(container, marks, (mark) => {
     if (mark.anchor.format !== 'mobi') return false
@@ -210,7 +210,7 @@ export function renderWebMarkOverlays(
   container: HTMLElement | null,
   marks: ReadingMark[],
   pageUrl: string,
-  theme: 'dark' | 'light' = 'light',
+  theme: 'dark' | 'light' | 'sepia' = 'light',
 ): void {
   const normalizedPageUrl = normalizeWebDocNavUrl(pageUrl)
   renderIframeMarkOverlays(container, marks, (mark) => {
@@ -223,7 +223,7 @@ function renderIframeMarkOverlays(
   container: HTMLElement | null,
   marks: ReadingMark[],
   matchesMark: (mark: ReadingMark) => boolean,
-  theme: 'dark' | 'light' = 'light',
+  theme: 'dark' | 'light' | 'sepia' = 'light',
 ): void {
   if (!container) return
   clearMobiMarkOverlays(container)
@@ -240,7 +240,8 @@ function renderIframeMarkOverlays(
     const rects = !appliedByText
       ? liveRectsFromMarkText(container, mark) ?? anchorRects(mark.anchor)
       : undefined
-    if (!appliedByText && rects?.length) {
+
+    if (rects && rects.length > 0) {
       for (const rect of rects) {
         appendRectOverlay(
           layer,
@@ -294,7 +295,7 @@ export function removeMobiPendingSelectionHighlight(container: HTMLElement | nul
 export function applyMobiPendingSelectionHighlight(
   container: HTMLElement | null,
   rects: Array<{ x: number; y: number; width: number; height: number }>,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
 ): void {
   if (!container || rects.length === 0) return
   removeMobiPendingSelectionHighlight(container)

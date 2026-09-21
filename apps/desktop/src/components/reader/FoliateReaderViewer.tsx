@@ -7,10 +7,13 @@ import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { PdfBookSearch } from '@/components/reader/PdfBookSearch'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { DockedAgentPane } from '@/components/agent/DockedAgentPane'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
+import { DeepAnswerDialog } from '@/components/reader/DeepAnswerDialog'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
@@ -23,6 +26,7 @@ import { registerReaderMarks } from '@/lib/agent/context/reader-marks-registry'
 import { registerSelectionProvider, commitReaderSelection, clearReaderSelection } from '@/lib/agent/context/reader-selection-registry'
 import { focusAgentComposerOnReaderSelection } from '@/lib/agent/context/focus-agent-composer'
 import { DEFAULT_HIGHLIGHT_COLOR } from '@inkdown/reader-core'
+import { emitRailFollow, emitRailFocus } from '@/lib/reader/rail-follow'
 import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
@@ -34,6 +38,23 @@ import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/adapter/foliate-book-adapter'
+import { parseNoteToCardMeta, resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
+import {
+  buildChapterSectionMap,
+  buildMarkFlag,
+  isExcerptDrawAllowed,
+  resolveMarkRangeDetailed,
+  type CfiResolverView,
+} from '@/lib/reader/marks/epub-mark-overlay'
+import {
+  findMarkByOverlayerKey,
+  locateExcerptInDocuments,
+  overlayerKeyForMark,
+  runRevealPlan,
+  subscribeRevealMark,
+  type RevealAdapter,
+} from '@/lib/reader/marks/mark-linkage'
+import { toCanonicalChapter } from '@inkdown/reader-core'
 import { parse as parseFoliateCfi, toRange as foliateCfiToRange } from '@foliate/epubcfi.js'
 import type { FoliateViewElement } from '@foliate/view.js'
 import type { OverlayerDrawFn } from '@foliate/overlayer.js'
@@ -45,6 +66,8 @@ import {
 import { normalizeLoadKey } from '@inkdown/reader-core'
 import {
   isSameSpineBase,
+  MARK_CATEGORY_SWATCH_FALLBACK,
+  resolveMarkCategorySwatch,
   scrollFoliateSectionToFragment,
   splitChapterFragment,
 } from '@inkdown/reader-core'
@@ -68,6 +91,7 @@ import {
   tocFromEpubUnits,
 } from '@inkdown/reader-core'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 
 declare global {
   interface Window {
@@ -80,27 +104,21 @@ declare global {
   }
 }
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 interface FoliateReaderViewerProps {
   filePath: string
   documentKind: 'epub' | 'mobi'
-  theme: 'dark' | 'light'
+  theme: AppTheme
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
 const READING_PROGRESS_SAVE_MS = 400
 const FOLIATE_READER_STYLE_ID = 'foliate-reader-theme'
 
-/** overlay 键：与 apply 侧一致（书签无可视层，不进 overlay） */
-function overlayerKeyForMark(mark: ReadingMark): string | null {
-  if (mark.kind === 'bookmark') return null
-  const anchor = mark.anchor
-  if (anchor.format === 'epub') return anchor.cfiRange ?? anchor.cfi ?? null
-  if (anchor.format === 'mobi') return anchor.cfiRange ?? anchor.cfi ?? null
-  return null
-}
-
-function findMarkByOverlayerKey(marks: ReadingMark[], key: string): ReadingMark | undefined {
-  return marks.find((mark) => overlayerKeyForMark(mark) === key)
-}
+/** M2 页边旗标：每渲染文档上限（与 M1 行内着色同 cap，不乱标） */
+const EPUB_MARK_FLAGS_PER_DOC_CAP = 40
 
 /** epub.js themes 规则（selector→props）转可注入 CSS 文本 */
 function themeRulesToCss(rules: Record<string, Record<string, string>>): string {
@@ -114,7 +132,7 @@ function themeRulesToCss(rules: Record<string, Record<string, string>>): string 
     .join('\n')
 }
 
-export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateReaderViewerProps) {
+export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRoot }: FoliateReaderViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<FoliateViewElement | null>(null)
   const adapterRef = useRef<FoliateBookAdapter | null>(null)
@@ -122,6 +140,8 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   const chapterSectionsRef = useRef<Array<number | null>>([])
   const [chapters, setChapters] = useState<EpubChapter[]>([])
   const nav = useReaderNavigationStore((state) => state.nav)
+  // docked 侧栏挂载于内框行（工具栏之下、底导航之上），与正文同属左大块
+  const dockedAgentVisible = useIsDockedAgentVisible()
   const { tocOpen, marksOpen, toggleToc, toggleMarks, closeToc, closeMarks } = useReaderSidePanels()
   const [ready, setReady] = useState(false)
   const [globalProgress, setGlobalProgress] = useState(0)
@@ -146,6 +166,8 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   const lastLocationRef = useRef<{ cfi?: string; sectionIndex: number; fraction: number } | null>(
     null,
   )
+  /** 已绘制常驻标记的节序号，避免节内滚动重复重算 */
+  const lastMarkSectionRef = useRef<number>(-1)
   const readerFontSize = useAppSettingsStore((state) => state.readerFontSize)
   const readerLineHeight = useAppSettingsStore((state) => state.readerLineHeight)
   const typography = useMemo(
@@ -358,8 +380,164 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         doc.head.appendChild(style)
       }
       style.textContent = css
+      // 正文 iframe 内部滚动条隐藏：单滚动条观感只留卡片轨右边那根，
+      // 正文进度由卡片轨滚动条经等比跟随反映（滚正文时轨跟着走）。
+      style.textContent +=
+        '\nhtml,body{scrollbar-width:none;}\nhtml::-webkit-scrollbar,body::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;}'
     } catch {
       // 章节文档不可写时忽略
+    }
+  }, [])
+
+  // 卡片常驻标记：CSS Custom Highlight 自绘层（颜色完全可控，不依赖 overlayer 私有 API）。
+  // 每渲染文档注入 5 条分类规则（主文档解析 CSS 变量后写字面值，主题切换重注），
+  // 按统一 Range 口径（resolveMarkRange：CFI 优先 excerpt 兜底，与 M2 旗标同源）着色；
+  // 切章/翻页不同步（由调用方在 relocation 节点触发）。
+  const markHighlightStyleSigRef = useRef<WeakMap<Document, string>>(new WeakMap())
+  const syncMarkHighlights = useCallback(() => {
+    const view = viewRef.current
+    const cfiView = (view ?? null) as unknown as CfiResolverView | null
+    // 章节门输入：固化章节 key → spine section 集合（excerpt 兜底跨章漏画到此为止）
+    const chapterSections = buildChapterSectionMap(
+      chaptersRef.current,
+      chapterSectionsRef.current,
+    )
+    let docs: Array<{ doc: Document; index: number }> = []
+    try {
+      const renderer = viewRef.current?.renderer as unknown as {
+        getContents: () => Array<{ doc: Document; index: number }>
+      } | null
+      docs = renderer?.getContents() ?? []
+    } catch {
+      return
+    }
+    if (docs.length === 0) return
+    const rootCS = document.defaultView?.getComputedStyle(document.documentElement)
+    const getVar = (name: string) => rootCS?.getPropertyValue(name).trim() || undefined
+    const palette: Record<string, string> = {}
+    for (const cat of Object.keys(MARK_CATEGORY_SWATCH_FALLBACK)) {
+      palette[cat] = resolveMarkCategorySwatch(cat, getVar, themeRef.current)
+    }
+    const sig = Object.values(palette).join('|')
+    const buckets = new Map<string, Range[]>()
+    for (const { doc, index } of docs) {
+      try {
+        const viewWindow = doc.defaultView as unknown as {
+          CSS?: { highlights?: { set: (name: string, h: object) => void; delete: (n: string) => void } }
+          Highlight?: new (...ranges: AbstractRange[]) => object
+        } | null
+        const registry = viewWindow?.CSS?.highlights
+        const HighlightCtor = viewWindow?.Highlight
+        if (!registry || !HighlightCtor) continue
+        if (markHighlightStyleSigRef.current.get(doc) !== sig) {
+          let style = doc.querySelector('style[data-inkdown-marks]') as HTMLStyleElement | null
+          if (!style) {
+            style = doc.createElement('style')
+            style.setAttribute('data-inkdown-marks', '')
+            ;(doc.head ?? doc.documentElement)?.appendChild(style)
+          }
+          style.textContent = Object.entries(palette)
+            .map(
+              ([cat, color]) =>
+                `::highlight(inkdown-mark-${cat}){text-decoration:underline dotted;text-underline-offset:3px;text-decoration-color:${color};}`,
+            )
+            .join('\n')
+          markHighlightStyleSigRef.current.set(doc, sig)
+        }
+        for (const cat of Object.keys(palette)) {
+          registry.delete(`inkdown-mark-${cat}`)
+          buckets.set(cat, [])
+        }
+        for (const mark of marksRef.current) {
+          // 与 M2 旗标同源：CFI 优先 excerpt 兜底（此前只按 excerpt 首匹配，
+          // 同一卡片下划线与圆点可能落在两处）。
+          // 章节门：只有 excerpt 兜底才受限（跨章漏画到此为止）；
+          // CFI 精确命中是真位置，永远画。
+          const resolved = resolveMarkRangeDetailed(doc, index, mark, cfiView)
+          if (!resolved) continue
+          if (
+            resolved.via === 'excerpt' &&
+            !isExcerptDrawAllowed(mark.chapter?.key, index, chapterSections)
+          ) {
+            continue
+          }
+          const range = resolved.range
+          const cat = (mark.category ?? resolveCardMeta(mark).category) as string
+          if (!palette[cat]) continue
+          const bucket = buckets.get(cat)
+          if (bucket && bucket.length < 40) bucket.push(range)
+        }
+        for (const [cat, ranges] of buckets) {
+          if (ranges.length === 0) continue
+          try {
+            registry.set(`inkdown-mark-${cat}`, new HighlightCtor(...ranges))
+          } catch {
+            // 单个失败不影响其余分类
+          }
+        }
+      } catch {
+        // 单文档失败不影响其余文档
+      }
+    }
+  }, [])
+
+  // M2 页边旗标：每渲染文档内 absolute 圆点（文档内坐标，随内容滚动天然跟随，
+  // 只在 relocation/载入/标记变更/主题字号变化时重算）。定位与 M1 同源
+  //（共用 resolveMarkRange：CFI 优先、excerpt 兜底，无合法坐标不画）；
+  // 点击直达卡片（rail-follow 通道）。
+  const syncMarkFlags = useCallback(() => {
+    const view = viewRef.current
+    if (!view) return
+    const cfiView = view as unknown as CfiResolverView
+    let contents: Array<{ doc: Document; index: number }> = []
+    try {
+      const renderer = view.renderer as unknown as {
+        getContents: () => Array<{ doc: Document; index: number }>
+      } | null
+      contents = renderer?.getContents() ?? []
+    } catch {
+      return
+    }
+    if (contents.length === 0) return
+    const rootCS = document.defaultView?.getComputedStyle(document.documentElement)
+    const getVar = (name: string) => rootCS?.getPropertyValue(name).trim() || undefined
+    // 章节门输入：固化章节 key → spine section 集合（excerpt 兜底跨章漏画到此为止）
+    const flagChapterSections = buildChapterSectionMap(
+      chaptersRef.current,
+      chapterSectionsRef.current,
+    )
+    for (const { doc, index } of contents) {
+      try {
+        doc.querySelectorAll('[data-inkdown-flag]').forEach((el) => el.remove())
+        // 旗标挂 documentElement 而非 body：主题 CSS 所有全宽 static 规则
+        // 全是 `body ...` 作用域，挂根元素天然免疫，新旧版本通吃；
+        // 行内 !important 再保一层，双保险。
+        const host = doc.documentElement
+        if (!host) continue
+        let placed = 0
+        for (const mark of marksRef.current) {
+          if (placed >= EPUB_MARK_FLAGS_PER_DOC_CAP) break
+          if (mark.kind === 'bookmark') continue
+          const resolved = resolveMarkRangeDetailed(doc, index, mark, cfiView)
+          if (!resolved) continue
+          if (
+            resolved.via === 'excerpt' &&
+            !isExcerptDrawAllowed(mark.chapter?.key, index, flagChapterSections)
+          ) {
+            continue
+          }
+          const range = resolved.range
+          const cat = (mark.category ?? resolveCardMeta(mark).category) as string
+          const flag = buildMarkFlag(doc, mark.id, range, {
+            background: resolveMarkCategorySwatch(cat, getVar, themeRef.current),
+          })
+          if (!flag) continue
+          host.appendChild(flag)
+          placed += 1
+        }
+      } catch {
+        // 单文档失败不影响其余文档
+      }
     }
   }, [])
 
@@ -373,8 +551,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     }
   }, [])
 
-  const removePendingAnnotateHighlight = useCallback(() => {
-    const key = pendingAnnotateKeyRef.current
+  const removePendingAnnotateHighlight = useCallback(() => {    const key = pendingAnnotateKeyRef.current
     pendingAnnotateKeyRef.current = null
     if (!key) return
     void viewRef.current?.deleteAnnotation({ value: key }).catch(() => undefined)
@@ -396,23 +573,237 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     void view.addAnnotation({ value: snapshot.cfiRange }).catch(() => undefined)
   }, [editingNoteMark])
 
-  const handleSelectMark = useCallback((mark: ReadingMark) => {
-    const view = viewRef.current
-    if (!view) return
-    const anchor = mark.anchor
-    const cfi =
-      anchor.format === 'epub' || anchor.format === 'mobi'
-        ? (anchor.cfiRange ?? anchor.cfi)
-        : undefined
-    if (cfi) {
-      void view.goTo(cfi).catch(() => undefined)
+  // 卡片悬停→正文高亮：CSS Custom Highlight API，无 DOM 改动，移出即清除。
+  // 与 BracketConnector 的卡片侧高亮呼应，完成悬停方向的双向联动。
+  const hoverStyleInjectedRef = useRef<WeakSet<Document>>(new WeakSet())
+  const handleHoverExcerpt = useCallback((excerpt: string | undefined) => {
+    let docs: Array<{ doc: Document }> = []
+    try {
+      const renderer = viewRef.current?.renderer as unknown as {
+        getContents: () => Array<{ doc: Document }>
+      } | null
+      docs = renderer?.getContents() ?? []
+    } catch {
       return
     }
-    if (anchor.format === 'mobi') {
-      const index = adapterRef.current?.sections.findIndex((s) => s.id === anchor.chapterId) ?? -1
-      if (index >= 0) void view.goTo(index).catch(() => undefined)
+    for (const { doc } of docs) {
+      try {
+        const viewWindow = doc.defaultView as unknown as {
+          CSS?: { highlights?: { set: (name: string, highlight: object) => void; delete: (name: string) => void } }
+          Highlight?: new (...ranges: AbstractRange[]) => object
+        } | null
+        const registry = viewWindow?.CSS?.highlights
+        const HighlightCtor = viewWindow?.Highlight
+        if (!registry || !HighlightCtor) continue
+        if (!excerpt?.trim()) {
+          registry.delete('inkdown-hover')
+          continue
+        }
+        if (!hoverStyleInjectedRef.current.has(doc)) {
+          const style = doc.createElement('style')
+          style.setAttribute('data-inkdown-hover', '')
+          style.textContent =
+            '::highlight(inkdown-hover){background:rgba(139,92,246,.32);border-radius:2px;}'
+          ;(doc.head ?? doc.documentElement)?.appendChild(style)
+          hoverStyleInjectedRef.current.add(doc)
+        }
+        const body = doc.body
+        if (!body) continue
+        const range = findTextRangeInRoot(body, excerpt.trim())
+        registry.delete('inkdown-hover')
+        if (range) {
+          registry.set('inkdown-hover', new HighlightCtor(range))
+        }
+      } catch {
+        // 高亮失败时静默忽略，不干扰阅读
+      }
     }
   }, [])
+
+  // 跳转落定的方框闪现：与悬停同款叠层，2.5s 后自动清除
+  const jumpFlashTokenRef = useRef(0)
+  const flashJumpRange = useCallback((cfiKey: string) => {
+    const token = ++jumpFlashTokenRef.current
+    window.setTimeout(() => {
+      if (jumpFlashTokenRef.current !== token) return
+      let resolved: { index: number; anchor: (doc: Document) => Range } | null = null
+      try {
+        resolved = viewRef.current?.resolveCFI(cfiKey) ?? null
+      } catch {
+        resolved = null
+      }
+      if (!resolved) return
+      let renderer: { getContents: () => Array<{ doc: Document; index: number }> } | null = null
+      try {
+        renderer = viewRef.current?.renderer as unknown as {
+          getContents: () => Array<{ doc: Document; index: number }>
+        } | null
+      } catch {
+        return
+      }
+      const target = renderer?.getContents().find((item) => item.index === resolved.index)
+      if (!target) return
+      let range: Range | null = null
+      try {
+        range = resolved.anchor(target.doc)
+      } catch {
+        return
+      }
+      if (!range) return
+      try {
+        const viewWindow = target.doc.defaultView as unknown as {
+          CSS?: { highlights?: { set: (name: string, h: object) => void; delete: (n: string) => void } }
+          Highlight?: new (...ranges: AbstractRange[]) => object
+        } | null
+        const registry = viewWindow?.CSS?.highlights
+        const HighlightCtor = viewWindow?.Highlight
+        if (!registry || !HighlightCtor) return
+        if (!target.doc.querySelector('style[data-inkdown-hover]')) {
+          const style = target.doc.createElement('style')
+          style.setAttribute('data-inkdown-hover', '')
+          style.textContent =
+            '::highlight(inkdown-hover){background:rgba(139,92,246,.32);border-radius:2px;}'
+          ;(target.doc.head ?? target.doc.documentElement)?.appendChild(style)
+        }
+        registry.set('inkdown-hover', new HighlightCtor(range))
+        window.setTimeout(() => {
+          if (jumpFlashTokenRef.current !== token) return
+          try {
+            registry.delete('inkdown-hover')
+          } catch {
+            // 忽略
+          }
+        }, 2500)
+      } catch {
+        // 忽略
+      }
+    }, 180)
+  }, [])
+
+  // 卡片轨逐帧跟随：文档滚动直驱书级分数（章节映射），rAF 节流 + 0.002 阈值，
+  // 经 window 事件直达卡片轨 DOM，不经过 React state（滚动过程零重渲染）。
+  const railFollowStateRef = useRef({ scheduled: false, last: -1 })
+  const bindRailFollow = useCallback((doc: Document, index: number) => {
+    const onScroll = () => {
+      const st = railFollowStateRef.current
+      if (st.scheduled) return
+      st.scheduled = true
+      requestAnimationFrame(() => {
+        st.scheduled = false
+        try {
+          const el = doc.documentElement
+          const max = el.scrollHeight - el.clientHeight
+          const local = max > 0 ? el.scrollTop / max : 0
+          let start = 0
+          let end = 1
+          try {
+            const fractions = viewRef.current?.getSectionFractions?.() ?? []
+            if (fractions.length > index) {
+              start = fractions[index] ?? 0
+              end = fractions[index + 1] ?? 1
+            }
+          } catch {
+            // 取不到节映射时回落全文档等比
+          }
+          const f = start + Math.min(1, Math.max(0, local)) * (end - start)
+          if (Math.abs(f - st.last) < 0.002) return
+          st.last = f
+          emitRailFollow(f)
+        } catch {
+          // 忽略
+        }
+      })
+    }
+    doc.addEventListener('scroll', onScroll, { passive: true, capture: true })
+    return () => {
+      doc.removeEventListener('scroll', onScroll, { capture: true })
+    }
+  }, [])
+
+  // 卡片→正文摘录兜底：在已渲染节文档中定位并选中（与统一联动 excerpt 步同语义）。
+  const revealExcerptInFoliateDocs = useCallback((text: string): boolean => {
+    let docs: Array<{ doc: Document }> = []
+    try {
+      const renderer = viewRef.current?.renderer as unknown as {
+        getContents: () => Array<{ doc: Document }>
+      } | null
+      docs = renderer?.getContents() ?? []
+    } catch {
+      docs = []
+    }
+    const hit = locateExcerptInDocuments(docs, text)
+    if (!hit) return false
+    try {
+      const host =
+        hit.range.startContainer instanceof Element
+          ? hit.range.startContainer
+          : hit.range.startContainer.parentElement
+      host?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const selection = hit.doc.defaultView?.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(hit.range.cloneRange())
+    } catch {
+      return false
+    }
+    return true
+  }, [])
+
+  const handleSelectMark = useCallback(
+    (mark: ReadingMark) => {
+      const adapter: RevealAdapter = {
+        tryStep: async (step): Promise<boolean> => {
+          const view = viewRef.current
+          if (!view) return false
+          switch (step.type) {
+            case 'cfi': {
+              try {
+                await view.goTo(step.cfi)
+              } catch {
+                return false
+              }
+              flashJumpRange(step.cfi)
+              return true
+            }
+            case 'mobi-chapter': {
+              const index =
+                adapterRef.current?.sections.findIndex((s) => s.id === step.chapterId) ?? -1
+              if (index < 0) return false
+              try {
+                await view.goTo(index)
+              } catch {
+                return false
+              }
+              return true
+            }
+            case 'excerpt':
+              return revealExcerptInFoliateDocs(step.text)
+            default:
+              return false
+          }
+        },
+      }
+      void runRevealPlan(mark, adapter).then((result) => {
+        if (!result.ok) {
+          reportRuntimeError(new Error(`reveal miss (${result.miss.reason})`), {
+            source: 'mark-linkage',
+            op: 'reveal',
+            silentToast: true,
+            filePath,
+            data: { markId: mark.id, reason: result.miss.reason },
+          })
+        }
+      })
+    },
+    [filePath, flashJumpRange, revealExcerptInFoliateDocs],
+  )
+
+  // 悬浮窗卡片 reveal 请求：同文件 mark 才执行（跨文件请求忽略）。
+  useEffect(() => {
+    return subscribeRevealMark((id) => {
+      const mark = marksRef.current.find((item) => item.id === id)
+      if (mark) handleSelectMark(mark)
+    })
+  }, [handleSelectMark])
 
   const handleDeleteMark = useCallback(
     async (mark: ReadingMark) => {
@@ -437,15 +828,18 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       throw new Error('无法获取当前阅读位置')
     }
     const sectionId = adapterRef.current?.sections[current.sectionIndex]?.id
+    const bookmarkAnchor =
+      kindRef.current === 'epub'
+        ? { format: 'epub' as const, cfi: current.cfi, href: sectionId }
+        : { format: 'mobi' as const, chapterId: sectionId ?? '', cfi: current.cfi }
     const result = await createMark({
       filePath,
       fileFingerprint,
       kind: 'bookmark',
-      anchor:
-        kindRef.current === 'epub'
-          ? { format: 'epub', cfi: current.cfi, href: sectionId }
-          : { format: 'mobi', chapterId: sectionId ?? '', cfi: current.cfi },
+      anchor: bookmarkAnchor,
       label: nav.current?.label ?? '书签',
+      // 写入时固化章节归属（单入口 toCanonicalChapter）
+      chapter: toCanonicalChapter(bookmarkAnchor, tocFromEpubUnits(chaptersRef.current)) ?? undefined,
     })
     if (!isOk(result)) {
       throw new Error(result.error.message || '创建书签失败')
@@ -487,17 +881,27 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         text: snapshot.text,
         cfiRange: snapshot.cfiRange,
       })
+      // 写入时固化章节归属；老卡重存时顺手补上（触达即升级）
+      const anchorChapter =
+        toCanonicalChapter(anchor, tocFromEpubUnits(chaptersRef.current)) ?? undefined
+      const meta = parseNoteToCardMeta(note)
       if (existing) {
-        const trimmed = note.trim()
+        const trimmed = meta.note?.trim()
         const result = await updateMark({
           id: existing.id,
           color,
+          chapter: anchorChapter,
           ...(trimmed
             ? {
                 note: trimmed,
                 kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
               }
             : {}),
+          ...(meta.category ? { category: meta.category } : {}),
+          ...(meta.title ? { title: meta.title } : {}),
+          ...(meta.aiSummary ? { aiSummary: meta.aiSummary } : {}),
+          ...(meta.keyPoints ? { keyPoints: meta.keyPoints } : {}),
+          ...(meta.diagramId ? { diagramId: meta.diagramId } : {}),
         })
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
@@ -515,8 +919,14 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         kind: note ? 'note' : 'highlight',
         anchor,
         excerpt: snapshot.text,
-        note: note || undefined,
+        note: meta.note,
+        category: meta.category,
+        title: meta.title,
+        aiSummary: meta.aiSummary,
+        keyPoints: meta.keyPoints,
+        diagramId: meta.diagramId,
         color,
+        chapter: anchorChapter,
       })
       if (!isOk(result)) {
         throw new Error(result.error.message || '创建批注失败')
@@ -550,6 +960,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
     },
     showPendingHighlight: showPendingAnnotateHighlight,
     saveHighlight: handleSaveAnnotation,
+    sessionKey: fileFingerprint ?? filePath,
   })
 
   const getRenderedDocs = useCallback((): Array<{ doc: Document; index: number }> => {
@@ -685,12 +1096,35 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       }
       doc.addEventListener('mousedown', onMouseDown)
       doc.addEventListener('mouseup', onMouseUp)
+      // 点击正文标记 → 卡片轨滚动到对应卡并闪现（反向联动；拖选走正常选区流程）
+      const onMarkClick = (event: MouseEvent) => {
+        const origin = pointerOriginRef.current
+        if (
+          !isClickNotDrag(origin, {
+            clientX: event.clientX,
+            clientY: event.clientY,
+          } as MouseEvent)
+        ) {
+          return
+        }
+        const overlayer = viewRef.current?.renderer
+          ?.getContents()
+          .find((item) => item.doc === doc)?.overlayer
+        if (!overlayer) return
+        const [key] = overlayer.hitTest({ x: event.clientX, y: event.clientY })
+        const mark =
+          typeof key === 'string' ? findMarkByOverlayerKey(marksRef.current, key) : undefined
+        if (!mark) return
+        emitRailFocus(mark.id)
+      }
+      doc.addEventListener('click', onMarkClick)
       const unbindCollapse = bindDocumentSelectionCollapse(doc, doc.defaultView as Window, () => {
         setSelectionToolbarPos(null)
       })
       cleanupFns.push(() => {
         doc.removeEventListener('mousedown', onMouseDown)
         doc.removeEventListener('mouseup', onMouseUp)
+        doc.removeEventListener('click', onMarkClick)
         unbindCollapse()
       })
 
@@ -776,7 +1210,9 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
   useEffect(() => {
     if (!ready) return
     syncVisualMarks()
-  }, [marks, ready, readerFontSize, readerLineHeight, syncVisualMarks, theme])
+    syncMarkHighlights()
+    syncMarkFlags()
+  }, [marks, ready, readerFontSize, readerLineHeight, syncVisualMarks, syncMarkHighlights, syncMarkFlags, theme])
 
   useEffect(() => {
     if (error && typeof error === 'object' && error !== null && 'code' in error) {
@@ -825,6 +1261,12 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       setGlobalProgress(resolveGlobalProgress(fraction))
       syncChapterNav(sectionIndex, detail.cfi)
       schedulePersistReadingProgress(sectionIndex, fraction, detail.cfi)
+      // 切节时重绘卡片常驻标记与旗标（节内滚动文档集合不变，无需重算）
+      if (lastMarkSectionRef.current !== sectionIndex) {
+        lastMarkSectionRef.current = sectionIndex
+        syncMarkHighlights()
+        syncMarkFlags()
+      }
       // 节内分片细化：用 foliate 自带的可见 TOC 项（与其渲染一致），而非自测矩形
       const tocHref = detail.tocItem?.href
       if (tocHref) {
@@ -849,8 +1291,16 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       if (cancelled) return
       applyDocTheme(detail.doc)
       docCleanups.get(detail.doc)?.()
-      docCleanups.set(detail.doc, bindSectionDocInteractions(detail.doc, detail.index))
+      const unbindInteractions = bindSectionDocInteractions(detail.doc, detail.index)
+      const unbindRailFollow = bindRailFollow(detail.doc, detail.index)
+      docCleanups.set(detail.doc, () => {
+        unbindInteractions()
+        unbindRailFollow()
+      })
       syncVisualMarks()
+      lastMarkSectionRef.current = -1
+      syncMarkHighlights()
+      syncMarkFlags()
     }
 
     const onLink = (event: CustomEvent) => {
@@ -939,6 +1389,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         const element = document.createElement('foliate-view') as unknown as FoliateViewElement
         element.style.width = '100%'
         element.style.height = '100%'
+        element.style.display = 'block'
         container.appendChild(element)
         view = element
         viewRef.current = element
@@ -954,6 +1405,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         if (cancelled) return
         try {
           element.renderer?.setAttribute('flow', 'scrolled')
+          element.renderer?.setAttribute('max-inline-size', '1040px')
         } catch {
           // paginated 回退：保持默认分页
         }
@@ -1076,7 +1528,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
       applyDocTheme(doc)
     }
     syncVisualMarks()
-  }, [applyDocTheme, getRenderedDocs, ready, readerFontSize, readerLineHeight, syncVisualMarks, theme])
+  }, [applyDocTheme, getRenderedDocs, ready, readerFontSize, readerLineHeight, syncVisualMarks, syncMarkHighlights, theme])
 
   useEffect(() => {
     return registerReaderContent({
@@ -1274,8 +1726,10 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
         }
       />
 
-      <ReaderContentShell
-        filePath={filePath}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航收进正文列 */}
+      <div className="flex min-h-0 flex-1">
+        <ReaderContentShell
+          filePath={filePath}
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -1296,14 +1750,20 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           )
           goToChapter(unit, index >= 0 ? index : undefined)
         }}
+        onHoverExcerpt={handleHoverExcerpt}
+        readingFraction={globalProgress}
+        footerNav={
+          <ReaderFooterNav
+            ready={ready}
+            onPrevious={() => goToChapter(nav.previous, nav.previousIndex)}
+            onNext={() => goToChapter(nav.next, nav.nextIndex)}
+          />
+        }
       >
         <PaneErrorBoundary name={isEpub ? 'EPUB 阅读' : 'MOBI 阅读'} filePath={filePath}>
           <div
             ref={containerRef}
-            className={cn(
-              'foliate-reader-host relative h-full min-h-0 overflow-hidden',
-              theme === 'dark' ? 'bg-[#18181b]' : 'bg-[#fafafa]',
-            )}
+            className="foliate-reader-host relative h-full min-h-0 overflow-hidden bg-[var(--color-bg-base)]"
             data-theme={theme}
           >
             {isLoading && (
@@ -1314,13 +1774,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
             )}
           </div>
         </PaneErrorBoundary>
-      </ReaderContentShell>
-
-      <ReaderFooterNav
-        ready={ready}
-        onPrevious={() => goToChapter(nav.previous, nav.previousIndex)}
-        onNext={() => goToChapter(nav.next, nav.nextIndex)}
-      />
+        </ReaderContentShell>
+        {dockedAgentVisible ? (
+          <DockedAgentPane workspaceRoot={workspaceRoot} />
+        ) : null}
+      </div>
 
       {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
@@ -1359,9 +1817,21 @@ export function FoliateReaderViewer({ filePath, documentKind, theme }: FoliateRe
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onAskDeepAnswer={selectionActions.askDeepAnswer}
+          deepAnswerPending={selectionActions.deepAnswerPending}
+          onGenerateCardPreset={selectionActions.generateAiCard}
+          cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
+
+      <DeepAnswerDialog
+        data={selectionActions.deepAnswer}
+        pending={selectionActions.deepAnswerPending}
+        onClose={selectionActions.dismissDeepAnswer}
+        onRetry={selectionActions.retryDeepAnswer}
+        onSaveAsNote={selectionActions.saveDeepAnswerAsNote}
+      />
 
       <AnnotationNoteDialog
         open={noteDialogOpen}

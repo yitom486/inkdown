@@ -14,6 +14,11 @@ export interface AcpToolDiff {
   newText: string
 }
 
+export interface AcpToolLocation {
+  path: string
+  line?: number
+}
+
 export interface AcpChatMessage {
   id: string
   role: AcpChatRole
@@ -44,6 +49,13 @@ export interface AcpChatMessage {
   }>
   /** inkdown_suggest_chapters 章级建议（promote 前在 tool，promote 后在 agent） */
   chapterMarkPlan?: ChapterMarkPlanEntry[]
+  /** 交互经纬流转分步卡片（带对应章句穿透定位） */
+  steps?: Array<{
+    num: number
+    title: string
+    desc: string
+    anchorId?: string
+  }>
 }
 
 export function extractTextFromContent(content: unknown): string {

@@ -1,4 +1,4 @@
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
+import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from 'node:child_process'
 import type { AcpRuntimeInfo } from '@inkdown/contracts'
 import { ANTIGRAVITY_ACP_RUNTIME_ID } from '@inkdown/contracts'
 import { findAntigravityServer } from './antigravity-discovery'
@@ -21,6 +21,31 @@ export interface SpawnAcpOptions {
   onExit?: (code: number | null, signal: NodeJS.Signals | null) => void
 }
 
+/**
+ * 进程是否仍存活。exitCode 非 null 表示已退出；killed 仅表示收到过 kill 信号，
+ * 必须两者结合判断，避免对已退出（PID 可能已被系统复用）的进程再下手。
+ */
+export function isSpawnedAcpProcessAlive(handle: SpawnedAcpProcess): boolean {
+  const child = handle.child
+  return !child.killed && child.exitCode === null && child.signalCode === null
+}
+
+/**
+ * 按 PID 树级联杀（Windows）：趁父进程（PyInstaller 引导器）还活着时沿父子链
+ * 把外层引导器 / 内层 Python / harness 一并击杀，避免只杀外层留下孤儿。
+ * 仅对确认存活的进程执行，防止误伤已被系统回收复用的 PID。
+ */
+function killProcessTree(pid: number): void {
+  if (process.platform !== 'win32') return
+  try {
+    spawnSync('taskkill', ['/F', '/T', '/PID', String(pid)], {
+      windowsHide: true,
+      timeout: 8000,
+    })
+  } catch {
+    // taskkill 失败时上层仍有 child.kill() 兜底
+  }
+}
 function resolveCommand(runtime: AcpRuntimeInfo): { file: string; shell: boolean } {
   if (runtime.id === ANTIGRAVITY_ACP_RUNTIME_ID || runtime.command === 'agy_acp_server') {
     const discovered = findAntigravityServer()
@@ -99,8 +124,26 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
     runtimeId: options.runtime.id,
     child,
     kill: () => {
-      if (!child.killed) {
-        child.kill()
+      // 已退出的进程不再下手：其 PID 可能已被系统回收复用，误杀后果严重。
+      if (isSpawnedAcpProcessAlive(handle)) {
+        // 先递 EOF，让官方服务端走 stdin 优雅退出（PyInstaller 退出钩子会自删 _MEI）。
+        try {
+          child.stdin.end()
+        } catch {
+          // stdin 已坏时忽略，走下面的强制路径
+        }
+        // 树杀整棵进程树（外层引导器/内层 Python/harness），杜绝孤儿残留。
+        // 注意：必须趁父子关系还在内核登记时执行，父死后 /T 即失效。
+        if (typeof child.pid === 'number') {
+          killProcessTree(child.pid)
+        }
+        if (!child.killed) {
+          try {
+            child.kill()
+          } catch {
+            // 忽略竞态关闭
+          }
+        }
       }
       active.delete(options.runtime.id)
     },
@@ -124,4 +167,18 @@ export function disposeAllAcpProcesses(): void {
 
 export function getActiveAcpProcess(runtimeId: string): SpawnedAcpProcess | undefined {
   return active.get(runtimeId)
+}
+
+/**
+ * 取同 runtime 下仍存活的常驻进程（复用时用）。已退出或被外部杀掉的返回 undefined，
+ * 调用方应走冷启动并顺手清扫其残留临时目录。
+ */
+export function getLiveAcpProcess(runtimeId: string): SpawnedAcpProcess | undefined {
+  const handle = active.get(runtimeId)
+  if (!handle) return undefined
+  if (!isSpawnedAcpProcessAlive(handle)) {
+    active.delete(runtimeId)
+    return undefined
+  }
+  return handle
 }

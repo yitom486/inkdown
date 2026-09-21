@@ -20,12 +20,15 @@ export type MessagePinState = {
   prompting?: boolean
 }
 
-/** 新消息、新回复开始流式、用户刚发送 prompt 时重新贴底。 */
+/** 新消息、新回复开始流式、用户刚发送 prompt 时重新贴底。历史懒加载向前补（条数涨但末条不变）不贴底。 */
 export function shouldRePinOnMessageChange(
   prev: MessagePinState,
   next: MessagePinState,
 ): boolean {
-  if (next.messageCount > prev.messageCount) return true
+  if (next.messageCount > prev.messageCount) {
+    // 条数涨 + 末条变 = 末尾追加 → 贴底；条数涨 + 末条不变 = 历史前补 → 不贴
+    return next.lastMessageId !== prev.lastMessageId
+  }
   if (next.lastMessageId !== prev.lastMessageId) return true
   if (next.lastMessageStreaming && !prev.lastMessageStreaming) return true
   if (next.prompting && !prev.prompting) return true
@@ -61,4 +64,20 @@ export function rafCoalesce(callback: () => void): () => void {
       callback()
     })
   }
+}
+
+/** 历史分页：初次只看末尾，向上滚动 5 条 5 条向前补。 */
+export const CHAT_HISTORY_INITIAL_COUNT = 5
+export const CHAT_HISTORY_PAGE_STEP = 5
+
+/**
+ * 聊天可见窗口切片（纯函数）。
+ * - start 为 null：贴底锚定，取末尾 count 条（新消息自然进入视野）；
+ * - start 为数字：冻结窗口 [start, start+count)，新消息到来不移位（供未贴底时保持位置）。
+ * 越界钳制；总量不足返回全部。
+ */
+export function sliceChatWindow<T>(messages: T[], start: number | null, count: number): T[] {
+  if (messages.length <= count || start === null) return messages.slice(-count)
+  const clamped = Math.max(0, Math.min(start, messages.length - 1))
+  return messages.slice(clamped, clamped + count)
 }

@@ -10,16 +10,20 @@ import {
 } from './antigravity-auth'
 import { buildAntigravityProxyEnv } from './antigravity-proxy'
 import { findAntigravityServer } from './antigravity-discovery'
+import { sweepStaleAntigravityTempDirs } from './antigravity-temp-sweep'
 
 export * from './antigravity-bridge'
 export * from './antigravity-auth'
 export * from './antigravity-proxy'
 export * from './antigravity-discovery'
+export * from './antigravity-temp-sweep'
 
 export interface AntigravityRuntimeAdapter {
   id: 'antigravity-acp'
   findServer: typeof findAntigravityServer
   beforeSpawn: () => Promise<void>
+  /** 仅冷启动时调用一次：收拾已死进程的 _MEI/.tmp 残留 */
+  onColdStart: () => Promise<void>
   getSpawnEnv: (proxySettings?: Partial<AcpProxySettings>) => {
     env: NodeJS.ProcessEnv
     envRemove: string[]
@@ -36,6 +40,18 @@ export const antigravityAdapter: AntigravityRuntimeAdapter = {
   /** 进程启动前钩子：检测到 Token 缺失时自动从 Windows 凭据管理器执行桥接 */
   beforeSpawn: async () => {
     await bridgeAntigravityCredentialFromManager()
+  },
+
+  /**
+   * 冷启动前钩子：清扫已死进程的 _MEI/.tmp 残留。
+   * 温进程与 Zed 共存实例的目录因新鲜（或被 DLL 锁占用）会被豁免；失败不阻塞连接。
+   */
+  onColdStart: async () => {
+    try {
+      await sweepStaleAntigravityTempDirs()
+    } catch {
+      // 清扫失败不阻塞连接
+    }
   },
 
   /** 专享代理：全量注入 SOCKS5 与 HTTP 代理及 NO_PROXY */

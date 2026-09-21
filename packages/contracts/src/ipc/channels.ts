@@ -121,6 +121,28 @@ export const IPC = {
   MARKS_UPDATE: 'marks:update',
   /** invoke：删除阅读书签/批注 */
   MARKS_DELETE: 'marks:delete',
+  /** invoke：本书内卡片全文搜（标题/摘录/批注/AI 洞见，走 marks_fts） */
+  MARKS_SEARCH: 'marks:search',
+  /** invoke：按章查卡（走 chapter_key 索引，另捎带未固化卡由调用方窄化） */
+  MARKS_LIST_BY_CHAPTER: 'marks:list-by-chapter',
+
+  /* ================================================================
+   * 记忆卡片复习态（flashcards:*，本书库 flashcards + review_log）
+   * ================================================================ */
+  /** invoke：本书待复习列表（未复习优先、其次最久未复习） */
+  FLASHCARDS_LIST_DUE: 'flashcards:list-due',
+  /** invoke：记一次复习评分 */
+  FLASHCARDS_APPEND_REVIEW: 'flashcards:append-review',
+
+  /* ================================================================
+   * AI 会话指针（一书一会话，inkdown.db ai_sessions，只记指针与计数）
+   * ================================================================ */
+  /** invoke：取某书会话行（无则 null，调用方建新会话后 put） */
+  AI_SESSIONS_GET: 'ai-sessions:get',
+  /** invoke：upsert 会话行 */
+  AI_SESSIONS_PUT: 'ai-sessions:put',
+  /** invoke：prompt 成功后计数 + 保活 */
+  AI_SESSIONS_TOUCH: 'ai-sessions:touch',
 
   /* ================================================================
    * ACP Agent（acp:*）：协议见 @inkdown/acp，默认运行时 codex-acp

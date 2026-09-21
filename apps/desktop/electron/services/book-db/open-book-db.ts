@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { migrateBookDb } from './schema'
+import { backfillAnchorKeys } from './marks-anchor-backfill'
 
 /**
  * 单书一库打开器。路径与 ocr-cache 同哈希约定：
@@ -29,6 +30,12 @@ export function openBookDb(userDataDir: string, fingerprint: string): DatabaseSy
   mkdirSync(dirname(dbPath), { recursive: true })
   const db = new DatabaseSync(dbPath)
   migrateBookDb(db)
+  // v7 存量行 anchor_key 回填（只碰空键行；稳定后每次 open 只是一次零行查询）
+  try {
+    backfillAnchorKeys(db)
+  } catch {
+    // 回填失败不阻断开库（读写时 insert/update 照写新键；下次 open 再补）
+  }
   openHandles.set(dbPath, db)
   return db
 }

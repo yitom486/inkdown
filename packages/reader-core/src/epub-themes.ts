@@ -10,22 +10,31 @@ const READER_LAYOUT_STYLE_ID = 'reader-layout-styles'
 
 const EPUB_PALETTE = {
   dark: {
-    pageBackground: '#18181b',
-    text: '#d4d4d8',
-    link: '#a1a1aa',
-    linkHover: '#e4e4e7',
-    h1: '#fafafa',
-    h2: '#f4f4f5',
-    h3: '#e4e4e7',
+    pageBackground: '#26272b',
+    text: '#ece9e2',
+    link: '#a8a69f',
+    linkHover: '#ffffff',
+    h1: '#ece9e2',
+    h2: '#e2dfd7',
+    h3: '#d5d1c8',
   },
   light: {
-    pageBackground: '#fafafa',
-    text: '#3f3f46',
-    link: '#71717a',
-    linkHover: '#27272a',
-    h1: '#18181b',
-    h2: '#27272a',
-    h3: '#3f3f46',
+    pageBackground: '#ffffff',
+    text: '#1f1e1b',
+    link: '#524f48',
+    linkHover: '#244638',
+    h1: '#1f1e1b',
+    h2: '#2c2a26',
+    h3: '#3d3a34',
+  },
+  sepia: {
+    pageBackground: '#faf6ed',
+    text: '#2c241b',
+    link: '#5e5142',
+    linkHover: '#2a4e3f',
+    h1: '#2c241b',
+    h2: '#3d3327',
+    h3: '#4e4233',
   },
 } as const
 
@@ -181,7 +190,7 @@ export function buildReaderLayoutCss(
     }
     body p,
     body span:not(.mobi-mark-highlight):not(.mobi-mark-note):not(.reader-mark-highlight):not(.reader-mark-note),
-    body div:not(.mobi-mark-highlight):not(.mobi-mark-note):not(#reader-mark-layer),
+    body div:not(.mobi-mark-highlight):not(.mobi-mark-note):not(#reader-mark-layer):not([data-inkdown-flag]),
     body li,
     body td,
     body th,
@@ -239,7 +248,7 @@ export function buildReaderLayoutCss(
     body a:hover {
       color: ${palette.linkHover} !important;
     }
-    body > div:not(.mobi-mark-highlight):not(.mobi-mark-note):not(#reader-mark-layer),
+    body > div:not(.mobi-mark-highlight):not(.mobi-mark-note):not(#reader-mark-layer):not([data-inkdown-flag]),
     body > section,
     body > article,
     body > main,

@@ -9,10 +9,7 @@ import {
   FileType,
   Folder,
   FolderOpen,
-  FolderPlus,
-  FilePlus,
   Globe,
-  RefreshCw,
   PanelLeftClose,
 } from 'lucide-react'
 import type { FileTreeNode } from '@inkdown/contracts'
@@ -21,6 +18,7 @@ import { writeWorkspacePathsToDataTransfer } from '@/lib/agent/acp-composer'
 import { getParentDir, isAncestorOrSelf, isAncestorPath, isMarkdownPath } from '@/lib/workspace/file-tree-ops'
 import { cn } from '@/lib/utils'
 import type { useFileTreeActions } from '@/hooks/workspace/useFileTreeActions'
+import { FileExplorerOverflowMenu } from '@/components/layout/panels/FileExplorerOverflowMenu'
 import { WebDocSidebarPanel } from '@/components/layout/web-doc/WebDocSidebarPanel'
 
 type TreeActions = ReturnType<typeof useFileTreeActions>
@@ -40,6 +38,20 @@ interface FileExplorerProps {
   onSelectFile: (path: string) => void
   onHideSidebar?: () => void
   treeActions?: TreeActions
+  /** 只读模式（阅读器/在线文档）：⋯ 菜单隐藏文档组 */
+  readOnly?: boolean
+  onOpenFile?: () => void
+  onQuickOpen?: () => void
+  onNewWindow?: () => void
+  onSave?: () => void
+  onSaveAs?: () => void
+  onExportHtml?: () => void
+  onExportPdf?: () => void
+  onOpenSettings?: () => void
+  onOpenErrorLog?: () => void
+  onOpenDevTools?: () => void
+  onAbout?: () => void
+  onQuit?: () => void
 }
 
 function formatWebDocLabel(url: string): string {
@@ -348,6 +360,19 @@ export function FileExplorer({
   onSelectFile,
   onHideSidebar,
   treeActions,
+  readOnly = false,
+  onOpenFile,
+  onQuickOpen,
+  onNewWindow,
+  onSave,
+  onSaveAs,
+  onExportHtml,
+  onExportPdf,
+  onOpenSettings,
+  onOpenErrorLog,
+  onOpenDevTools,
+  onAbout,
+  onQuit,
 }: FileExplorerProps) {
   const rootName = workspaceRoot?.split(/[/\\]/).pop() ?? '工作区'
   const webMode = !workspaceRoot && Boolean(webPageUrl)
@@ -469,28 +494,6 @@ export function FileExplorer({
           <span className="truncate">{webMode ? '在线文档' : '资源管理器'}</span>
         </div>
         <div className="flex items-center gap-1">
-          {workspaceRoot && treeActions ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground"
-                title="新建文件"
-                onClick={() => beginNew('new-file', workspaceRoot)}
-              >
-                <FilePlus className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground"
-                title="新建文件夹"
-                onClick={() => beginNew('new-folder', workspaceRoot)}
-              >
-                <FolderPlus className="size-3.5" />
-              </Button>
-            </>
-          ) : null}
           {onHideSidebar ? (
             <Button
               variant="ghost"
@@ -503,26 +506,27 @@ export function FileExplorer({
               <PanelLeftClose className="size-3.5" />
             </Button>
           ) : null}
-          {workspaceRoot && onRescanWorkspace ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground"
-              disabled={isRescanning}
-              onClick={onRescanWorkspace}
-              title="重新扫描工作区"
-            >
-              <RefreshCw className={`size-3.5 ${isRescanning ? 'animate-spin' : ''}`} />
-            </Button>
-          ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground"
-            onClick={onOpenFolder}
-          >
-            打开
-          </Button>
+          <FileExplorerOverflowMenu
+            canWrite={Boolean(workspaceRoot && treeActions)}
+            readOnly={readOnly}
+            isRescanning={isRescanning}
+            onNewFile={() => workspaceRoot && beginNew('new-file', workspaceRoot)}
+            onNewFolder={() => workspaceRoot && beginNew('new-folder', workspaceRoot)}
+            onOpenFile={onOpenFile ?? (() => undefined)}
+            onOpenFolder={onOpenFolder}
+            onQuickOpen={onQuickOpen}
+            onRescanWorkspace={onRescanWorkspace}
+            onNewWindow={onNewWindow ?? (() => undefined)}
+            onSave={onSave ?? (() => undefined)}
+            onSaveAs={onSaveAs ?? (() => undefined)}
+            onExportHtml={onExportHtml ?? (() => undefined)}
+            onExportPdf={onExportPdf ?? (() => undefined)}
+            onOpenSettings={onOpenSettings ?? (() => undefined)}
+            onOpenErrorLog={onOpenErrorLog ?? (() => undefined)}
+            onOpenDevTools={onOpenDevTools ?? (() => undefined)}
+            onAbout={onAbout ?? (() => undefined)}
+            onQuit={onQuit ?? (() => undefined)}
+          />
         </div>
       </div>
 

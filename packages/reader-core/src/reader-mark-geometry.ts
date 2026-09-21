@@ -45,7 +45,7 @@ export function normalizeRectsInScrollDocument(
   return rects
 }
 
-export function buildMobiMarkStylesCss(theme: 'dark' | 'light'): string {
+export function buildMobiMarkStylesCss(theme: 'dark' | 'light' | 'sepia'): string {
   const highlight = highlightFill('yellow', theme)
   const noteStroke = theme === 'dark' ? '#fbbf24' : '#d97706'
 
@@ -109,7 +109,7 @@ export function buildMobiMarkStylesCss(theme: 'dark' | 'light'): string {
   `
 }
 
-export function injectMobiMarkStyles(doc: Document, theme: 'dark' | 'light'): void {
+export function injectMobiMarkStyles(doc: Document, theme: 'dark' | 'light' | 'sepia'): void {
   const styleId = 'reader-mobi-mark-styles'
   let style = doc.getElementById(styleId) as HTMLStyleElement | null
   if (!style) {

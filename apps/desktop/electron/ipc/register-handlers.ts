@@ -16,7 +16,11 @@ import type {
 } from '@inkdown/contracts'
 import type { RendererErrorPayload } from '@inkdown/contracts'
 import type {
+  AppendFlashcardReviewPayload,
   CreateReadingMarkPayload,
+  ListDueFlashcardsPayload,
+  MarksListByChapterPayload,
+  MarksSearchPayload,
   UpdateReadingMarkPayload,
 } from '@inkdown/contracts'
 import type {
@@ -115,9 +119,13 @@ import type {
 import { applyWindowTitle } from '../window/window-title'
 import { setVerboseRendererLogs } from '../services/runtime-state'
 import {
+  appendFlashcardReview,
   createReadingMark,
   deleteReadingMark,
+  listDueFlashcards,
   listReadingMarks,
+  listReadingMarksByChapter,
+  searchReadingMarks,
   updateReadingMark,
 } from '../services/reading-marks-service'
 import {
@@ -125,6 +133,16 @@ import {
   readAllQuizSessions,
   readQuizSessionsByFile,
 } from '../services/quiz-service'
+import {
+  getAiSession,
+  putAiSession,
+  touchAiSession,
+} from '../services/ai-session-service'
+import type {
+  AiSessionGetPayload,
+  AiSessionPutPayload,
+  AiSessionTouchPayload,
+} from '@inkdown/contracts'
 import type { QuizSessionRecord } from '@inkdown/contracts'
 import {
   discoverWebDocToc,
@@ -563,6 +581,21 @@ export function registerIpcHandlers(): void {
     updateReadingMark(payload),
   )
   ipcMain.handle(IPC.MARKS_DELETE, (_event, id: string) => deleteReadingMark(id))
+  ipcMain.handle(IPC.MARKS_SEARCH, (_event, payload: MarksSearchPayload) =>
+    searchReadingMarks(payload),
+  )
+  ipcMain.handle(IPC.MARKS_LIST_BY_CHAPTER, (_event, payload: MarksListByChapterPayload) =>
+    listReadingMarksByChapter(payload),
+  )
+
+  // --- 记忆卡片复习态 ---
+  ipcMain.handle(IPC.FLASHCARDS_LIST_DUE, (_event, payload: ListDueFlashcardsPayload) =>
+    listDueFlashcards(payload),
+  )
+  ipcMain.handle(
+    IPC.FLASHCARDS_APPEND_REVIEW,
+    (_event, payload: AppendFlashcardReviewPayload) => appendFlashcardReview(payload),
+  )
 
   // --- AI 测验与答题打分记录 (JSONL) ---
   ipcMain.handle(IPC.QUIZ_APPEND_SESSION, (_event, session: QuizSessionRecord) =>
@@ -571,6 +604,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.QUIZ_GET_ALL_SESSIONS, () => readAllQuizSessions())
   ipcMain.handle(IPC.QUIZ_GET_SESSIONS_BY_FILE, (_event, filePath: string) =>
     readQuizSessionsByFile(filePath),
+  )
+
+  // --- AI 会话指针（一书一会话） ---
+  ipcMain.handle(IPC.AI_SESSIONS_GET, (_event, payload: AiSessionGetPayload) =>
+    getAiSession(payload),
+  )
+  ipcMain.handle(IPC.AI_SESSIONS_PUT, (_event, payload: AiSessionPutPayload) =>
+    putAiSession(payload),
+  )
+  ipcMain.handle(IPC.AI_SESSIONS_TOUCH, (_event, payload: AiSessionTouchPayload) =>
+    touchAiSession(payload),
   )
 
   // --- 在线文档 ---

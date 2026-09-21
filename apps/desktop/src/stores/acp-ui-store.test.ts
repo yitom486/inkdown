@@ -324,4 +324,36 @@ describe('acp-ui-store history + plan', () => {
     ])
     expect(plan?.streaming).toBe(false)
   })
+
+  it('hudDisplayMode 支持 docked / floating / capsule 三态流转与划选自动展开', () => {
+    useAcpUiStore.getState().setHudDisplayMode('docked')
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('docked')
+    useAcpUiStore.getState().setHudDisplayMode('floating')
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('floating')
+
+    useAcpUiStore.getState().setHudDisplayMode('capsule')
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('capsule')
+
+    // 划词时调用 openPanelAndFocusComposer 会自动将 capsule 展开为 floating
+    useAcpUiStore.getState().openPanelAndFocusComposer()
+    expect(useAcpUiStore.getState().panelOpen).toBe(true)
+    expect(useAcpUiStore.getState().hudDisplayMode).toBe('floating')
+  })
+
+  it('setChatScroll 按线程记忆滚动，deleteThread 连带清理', () => {
+    const threadId = useAcpUiStore.getState().activeThreadId
+    useAcpUiStore.getState().setChatScroll(threadId, { scrollTop: 123, pinned: false })
+    expect(useAcpUiStore.getState().chatScrollByThread[threadId]).toEqual({
+      scrollTop: 123,
+      pinned: false,
+    })
+    useAcpUiStore.getState().deleteThread(threadId)
+    expect(useAcpUiStore.getState().chatScrollByThread[threadId]).toBeUndefined()
+  })
+
+  it('requestConnect 只发 nonce 信令（连接本身由 useAcpSession 驱动）', () => {
+    expect(useAcpUiStore.getState().connectRequestedAt).toBe(0)
+    useAcpUiStore.getState().requestConnect()
+    expect(useAcpUiStore.getState().connectRequestedAt).toBeGreaterThan(0)
+  })
 })

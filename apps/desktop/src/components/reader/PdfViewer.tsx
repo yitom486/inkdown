@@ -9,11 +9,15 @@ import { PdfPageView } from '@/components/reader/PdfPageView'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { DockedAgentPane } from '@/components/agent/DockedAgentPane'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
+import { DeepAnswerDialog } from '@/components/reader/DeepAnswerDialog'
 import { useReaderBinary } from '@/hooks/reader/useReaderBinary'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
+import { parseNoteToCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { useRosettaImport } from '@/hooks/reader/useRosettaImport'
 import { rosettaApi } from '@/api/rosetta-api'
 import { resolveRosettaTocEntries } from '@/lib/reader/rosetta/rosetta-toc'
@@ -108,6 +112,7 @@ import { openPdfDocument } from '@/lib/reader/pdf/pdf-document'
 import { findPdfMarksAtPoint, findPdfNoteMarkAtPoint } from '@/lib/reader/marks/pdf-reading-marks'
 import { shouldRenderPdfPage } from '@/lib/reader/pdf/pdf-render'
 import { findMarkForSelection, isClickNotDrag } from '@inkdown/reader-core'
+import { toCanonicalChapter } from '@inkdown/reader-core'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   getSelectionToolbarPosition,
@@ -130,6 +135,14 @@ import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf/pdf-agent-search-ga
 import { rosettaPageMissingError } from '@/lib/reader/rosetta/rosetta-read-guard'
 import { iterateRosettaChapterUnits } from '@/lib/agent/context/rosetta-chapter-units'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
+import {
+  revealExcerptOf,
+  runRevealPlan,
+  scrollElementTextIntoView,
+  subscribeRevealMark,
+  type RevealAdapter,
+} from '@/lib/reader/marks/mark-linkage'
 import {
   resolvePdfChapter,
   resolvePdfChapterByPage,
@@ -146,15 +159,20 @@ import type { AppError } from '@inkdown/contracts'
 import type { ReadingMark } from '@inkdown/contracts'
 import { isOk } from '@inkdown/contracts'
 import { toast } from 'sonner'
+import type { AppTheme } from '@/stores/editor-ui-store'
 import { appApi } from '@/api/app-api'
 import '@/styles/pdf-viewer.css'
 
 interface PdfViewerProps {
   filePath: string
-  theme: 'dark' | 'light'
+  theme: AppTheme
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
-export function PdfViewer({ filePath, theme }: PdfViewerProps) {
+export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
+  // docked 侧栏挂载于内框行（工具栏之下、底导航之上），与正文同属左大块
+  const dockedAgentVisible = useIsDockedAgentVisible()
   const containerRef = useRef<HTMLDivElement>(null)
   const pageAnchorRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null)
@@ -232,6 +250,8 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
+  const marksRef = useRef(marks)
+  marksRef.current = marks
   const inspector = useReadingMarkInspector(marks)
   const inspectorRef = useRef(inspector)
   inspectorRef.current = inspector
@@ -1560,6 +1580,9 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     }, 10)
   }, [captureSelectionSnapshot, clearTextSelection, inspector, marks])
 
+  // 目录（供卡片章节归属写入固化与透传；置于创建回调之前，避免 TDZ）
+  const marksToc = useMemo(() => tocFromPdfUnits(outlineUnits), [outlineUnits])
+
   const addPageBookmark = useCallback(async () => {
     if (!fileFingerprint || numPages === 0) {
       throw new Error('无法获取当前页')
@@ -1570,13 +1593,14 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       kind: 'bookmark',
       anchor: { format: 'pdf', page: pageNum },
       label: nav.current?.label ?? `第 ${pageNum} 页`,
+      chapter: toCanonicalChapter({ format: 'pdf', page: pageNum }, marksToc) ?? undefined,
     })
     if (!isOk(result)) {
       throw new Error(result.error.message || '创建书签失败')
     }
     toast.success('已添加书签')
     return result.value
-  }, [createMark, fileFingerprint, filePath, nav.current?.label, numPages, pageNum])
+  }, [createMark, fileFingerprint, filePath, marksToc, nav.current?.label, numPages, pageNum])
 
   const handleSaveAnnotation = useCallback(
     async (note: string, color = DEFAULT_HIGHLIGHT_COLOR) => {
@@ -1593,17 +1617,24 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         text: snapshot.text,
         page: snapshot.page,
       })
+      const meta = parseNoteToCardMeta(note)
       if (existing) {
-        const trimmed = note.trim()
+        const trimmed = meta.note?.trim()
         const result = await updateMark({
           id: existing.id,
           color,
+          chapter: toCanonicalChapter({ format: 'pdf', page: snapshot.page }, marksToc) ?? undefined,
           ...(trimmed
             ? {
                 note: trimmed,
                 kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
               }
             : {}),
+          ...(meta.category ? { category: meta.category } : {}),
+          ...(meta.title ? { title: meta.title } : {}),
+          ...(meta.aiSummary ? { aiSummary: meta.aiSummary } : {}),
+          ...(meta.keyPoints ? { keyPoints: meta.keyPoints } : {}),
+          ...(meta.diagramId ? { diagramId: meta.diagramId } : {}),
         })
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
@@ -1628,8 +1659,17 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           quads: snapshot.quads,
           rects: snapshot.rects,
         },
+        chapter: toCanonicalChapter(
+          { format: 'pdf', page: snapshot.page },
+          marksToc,
+        ) ?? undefined,
         excerpt: snapshot.text,
-        note: note || undefined,
+        note: meta.note,
+        category: meta.category,
+        title: meta.title,
+        aiSummary: meta.aiSummary,
+        keyPoints: meta.keyPoints,
+        diagramId: meta.diagramId,
         color,
       })
 
@@ -1641,7 +1681,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       clearTextSelection()
       return result.value
     },
-    [clearTextSelection, createMark, fileFingerprint, filePath, marks, updateMark],
+    [clearTextSelection, createMark, fileFingerprint, filePath, marks, marksToc, updateMark],
   )
 
   const selectionActions = useReaderSelectionActions({
@@ -1663,6 +1703,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     onHighlightError: (cause) => {
       toast.error(cause instanceof Error ? cause.message : '添加高亮失败')
     },
+    sessionKey: fileFingerprint ?? filePath,
   })
 
   const handleCreateMarkAt = useCallback(
@@ -1722,12 +1763,72 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {
-      if (mark.anchor.format === 'pdf') {
-        jumpToPage(mark.anchor.page)
+      const adapter: RevealAdapter = {
+        tryStep: async (step): Promise<boolean> => {
+          switch (step.type) {
+            case 'pdf-page': {
+              if (!Number.isFinite(step.page) || step.page < 1) return false
+              if (step.page !== pageNumRef.current) jumpToPage(step.page)
+              // 页内精确定位：等页 DOM 就绪后按摘录滚动（同页卡片此前只跳页首，视觉无位移）
+              const text = revealExcerptOf(mark)
+              if (text) {
+                const range = await waitForDom(() => {
+                  const el = pageAnchorRefs.current.get(step.page)
+                  return el ? scrollElementTextIntoView(el, text) : null
+                }, { attempts: 10, delayMs: 100 })
+                if (range) {
+                  try {
+                    const selection = window.getSelection()
+                    selection?.removeAllRanges()
+                    selection?.addRange(range.cloneRange())
+                  } catch {
+                    // 选区失败不否定滚动定位
+                  }
+                }
+              }
+              return true
+            }
+            case 'excerpt': {
+              const el = pageAnchorRefs.current.get(pageNumRef.current)
+              if (!el) return false
+              const range = scrollElementTextIntoView(el, step.text)
+              if (!range) return false
+              try {
+                const selection = window.getSelection()
+                selection?.removeAllRanges()
+                selection?.addRange(range.cloneRange())
+              } catch {
+                return false
+              }
+              return true
+            }
+            default:
+              return false
+          }
+        },
       }
+      void runRevealPlan(mark, adapter).then((result) => {
+        if (!result.ok) {
+          reportRuntimeError(new Error(`reveal miss (${result.miss.reason})`), {
+            source: 'mark-linkage',
+            op: 'reveal',
+            silentToast: true,
+            filePath,
+            data: { markId: mark.id, reason: result.miss.reason },
+          })
+        }
+      })
     },
-    [jumpToPage],
+    [filePath, jumpToPage],
   )
+
+  // 悬浮窗卡片 reveal 请求：同文件 mark 才执行（跨文件请求忽略）。
+  useEffect(() => {
+    return subscribeRevealMark((id) => {
+      const mark = marksRef.current.find((item) => item.id === id)
+      if (mark) handleSelectMark(mark)
+    })
+  }, [handleSelectMark])
 
   const handleDeleteMark = useCallback(
     async (mark: ReadingMark) => {
@@ -1784,7 +1885,6 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
     setMarkTooltipPos(null)
   }, [])
 
-  const marksToc = useMemo(() => tocFromPdfUnits(outlineUnits), [outlineUnits])
   const currentPdfChapter = useMemo(
     () => resolvePdfChapterByPage(pageNum, marksToc),
     [marksToc, pageNum],
@@ -2187,8 +2287,18 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         }
       />
 
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航收进正文列 */}
+      <div className="flex min-h-0 flex-1">
       <ReaderContentShell
         filePath={filePath}
+        readingFraction={numPages > 1 ? (pageNum - 1) / (numPages - 1) : 0}
+        footerNav={
+          <ReaderFooterNav
+            ready={ready}
+            onPrevious={() => nav.previousIndex >= 0 && goToFlatIndex(nav.previousIndex)}
+            onNext={() => nav.nextIndex >= 0 && goToFlatIndex(nav.nextIndex)}
+          />
+        }
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -2197,7 +2307,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
         onExportNotes={handleExportNotes}
         onExportAnkiCards={handleExportAnkiCards}
         marksToc={marksToc}
-        marksCurrentChapterKey={currentPdfChapter.key}
+        marksCurrentChapterKey={currentPdfChapter.matchKey ?? currentPdfChapter.key}
         marksResolveChapter={resolvePdfChapter}
         tocOpen={tocOpen}
         units={outlineUnits}
@@ -2236,7 +2346,7 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
       >
         <div
           ref={containerRef}
-          className={`h-full min-h-0 overflow-auto ${theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-100'}`}
+          className="h-full min-h-0 overflow-auto bg-[var(--color-bg-base)]"
           onMouseMove={handlePdfMarkHoverMove}
           onMouseLeave={handlePdfMarkHoverLeave}
         >
@@ -2299,13 +2409,11 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
             )}
           </PaneErrorBoundary>
         </div>
-      </ReaderContentShell>
-
-      <ReaderFooterNav
-        ready={ready}
-        onPrevious={() => nav.previousIndex >= 0 && goToFlatIndex(nav.previousIndex)}
-        onNext={() => nav.nextIndex >= 0 && goToFlatIndex(nav.nextIndex)}
-      />
+        </ReaderContentShell>
+        {dockedAgentVisible ? (
+          <DockedAgentPane workspaceRoot={workspaceRoot} />
+        ) : null}
+      </div>
 
       {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
@@ -2343,9 +2451,21 @@ export function PdfViewer({ filePath, theme }: PdfViewerProps) {
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onAskDeepAnswer={selectionActions.askDeepAnswer}
+          deepAnswerPending={selectionActions.deepAnswerPending}
+          onGenerateCardPreset={selectionActions.generateAiCard}
+          cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
+
+      <DeepAnswerDialog
+        data={selectionActions.deepAnswer}
+        pending={selectionActions.deepAnswerPending}
+        onClose={selectionActions.dismissDeepAnswer}
+        onRetry={selectionActions.retryDeepAnswer}
+        onSaveAsNote={selectionActions.saveDeepAnswerAsNote}
+      />
 
       <AnnotationNoteDialog
         open={noteDialogOpen}

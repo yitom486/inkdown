@@ -16,14 +16,24 @@ import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
+import { useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { DockedAgentPane } from '@/components/agent/DockedAgentPane'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
+import { DeepAnswerDialog } from '@/components/reader/DeepAnswerDialog'
 import { useWebDocPage } from '@/hooks/reader/useWebDocPage'
 import { useWebDocToc } from '@/hooks/reader/useWebDocToc'
 import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
+import { parseNoteToCardMeta } from '@/lib/reader/marks/resolve-card-meta'
+import {
+  runRevealPlan,
+  scrollElementTextIntoView,
+  subscribeRevealMark,
+  type RevealAdapter,
+} from '@/lib/reader/marks/mark-linkage'
 import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
@@ -62,6 +72,7 @@ import {
 } from '@/lib/reader/web-doc/web-doc-link'
 import { logWebDoc } from '@/lib/reader/web-doc/web-doc-debug'
 import { findWebDocFlatIndex, normalizeWebDocNavUrl, webDocTocEntriesToReaderUnits } from '@inkdown/reader-core'
+import { toCanonicalChapter } from '@inkdown/reader-core'
 import {
   iterateWebDocUnits,
   primeWebDocAgentTextCache,
@@ -92,6 +103,7 @@ import {
   tocFromWebUnits,
 } from '@inkdown/reader-core'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
@@ -108,14 +120,20 @@ export interface WebDocViewerHandle {
   selectHeading: (heading: MarkdownHeading) => void
 }
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 interface WebDocViewerProps {
   pageUrl: string
-  theme: 'dark' | 'light'
+  theme: AppTheme
   onOutlineChange?: (state: EditorOutlineState) => void
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
 export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
-  function WebDocViewer({ pageUrl, theme, onOutlineChange }, ref) {
+  function WebDocViewer({ pageUrl, theme, onOutlineChange, workspaceRoot }, ref) {
+  // docked 侧栏挂载于内框行（工具栏之下、底导航之上），与正文同属左大块
+  const dockedAgentVisible = useIsDockedAgentVisible()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const saveProgressTimerRef = useRef<number | null>(null)
   const themeRef = useRef(theme)
@@ -384,6 +402,10 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
       kind: 'bookmark',
       anchor: { format: 'web', url: normalizedPageUrl },
       label: nav.current?.label ?? data?.content.title ?? '书签',
+      chapter: toCanonicalChapter(
+        { format: 'web', url: normalizedPageUrl },
+        tocFromWebUnits(units),
+      ) ?? undefined,
     })
     if (!isOk(result)) {
       throw new Error(result.error.message || '创建书签失败')
@@ -404,17 +426,27 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         text: snapshot.text,
         pageUrl: normalizedPageUrl,
       })
+      const meta = parseNoteToCardMeta(note)
       if (existing) {
-        const trimmed = note.trim()
+        const trimmed = meta.note?.trim()
         const result = await updateMark({
           id: existing.id,
           color,
+          chapter: toCanonicalChapter(
+            { format: 'web', url: normalizedPageUrl },
+            tocFromWebUnits(units),
+          ) ?? undefined,
           ...(trimmed
             ? {
                 note: trimmed,
                 kind: existing.kind === 'highlight' ? ('highlight' as const) : ('note' as const),
               }
             : {}),
+          ...(meta.category ? { category: meta.category } : {}),
+          ...(meta.title ? { title: meta.title } : {}),
+          ...(meta.aiSummary ? { aiSummary: meta.aiSummary } : {}),
+          ...(meta.keyPoints ? { keyPoints: meta.keyPoints } : {}),
+          ...(meta.diagramId ? { diagramId: meta.diagramId } : {}),
         })
         if (!isOk(result)) {
           throw new Error(result.error.message || '更新标记失败')
@@ -436,8 +468,17 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           selectedText: snapshot.text,
           rects: snapshot.rects,
         },
+        chapter: toCanonicalChapter(
+          { format: 'web', url: normalizedPageUrl },
+          tocFromWebUnits(units),
+        ) ?? undefined,
         excerpt: snapshot.text,
-        note: note || undefined,
+        note: meta.note,
+        category: meta.category,
+        title: meta.title,
+        aiSummary: meta.aiSummary,
+        keyPoints: meta.keyPoints,
+        diagramId: meta.diagramId,
         color,
       })
 
@@ -466,6 +507,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
     },
     showPendingHighlight: showPendingSelectionHighlight,
     saveHighlight: handleSaveAnnotation,
+    sessionKey: fileFingerprint ?? documentId,
   })
 
   const handleCreateMarkAt = useCallback(
@@ -952,12 +994,64 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {
-      if (mark.anchor.format === 'web') {
-        navigateToUrl(mark.anchor.url)
+      const adapter: RevealAdapter = {
+        tryStep: (step): boolean => {
+          switch (step.type) {
+            case 'web-url': {
+              // 跨页才导航；同页落到 heading/excerpt  intra 定位（此前同页也整页重载）
+              if (step.url !== pageUrlRef.current) {
+                navigateToUrl(step.url)
+                return true
+              }
+              if (step.headingId) return scrollToWebDocFragment(step.headingId)
+              return false
+            }
+            case 'excerpt': {
+              let doc: Document | null | undefined
+              try {
+                doc = iframeRef.current?.contentDocument
+              } catch {
+                return false
+              }
+              if (!doc?.body) return false
+              const range = scrollElementTextIntoView(doc.body, step.text)
+              if (!range) return false
+              try {
+                const selection = doc.defaultView?.getSelection()
+                selection?.removeAllRanges()
+                selection?.addRange(range.cloneRange())
+              } catch {
+                return false
+              }
+              return true
+            }
+            default:
+              return false
+          }
+        },
       }
+      void runRevealPlan(mark, adapter).then((result) => {
+        if (!result.ok) {
+          reportRuntimeError(new Error(`reveal miss (${result.miss.reason})`), {
+            source: 'mark-linkage',
+            op: 'reveal',
+            silentToast: true,
+            filePath: documentId,
+            data: { markId: mark.id, reason: result.miss.reason },
+          })
+        }
+      })
     },
-    [navigateToUrl],
+    [documentId, navigateToUrl, scrollToWebDocFragment],
   )
+
+  // 悬浮窗卡片 reveal 请求：同文档 mark 才执行（跨文档请求忽略）。
+  useEffect(() => {
+    return subscribeRevealMark((id) => {
+      const mark = marksRef.current.find((item) => item.id === id)
+      if (mark) handleSelectMark(mark)
+    })
+  }, [handleSelectMark])
 
   const handleDeleteMark = useCallback(
     async (mark: ReadingMark) => {
@@ -989,7 +1083,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const readerHost = (
     <PaneErrorBoundary name="在线文档" filePath={pageUrl}>
-      <div className={cn('web-doc-viewer-host relative h-full min-h-0', `theme-${theme}`)} data-theme={theme}>
+      <div className={cn('web-doc-viewer-host relative h-full min-h-0 bg-[var(--color-bg-base)]', `theme-${theme}`)} data-theme={theme}>
         {isLoading && !data ? (
           <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
@@ -1042,8 +1136,13 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         }
       />
 
-      <ReaderContentShell
-        bookTitle={displayTitle}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航收进正文列 */}
+      <div className="flex min-h-0 flex-1">
+        <ReaderContentShell
+          bookTitle={displayTitle}
+        footerNav={
+          <ReaderFooterNav ready={ready && units.length > 0} onPrevious={goPrevious} onNext={goNext} />
+        }
         marksOpen={marksOpen}
         marks={marks}
         onSelectMark={handleSelectMark}
@@ -1061,9 +1160,11 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         onSelectUnit={(unit) => navigateToUrl(unit.href)}
       >
         {readerHost}
-      </ReaderContentShell>
-
-      <ReaderFooterNav ready={ready && units.length > 0} onPrevious={goPrevious} onNext={goNext} />
+        </ReaderContentShell>
+        {dockedAgentVisible ? (
+          <DockedAgentPane workspaceRoot={workspaceRoot} />
+        ) : null}
+      </div>
 
       {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
@@ -1104,9 +1205,21 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
           onHighlight={selectionActions.handleHighlight}
           onAddToChat={selectionActions.handleAddToChat}
           onAskAgent={selectionActions.handleAskAgent}
+          onAskDeepAnswer={selectionActions.askDeepAnswer}
+          deepAnswerPending={selectionActions.deepAnswerPending}
+          onGenerateCardPreset={selectionActions.generateAiCard}
+          cardPresetPending={selectionActions.aiCardPending}
           onDismiss={selectionActions.handleDismiss}
         />
       ) : null}
+
+      <DeepAnswerDialog
+        data={selectionActions.deepAnswer}
+        pending={selectionActions.deepAnswerPending}
+        onClose={selectionActions.dismissDeepAnswer}
+        onRetry={selectionActions.retryDeepAnswer}
+        onSaveAsNote={selectionActions.saveDeepAnswerAsNote}
+      />
 
       <AnnotationNoteDialog
         open={noteDialogOpen}

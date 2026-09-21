@@ -16,14 +16,11 @@ import {
 import { resetTurnContextTracker } from '@/lib/agent/context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
-import { STREAM_FLUSH_MS, StreamCoalescer, isCoalescableAgentChunk } from '@/lib/agent/stream-coalescer'
+import { flushAcpStreamBuffer, registerStreamAuthReset } from '@/lib/agent/acp-stream-host'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
 import { selectActiveThreadAgentSessionId } from '@/stores/acp-ui-store'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
-import { useAnnotationAgentStore, annotationOwnsSessionId } from '@/stores/annotation-agent-store'
-import { quizOwnsSessionId, accumulateQuizSessionUpdate, isQuizPrompting } from '@/lib/quiz/quiz-acp-session'
-import { tocOwnsSessionId, accumulateTocSessionUpdate, isTocPrompting } from '@/lib/agent/toc-ai-session'
 
 function activeThreadAgentSessionId(): string | undefined {
   return selectActiveThreadAgentSessionId(useAcpUiStore.getState())
@@ -92,86 +89,24 @@ export function useAcpSession(workspaceRoot?: string) {
     connectionEpochRef.current += 1
     return connectionEpochRef.current
   }, [])
-
-  // 接收缓冲提到 hook 级：结束/cancel/断开路径必须先冲刷再 finishStreaming，
+  // 接收冲刷走应用级宿主（`acp-stream-host`）；各发送/取消/断开路径先冲刷再收尾，
   // 否则尾部 chunk 可能丢失或错序
-  const chunkBufferRef = useRef<{ coalescer: StreamCoalescer; timer: ReturnType<typeof setTimeout> | null } | null>(null)
   const flushBufferedChunks = useCallback(() => {
-    const buf = chunkBufferRef.current
-    if (!buf) return
-    if (buf.timer) {
-      clearTimeout(buf.timer)
-      buf.timer = null
-    }
-    const text = buf.coalescer.flush()
-    if (text) {
-      useAcpUiStore.getState().applySessionUpdate({
-        sessionUpdate: 'agent_message_chunk',
-        content: [{ type: 'text', text }],
-      })
-    }
+    flushAcpStreamBuffer()
   }, [])
 
   useEffect(() => {
-    // 正文 chunk 先缓冲、按帧合并提交；工具/权限/结束等保留顺序、立即冲刷
-    const buf = { coalescer: new StreamCoalescer(), timer: null as ReturnType<typeof setTimeout> | null }
-    chunkBufferRef.current = buf
-    const scheduleFlush = () => {
-      if (buf.timer) return
-      buf.timer = setTimeout(() => flushBufferedChunks(), STREAM_FLUSH_MS)
-    }
-    const offStatus = acpApi.onStatusChanged((event) => {
-      setStatus(event.status, event.errorMessage)
-      if (event.sessionId) setSession(event.sessionId)
-      if (event.status === 'disconnected') {
-        // 清「当前连接」；勿清 thread.agentSessionIds（setSession(null) 已按运行时保留）
-        setSession(null)
-        flushBufferedChunks()
-        finishStreaming()
+    // 本实例只登记认证弹窗清理回调；IPC 订阅的生命周期归应用宿主，
+    // 与本组件挂载与否无关（见 `acp-stream-host.ts`）
+    return registerStreamAuthReset({
+      resetAuthUi: () => {
         setAuthOpen(false)
         setAuthMethods([])
         setAuthRuntimeId(null)
-        // 批注：保留 agentSessionIds，仅标记 stale，重连后 session/load 续上
-        useAnnotationAgentStore.getState().markSessionsStale()
-      }
+      },
     })
-    const offUpdate = acpApi.onSessionUpdate((event) => {
-      const ann = useAnnotationAgentStore.getState()
-      // 按 sessionId 分流：批注副会话绝不进右侧时间线
-      if (annotationOwnsSessionId(ann, event.sessionId)) {
-        ann.applySessionUpdate(event.update)
-        return
-      }
-      // 兼容：副会话刚创建、尚未 bind 前的短窗口
-      if (ann.capturing) {
-        ann.applySessionUpdate(event.update)
-        return
-      }
-      // 按 sessionId 分流：考官副会话或出题判卷期间绝不进右侧时间线
-      if (quizOwnsSessionId(event.sessionId) || isQuizPrompting()) {
-        accumulateQuizSessionUpdate(event.sessionId, event.update)
-        return
-      }
-      // 按 sessionId 分流：目录 AI 整理副会话绝不进右侧时间线
-      if (tocOwnsSessionId(event.sessionId) || isTocPrompting()) {
-        accumulateTocSessionUpdate(event.sessionId, event.update)
-        return
-      }
-      const chunkText = isCoalescableAgentChunk(event.update)
-      if (chunkText) {
-        chunkBufferRef.current?.coalescer.push(chunkText)
-        scheduleFlush()
-        return
-      }
-      flushBufferedChunks()
-      applySessionUpdate(event.update)
-    })
-    return () => {
-      flushBufferedChunks()
-      offStatus()
-      offUpdate()
-    }
-  }, [applySessionUpdate, finishStreaming, flushBufferedChunks, setSession, setStatus])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const finalizeConnected = useCallback(
     async (result: AcpConnectReadyResult, prefix: string) => {
@@ -268,6 +203,18 @@ export function useAcpSession(workspaceRoot?: string) {
     setStatus,
     workspaceRoot,
   ])
+
+  // 子会话连接请求信令（制卡/测验）：nonce 变化且当前未连/出错时，
+  // 走完整 connect（含认证弹窗与 epoch 防线）。认证仍需用户点一下——
+  // 这是唯一需要主 UI 出面的环节，子会话自己绝不碰 auth 状态机。
+  const connectRequestedAt = useAcpUiStore((s) => s.connectRequestedAt)
+  useEffect(() => {
+    if (!connectRequestedAt) return
+    const statusNow = useAcpUiStore.getState().status
+    if (statusNow === 'disconnected' || statusNow === 'error') {
+      void connect()
+    }
+  }, [connectRequestedAt, connect])
 
   const completeAuth = useCallback(
     async (methodId: string) => {

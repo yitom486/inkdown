@@ -52,9 +52,13 @@
 }
 
 .markdown-preview blockquote {
-  border-left: 3px solid var(--border);
-  padding-left: 1rem;
-  color: var(--muted-foreground);
+  border-left: 3px solid var(--color-accent-primary, var(--primary));
+  background: var(--color-accent-subtle, color-mix(in oklch, var(--primary) 6%, transparent));
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 0.5rem 1rem;
+  margin: 0.85rem 0;
+  color: var(--color-text-secondary, var(--muted-foreground));
+  font-style: italic;
 }
 
 .markdown-preview code {

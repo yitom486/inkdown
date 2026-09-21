@@ -26,6 +26,7 @@ import { useAppMeta, useFileOperations } from '@/hooks/workspace/useFileOperatio
 import { useSyncProgressBridge } from '@/hooks/reader/useSyncProgressBridge'
 import { useAcpPermissionIngest } from '@/hooks/agent/useAcpPermissionIngest'
 import { useInkdownSnapshotHost } from '@/hooks/agent/useInkdownSnapshotHost'
+import { useAcpStreamHost } from '@/hooks/agent/useAcpStreamHost'
 import { pickLatestRecoverableDraft } from '@/lib/editor/draft-utils'
 import { resolveStartupRestoreTarget } from '@/lib/workspace/workspace-session'
 import { reportAppError, reportUnknownError } from '@/lib/workspace/report-error'
@@ -53,7 +54,6 @@ function App() {
   const webDocMainRef = useRef<WebDocWorkspaceMainHandle>(null)
   const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
-  const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
   const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
   const autoSaveEnabled = useAppSettingsStore((state) => state.autoSaveEnabled)
   const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
@@ -126,6 +126,9 @@ function App() {
   useSyncProgressBridge()
   useAcpPermissionIngest()
   useInkdownSnapshotHost()
+  // ACP 流式推送宿主：生命周期跟应用走（useAcpStreamHost），
+  // 绝不跟 Agent 面板的挂载走——双面板挂载曾导致同一 chunk 进两遍时间线（复读）
+  useAcpStreamHost()
 
   const handleAutoSave = useCallback(async () => {
     if (!isMarkdownDocument || !filePath || !isDirty || isFileBusy) return
@@ -361,15 +364,17 @@ function App() {
         return
       }
 
+      // 新建窗口：Ctrl+Shift+N（VS Code 同键位；Ctrl+N 留空，避免误触开窗）
+      if (mod && event.shiftKey && !event.altKey && (key === 'n' || code === 'KeyN')) {
+        event.preventDefault()
+        appApi.newWindow()
+        return
+      }
+
       if (!mod || event.shiftKey || event.altKey) return
       if (key === ',' || code === 'Comma') {
         event.preventDefault()
         setSettingsOpen(true)
-        return
-      }
-      if (key === 'n' || code === 'KeyN') {
-        event.preventDefault()
-        appApi.newWindow()
         return
       }
       if (key === 'p' || code === 'KeyP') {
@@ -452,11 +457,10 @@ function App() {
 
   return (
     <>
-      <Toaster theme={theme} richColors closeButton position="top-right" />
+      <Toaster theme={theme === 'dark' ? 'dark' : 'light'} richColors closeButton position="top-right" />
       <UpdatePromptHost />
 
       <WorkspaceShell
-        theme={theme}
         workspaceRoot={workspaceRoot}
         fileTree={fileTree}
         activeFilePath={filePath}
@@ -471,14 +475,10 @@ function App() {
         onOpenFile={() => void openFile()}
         onOpenFolder={() => void openFolder()}
         onQuickOpen={handleToggleQuickOpen}
-        onFind={handleOpenFind}
-        onReplace={handleOpenReplace}
         onOpenWebDoc={handleOpenWebDoc}
         onRescanWorkspace={() => void rescanWorkspace()}
         isRescanningWorkspace={isFileBusy}
         onSelectFile={(path) => void openFileFromTree(path)}
-        onOpenRecentFile={(path) => void openRecentFile(path)}
-        onToggleTheme={toggleTheme}
         onSave={() => void saveFile()}
         onSaveAs={() => void saveFileAs()}
         onExportHtml={handleExportHtml}
@@ -489,6 +489,7 @@ function App() {
         onAbout={() => setAboutOpen(true)}
         onNewWindow={() => appApi.newWindow()}
         onQuit={quitApp}
+        suppressDockedAgent={(isReader && !!readerDocumentKind) || (isWebDoc && !!webPageUrl)}
       >
         {isWebDoc && webPageUrl ? (
           <WebDocWorkspaceMain
@@ -498,12 +499,14 @@ function App() {
             recentUrls={recentWebUrls}
             onNavigateUrl={handleOpenWebDoc}
             onOutlineChange={handleOutlineChange}
+            workspaceRoot={workspaceRoot}
           />
         ) : isReader && readerDocumentKind && filePath ? (
           <ReaderWorkspaceMain
             filePath={filePath}
             documentKind={readerDocumentKind}
             theme={theme}
+            workspaceRoot={workspaceRoot}
           />
         ) : (
           <EditorWorkspaceMain

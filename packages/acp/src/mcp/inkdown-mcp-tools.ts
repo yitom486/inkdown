@@ -616,10 +616,11 @@ export async function callInkdownMcpTool(
         }
       }
 
-      // 清洗可能意外包含的 ```mermaid 围栏
+      // 清洗可能意外包含的 ```mermaid 围栏、首行纯 mermaid\n 以及包裹的反引号
       const cleanedCode = mermaidCode
-        .replace(/^```(?:mermaid)?\s*/i, '')
-        .replace(/```\s*$/, '')
+        .replace(/^```(?:mermaid)?[\r\n]*/i, '')
+        .replace(/^mermaid[\r\n]+/i, '')
+        .replace(/[\r\n]*```\s*$/i, '')
         .trim()
 
       const visualSteps = Array.isArray(args?.visualSteps) ? args.visualSteps : undefined
@@ -674,15 +675,52 @@ export async function callInkdownMcpTool(
         }
 
         const hits: RawHit[] = Array.isArray(parsed.hits) ? parsed.hits : []
+
+        interface AggregatedChapter {
+          chapter: string
+          flatIndex?: number
+          occurrences: number
+          excerpt: string
+          excerpts: string[]
+        }
+
+        const chapterMap = new Map<string | number, AggregatedChapter>()
+
+        for (const hit of hits) {
+          const key = hit.flatIndex != null ? hit.flatIndex : (hit.title ?? '未知章节')
+          const hitCount = typeof hit.count === 'number' && hit.count > 0 ? hit.count : 1
+          const snippet = hit.snippet?.trim() || ''
+
+          const existing = chapterMap.get(key)
+          if (!existing) {
+            chapterMap.set(key, {
+              chapter: hit.title ?? '未知章节',
+              ...(hit.flatIndex != null ? { flatIndex: hit.flatIndex } : {}),
+              occurrences: hitCount,
+              excerpt: snippet,
+              excerpts: snippet ? [snippet] : [],
+            })
+          } else {
+            existing.occurrences += hitCount
+            if (snippet && existing.excerpts.length < maxPerChapter && !existing.excerpts.includes(snippet)) {
+              existing.excerpts.push(snippet)
+            }
+            if (!existing.excerpt && snippet) {
+              existing.excerpt = snippet
+            }
+          }
+        }
+
+        const chapterDistribution = Array.from(chapterMap.values()).slice(0, 15)
+        const totalOccurrences =
+          typeof parsed.totalMatches === 'number'
+            ? parsed.totalMatches
+            : chapterDistribution.reduce((acc, c) => acc + c.occurrences, 0)
+
         const result = {
           entity: entityName.trim(),
-          totalOccurrences: parsed.totalMatches ?? hits.length,
-          chapterDistribution: hits.slice(0, 15).map((h) => ({
-            chapter: h.title ?? '未知章节',
-            flatIndex: h.flatIndex,
-            occurrences: h.count ?? 1,
-            excerpt: h.snippet ?? '',
-          })),
+          totalOccurrences,
+          chapterDistribution,
         }
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
       } catch {

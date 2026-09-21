@@ -168,9 +168,23 @@ describe('MCP read-only annotations and concurrency', () => {
     expect(parsed.visualSteps).toHaveLength(1)
     expect(parsed.visualSteps[0].action).toBe('initialize')
     expect(parsed.diagramId).toMatch(/^diag-/)
+
+    // 验证首行纯 mermaid\n 以及多余空白的清洗
+    const mermaidPrefix = await callInkdownMcpTool(
+      'inkdown_generate_diagram',
+      context(),
+      {
+        diagramType: 'flowchart',
+        title: '流程图',
+        mermaidCode: 'mermaid\nflowchart TD\n  A-->B\n',
+      },
+    )
+    expect(mermaidPrefix.isError).toBeUndefined()
+    const parsedPrefix = JSON.parse(mermaidPrefix.content[0]!.text)
+    expect(parsedPrefix.mermaidCode).toBe('flowchart TD\n  A-->B')
   })
 
-  it('inkdown_cross_reference 跨章节聚合检索命中', async () => {
+  it('inkdown_cross_reference 跨章节聚合检索命中并按章节合并与截断', async () => {
     const tooShort = await callInkdownMcpTool(
       'inkdown_cross_reference',
       context(),
@@ -181,10 +195,12 @@ describe('MCP read-only annotations and concurrency', () => {
     const readSnapshot = vi.fn(async () =>
       JSON.stringify({
         query: 'protocolVersion',
-        totalMatches: 5,
+        totalMatches: 8,
         hits: [
           { title: 'Chapter 1', flatIndex: 0, count: 2, snippet: 'negotiate protocolVersion' },
-          { title: 'Chapter 2', flatIndex: 1, count: 3, snippet: 'latest protocolVersion supported' },
+          { title: 'Chapter 1', flatIndex: 0, count: 3, snippet: 'second hit protocolVersion' },
+          { title: 'Chapter 1', flatIndex: 0, count: 1, snippet: 'third hit protocolVersion' },
+          { title: 'Chapter 2', flatIndex: 1, count: 2, snippet: 'latest protocolVersion supported' },
         ],
       }),
     )
@@ -192,20 +208,26 @@ describe('MCP read-only annotations and concurrency', () => {
     const valid = await callInkdownMcpTool(
       'inkdown_cross_reference',
       context(readSnapshot),
-      { entityName: 'protocolVersion' },
+      { entityName: 'protocolVersion', maxPerChapter: 2 },
     )
     expect(readSnapshot).toHaveBeenCalledWith('search', { query: 'protocolVersion' })
     expect(valid.isError).toBeUndefined()
     const parsed = JSON.parse(valid.content[0]!.text)
     expect(parsed.entity).toBe('protocolVersion')
-    expect(parsed.totalOccurrences).toBe(5)
+    expect(parsed.totalOccurrences).toBe(8)
     expect(parsed.chapterDistribution).toHaveLength(2)
-    expect(parsed.chapterDistribution[0]).toEqual({
-      chapter: 'Chapter 1',
-      flatIndex: 0,
-      occurrences: 2,
-      excerpt: 'negotiate protocolVersion',
-    })
+    // 验证 Chapter 1 的同章节 hit 正确累加为 2 + 3 + 1 = 6，且 excerpts 被 maxPerChapter 截断为 2
+    expect(parsed.chapterDistribution[0].chapter).toBe('Chapter 1')
+    expect(parsed.chapterDistribution[0].flatIndex).toBe(0)
+    expect(parsed.chapterDistribution[0].occurrences).toBe(6)
+    expect(parsed.chapterDistribution[0].excerpt).toBe('negotiate protocolVersion')
+    expect(parsed.chapterDistribution[0].excerpts).toEqual([
+      'negotiate protocolVersion',
+      'second hit protocolVersion',
+    ])
+    // Chapter 2
+    expect(parsed.chapterDistribution[1].occurrences).toBe(2)
+    expect(parsed.chapterDistribution[1].excerpts).toHaveLength(1)
   })
 
   it('independent read-only calls execute concurrently when the client sends them concurrently', async () => {

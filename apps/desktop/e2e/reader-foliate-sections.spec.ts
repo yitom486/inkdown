@@ -12,7 +12,7 @@ import { writeFoliateSectionsWorkspace } from './helpers/ebook-fixture'
  * 点击后等意图锁过期再小幅滚轮，细化同步上报实际所见章节。
  */
 async function openSectionsBook(window: Page): Promise<void> {
-  await window.getByRole('button', { name: '文件', exact: true }).click()
+  await window.getByRole('button',   { name: '更多操作', exact: true }).click()
   await window.getByRole('menuitem', { name: /打开文件夹/ }).click()
   await expect(window.getByText('sections-book.epub').first()).toBeVisible({ timeout: 15_000 })
 
@@ -37,7 +37,7 @@ test.describe('foliate 大部头分片', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
       await openSectionsBook(window)

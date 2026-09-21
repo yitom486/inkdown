@@ -19,6 +19,31 @@ export type ReadingMarkKind = 'bookmark' | 'highlight' | 'note'
 export type ReadingDocumentFormat = 'pdf' | 'epub' | 'mobi' | 'web'
 
 /**
+ * 章节键（品牌类型）：目录 matchKey 的归一化形式，是跨阅读器比较章节归属的
+ * 唯一合法载体。禁止用裸字符串比较章节（曾因此出现 `3:text/x` vs `text/x`
+ * 恒不等，导致本章过滤全灭；见单测 `resolve-mark-chapter.test.ts` 回归项）。
+ * 构造只能走 `toChapterKey()`。
+ */
+export type ChapterKey = string & { readonly __chapterKeyBrand: unique symbol }
+
+export function toChapterKey(raw: string): ChapterKey {
+  return raw as ChapterKey
+}
+
+/**
+ * 卡片章节归属（写入时固化）：创建卡片的那一刻由创建方按当时目录解析一次，
+ * 此后所有消费方（过滤/致灰/出处行/排序）只读该字段，不再现场 resolve。
+ * 解析失败记 null（脏卡可查可清，不丢失）；DB 时代对应 `marks.chapter_key`
+ *（主联动键）+ `marks.chapter_json`（含 label/index 的原样 round-trip）。
+ */
+export interface MarkChapterRef {
+  key: ChapterKey
+  label: string
+  /** 目录下标；回退项为 -1 */
+  index: number
+}
+
+/**
  * V1 兼容的渲染层归一化矩形。
  *
  * 当前 PDF 选择实现从 `Range.getClientRects()` 读取它，并相对于
@@ -167,6 +192,8 @@ export interface WebReadingAnchor {
 
 export type ReadingAnchor = PdfReadingAnchor | EpubReadingAnchor | MobiReadingAnchor | WebReadingAnchor
 
+export type ReadingMarkCategory = 'concept' | 'quote' | 'method' | 'diagram' | 'question'
+
 export interface ReadingMark {
   id: string
   filePath: string
@@ -177,6 +204,15 @@ export interface ReadingMark {
   note?: string
   excerpt?: string
   color?: string
+  category?: ReadingMarkCategory
+  title?: string
+  aiSummary?: string
+  keyPoints?: string[]
+  tags?: string[]
+  collapsed?: boolean
+  diagramId?: string
+  /** 写入时固化的章节归属；缺省（老数据）由消费方回落运行时解析 */
+  chapter?: MarkChapterRef | null
   createdAt: number
   updatedAt: number
 }
@@ -190,6 +226,15 @@ export interface CreateReadingMarkPayload {
   note?: string
   excerpt?: string
   color?: string
+  category?: ReadingMarkCategory
+  title?: string
+  aiSummary?: string
+  keyPoints?: string[]
+  tags?: string[]
+  collapsed?: boolean
+  diagramId?: string
+  /** 创建方按当时目录解析的章节归属；缺省由消费方回落运行时解析 */
+  chapter?: MarkChapterRef | null
 }
 
 export interface UpdateReadingMarkPayload {
@@ -198,4 +243,61 @@ export interface UpdateReadingMarkPayload {
   label?: string
   note?: string
   color?: string
+  category?: ReadingMarkCategory
+  title?: string
+  aiSummary?: string
+  keyPoints?: string[]
+  tags?: string[]
+  collapsed?: boolean
+  diagramId?: string
+  /** 锚点变更时由调用方重算后传入；缺省保持原值 */
+  chapter?: MarkChapterRef | null
+}
+
+/** `marks:search` 请求：本书内全文搜（标题/摘录/批注/AI 洞见走 FTS） */
+export interface MarksSearchPayload {
+  filePath: string
+  query: string
+}
+
+/**
+ * `marks:list-by-chapter` 请求：按章查卡（走 `chapter_key` 索引）。
+ * `chapterKeys` 传当前章的 key + matchKey（去空，`toChapterKey` 品牌值亦可）；
+ * 服务端额外捎带 `chapter_key = ''` 的未固化卡，调用方按 MarginaliaBar
+ * 同规则（固化优先、缺失回落运行时解析）窄化，保证 DB/file 双后端输出一致。
+ */
+export interface MarksListByChapterPayload {
+  filePath: string
+  chapterKeys: string[]
+}
+
+/** 锚点 href/id 的归一化（与 reader-core normalizeLoadKey 同构；contracts 层零依赖，内联实现）。 */
+function normalizeAnchorRef(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return raw.split('#')[0]?.toLowerCase() ?? raw.toLowerCase()
+}
+
+/**
+ * 锚点规范键：同一段正文的卡片共享同一键，是"一卡一段、一段多卡"绑定关系
+ * 在 DB 的体现（`marks.anchor_key` 抽取列 + 索引，去重/联查走索引）。
+ * - epub：href（归一化）+ cfiRange/cfi
+ * - pdf：page + begin/end（V1 无语义位置时只有 page，同页多卡同键、创建时间区分）
+ * - mobi：chapterId（归一化）+ cfi
+ * - web：url + headingId
+ * 纯函数、无品牌类型，方便 SQL 回填与 TS 写入两侧对口径（见 marks-anchor-binding 单测）。
+ */
+export function canonicalAnchorKey(anchor: ReadingAnchor): string {
+  switch (anchor.format) {
+    case 'epub':
+      return `epub|${normalizeAnchorRef(anchor.href)}|${anchor.cfiRange ?? anchor.cfi ?? ''}`
+    case 'pdf': {
+      const begin = anchor.begin ? `${anchor.begin.itemIndex},${anchor.begin.offset}` : ''
+      const end = anchor.end ? `${anchor.end.itemIndex},${anchor.end.offset}` : ''
+      return `pdf|${anchor.page}|${begin}-${end}`
+    }
+    case 'mobi':
+      return `mobi|${normalizeAnchorRef(anchor.chapterId)}|${anchor.cfiRange ?? anchor.cfi ?? ''}`
+    case 'web':
+      return `web|${anchor.url}|${anchor.headingId ?? ''}`
+  }
 }

@@ -53,7 +53,7 @@ import {
   isJsonRpcRequest,
   JsonRpcTransport,
 } from '@inkdown/acp'
-import { disposeAllAcpProcesses, spawnAcpProcess, type SpawnedAcpProcess } from './process-manager'
+import { disposeAllAcpProcesses, getLiveAcpProcess, isSpawnedAcpProcessAlive, spawnAcpProcess, type SpawnedAcpProcess } from './process-manager'
 import { ensureBunForCommand, mapSpawnErrorToAppError } from '../bun-runtime'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -108,6 +108,31 @@ let snapshotRequestSeq = 0
 let inkdownMcp: InkdownMcpServerHandle | null = null
 /** 目录副会话专用端点句柄（懒启动，随 disconnect 关闭） */
 let tocMcp: InkdownMcpServerHandle | null = null
+/** 已绑过退出监听的温进程（复用时刷新代际，避免监听器堆积） */
+let exitWatch: { handle: SpawnedAcpProcess; listener: () => void } | null = null
+
+/**
+ * 给温进程绑定单次退出监听。每次复用都刷新闭包里的代际，
+ * 旧监听先摘掉，保证同时只有一个有效监听。
+ */
+function watchProcessExit(handle: SpawnedAcpProcess, gen: number): void {
+  if (exitWatch) {
+    exitWatch.handle.child.off('exit', exitWatch.listener)
+    exitWatch = null
+  }
+  const listener = () => {
+    if (gen !== connectGeneration) return
+    if (
+      status === 'connected' ||
+      status === 'connecting' ||
+      status === 'awaiting_auth'
+    ) {
+      void disconnectAcp('Agent 进程已退出')
+    }
+  }
+  handle.child.once('exit', listener)
+  exitWatch = { handle, listener }
+}
 
 function mcpServerEntry(handle: InkdownMcpServerHandle, name: string): unknown[] {
   return [
@@ -382,12 +407,19 @@ export async function connectAcp(payload: {
     resumeSessionId: payload.resumeSessionId,
   })
 
-  await disconnectAcp()
-  if (gen !== connectGeneration) {
-    return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
+  // 常驻复用：同 runtime 有存活温进程时跳过冷启动（省掉 PyInstaller 解压 +
+  // Python 导包，antigravity 一次冷启动可达数十秒）。温进程是否健康由后面的
+  // initialize 握手验证；若握手失败，catch 会杀掉毒进程，下次点击走冷启动自愈。
+  const warmHandle = getLiveAcpProcess(runtime.id)
+  if (warmHandle) {
+    // 剥离旧会话状态但保温进程：旧 transport 只摘监听，不关 stdio。
+    await disconnectAcp()
+    processHandle = warmHandle
+  } else {
+    await disconnectAcp(undefined, { killProcess: true })
+    // 给旧进程/stdio 一点时间收尾，降低「传输已销毁」竞态
+    await new Promise((resolve) => setTimeout(resolve, 80))
   }
-  // 给旧进程/stdio 一点时间收尾，降低「传输已销毁」竞态
-  await new Promise((resolve) => setTimeout(resolve, 80))
   if (gen !== connectGeneration) {
     return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
   }
@@ -441,6 +473,16 @@ export async function connectAcp(payload: {
   }
 
   try {
+    // 冷启动才做 runtime 级副作用（如 antigravity 清扫 _MEI/.tmp 残留）；
+    // 温进程复用路径跳过，追求毫秒级重连。
+    if (!warmHandle) {
+      await adapter.onColdStart?.()
+    }
+    if (warmHandle) {
+      // 温进程复用：跳过 spawn，直接用原 stdio 建新传输并走握手
+      processHandle = warmHandle
+      watchProcessExit(warmHandle, gen)
+    } else {
     processHandle = spawnAcpProcess({
       runtime,
       cwd,
@@ -465,6 +507,7 @@ export async function connectAcp(payload: {
         }
       },
     })
+    }
 
     if (gen !== connectGeneration) {
       processHandle.kill()
@@ -531,7 +574,8 @@ export async function connectAcp(payload: {
     const negotiated =
       typeof initResult.protocolVersion === 'number' ? initResult.protocolVersion : PROTOCOL_VERSION
     if (negotiated !== PROTOCOL_VERSION) {
-      await disconnectAcp(`协议版本不兼容: Agent=${negotiated}`)
+      // 协议对不上：该进程服务不了我们，杀掉避免温复用毒进程
+      await disconnectAcp(`协议版本不兼容: Agent=${negotiated}`, { killProcess: true })
       return err({
         code: 'ACP_PROTOCOL_ERROR',
         message: `协议版本不兼容（需要 ${PROTOCOL_VERSION}，得到 ${negotiated}）`,
@@ -611,7 +655,8 @@ export async function connectAcp(payload: {
     if (gen !== connectGeneration) {
       return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
     }
-    await disconnectAcp()
+    // 未知异常：进程状态不可信，杀掉避免下次复用毒进程
+    await disconnectAcp(undefined, { killProcess: true })
     setStatus('error', error instanceof Error ? error.message : String(error))
     return err(toProtocolError(error, '连接 ACP Agent 失败'))
   }
@@ -698,7 +743,10 @@ export async function loadAcpSession(payload: {
   }
 }
 
-export async function disconnectAcp(reason?: string): Promise<Result<void, AppError>> {
+export async function disconnectAcp(
+  reason?: string,
+  opts?: { killProcess?: boolean },
+): Promise<Result<void, AppError>> {
   for (const [, pending] of pendingPermissions) {
     pending.resolve({ outcome: 'cancelled' })
   }
@@ -709,8 +757,18 @@ export async function disconnectAcp(reason?: string): Promise<Result<void, AppEr
   transport?.dispose()
   transport = null
 
-  processHandle?.kill()
-  processHandle = null
+  if (processHandle) {
+    // 已死句柄一律回收；存活进程默认保温（killProcess=false），下次同 runtime
+    // 连接直接复用，省掉冷启动。只有明确可疑或 App 退出时才整树杀掉。
+    if (opts?.killProcess || !isSpawnedAcpProcessAlive(processHandle)) {
+      if (exitWatch?.handle === processHandle) {
+        processHandle.child.off('exit', exitWatch.listener)
+        exitWatch = null
+      }
+      processHandle.kill()
+      processHandle = null
+    }
+  }
 
   await stopInkdownMcpServer()
   inkdownMcp = null
@@ -855,7 +913,8 @@ export function respondAcpPermission(
 }
 
 export function disposeAllAcp(): void {
-  void disconnectAcp()
+  // App 退出：整树杀干净，不保温
+  void disconnectAcp(undefined, { killProcess: true })
   disposeAllAcpProcesses()
 }
 

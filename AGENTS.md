@@ -114,18 +114,6 @@ Zustand selector 返回对象时必须 `useShallow`：见 `.cursor/rules/zustand
 - 准则与架构 → 本文件 + `.cursor/rules/`
 - 可执行清单 → 本地 `.plan/*.md`（gitignore，勿提交）
 - 不擅自新建计划文件；优先追加现有路线图
-
-## 与 inkdown-ui 原型项目的组件联动机制（⚠️ 阶段性联调说明：工作树合并回 master 时必须删除）
-
-- **原型工程目录**：`D:\project\js\Electron\inkdown-ui`（独立 Vite + React 19 + Tailwind v4 视觉与交互实验室，端口 3000）
-- **当前开发工作树**：`D:\project\js\Electron\inkdown-hud`（分支 `feat/ai-reader-hud`）
-- **核心联动与迁移策略**：
-  1. **组件逐级吸收**：从 `inkdown-ui/src/components/` 逐步将打磨成熟的 UI 模块抽离适配到 `apps/desktop/src/components/agent/` 和阅读器：
-     - `FloatingAIHud.tsx` → 桌面端伴读 HUD 模式（与传统侧栏 Docked 模式一键切换）；
-     - `DiagramViewer.tsx` → 对应 `inkdown_generate_diagram` 的交互式时序/流转卡片（带 `visualSteps` 步骤展开、穿透高亮与 Mermaid 钉入正文）；
-     - `MarginaliaBar.tsx` → 承接 `packages/annotations` 批注、重点提议与 AI 提炼卡；
-     - `SelectionBubble.tsx` → 桌面端划选就地气泡栏（追问、图解、重点）。
-  2. **设计系统与色彩体系对齐**：全面采用 CSS 自定义属性（Variables）与 Tailwind v4 语义化 Tokens，严禁十六进制硬编码，确保 Dark / Light / 护眼模式无缝兼容。
-  3. **契约保障**：数据源与交互回调严格对接 `@inkdown/acp` 真实工具流（`inkdown_generate_diagram`、`inkdown_cross_reference`、`inkdown_propose_mark`），禁用前端盲目 mock。
-- **清理约束**：当 `feat/ai-reader-hud` 完成开发并经全量测试验证合并回 `master` 主线时，**必须将本段「与 inkdown-ui 原型项目的组件联动机制」完整自 `AGENTS.md` 中删除**，确保主线文档保持干净纯粹。
+- 执行总序 → `.plan/00-roadmap.md`：UI 联动先行，落库紧随，库能力收尾；
+  全部完成并合并回 `master` 后，按该文件末尾「完成后删除」清理计划文档
 

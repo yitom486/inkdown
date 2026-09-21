@@ -63,6 +63,8 @@ describe('book-db schema', () => {
     // 退回 v3 形态：删列 + 版本号回拨，再造旧行
     db.exec('ALTER TABLE blocks DROP COLUMN source')
     db.exec('ALTER TABLE blocks DROP COLUMN extract_version')
+    db.exec('DROP INDEX IF EXISTS idx_marks_anchor_key')
+    db.exec('ALTER TABLE marks DROP COLUMN anchor_key')
     db.exec('PRAGMA user_version = 3')
     db.prepare(
       `INSERT INTO books
@@ -81,7 +83,7 @@ describe('book-db schema', () => {
        VALUES (?, NULL, -1, ?, 'paragraph', ?, ?, ?, ?)`,
     ).run(bookId, 1, 'OCR 段落', 2, '{"x":1,"y":2,"width":3,"height":4}', 0.9)
     const migrated = migrateBookDb(db)
-    expect(migrated).toEqual({ migrated: true, version: 4 })
+    expect(migrated).toEqual({ migrated: true, version: BOOK_DB_SCHEMA_VERSION })
     const rows = db
       .prepare('SELECT content AS c, source AS s FROM blocks ORDER BY id')
       .all() as { c: string; s: string }[]

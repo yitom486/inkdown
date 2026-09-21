@@ -1,4 +1,4 @@
-import { Files } from 'lucide-react'
+import { BookOpen, BookmarkCheck, Files } from 'lucide-react'
 import { AgentMark } from '@/components/agent/AgentMark'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -8,14 +8,18 @@ interface ActivityBarProps {
   agentPanelOpen?: boolean
   onToggleSidebar: () => void
   onToggleAgentPanel?: () => void
+  onOpenLibrary?: () => void
+  onOpenNotes?: () => void
 }
 
-/** 左侧活动栏：资源管理器 + Agent（VS Code / Cursor：活动栏在左，聊天停靠右侧） */
+/** 左侧活动栏：资源管理器 + 书库 + 札记 + Agent */
 export function ActivityBar({
   sidebarVisible,
   agentPanelOpen = false,
   onToggleSidebar,
   onToggleAgentPanel,
+  onOpenLibrary,
+  onOpenNotes,
 }: ActivityBarProps) {
   return (
     <aside
@@ -37,6 +41,34 @@ export function ActivityBar({
       >
         <Files className="size-5" />
       </Button>
+
+      {onOpenLibrary ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-10 rounded-none border-l-2 border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          aria-label="馆藏书卷与在线规范"
+          title="馆藏书卷与在线规范 (书库抽屉)"
+          onClick={onOpenLibrary}
+        >
+          <BookOpen className="size-5" />
+        </Button>
+      ) : null}
+
+      {onOpenNotes ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-10 rounded-none border-l-2 border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          aria-label="全书札记中心"
+          title="全书札记中心与闪卡"
+          onClick={onOpenNotes}
+        >
+          <BookmarkCheck className="size-5" />
+        </Button>
+      ) : null}
       {onToggleAgentPanel ? (
         <Button
           type="button"

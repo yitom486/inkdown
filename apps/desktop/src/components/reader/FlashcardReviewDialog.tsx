@@ -32,6 +32,8 @@ export interface FlashcardReviewDialogProps {
   cards: Flashcard[]
   bookTitle: string
   onNavigateToMark?: (markId: string) => void
+  /** 评分落盘（UI批）：调用方持久化，失败不打断复习流（本地评分态照常推进） */
+  onRate?: (cardId: string, rating: FlashcardReviewRating) => void
 }
 
 export function FlashcardReviewDialog({
@@ -40,6 +42,7 @@ export function FlashcardReviewDialog({
   cards,
   bookTitle,
   onNavigateToMark,
+  onRate,
 }: FlashcardReviewDialogProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
@@ -82,9 +85,10 @@ export function FlashcardReviewDialog({
     (rating: FlashcardReviewRating) => {
       if (!currentCard) return
       setRatings((prev) => ({ ...prev, [currentCard.id]: rating }))
+      onRate?.(currentCard.id, rating)
       handleNext()
     },
-    [currentCard, handleNext],
+    [currentCard, handleNext, onRate],
   )
 
   // 全键盘快捷键调度（空格翻转、数字键打分、左右键切卡）

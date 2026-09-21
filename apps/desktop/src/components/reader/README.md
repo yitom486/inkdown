@@ -15,7 +15,16 @@
 | `ReaderTypographyControls` | 阅读排版控件（字号 / 行距） |
 | `ReadingMarkPanel` / `ReadingMarkPopover` | 书签/批注列表（目录层级、类型筛选、当前章展开；含导出）与点击编辑浮层 |
 | `FlashcardReviewDialog` | 沉浸式 3D 闪卡复习弹窗（挖空遮罩、正反翻转、原书一键秒回与记忆打分） |
-| `SelectionToolbar` | 划选工具条（划重点、问 Agent、批注等） |
+| `SelectionToolbar` | 划选工具条（划重点、问 Agent、批注、AI 制卡预设菜单等） |
+| `SelectionBubble` | 就地划选悬浮微晶气泡（解释/摘要/制卡/对比/追问五大动作、莫兰迪柔光高亮与复制） |
+| `CardPresetMenu` | AI 制卡预设菜单内容（6 方向点选 + 更多要求次级入口，工具条与气泡共用） |
+| `DeepAnswerMenu` | 一键深度问答菜单内容（三方向点即直答 + composer 追问入口保留） |
+| `DeepAnswerDialog` | 一键深度问答对话框（同会话直答选段、不进右侧时间线，可存为卡片批注） |
+| `MarginaliaBar` | 右侧知识卡片轨（分类药丸筛选、全部/单项折叠、AI 智能制卡、时序图联动） |
+| `KnowledgeCardItem` | 知识卡片单项（概念/引用/方法/图谱/思考五类微晶卡片、单行与多功能态切换、AI 润色） |
+| `LibraryDrawer` | 馆藏书卷与在线规范侧拉抽屉（本地书库、在线规范快速切换、检索） |
+| `NotesDrawer` | 全书札记中心与闪卡抽屉（全书卡片聚合、关键词筛选、导出与一键闪卡复习） |
+| `BracketConnector` | 细线分支抱合括号引线（正文锚点与知识卡片间的发丝级微光连线） |
 | `AnnotationNoteDialog` | 批注输入；可选 AI 意图/结果 chip 与草稿确认 |
 | `BodyWatermarkPreviewDialog` | 正文水印清洗预览 + 二次确认应用（只读计数/样例 + 签名展示，确认态展示统计/签名，确认后调应用通道，成功展示备份路径/结果；确认前不写库；另有自定义水印文本仅预览区，无应用入口） |
 | `PdfBookSearch` | 手动正文搜索（工具栏紧凑触发按钮 + 独立浮层结果面板；已入库 PDF 走 `queryBook(kind='search')` 点击跳页，EPUB/MOBI/AZW3 走内存 `iterateUnits` 点击按章节跳章，扫描未入库仍提示建索引；≥3 字才请求，输入即清旧结果，最多 20 条；逻辑在 `src/lib/reader/pdf/pdf-book-search`） |

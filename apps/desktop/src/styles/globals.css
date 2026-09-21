@@ -2,12 +2,15 @@
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant sepia (&:is(.sepia *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* shadcn 核心语义颜色桥接 */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -29,55 +32,274 @@
   --color-sidebar: var(--sidebar);
   --color-editor: var(--editor);
   --color-preview: var(--preview);
+
+  /* inkdown-ui 视觉体系核心命名 */
+  --color-bg-base: var(--color-bg-base);
+  --color-bg-surface: var(--color-bg-surface);
+  --color-bg-elevated: var(--color-bg-elevated);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-accent-primary: var(--color-accent-primary);
+  --color-accent-subtle: var(--color-accent-subtle);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-secondary: var(--color-accent-secondary);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-border-hover: var(--color-border-hover);
+  --color-border-strong: var(--color-border-strong);
 }
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --editor: oklch(1 0 0);
-  --preview: oklch(0.99 0 0);
+
+  /* 纸张白 · 人文雅致 (Paper White - Default) */
+  --color-bg-base: #f6f4ee;          /* 温暖柔和的浅燕麦纸底色 */
+  --color-bg-surface: #ffffff;       /* 纯净书籍页面与卡片 */
+  --color-bg-elevated: #edeae2;      /* 浅暖石灰 / 侧边栏与浮层底色 */
+  --color-hud-bg: rgba(255, 255, 255, 0.98);
+  --color-hud-border: rgba(0, 0, 0, 0.08);
+  --color-border-subtle: rgba(0, 0, 0, 0.07);
+  --color-border-hover: rgba(0, 0, 0, 0.14);
+  --color-border-strong: rgba(0, 0, 0, 0.22);
+  
+  --color-text-primary: #1f1e1b;     /* 极深墨褐字色 - Deep ink charcoal */
+  --color-text-secondary: #524f48;   /* 焦茶石墨灰 */
+  --color-text-muted: #88847c;       /* 次要信息暖灰 */
+  
+  --color-accent-primary: #244638;   /* 沉稳墨绿 (Forest Slate) */
+  --color-accent-subtle: rgba(36, 70, 56, 0.08);
+  --color-accent-hover: #1c382d;
+  --color-accent-secondary: #8c5a3c; /* 暖杏檀木金 */
+
+  /* 实体划线高亮：柔和荧光笔原色 */
+  --color-mark-yellow: #fbe89b;
+  --color-mark-yellow-text: #1f1e1b;
+  --color-mark-green: #d8ebd9;
+  --color-mark-green-text: #234932;
+  --color-mark-blue: #d9e7f2;
+  --color-mark-blue-text: #224560;
+  --color-mark-purple: #eddff2;
+  --color-mark-purple-text: #593266;
+
+  /* 五类知识卡片配色 (柔和学术与工程色系) */
+  --card-concept-bg: #ebf2f7;
+  --card-concept-text: #2e5166;
+  --card-quote-bg: #fdf3eb;
+  --card-quote-text: #7d4a2b;
+  --card-method-bg: #eff6f1;
+  --card-method-text: #2b583b;
+  --card-diagram-bg: #f5f2f7;
+  --card-diagram-text: #524060;
+  --card-question-bg: #fef8eb;
+  --card-question-text: #8c5a2b;
+
+  /* 映射 shadcn UI 基础变量 */
+  --background: #f6f4ee;
+  --foreground: #1f1e1b;
+  --card: #ffffff;
+  --card-foreground: #1f1e1b;
+  --popover: #edeae2;
+  --popover-foreground: #1f1e1b;
+  --primary: #244638;
+  --primary-foreground: #ffffff;
+  --secondary: #edeae2;
+  --secondary-foreground: #1f1e1b;
+  --muted: #edeae2;
+  --muted-foreground: #88847c;
+  --accent: rgba(36, 70, 56, 0.08);
+  --accent-foreground: #244638;
+  --destructive: #b91c1c;
+  --border: rgba(0, 0, 0, 0.09);
+  --input: rgba(0, 0, 0, 0.09);
+  --ring: #244638;
+  --sidebar: #edeae2;
+  --editor: #ffffff;
+  --preview: #ffffff;
+
+  color-scheme: light;
+}
+
+.light {
+  /* 纸张白与 :root 完全对齐 */
+  --color-bg-base: #f6f4ee;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #edeae2;
+  --color-hud-bg: rgba(255, 255, 255, 0.98);
+  --color-hud-border: rgba(0, 0, 0, 0.08);
+  --color-border-subtle: rgba(0, 0, 0, 0.07);
+  --color-border-hover: rgba(0, 0, 0, 0.14);
+  --color-border-strong: rgba(0, 0, 0, 0.22);
+  
+  --color-text-primary: #1f1e1b;
+  --color-text-secondary: #524f48;
+  --color-text-muted: #88847c;
+  
+  --color-accent-primary: #244638;
+  --color-accent-subtle: rgba(36, 70, 56, 0.08);
+  --color-accent-hover: #1c382d;
+  --color-accent-secondary: #8c5a3c;
+
+  --color-mark-yellow: #fbe89b;
+  --color-mark-yellow-text: #1f1e1b;
+  --color-mark-green: #d8ebd9;
+  --color-mark-green-text: #234932;
+  --color-mark-blue: #d9e7f2;
+  --color-mark-blue-text: #224560;
+  --color-mark-purple: #eddff2;
+  --color-mark-purple-text: #593266;
+
+  --background: #f6f4ee;
+  --foreground: #1f1e1b;
+  --card: #ffffff;
+  --card-foreground: #1f1e1b;
+  --popover: #edeae2;
+  --popover-foreground: #1f1e1b;
+  --primary: #244638;
+  --primary-foreground: #ffffff;
+  --secondary: #edeae2;
+  --secondary-foreground: #1f1e1b;
+  --muted: #edeae2;
+  --muted-foreground: #88847c;
+  --accent: rgba(36, 70, 56, 0.08);
+  --accent-foreground: #244638;
+  --border: rgba(0, 0, 0, 0.09);
+  --input: rgba(0, 0, 0, 0.09);
+  --ring: #244638;
+  --sidebar: #edeae2;
+  --editor: #ffffff;
+  --preview: #ffffff;
+
+  color-scheme: light;
+}
+
+.sepia {
+  /* 护眼暖 · 温润麦香 (Warm Linen / Sepia) */
+  --color-bg-base: #ede4d3;
+  --color-bg-surface: #faf6ed;
+  --color-bg-elevated: #e4dac5;
+  --color-hud-bg: rgba(250, 246, 237, 0.98);
+  --color-hud-border: rgba(60, 48, 35, 0.10);
+  --color-border-subtle: rgba(60, 48, 35, 0.08);
+  --color-border-hover: rgba(60, 48, 35, 0.15);
+  --color-border-strong: rgba(60, 48, 35, 0.24);
+  
+  --color-text-primary: #2c241b;
+  --color-text-secondary: #5e5142;
+  --color-text-muted: #8a7b69;
+  
+  --color-accent-primary: #2a4e3f;
+  --color-accent-subtle: rgba(42, 78, 63, 0.10);
+  --color-accent-hover: #203d31;
+  --color-accent-secondary: #8f5a34;
+
+  --color-mark-yellow: #f5dc85;
+  --color-mark-yellow-text: #2c241b;
+  --color-mark-green: #d2e4d4;
+  --color-mark-green-text: #234731;
+  --color-mark-blue: #d4e1ec;
+  --color-mark-blue-text: #203f56;
+  --color-mark-purple: #e7d8ec;
+  --color-mark-purple-text: #4e2e59;
+
+  --card-concept-bg: #e1ecf4;
+  --card-concept-text: #26475b;
+  --card-quote-bg: #f8ece2;
+  --card-quote-text: #6f4226;
+  --card-method-bg: #e5efe8;
+  --card-method-text: #254d33;
+  --card-diagram-bg: #ebe5ef;
+  --card-diagram-text: #493856;
+  --card-question-bg: #f7f1e2;
+  --card-question-text: #7b4f25;
+
+  --background: #ede4d3;
+  --foreground: #2c241b;
+  --card: #faf6ed;
+  --card-foreground: #2c241b;
+  --popover: #e4dac5;
+  --popover-foreground: #2c241b;
+  --primary: #2a4e3f;
+  --primary-foreground: #ffffff;
+  --secondary: #e4dac5;
+  --secondary-foreground: #2c241b;
+  --muted: #e4dac5;
+  --muted-foreground: #8a7b69;
+  --accent: rgba(42, 78, 63, 0.10);
+  --accent-foreground: #2a4e3f;
+  --destructive: #b91c1c;
+  --border: rgba(60, 48, 35, 0.12);
+  --input: rgba(60, 48, 35, 0.14);
+  --ring: #2a4e3f;
+  --sidebar: #e4dac5;
+  --editor: #faf6ed;
+  --preview: #faf6ed;
+
+  color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.17 0.005 286);
-  --foreground: oklch(0.93 0 0);
-  --card: oklch(0.2 0.005 286);
-  --card-foreground: oklch(0.93 0 0);
-  --popover: oklch(0.22 0.006 286);
-  --popover-foreground: oklch(0.93 0 0);
-  --primary: oklch(0.72 0.14 250);
-  --primary-foreground: oklch(0.15 0.01 286);
-  --secondary: oklch(0.25 0.006 286);
-  --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.24 0.006 286);
-  --muted-foreground: oklch(0.65 0.01 286);
-  --accent: oklch(0.28 0.008 286);
-  --accent-foreground: oklch(0.93 0 0);
-  --destructive: oklch(0.65 0.2 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.55 0.1 250);
-  --sidebar: oklch(0.14 0.005 286);
-  --editor: oklch(0.16 0.005 286);
-  --preview: oklch(0.18 0.005 286);
+  /* 深色 · 沉稳石墨岩灰 (Deep Slate Charcoal) */
+  --color-bg-base: #1e1f22;          /* 哑光岩灰，杜绝刺目纯黑 */
+  --color-bg-surface: #26272b;       /* 暗石墨面板与卡片 */
+  --color-bg-elevated: #2e3035;      /* 浮层与栏目底色 */
+  --color-hud-bg: rgba(38, 39, 43, 0.98);
+  --color-hud-border: rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+  
+  --color-text-primary: #ece9e2;     /* 柔和羊绒白，温润不刺眼 */
+  --color-text-secondary: #a8a69f;   /* 次级银灰 */
+  --color-text-muted: #73716a;       /* 暗岩灰 */
+  
+  --color-accent-primary: #528c74;   /* 护眼青苔绿 */
+  --color-accent-subtle: rgba(82, 140, 116, 0.16);
+  --color-accent-hover: #63a388;
+  --color-accent-secondary: #c99363; /* 暗金古铜 */
+
+  --color-mark-yellow: rgba(251, 232, 155, 0.28);
+  --color-mark-yellow-text: #fbe89b;
+  --color-mark-green: rgba(134, 186, 152, 0.26);
+  --color-mark-green-text: #a8e0be;
+  --color-mark-blue: rgba(110, 155, 195, 0.26);
+  --color-mark-blue-text: #b6dbfa;
+  --color-mark-purple: rgba(180, 135, 195, 0.26);
+  --color-mark-purple-text: #e6c5f2;
+
+  --card-concept-bg: #1a252f;
+  --card-concept-text: #89b4d4;
+  --card-quote-bg: #291e17;
+  --card-quote-text: #d99f79;
+  --card-method-bg: #18281d;
+  --card-method-text: #82c496;
+  --card-diagram-bg: #241c2a;
+  --card-diagram-text: #bca0cf;
+  --card-question-bg: #2a2217;
+  --card-question-text: #dfa872;
+
+  --background: #1e1f22;
+  --foreground: #ece9e2;
+  --card: #26272b;
+  --card-foreground: #ece9e2;
+  --popover: #2e3035;
+  --popover-foreground: #ece9e2;
+  --primary: #528c74;
+  --primary-foreground: #1e1f22;
+  --secondary: #2e3035;
+  --secondary-foreground: #ece9e2;
+  --muted: #2e3035;
+  --muted-foreground: #a8a69f;
+  --accent: rgba(82, 140, 116, 0.16);
+  --accent-foreground: #ece9e2;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #528c74;
+  --sidebar: #26272b;
+  --editor: #26272b;
+  --preview: #26272b;
+
+  color-scheme: dark;
 }
 
 @layer base {
@@ -85,12 +307,88 @@
     @apply border-border;
   }
 
+  html {
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+  }
+
   body {
-    @apply bg-background text-foreground antialiased;
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    letter-spacing: -0.01em;
     font-family:
-      'Segoe UI',
-      system-ui,
       -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      'PingFang SC',
+      'Hiragino Sans GB',
+      'Microsoft YaHei',
       sans-serif;
   }
+}
+
+/* 人文雅致经典微动效：锚点定位与呼吸发光 */
+@keyframes anchorPulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(36, 70, 56, 0.4);
+    background-color: rgba(251, 232, 155, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(36, 70, 56, 0);
+    background-color: rgba(251, 232, 155, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(36, 70, 56, 0);
+    background-color: rgba(251, 232, 155, 0.35);
+  }
+}
+
+.animate-anchor-glow {
+  animation: anchorPulseGlow 1.2s ease-in-out 2;
+  border-radius: 4px;
+  outline: 1.5px solid var(--color-accent-primary);
+}
+
+@keyframes ink-spread {
+  0% {
+    background-color: rgba(36, 70, 56, 0.25);
+    box-shadow: 0 0 0 1px rgba(36, 70, 56, 0.4), 0 0 16px rgba(36, 70, 56, 0.3);
+  }
+  60% {
+    background-color: rgba(36, 70, 56, 0.12);
+    box-shadow: 0 0 0 2px rgba(36, 70, 56, 0.2), 0 0 8px rgba(36, 70, 56, 0.15);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.ink-anchor-pulse {
+  animation: ink-spread 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.ink-seal-text {
+  font-family: 'Songti SC', 'SimSun', 'Noto Serif SC', serif;
+}
+
+/* 典雅书籍极简滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(150, 140, 130, 0.24);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(150, 140, 130, 0.42);
 }

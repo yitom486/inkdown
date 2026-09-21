@@ -5,16 +5,20 @@ import { WebDocAddressBar } from '@/components/layout/web-doc/WebDocAddressBar'
 import type { EditorOutlineState } from '@/components/layout/main/EditorWorkspaceMain'
 import type { MarkdownHeading } from '@/lib/editor/markdown-headings'
 
+import type { AppTheme } from '@/stores/editor-ui-store'
+
 export interface WebDocWorkspaceMainHandle {
   selectHeading: (heading: MarkdownHeading) => void
 }
 
 interface WebDocWorkspaceMainProps {
   pageUrl: string
-  theme: 'dark' | 'light'
+  theme: AppTheme
   recentUrls?: string[]
   onNavigateUrl: (url: string) => void
   onOutlineChange?: (state: EditorOutlineState) => void
+  /** 透传给内框 docked 侧栏，供 Agent 会话 cwd */
+  workspaceRoot?: string
 }
 
 // 在线文档 Viewer 按需加载：katex/阅读抽取链只在打开 URL 时进 chunk，首屏不付成本。
@@ -25,7 +29,7 @@ const WebDocViewer = lazy(() =>
 
 export const WebDocWorkspaceMain = forwardRef<WebDocWorkspaceMainHandle, WebDocWorkspaceMainProps>(
   function WebDocWorkspaceMain(
-    { pageUrl, theme, recentUrls = [], onNavigateUrl, onOutlineChange },
+    { pageUrl, theme, recentUrls = [], onNavigateUrl, onOutlineChange, workspaceRoot },
     ref,
   ) {
     const viewerRef = useRef<WebDocViewerHandle>(null)
@@ -58,6 +62,7 @@ export const WebDocWorkspaceMain = forwardRef<WebDocWorkspaceMainHandle, WebDocW
               pageUrl={pageUrl}
               theme={theme}
               onOutlineChange={onOutlineChange}
+              workspaceRoot={workspaceRoot}
             />
           </Suspense>
         </main>

@@ -134,6 +134,12 @@ const electronAPI: ElectronAPI = {
   createReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_CREATE, payload),
   updateReadingMark: (payload) => ipcRenderer.invoke(IPC.MARKS_UPDATE, payload),
   deleteReadingMark: (id: string) => ipcRenderer.invoke(IPC.MARKS_DELETE, id),
+  searchReadingMarks: (payload) => ipcRenderer.invoke(IPC.MARKS_SEARCH, payload),
+  listReadingMarksByChapter: (payload) =>
+    ipcRenderer.invoke(IPC.MARKS_LIST_BY_CHAPTER, payload),
+  listDueFlashcards: (payload) => ipcRenderer.invoke(IPC.FLASHCARDS_LIST_DUE, payload),
+  appendFlashcardReview: (payload) =>
+    ipcRenderer.invoke(IPC.FLASHCARDS_APPEND_REVIEW, payload),
   listAcpRuntimes: () => ipcRenderer.invoke(IPC.ACP_LIST_RUNTIMES),
   acpAuthPreflight: (payload) => ipcRenderer.invoke(IPC.ACP_AUTH_PREFLIGHT, payload),
   acpConnect: (payload) => ipcRenderer.invoke(IPC.ACP_CONNECT, payload),
@@ -248,6 +254,9 @@ const electronAPI: ElectronAPI = {
   getAllQuizSessions: () => ipcRenderer.invoke(IPC.QUIZ_GET_ALL_SESSIONS),
   getQuizSessionsByFile: (filePath: string) =>
     ipcRenderer.invoke(IPC.QUIZ_GET_SESSIONS_BY_FILE, filePath),
+  getAiSession: (payload) => ipcRenderer.invoke(IPC.AI_SESSIONS_GET, payload),
+  putAiSession: (payload) => ipcRenderer.invoke(IPC.AI_SESSIONS_PUT, payload),
+  touchAiSession: (payload) => ipcRenderer.invoke(IPC.AI_SESSIONS_TOUCH, payload),
   getSyncConfig: () => ipcRenderer.invoke(IPC.SYNC_GET_CONFIG),
   saveSyncConfig: (config) => ipcRenderer.invoke(IPC.SYNC_SAVE_CONFIG, config),
   testSyncConnection: (config) => ipcRenderer.invoke(IPC.SYNC_TEST_CONNECTION, config),

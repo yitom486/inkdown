@@ -1,10 +1,16 @@
 import { acpApi } from '@/api/acp-api'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 import { isOk } from '@inkdown/contracts'
-import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { buildAcpPromptBlocks, type ComposerAttachment } from '@/lib/agent/acp-composer'
-import { extractTextFromContent } from '@/stores/acp-chat-types'
 import type { AcpConfigOption } from '@inkdown/contracts'
+import {
+  accumulateSubsessionUpdate,
+  ensureSubsessionSession,
+  isSubsessionPrompting,
+  resetSubsession,
+  sendSubsessionPrompt,
+  subsessionOwnsSessionFor,
+} from '@/lib/agent/acp-subsession'
 import {
   markSessionBootstrapSent,
   shouldSendSessionBootstrap,
@@ -18,6 +24,10 @@ export interface TocPromptImage {
   name: string
 }
 
+const TOC_PURPOSE = 'toc'
+/** prepare 会话的稳定键（always-new 下每次 ensure 覆盖，不泄漏）；单次 send 另用 opId 风格唯一键 */
+const TOC_PREPARE_KEY = 'current'
+
 /**
  * 目录 AI 整理专用副会话（考官会话同款无头模式）。
  * 与考官单例复用不同：每次整理新建一条——目录内容随书而变，
@@ -25,8 +35,6 @@ export interface TocPromptImage {
  */
 
 let tocSessionId: string | null = null
-let tocReplyBuffer = ''
-let tocPrompting = false
 /** 单调 prompt 序号：与 session 短 id 合成 operationId（审计日志关联一次整理） */
 let tocPromptSeq = 0
 
@@ -37,7 +45,7 @@ const TOC_SESSION_BOOTSTRAP =
   'You are the one-shot Inkdown table-of-contents assistant. Work only on the supplied book TOC task, use the available toc_* tools, and never write the final cache directly; the user confirms the draft in the UI.'
 
 export function isTocPrompting(): boolean {
-  return tocPrompting
+  return isSubsessionPrompting(TOC_PURPOSE)
 }
 
 /** 当前 Agent 是否接受图片（决定整理时附不附目录页原图） */
@@ -46,8 +54,7 @@ export function canTocUseImages(): boolean {
 }
 
 export function tocOwnsSessionId(sessionId: string): boolean {
-  if (!tocSessionId) return false
-  return tocSessionId === sessionId.trim()
+  return subsessionOwnsSessionFor(TOC_PURPOSE, sessionId)
 }
 
 /** 收集目录副会话的流式增量（不进入右侧时间线） */
@@ -55,23 +62,8 @@ export function accumulateTocSessionUpdate(
   sessionId: string,
   update: Record<string, unknown>,
 ): void {
-  if (!tocOwnsSessionId(sessionId) && !tocPrompting) return
-  const text = extractTextFromContent(update.content)
-  if (text) {
-    tocReplyBuffer += text
-  }
-}
-
-function resolvePreferredAgentCwd(): string | undefined {
-  const s = useAcpUiStore.getState()
-  const active = s.threads.find((t) => t.id === s.activeThreadId)
-  const fromActive = active?.workspaceRoot?.trim()
-  if (fromActive) return fromActive
-  for (const thread of s.threads) {
-    const root = thread.workspaceRoot?.trim()
-    if (root) return root
-  }
-  return undefined
+  if (!tocOwnsSessionId(sessionId) && !isTocPrompting()) return
+  accumulateSubsessionUpdate(sessionId, update)
 }
 
 export interface TocModelOverride {
@@ -128,17 +120,17 @@ export async function ensureTocSessionId(overrides?: {
   model?: TocModelOverride
   thought?: TocModelOverride
 }): Promise<{ sessionId: string; configOptions: AcpConfigOption[] } | null> {
-  const acpState = useAcpUiStore.getState()
-  if (acpState.status !== 'connected') return null
+  const ensured = await ensureSubsessionSession({
+    purpose: TOC_PURPOSE,
+    key: TOC_PREPARE_KEY,
+    rotation: { mode: 'always-new' },
+    toolScope: 'toc',
+  })
+  if ('error' in ensured) return null
+  const sid = ensured.sessionId
+  let options = ensured.configOptions
 
-  const created = await acpApi.sessionNew({ cwd: resolvePreferredAgentCwd(), toolScope: 'toc' })
-  if (!isOk(created)) return null
-  const sid = created.value.sessionId
-  let options = created.value.configOptions ?? []
-
-  const runtimeId = useAcpUiStore.getState().selectedRuntimeId
-  const preferred = useAcpUiStore.getState().preferredConfigByRuntime[runtimeId] ?? undefined
-  const patches = listPreferredConfigPatches(options, preferred)
+  const patches: TocModelOverride[] = []
   for (const extra of [overrides?.model, overrides?.thought]) {
     const runnable = findRunnableOverride(options, extra)
     if (runnable) patches.push(runnable)
@@ -195,9 +187,8 @@ export async function sendTocPrompt(
   if (!tocSessionId) {
     return { reply: null, outcome: 'error', elapsedMs: 0, opId }
   }
-  tocReplyBuffer = ''
-  tocPrompting = true
-  const shortSid = tocSessionId.slice(0, 8)
+  const preparedSid = tocSessionId
+  const shortSid = preparedSid.slice(0, 8)
   const attachments: ComposerAttachment[] = (images ?? []).map((image, index) => ({
     id: `toc-img-${index}`,
     kind: 'image',
@@ -206,7 +197,7 @@ export async function sendTocPrompt(
     base64: image.base64,
   }))
   const caps = useAcpUiStore.getState().promptCapabilities
-  const includeBootstrap = shouldSendSessionBootstrap(tocSessionId)
+  const includeBootstrap = shouldSendSessionBootstrap(preparedSid)
   const taskText = [
     includeBootstrap ? TOC_SESSION_BOOTSTRAP : null,
     TOC_TOOL_OVERVIEW,
@@ -220,29 +211,49 @@ export async function sendTocPrompt(
     `[toc-ai] prompt:start op=${opId} session=${shortSid} fp=${fpTail} chars=${promptText.length} images=${imageCount}/${attachments.length}`,
   )
   const startedAt = Date.now()
+  // 单次 send 独占一 entry（并发串扰隔离），完成后即清；always-new 下它只为累积本次 reply 而存在
+  const opKey = `op-${opId}`
   try {
-    const result = await acpApi.prompt({
-      sessionId: tocSessionId,
-      prompt: blocks,
-    })
-    const elapsedMs = Date.now() - startedAt
-    if (!isOk(result)) {
-      const outcome: TocPromptSendOutcome =
-        result.error.code === 'ACP_TIMEOUT' ? 'timeout' : 'error'
-      console.info(
-        `[toc-ai] send:return op=${opId} outcome=${outcome} elapsedMs=${elapsedMs} error=${result.error.message}`,
-      )
-      return { reply: null, outcome, elapsedMs, opId }
-    }
-    if (includeBootstrap) {
-      markSessionBootstrapSent(tocSessionId)
-    }
-    const reply = tocReplyBuffer.trim()
-    const outcome: TocPromptSendOutcome = reply ? 'ok' : 'empty'
-    console.info(
-      `[toc-ai] send:return op=${opId} outcome=${outcome} elapsedMs=${elapsedMs} replyChars=${reply.length} stop=${result.value.stopReason ?? 'ok'}`,
+    const sent = await sendSubsessionPrompt(
+      {
+        purpose: TOC_PURPOSE,
+        key: opKey,
+        rotation: { mode: 'always-new' },
+        toolScope: 'toc',
+        images: attachments.map((attachment) => ({
+          id: attachment.id,
+          kind: 'image' as const,
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          base64: attachment.base64 ?? '',
+        })),
+      },
+      taskText,
     )
-    return { reply, outcome, elapsedMs, opId }
+    const elapsedMs = Date.now() - startedAt
+    if (sent.status === 'ok') {
+      if (includeBootstrap) {
+        markSessionBootstrapSent(preparedSid)
+      }
+      const reply = sent.reply
+      const outcome: TocPromptSendOutcome = reply ? 'ok' : 'empty'
+      console.info(
+        `[toc-ai] send:return op=${opId} outcome=${outcome} elapsedMs=${elapsedMs} replyChars=${reply.length} stop=ok`,
+      )
+      return { reply, outcome, elapsedMs, opId }
+    }
+    if (sent.status === 'auth-required') {
+      console.info(
+        `[toc-ai] send:return op=${opId} outcome=error elapsedMs=${elapsedMs} error=auth-required`,
+      )
+      return { reply: null, outcome: 'error', elapsedMs, opId }
+    }
+    const outcome: TocPromptSendOutcome =
+      sent.errorCode === 'ACP_TIMEOUT' ? 'timeout' : 'error'
+    console.info(
+      `[toc-ai] send:return op=${opId} outcome=${outcome} elapsedMs=${elapsedMs} error=${sent.errorCode ?? 'failed'}`,
+    )
+    return { reply: null, outcome, elapsedMs, opId }
   } catch (cause) {
     const elapsedMs = Date.now() - startedAt
     console.info(
@@ -250,7 +261,7 @@ export async function sendTocPrompt(
     )
     return { reply: null, outcome: 'error', elapsedMs, opId }
   } finally {
-    tocPrompting = false
+    resetSubsession(TOC_PURPOSE, opKey)
   }
 }
 
@@ -271,6 +282,5 @@ export async function cancelTocPrompt(sessionId?: string | null): Promise<void> 
 
 export function resetTocSession(): void {
   tocSessionId = null
-  tocReplyBuffer = ''
-  tocPrompting = false
+  resetSubsession(TOC_PURPOSE, TOC_PREPARE_KEY)
 }

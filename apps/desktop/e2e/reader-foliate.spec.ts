@@ -11,7 +11,7 @@ import { writeMinimalMobi, writeReaderSmokeWorkspace } from './helpers/ebook-fix
  * `foliate-view` 标签存在即证明新链路挂载（而非旧 Epub/MobiViewer）。
  */
 async function openWorkspaceFile(window: Page, fileName: string, query: string): Promise<void> {
-  await window.getByRole('button', { name: '文件', exact: true }).click()
+  await window.getByRole('button',   { name: '更多操作', exact: true }).click()
   await window.getByRole('menuitem', { name: /打开文件夹/ }).click()
   await expect(window.getByText(fileName).first()).toBeVisible({ timeout: 15_000 })
 
@@ -36,7 +36,7 @@ test.describe('foliate 统一阅读器', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
       await openWorkspaceFile(window, epubName, 'smoke-sample.epub')
@@ -68,7 +68,7 @@ test.describe('foliate 统一阅读器', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
       await openWorkspaceFile(window, 'smoke-sample.mobi', 'smoke-sample.mobi')

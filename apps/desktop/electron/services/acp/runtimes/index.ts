@@ -10,6 +10,8 @@ export * from './codex'
 export interface GenericRuntimeAdapter {
   id: string
   beforeSpawn?: () => Promise<void>
+  /** 仅冷启动（无温进程可用、即将 spawn）时调用一次；各 runtime 自理副作用 */
+  onColdStart?: () => Promise<void>
   probeAuth: () => CodexAuthPreflight
   getSpawnEnv?: (proxySettings?: Partial<AcpProxySettings>) => {
     env: NodeJS.ProcessEnv

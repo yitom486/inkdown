@@ -1,21 +1,34 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { Bookmark, ChevronLeft } from 'lucide-react'
 import { ReadingMarkPanel } from '@/components/reader/ReadingMarkPanel'
 import { ReaderUnitOutline } from '@/components/reader/ReaderUnitOutline'
+import { MarginaliaBar } from '@/components/reader/MarginaliaBar'
 import { FlashcardReviewDialog } from '@/components/reader/FlashcardReviewDialog'
 import { AiQuizDialog } from '@/components/quiz/AiQuizDialog'
 import { QuizHistoryDialog } from '@/components/quiz/QuizHistoryDialog'
 import { buildAnkiCardsExport } from '@/lib/reader/marks/export-anki-cards'
+import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
+import { useAcpUiStore } from '@/stores/acp-ui-store'
+import { preserveScrollAnchor } from '@/lib/reader/scroll-anchor'
 import type { Flashcard } from '@inkdown/annotations'
+import type { FlashcardReviewRating } from '@inkdown/annotations'
+import { flashcardsApi } from '@/api/flashcards-api'
+import { sortCardsByDueOrder } from '@/lib/reader/marks/review-order'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   findCurrentChapterRef,
+  normalizeLoadKey,
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,
   type ReadingNotesScope,
 } from '@inkdown/reader-core'
 import { passageExcerpt } from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
+import { isOk, toChapterKey } from '@inkdown/contracts'
+import { readingMarksApi } from '@/api/reading-marks-api'
+import { narrowChapterScopeMarks } from '@/lib/reader/marks/chapter-scope'
+import type { DiagramVisualStep } from '@/components/agent/tools/DiagramViewerCard'
 import { toast } from 'sonner'
 
 interface ReaderContentShellProps {
@@ -43,6 +56,12 @@ interface ReaderContentShellProps {
   outlineNotice?: string
   tocAside?: ReactNode
   children: ReactNode
+  /** 卡片悬停时透出原文 excerpt（EPUB 用 CSS 高亮 API 照亮正文，PDF 画布暂不支持） */
+  onHoverExcerpt?: (excerpt: string | undefined) => void
+  /** 正文书级阅读进度 0~1：卡片轨等比跟随滚动；缺省不同滚 */
+  readingFraction?: number
+  /** 底栏翻页：收进正文列（正文下方），不横跨卡片轨；缺省无底栏 */
+  footerNav?: ReactNode
 }
 
 export function ReaderContentShell({
@@ -67,7 +86,47 @@ export function ReaderContentShell({
   outlineNotice,
   tocAside,
   children,
+  onHoverExcerpt,
+  readingFraction,
+  /** 底栏翻页：收进正文列（正文下方），不横跨卡片轨；缺省无底栏 */
+  footerNav,
 }: ReaderContentShellProps) {
+  // 知识卡轨与伴读联动状态
+  const isCardRailOpen = useReaderHudUiStore((s) => s.isCardRailOpen)
+  const setIsCardRailOpen = useReaderHudUiStore((s) => s.setIsCardRailOpen)
+  const hudDisplayMode = useAcpUiStore((s) => s.hudDisplayMode)
+  const panelOpen = useAcpUiStore((s) => s.panelOpen)
+  const zenMode = useReaderHudUiStore((s) => s.zenMode)
+  const setSelectedDiagram = useReaderHudUiStore((s) => s.setSelectedDiagram)
+  const openPanelAndFocusComposer = useAcpUiStore((s) => s.openPanelAndFocusComposer)
+
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({})
+
+  const handleToggleCardCollapse = (id: string) => {
+    setCollapsedMap((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const handleToggleAllCollapse = (collapse: boolean) => {
+    const next: Record<string, boolean> = {}
+    for (const m of marks) {
+      next[m.id] = collapse
+    }
+    setCollapsedMap(next)
+  }
+
+  const enhancedMarks = marks.map((m) => ({
+    ...m,
+    collapsed: collapsedMap[m.id] ?? m.collapsed,
+  }))
+
+  // 目录键序：卡片按文档位置排序用（纵序对齐正文）。
+  // 必须与 chapterOfMark 返回值同 key 空间（固化 key 恒为 matchKey 形态），
+  // 取 toc.key（带 index 前缀）会导致分组恒 miss——见 sortMarksByDocumentPosition 约定。
+  const chapterOrder = useMemo(
+    () => marksToc?.map((t) => toChapterKey(normalizeLoadKey(t.matchKey || t.key))) ?? [],
+    [marksToc],
+  )
+
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewCards, setReviewCards] = useState<Flashcard[]>([])
 
@@ -82,7 +141,7 @@ export function ReaderContentShell({
     (filePath ? filePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') : undefined) ||
     '当前书籍'
 
-  const handleReviewFlashcards = (scope: ReadingNotesScope) => {
+  const handleReviewFlashcards = async (scope: ReadingNotesScope) => {
     const toc = marksToc ?? []
     const currentChapter = findCurrentChapterRef(toc, marksCurrentChapterKey)
     const resolveChapter =
@@ -94,11 +153,34 @@ export function ReaderContentShell({
         level: 1,
       }))
 
+    // 本章 scope 走 chapter_key 索引（[3]）；窄化规则见 chapter-scope，
+    // IPC 失败回落内存过滤（今日行为）。已窄化后按全书走，避免二次过滤。
+    let scopedMarks = marks
+    let preNarrowed = false
+    if (scope === 'chapter' && currentChapter && filePath) {
+      const chapterKeys = [currentChapter.key, currentChapter.matchKey].filter(Boolean)
+      try {
+        const result = await readingMarksApi.listByChapter({ filePath, chapterKeys })
+        if (isOk(result)) {
+          scopedMarks = narrowChapterScopeMarks({
+            candidates: result.value,
+            chapterKeys,
+            toc,
+            current: currentChapter,
+            resolveChapter,
+          })
+          preNarrowed = true
+        }
+      } catch {
+        // 回落内存过滤
+      }
+    }
+
     const exportResult = buildAnkiCardsExport({
-      marks,
+      marks: scopedMarks,
       bookTitle: displayTitle,
-      scope,
-      currentChapter: scope === 'chapter' ? currentChapter : null,
+      scope: preNarrowed ? 'book' : scope,
+      currentChapter: preNarrowed ? null : scope === 'chapter' ? currentChapter : null,
       toc,
       resolveChapter,
     })
@@ -112,9 +194,41 @@ export function ReaderContentShell({
       return
     }
 
-    setReviewCards(exportResult.cards)
+    // 待复习排序（UI批）：due id 顺序 ∩ 派生卡；不在 due 中的新卡缀尾（不静默丢失）；
+    // IPC 失败回落派生顺序（今日行为）。
+    setReviewCards(sortCardsByDueOrder(exportResult.cards, await fetchDueOrder()))
     setReviewOpen(true)
   }
+
+  /** 拉本书待复习顺序；失败返回 null（调用方回落派生顺序） */
+  const fetchDueOrder = async (): Promise<string[] | null> => {
+    if (!filePath) return null
+    try {
+      const result = await flashcardsApi.listDue({ filePath, limit: 200 })
+      if (!isOk(result)) return null
+      return result.value.map((card) => card.id)
+    } catch {
+      return null
+    }
+  }
+
+  /** 评分落盘（UI批）：失败 toast 但不打断复习流（Dialog 本地态照常推进） */
+  const handlePersistRating = useCallback(
+    (cardId: string, rating: FlashcardReviewRating) => {
+      if (!filePath) return
+      void (async () => {
+        try {
+          const result = await flashcardsApi.appendReview({ filePath, cardId, rating })
+          if (!isOk(result)) {
+            toast.error('评分未能存入本地，复习进度可能丢失')
+          }
+        } catch {
+          toast.error('评分未能存入本地，复习进度可能丢失')
+        }
+      })()
+    },
+    [filePath],
+  )
 
   const handleNavigateToMark = (markId: string) => {
     const mark = marks.find((m) => m.id === markId)
@@ -123,16 +237,45 @@ export function ReaderContentShell({
     }
   }
 
-  const handleOpenQuiz = (mark?: ReadingMark, scope?: 'mark' | 'chapter' | 'book') => {
+  const handleOpenQuiz = async (mark?: ReadingMark, scope?: 'mark' | 'chapter' | 'book') => {
     if (scope === 'chapter') {
       let chapterLabel = '当前章节'
-      const targetMarks = marks.filter((m) => {
-        if (passageExcerpt(m).trim().length === 0) return false
-        if (marksToc && marksResolveChapter && marksCurrentChapterKey) {
-          const ch = marksResolveChapter(m, marksToc)
-          return ch.key === marksCurrentChapterKey || ch.matchKey === marksCurrentChapterKey
+      // 本章 scope 走 chapter_key 索引（[3]）；失败回落内存过滤（今日行为）
+      let candidates = marks
+      const toc = marksToc ?? []
+      const currentChapter = findCurrentChapterRef(toc, marksCurrentChapterKey)
+      if (currentChapter && filePath && marksResolveChapter) {
+        const chapterKeys = [currentChapter.key, currentChapter.matchKey].filter(Boolean)
+        try {
+          const result = await readingMarksApi.listByChapter({ filePath, chapterKeys })
+          if (isOk(result)) {
+            candidates = narrowChapterScopeMarks({
+              candidates: result.value,
+              chapterKeys,
+              toc,
+              current: currentChapter,
+              resolveChapter: marksResolveChapter,
+            })
+          } else {
+            candidates = marks
+          }
+        } catch {
+          candidates = marks
         }
-        return true
+      }
+      const inChapterScope =
+        candidates !== marks
+          ? () => true
+          : (m: ReadingMark) => {
+              if (marksToc && marksResolveChapter && marksCurrentChapterKey) {
+                const ch = marksResolveChapter(m, marksToc)
+                return ch.key === marksCurrentChapterKey || ch.matchKey === marksCurrentChapterKey
+              }
+              return true
+            }
+      const targetMarks = candidates.filter((m) => {
+        if (passageExcerpt(m).trim().length === 0) return false
+        return inChapterScope(m)
       })
       const combinedExcerpt = targetMarks.map((m) => passageExcerpt(m).trim()).join('\n\n')
       if (!combinedExcerpt) {
@@ -206,7 +349,94 @@ export function ReaderContentShell({
           />
         </aside>
       ) : null}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        {footerNav}
+      </div>
+
+      {isCardRailOpen ? (
+        <MarginaliaBar
+          marks={enhancedMarks}
+          onMarkClick={onSelectMark}
+          onHoverAnchor={onHoverExcerpt}
+          chapterOfMark={(m) => {
+            // 优先读写入时固化的章节归属；老数据缺字段时回落运行时解析。
+            // 回落 key 同样归一化到固化 key 空间（与 currentChapterKey/排序同构）。
+            if (m.chapter) return { key: m.chapter.key, label: m.chapter.label }
+            if (!(marksToc && marksResolveChapter)) return null
+            try {
+              const ref = marksResolveChapter(m, marksToc)
+              return { key: toChapterKey(normalizeLoadKey(ref.matchKey)), label: ref.label }
+            } catch {
+              return null
+            }
+          }}
+          currentChapterKey={marksCurrentChapterKey}
+          chapterOrder={chapterOrder}
+          readingFraction={readingFraction}
+          onDeleteMark={(id) => {
+            const m = marks.find((item) => item.id === id)
+            if (m) onDeleteMark(m)
+          }}
+          onOpenDiagram={(diagramId) => {
+            const m = marks.find((item) => item.diagramId === diagramId)
+            const fallbackSteps: DiagramVisualStep[] =
+              m?.keyPoints && m.keyPoints.length > 0
+                ? m.keyPoints.map((kp, idx) => ({
+                    from: `阶段 ${idx + 1}`,
+                    to: `推演 ${idx + 2}`,
+                    action: kp,
+                    desc: kp,
+                  }))
+                : [
+                    {
+                      from: '概念源起',
+                      to: '核心脉络',
+                      action: '提炼核心概念',
+                      desc: m?.excerpt ?? '概念正文解构',
+                    },
+                    {
+                      from: '核心脉络',
+                      to: '认知图景',
+                      action: '多维穿透解析',
+                      desc: m?.aiSummary ?? '时序流转分析',
+                    },
+                  ]
+
+            setSelectedDiagram({
+              diagramId,
+              diagramType: 'sequence',
+              title: m?.title ?? '时序流转交互图谱',
+              mermaidCode: m?.note?.includes('mermaid')
+                ? m.note.replace(/```mermaid\n?|\n?```/g, '').trim()
+                : 'sequenceDiagram\n  autonumber\n  Reader->>AI: 提出概念追问\n  AI-->>Reader: 返回分步交互图解',
+              summary: m?.aiSummary ?? m?.excerpt,
+              visualSteps: fallbackSteps,
+            })
+          }}
+          onToggleCardCollapse={handleToggleCardCollapse}
+          onToggleAllCollapse={handleToggleAllCollapse}
+          onCloseRail={() => preserveScrollAnchor(() => setIsCardRailOpen(false))}
+          onGenerateAiCard={() => openPanelAndFocusComposer()}
+          className="h-full"
+        />
+      ) : null}
+
+      {/* 知识卡轨折叠收起时，右边沿悬浮微晶书签浮纽 */}
+      {!zenMode && !isCardRailOpen && marks.length > 0 && (
+        <button
+          type="button"
+          onClick={() => preserveScrollAnchor(() => setIsCardRailOpen(true))}
+          className={`fixed top-20 z-40 px-3 py-1.5 rounded-full bg-background/90 backdrop-blur-md border border-border shadow-lg hover:border-primary text-foreground hover:text-primary transition-all cursor-pointer flex items-center gap-1.5 text-xs font-serif group animate-in fade-in ${
+            panelOpen && hudDisplayMode === 'docked' ? 'right-[400px]' : 'right-4'
+          }`}
+          title="展开知识卡片栏"
+        >
+          <Bookmark className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
+          <span>知识卡片 ({marks.length})</span>
+          <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+        </button>
+      )}
 
       <FlashcardReviewDialog
         open={reviewOpen}
@@ -214,6 +444,7 @@ export function ReaderContentShell({
         cards={reviewCards}
         bookTitle={displayTitle}
         onNavigateToMark={handleNavigateToMark}
+        onRate={handlePersistRating}
       />
 
       <AiQuizDialog

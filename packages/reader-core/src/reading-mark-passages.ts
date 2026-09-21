@@ -47,9 +47,11 @@ export function highlightSortKey(mark: ReadingMark): string {
     case 'pdf':
       return `pdf:${String(mark.anchor.page).padStart(6, '0')}:${mark.createdAt}`
     case 'epub':
-      return `epub:${mark.anchor.href ?? mark.anchor.cfi}:${mark.createdAt}`
+      // 同文件（同 href）内的先后靠 cfiRange 区分：只用 href 会让同章卡片退化成创建时间序
+      return `epub:${mark.anchor.href ?? ''}:${mark.anchor.cfiRange ?? mark.anchor.cfi}:${mark.createdAt}`
     case 'mobi':
-      return `mobi:${mark.anchor.chapterId}:${mark.createdAt}`
+      // foliate 统一后端会写 cfi/cfiRange；老 MOBI 锚点无此字段时退回创建时间序
+      return `mobi:${mark.anchor.chapterId}:${mark.anchor.cfiRange ?? mark.anchor.cfi ?? ''}:${mark.createdAt}`
     case 'web':
       return `web:${mark.anchor.url}:${mark.createdAt}`
   }

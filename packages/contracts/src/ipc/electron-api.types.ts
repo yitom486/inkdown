@@ -27,10 +27,23 @@ import type { RendererErrorPayload } from '../types/error-log'
 import type { Result } from '../core/result'
 import type {
   CreateReadingMarkPayload,
+  MarksListByChapterPayload,
+  MarksSearchPayload,
   ReadingMark,
   UpdateReadingMarkPayload,
 } from '../types/reading-mark'
 import type { QuizSessionRecord } from '../types/quiz'
+import type {
+  AppendFlashcardReviewPayload,
+  DueFlashcard,
+  ListDueFlashcardsPayload,
+} from '../types/flashcard'
+import type {
+  AiSessionGetPayload,
+  AiSessionPutPayload,
+  AiSessionRecord,
+  AiSessionTouchPayload,
+} from '../types/ai-session'
 import type {
   AcpAuthPreflightPayload,
   AcpAuthPreflightResult,
@@ -256,6 +269,31 @@ export interface ElectronAPI {
   updateReadingMark: (payload: UpdateReadingMarkPayload) => Promise<Result<ReadingMark, AppError>>
   /** 删除阅读书签/批注 */
   deleteReadingMark: (id: string) => Promise<Result<void, AppError>>
+  /** 本书内卡片全文搜（标题/摘录/批注/AI 洞见，走 marks_fts） */
+  searchReadingMarks: (payload: MarksSearchPayload) => Promise<Result<ReadingMark[], AppError>>
+  /** 按章查卡（走 chapter_key 索引，另捎带未固化卡由调用方窄化） */
+  listReadingMarksByChapter: (
+    payload: MarksListByChapterPayload,
+  ) => Promise<Result<ReadingMark[], AppError>>
+  /* ===== 记忆卡片复习态 ===== */
+  /** 本书待复习列表（未复习优先、其次最久未复习） */
+  listDueFlashcards: (
+    payload: ListDueFlashcardsPayload,
+  ) => Promise<Result<DueFlashcard[], AppError>>
+  /**
+   * 记一次复习评分；true=已落盘，false=未落盘（未知卡片/file 回滚后端；
+   * 调用方本地评分态照常推进，不打断复习流）。
+   */
+  appendFlashcardReview: (
+    payload: AppendFlashcardReviewPayload,
+  ) => Promise<Result<boolean, AppError>>
+  /* ===== AI 会话指针（一书一会话） ===== */
+  /** 取某书会话行（无则 null） */
+  getAiSession: (payload: AiSessionGetPayload) => Promise<Result<AiSessionRecord | null, AppError>>
+  /** upsert 会话行 */
+  putAiSession: (payload: AiSessionPutPayload) => Promise<Result<void, AppError>>
+  /** prompt 成功后计数 + 保活 */
+  touchAiSession: (payload: AiSessionTouchPayload) => Promise<Result<void, AppError>>
   /* ===== ACP Agent：运行时/认证/session/prompt/权限/快照/推送 ===== */
   /** 列出可用 ACP Agent 运行时 */
   listAcpRuntimes: () => Promise<Result<AcpRuntimeInfo[], AppError>>

@@ -14,7 +14,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import {
   AgentChatItem,
   AgentChatItemBody,
@@ -32,9 +32,97 @@ import {
   promptSelectTextForMarkRecovery,
 } from '@/lib/agent/mark-proposal-failure'
 import { explainToolFailure } from '@/lib/agent/tool-failure-message'
-import type { AcpChatMessage } from '@/stores/acp-chat-types'
-import { isToolActiveStatus } from '@/stores/acp-chat-types'
+import { toast } from 'sonner'
+import {
+  DiagramViewerCard,
+  type DiagramPayload,
+} from '@/components/agent/tools/DiagramViewerCard'
+import {
+  CrossReferenceCard,
+  type CrossReferencePayload,
+} from '@/components/agent/tools/CrossReferenceCard'
+import {
+  ContentAuditCard,
+  type ContentAuditPayload,
+} from '@/components/agent/tools/ContentAuditCard'
+import {
+  ChapterSuggestionCard,
+  type SuggestChaptersPayload,
+} from '@/components/agent/tools/ChapterSuggestionCard'
+import {
+  isToolActiveStatus,
+  type AcpChatMessage,
+  type AcpToolLocation,
+} from '@/stores/acp-chat-types'
 import { useAcpPendingPermission } from '@/stores/acp-ui-store'
+
+function parseDiagramPayload(text?: string, title?: string): DiagramPayload | null {
+  if (!text || (!text.includes('mermaidCode') && !title?.includes('inkdown_generate_diagram'))) {
+    return null
+  }
+  try {
+    const obj = JSON.parse(text)
+    if (obj && typeof obj === 'object' && typeof obj.mermaidCode === 'string') {
+      return obj as DiagramPayload
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function parseCrossReferencePayload(text?: string, title?: string): CrossReferencePayload | null {
+  if (
+    !text ||
+    (!text.includes('chapterDistribution') && !title?.includes('inkdown_cross_reference'))
+  ) {
+    return null
+  }
+  try {
+    const obj = JSON.parse(text)
+    if (
+      obj &&
+      typeof obj === 'object' &&
+      Array.isArray(obj.chapterDistribution) &&
+      typeof obj.entity === 'string'
+    ) {
+      return obj as CrossReferencePayload
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function parseContentAuditPayload(text?: string, title?: string): ContentAuditPayload | null {
+  if (!text || (!text.includes('"hits"') && !title?.includes('inkdown_inspect_content'))) {
+    return null
+  }
+  try {
+    const obj = JSON.parse(text)
+    if (obj && typeof obj === 'object' && Array.isArray(obj.hits) && typeof obj.query === 'string') {
+      return obj as ContentAuditPayload
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function parseSuggestChaptersPayload(text?: string, title?: string): SuggestChaptersPayload | null {
+  if (!text || (!text.includes('"chapters"') && !title?.includes('inkdown_suggest_chapters'))) {
+    return null
+  }
+  try {
+    const obj = JSON.parse(text)
+    if (obj && typeof obj === 'object' && Array.isArray(obj.chapters)) {
+      return obj as SuggestChaptersPayload
+    }
+  } catch {
+    return null
+  }
+  return null
+}
 
 function kindIcon(kind: string | undefined): ReactNode {
   const className = 'size-3.5 shrink-0'
@@ -85,11 +173,33 @@ interface AgentToolCallCardProps {
 export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
   const pendingPermission = useAcpPendingPermission()
   const needsApproval = toolMessageNeedsApproval(message, pendingPermission)
-  const active =
-    Boolean(message.streaming) || isToolActiveStatus(message.toolStatus) || needsApproval
-  const [open, setOpen] = useAgentChatOpen(active)
   const diffs = message.toolDiffs ?? []
   const detail = message.toolContentText || message.text
+  const diagramPayload = useMemo(
+    () => parseDiagramPayload(detail, message.toolTitle),
+    [detail, message.toolTitle],
+  )
+  const crossRefPayload = useMemo(
+    () => parseCrossReferencePayload(detail, message.toolTitle),
+    [detail, message.toolTitle],
+  )
+  const auditPayload = useMemo(
+    () => parseContentAuditPayload(detail, message.toolTitle),
+    [detail, message.toolTitle],
+  )
+  const suggestionPayload = useMemo(
+    () => parseSuggestChaptersPayload(detail, message.toolTitle),
+    [detail, message.toolTitle],
+  )
+  const active =
+    Boolean(message.streaming) ||
+    isToolActiveStatus(message.toolStatus) ||
+    needsApproval ||
+    Boolean(diagramPayload) ||
+    Boolean(crossRefPayload) ||
+    Boolean(auditPayload) ||
+    Boolean(suggestionPayload)
+  const [open, setOpen] = useAgentChatOpen(active)
   const locations = message.toolLocations ?? []
   const failed = message.toolStatus === 'failed'
   const failureExplain = failed
@@ -114,7 +224,11 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
     locations.length > 0 ||
     needsApproval ||
     Boolean(failureGuide) ||
-    Boolean(failureExplain)
+    Boolean(failureExplain) ||
+    Boolean(diagramPayload) ||
+    Boolean(crossRefPayload) ||
+    Boolean(auditPayload) ||
+    Boolean(suggestionPayload)
   const title = message.toolTitle || '工具调用'
   const locationHint =
     diffs.length === 1
@@ -172,7 +286,7 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
         <AgentChatItemBody>
           {locations.length > 0 && diffs.length === 0 ? (
             <ul className="min-w-0 space-y-0.5">
-              {locations.map((loc) => (
+              {locations.map((loc: AcpToolLocation) => (
                 <li
                   key={`${loc.path}:${loc.line ?? ''}`}
                   className="truncate font-mono text-[10px] text-muted-foreground"
@@ -190,7 +304,70 @@ export function AgentToolCallCard({ message }: AgentToolCallCardProps) {
               {failureExplain.body}
             </p>
           ) : null}
-          {hasTextDetail ? <pre className={AGENT_CHAT_PRE_CLASS}>{detail}</pre> : null}
+          {diagramPayload ? (
+            <div className="mt-1">
+              <DiagramViewerCard
+                payload={diagramPayload}
+                onHighlightAnchor={(anchor: string) => {
+                  toast.message(`正在定位原文：「${anchor.slice(0, 24)}...」`)
+                  window.dispatchEvent(
+                    new CustomEvent('inkdown:anchor-highlight', { detail: anchor }),
+                  )
+                }}
+                onPinToDoc={(p: DiagramPayload) => {
+                  void navigator.clipboard.writeText(
+                    `\n\n\`\`\`mermaid\n${p.mermaidCode}\n\`\`\`\n\n`,
+                  )
+                  toast.success('图表 Mermaid 源码已复制，可粘贴至正文或笔记')
+                }}
+              />
+            </div>
+          ) : null}
+          {crossRefPayload ? (
+            <div className="mt-1">
+              <CrossReferenceCard
+                payload={crossRefPayload}
+                onNavigateChapter={(flatIndex, excerpt) => {
+                  if (typeof flatIndex === 'number') {
+                    void openChapterForMarkRecovery(flatIndex)
+                  }
+                  if (excerpt) {
+                    window.dispatchEvent(
+                      new CustomEvent('inkdown:anchor-highlight', { detail: excerpt }),
+                    )
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+          {auditPayload ? (
+            <div className="mt-1">
+              <ContentAuditCard
+                payload={auditPayload}
+                onHighlightAnchor={(anchor: string) => {
+                  toast.message(`正在定位原句：「${anchor.slice(0, 24)}...」`)
+                  window.dispatchEvent(
+                    new CustomEvent('inkdown:anchor-highlight', { detail: anchor }),
+                  )
+                }}
+              />
+            </div>
+          ) : null}
+          {suggestionPayload ? (
+            <div className="mt-1">
+              <ChapterSuggestionCard
+                payload={suggestionPayload}
+                onSelectChapter={(item) => {
+                  if (item.flatIndex != null) {
+                    void openChapterForMarkRecovery(item.flatIndex)
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+          {!diagramPayload && !crossRefPayload && !auditPayload && !suggestionPayload && hasTextDetail ? (
+            <pre className={AGENT_CHAT_PRE_CLASS}>{detail}</pre>
+          ) : null}
           {failureGuide ? (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {failureGuide.canOpenChapter ? (

@@ -12,6 +12,8 @@ export * from "./types/rosetta";
 export * from "./types/web-doc";
 export * from "./types/sync";
 export * from "./types/quiz";
+export * from "./types/flashcard";
+export * from "./types/ai-session";
 export * from "./types/book-db";
 export * from "./types/error-log";
 export * from "./types/app-update";

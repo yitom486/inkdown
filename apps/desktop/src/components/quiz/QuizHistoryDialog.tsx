@@ -72,7 +72,7 @@ export function QuizHistoryDialog({
             </DialogTitle>
           </div>
           <DialogDescription id="quiz-history-dialog-desc" className="text-xs text-muted-foreground line-clamp-1">
-            《{bookTitle}》· 共 {sessions.length} 次测验记录 (JSONL 知识库)
+            《{bookTitle}》· 共 {sessions.length} 次测验记录（本地知识库）
           </DialogDescription>
         </DialogHeader>
 

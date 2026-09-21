@@ -5,7 +5,9 @@ import {
   highlightFill,
   highlightSwatch,
   normalizeHighlightColor,
+  resolveMarkCategorySwatch,
 } from '@inkdown/reader-core'
+import { resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import { findTextRangeInRoot } from '@/lib/reader/marks/excerpt-text-match'
 import {
   buildPdfSnapshotFromRange,
@@ -98,7 +100,7 @@ function appendUnderline(
   layer: SVGSVGElement,
   quad: ReturnType<typeof quadToViewport> | ReturnType<typeof rectToViewportQuad>,
   mark: ReadingMark,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
 ): void {
   const [start, end] = underlineEndpoints(quad)
   const line = document.createElementNS(SVG_NS, 'line')
@@ -152,18 +154,67 @@ function visualQuadsForMark(
   )
 }
 
+function markFlagCategory(mark: ReadingMark): string {
+  return mark.category ?? resolveCardMeta(mark).category
+}
+
+function cssVarReader(): (name: string) => string | undefined {
+  const rootCS =
+    typeof document !== 'undefined'
+      ? document.defaultView?.getComputedStyle(document.documentElement)
+      : undefined
+  return (name: string) => rootCS?.getPropertyValue(name).trim() || undefined
+}
+
+/** M2 页边旗标：取首 quad 行首外侧的圆点位置（视口单位），与行内绘制同源。 */
+export function flagSpotForQuads(
+  quads: Array<ReturnType<typeof quadToViewport> | ReturnType<typeof rectToViewportQuad>>,
+  viewportWidth: number,
+): { x: number; y: number; r: number } | null {
+  const first = quads[0]
+  if (!first) return null
+  const xs = first.points.map((point) => point.x)
+  const ys = first.points.map((point) => point.y)
+  const r = Math.min(7, Math.max(3, viewportWidth * 0.006))
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2
+  const x = Math.max(r + 1, Math.min(...xs) - r * 2.4)
+  return { x, y, r }
+}
+
+function appendFlag(
+  layer: SVGSVGElement,
+  spot: { x: number; y: number; r: number },
+  mark: ReadingMark,
+  fill: string,
+): void {
+  const flag = document.createElementNS(SVG_NS, 'circle')
+  flag.setAttribute('class', 'pdf-mark-flag')
+  flag.setAttribute('cx', String(spot.x))
+  flag.setAttribute('cy', String(spot.y))
+  flag.setAttribute('r', String(spot.r))
+  flag.setAttribute('fill', fill)
+  flag.setAttribute('stroke', '#ffffff')
+  flag.setAttribute('stroke-width', '1')
+  flag.dataset.markId = mark.id
+  layer.append(flag)
+}
+
+export const PDF_MARK_FLAGS_PER_PAGE_CAP = 40
+
 export function renderPdfMarkOverlays(
   layer: SVGSVGElement,
   marks: ReadingMark[],
   pageNum: number,
-  theme: 'dark' | 'light',
+  theme: 'dark' | 'light' | 'sepia',
   viewport: PageViewport,
   transientSelection?: PdfSelectionSnapshot | null,
   pageElement?: HTMLElement | null,
 ): void {
   layer.replaceChildren()
   layer.setAttribute('viewBox', `0 0 ${viewport.width} ${viewport.height}`)
+  const getVar = cssVarReader()
 
+  let flagsDrawn = 0
   for (const mark of marks) {
     if (mark.anchor.format !== 'pdf' || mark.anchor.page !== pageNum) continue
     if (mark.kind === 'bookmark') continue
@@ -181,6 +232,18 @@ export function renderPdfMarkOverlays(
           color,
           theme,
         })
+      }
+    }
+    if (flagsDrawn < PDF_MARK_FLAGS_PER_PAGE_CAP) {
+      const spot = flagSpotForQuads(quads, viewport.width)
+      if (spot) {
+        appendFlag(
+          layer,
+          spot,
+          mark,
+          resolveMarkCategorySwatch(markFlagCategory(mark), getVar, theme),
+        )
+        flagsDrawn += 1
       }
     }
   }
@@ -263,6 +326,13 @@ function findRenderedMarkIdsAtPoint(
       const start = { x: Number(element.getAttribute('x1')), y: Number(element.getAttribute('y1')) }
       const end = { x: Number(element.getAttribute('x2')), y: Number(element.getAttribute('y2')) }
       if (distanceToSegment(point, start, end) <= 5) ids.add(markId)
+    } else if (element.tagName.toLowerCase() === 'circle') {
+      const center = {
+        x: Number(element.getAttribute('cx')),
+        y: Number(element.getAttribute('cy')),
+      }
+      const radius = Number(element.getAttribute('r')) || 4
+      if (Math.hypot(point.x - center.x, point.y - center.y) <= radius + 2) ids.add(markId)
     }
   }
   return ids
