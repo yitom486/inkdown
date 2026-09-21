@@ -78,6 +78,41 @@ describe('sortMarksByDocumentPosition', () => {
     expect(sorted.map((m) => m.id)).toEqual(['earlier', 'later'])
   })
 
+  it('EPUB 同文件按 cfi 先后排序，不再退化成创建时间', () => {
+    const epub = (id: string, cfiRange: string, createdAt: number): ReadingMark => ({
+      id,
+      filePath: '/book.epub',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'epub', cfi: cfiRange, cfiRange, href: 'same-chapter.xhtml' },
+      createdAt,
+      updatedAt: createdAt,
+    }) as ReadingMark
+    // 输入是创建时间倒序：后创建的在文档更靠前，输出应按 cfi 位置正序
+    const marks = [
+      epub('doc-second', 'epubcfi(/6/14!/4/4)', 2),
+      epub('doc-first', 'epubcfi(/6/14!/4/2)', 1),
+      epub('doc-third', 'epubcfi(/6/14!/4/6)', 3),
+    ]
+    const sorted = sortMarksByDocumentPosition(marks, ['ch1'], () => 'ch1')
+    expect(sorted.map((m) => m.id)).toEqual(['doc-first', 'doc-second', 'doc-third'])
+  })
+
+  it('MOBI 同章按 cfi 先后排序', () => {
+    const mobi = (id: string, cfiRange: string, createdAt: number): ReadingMark => ({
+      id,
+      filePath: '/book.mobi',
+      fileFingerprint: 'fp',
+      kind: 'highlight',
+      anchor: { format: 'mobi', chapterId: 'ch1', cfi: cfiRange, cfiRange },
+      createdAt,
+      updatedAt: createdAt,
+    }) as ReadingMark
+    const marks = [mobi('newer', 'epubcfi(/6/14!/4/4)', 2), mobi('older', 'epubcfi(/6/14!/4/2)', 1)]
+    const sorted = sortMarksByDocumentPosition(marks, ['ch1'], () => 'ch1')
+    expect(sorted.map((m) => m.id)).toEqual(['older', 'newer'])
+  })
+
   it('MOBI 同章无细粒度位置，按创建时间排序', () => {
     const mobi = (id: string, createdAt: number): ReadingMark => ({
       id,
