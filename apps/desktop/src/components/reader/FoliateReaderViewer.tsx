@@ -7,7 +7,8 @@ import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { PdfBookSearch } from '@/components/reader/PdfBookSearch'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
-import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { DockedAgentPane } from '@/components/agent/DockedAgentPane'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingProgressRing } from '@/components/reader/ReadingProgressRing'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
@@ -1775,7 +1776,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
         </PaneErrorBoundary>
         </ReaderContentShell>
         {dockedAgentVisible ? (
-          <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
+          <DockedAgentPane workspaceRoot={workspaceRoot} />
         ) : null}
       </div>
 

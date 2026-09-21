@@ -16,6 +16,8 @@ export interface ReaderHudUiState {
   floatingPosition: { x: number; y: number }
   /** 悬浮窗自由拉伸尺寸（右下角手柄拖拽） */
   floatingSize: { width: number; height: number }
+  /** 阅读器内停靠态 Agent 面板宽度（左侧分隔线拖拽，280~640） */
+  dockedAgentWidth: number
   /** 是否正在拖拽悬浮窗 */
   isDragging: boolean
   /** HUD 内部当前活跃的功能 Tab */
@@ -45,6 +47,7 @@ export interface ReaderHudUiState {
   togglePanel: () => void
   setFloatingPosition: (pos: { x: number; y: number } | ((prev: { x: number; y: number }) => { x: number; y: number })) => void
   setFloatingSize: (size: { width: number; height: number }) => void
+  setDockedAgentWidth: (width: number) => void
   setIsDragging: (dragging: boolean) => void
   setHudActiveTab: (tab: HudActiveTab) => void
   setIsCardRailOpen: (open: boolean) => void
@@ -79,6 +82,7 @@ export const useReaderHudUiStore = create<ReaderHudUiState>()(
       panelOpen: false,
       floatingPosition: getDefaultFloatingPosition(),
       floatingSize: { width: 450, height: 580 },
+      dockedAgentWidth: 340,
       isDragging: false,
       hudActiveTab: 'chat',
       isCardRailOpen: true,
@@ -105,6 +109,8 @@ export const useReaderHudUiStore = create<ReaderHudUiState>()(
             height: Math.round(size.height),
           },
         }),
+      setDockedAgentWidth: (width) =>
+        set({ dockedAgentWidth: Math.round(Math.max(280, Math.min(640, width))) }),
       setIsDragging: (dragging) => set({ isDragging: dragging }),
       setHudActiveTab: (tab) => set({ hudActiveTab: tab }),
       setIsCardRailOpen: (open) => set({ isCardRailOpen: open }),
@@ -147,6 +153,7 @@ export const useReaderHudUiStore = create<ReaderHudUiState>()(
         approveForMe: state.approveForMe,
         floatingPosition: state.floatingPosition,
         floatingSize: state.floatingSize,
+        dockedAgentWidth: state.dockedAgentWidth,
       }),
     },
   ),

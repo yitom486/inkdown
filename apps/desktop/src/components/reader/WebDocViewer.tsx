@@ -16,7 +16,8 @@ import { EpubMarkTooltip } from '@/components/reader/EpubMarkTooltip'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
-import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { DockedAgentPane } from '@/components/agent/DockedAgentPane'
 import { ReaderTypographyControls } from '@/components/reader/ReaderTypographyControls'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
@@ -1161,7 +1162,7 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
         {readerHost}
         </ReaderContentShell>
         {dockedAgentVisible ? (
-          <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
+          <DockedAgentPane workspaceRoot={workspaceRoot} />
         ) : null}
       </div>
 

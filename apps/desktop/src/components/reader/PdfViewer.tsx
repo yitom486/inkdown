@@ -9,7 +9,8 @@ import { PdfPageView } from '@/components/reader/PdfPageView'
 import { ReaderContentShell } from '@/components/reader/ReaderContentShell'
 import { ReaderFooterNav } from '@/components/reader/ReaderFooterNav'
 import { ReaderToolbarShell } from '@/components/reader/ReaderToolbarShell'
-import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
+import { DockedAgentPane } from '@/components/agent/DockedAgentPane'
 import { ReadingMarkPopover } from '@/components/reader/ReadingMarkPopover'
 import { SelectionToolbar } from '@/components/reader/SelectionToolbar'
 import { DeepAnswerDialog } from '@/components/reader/DeepAnswerDialog'
@@ -2410,7 +2411,7 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
         </div>
         </ReaderContentShell>
         {dockedAgentVisible ? (
-          <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
+          <DockedAgentPane workspaceRoot={workspaceRoot} />
         ) : null}
       </div>
 
