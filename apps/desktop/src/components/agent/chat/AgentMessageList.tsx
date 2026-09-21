@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Loader2 } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,12 @@ import { AgentPermissionCard } from '@/components/agent/permission/AgentPermissi
 import { shouldShowOrphanPermissionCard } from '@/lib/agent/acp-permission-ui'
 import { logAcpLayoutProbe } from '@/lib/agent/acp-layout-probe'
 import { useStickToBottomScroll } from '@/hooks/agent/useStickToBottomScroll'
+import {
+  CHAT_HISTORY_INITIAL_COUNT,
+  CHAT_HISTORY_PAGE_STEP,
+  resolveScrollViewport,
+  sliceChatWindow,
+} from '@/lib/agent/stick-to-bottom'
 import { useCodeBlockCopy } from '@/hooks/preview/useCodeBlockCopy'
 import { AGENT_CHAT_COL_CLASS } from '@/components/agent/chat/AgentChatItem'
 import { AgentScrollToBottomButton } from '@/components/agent/chat/AgentScrollToBottomButton'
@@ -44,9 +50,17 @@ export const AgentMessageList = memo(function AgentMessageList({
   const prompting = useAcpUiStore((s) => s.prompting)
   const [nowMs, setNowMs] = useState(() => Date.now())
 
-  useCodeBlockCopy(messagesRef, messages)
-
-  const timeline = useMemo(() => groupAgentMessages(messages), [messages])
+  // 历史分页窗：初次只看末尾 N 条，上滑 5 条 5 条向前补。
+  // start 为 null = 贴底锚定；数字 = 冻结起点（未贴底时新消息不移位）。
+  const [chatWindow, setChatWindow] = useState<{ start: number | null; count: number }>({
+    start: null,
+    count: CHAT_HISTORY_INITIAL_COUNT,
+  })
+  const windowRef = useRef(chatWindow)
+  windowRef.current = chatWindow
+  const messagesLengthRef = useRef(messages.length)
+  messagesLengthRef.current = messages.length
+  const pinnedRef = useRef(true)
 
   const streamingAny = messages.some((m) => m.streaming) || prompting
   // 滚动记忆归属：只订阅线程 id（极少变化），快照读写走 getState，不引入额外订阅
@@ -79,6 +93,85 @@ export const AgentMessageList = memo(function AgentMessageList({
     loadScroll: loadChatScroll,
     saveScroll: saveChatScroll,
   })
+  pinnedRef.current = pinned
+
+  const visibleMessages = useMemo(() => {
+    // 贴底时恒为底锚（加载更多后来的新消息也不被冻结窗挡住）；离底才冻结。
+    const effectiveStart = pinned ? null : chatWindow.start
+    return sliceChatWindow(messages, effectiveStart, chatWindow.count)
+  }, [messages, pinned, chatWindow])
+  const remainingOlder = messages.length - visibleMessages.length
+
+  useCodeBlockCopy(messagesRef, visibleMessages)
+
+  const preserveRef = useRef<{ height: number; top: number } | null>(null)
+
+  const loadMore = useCallback(() => {
+    const total = messagesLengthRef.current
+    const w = windowRef.current
+    // 贴底时起点恒为末尾；离底时沿用冻结起点
+    const base = pinnedRef.current ? Math.max(0, total - w.count) : (w.start ?? Math.max(0, total - w.count))
+    // 已全量：不再长大，避免空转重渲染
+    if (base <= 0 && total <= w.count) return
+    const viewport = resolveScrollViewport(messagesRef.current)
+    if (viewport) {
+      preserveRef.current = { height: viewport.scrollHeight, top: viewport.scrollTop }
+    }
+    setChatWindow({ start: Math.max(0, base - CHAT_HISTORY_PAGE_STEP), count: w.count + CHAT_HISTORY_PAGE_STEP })
+  }, [messagesRef])
+  const loadMoreRef = useRef(loadMore)
+  loadMoreRef.current = loadMore
+
+  // 前补导致内容增高：paint 前恢复偏移，视觉原地不动（无滑动动画）。
+  const windowKey = `${chatWindow.start ?? 'end'}-${chatWindow.count}-${messages.length}`
+  useLayoutEffect(() => {
+    const preserved = preserveRef.current
+    if (!preserved) return
+    preserveRef.current = null
+    const viewport = resolveScrollViewport(messagesRef.current)
+    if (!viewport) return
+    viewport.scrollTop = preserved.top + (viewport.scrollHeight - preserved.height)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowKey])
+
+  const timeline = useMemo(() => groupAgentMessages(visibleMessages), [visibleMessages])
+
+  // 切线程重置窗口（回到底部看末 5 条）。
+  useEffect(() => {
+    setChatWindow({ start: null, count: CHAT_HISTORY_INITIAL_COUNT })
+  }, [threadId])
+
+  // 贴底态变化同步窗口锚定：离开底部冻结当前起点（起点=总数-窗宽）；
+  // 贴底时渲染恒用底锚，此处无需清除。
+  const prevPinnedRef = useRef(pinned)
+  pinnedRef.current = pinned
+  useEffect(() => {
+    if (prevPinnedRef.current && !pinned) {
+      const total = messagesLengthRef.current
+      const count = windowRef.current.count
+      setChatWindow({ start: Math.max(0, total - count), count })
+    }
+    prevPinnedRef.current = pinned
+  }, [pinned])
+
+  // 滑到顶部自动向前补（懒加载）；内容未撑满视口不触发。
+  useEffect(() => {
+    const viewport = resolveScrollViewport(messagesRef.current)
+    if (!viewport) return
+    let queued = false
+    const onScroll = () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        if (viewport.scrollTop > 200) return
+        if (viewport.scrollHeight <= viewport.clientHeight) return
+        loadMoreRef.current()
+      })
+    }
+    viewport.addEventListener('scroll', onScroll, { passive: true })
+    return () => viewport.removeEventListener('scroll', onScroll)
+  }, [messagesRef])
 
   const pendingOrphan = shouldShowOrphanPermissionCard(pendingPermission, messages)
 
@@ -145,6 +238,18 @@ export const AgentMessageList = memo(function AgentMessageList({
                 {authHint}
               </p>
             ) : null}
+          </div>
+        ) : null}
+        {remainingOlder > 0 ? (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              data-testid="chat-load-more"
+              onClick={() => loadMore()}
+              className="rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+            >
+              加载更早消息（还剩 {remainingOlder} 条）
+            </button>
           </div>
         ) : null}
         {timeline.map((item) =>
