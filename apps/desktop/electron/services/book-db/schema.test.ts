@@ -63,6 +63,8 @@ describe('book-db schema', () => {
     // 退回 v3 形态：删列 + 版本号回拨，再造旧行
     db.exec('ALTER TABLE blocks DROP COLUMN source')
     db.exec('ALTER TABLE blocks DROP COLUMN extract_version')
+    db.exec('DROP INDEX IF EXISTS idx_marks_anchor_key')
+    db.exec('ALTER TABLE marks DROP COLUMN anchor_key')
     db.exec('PRAGMA user_version = 3')
     db.prepare(
       `INSERT INTO books

@@ -270,3 +270,34 @@ export interface MarksListByChapterPayload {
   filePath: string
   chapterKeys: string[]
 }
+
+/** 锚点 href/id 的归一化（与 reader-core normalizeLoadKey 同构；contracts 层零依赖，内联实现）。 */
+function normalizeAnchorRef(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return raw.split('#')[0]?.toLowerCase() ?? raw.toLowerCase()
+}
+
+/**
+ * 锚点规范键：同一段正文的卡片共享同一键，是"一卡一段、一段多卡"绑定关系
+ * 在 DB 的体现（`marks.anchor_key` 抽取列 + 索引，去重/联查走索引）。
+ * - epub：href（归一化）+ cfiRange/cfi
+ * - pdf：page + begin/end（V1 无语义位置时只有 page，同页多卡同键、创建时间区分）
+ * - mobi：chapterId（归一化）+ cfi
+ * - web：url + headingId
+ * 纯函数、无品牌类型，方便 SQL 回填与 TS 写入两侧对口径（见 marks-anchor-binding 单测）。
+ */
+export function canonicalAnchorKey(anchor: ReadingAnchor): string {
+  switch (anchor.format) {
+    case 'epub':
+      return `epub|${normalizeAnchorRef(anchor.href)}|${anchor.cfiRange ?? anchor.cfi ?? ''}`
+    case 'pdf': {
+      const begin = anchor.begin ? `${anchor.begin.itemIndex},${anchor.begin.offset}` : ''
+      const end = anchor.end ? `${anchor.end.itemIndex},${anchor.end.offset}` : ''
+      return `pdf|${anchor.page}|${begin}-${end}`
+    }
+    case 'mobi':
+      return `mobi|${normalizeAnchorRef(anchor.chapterId)}|${anchor.cfiRange ?? anchor.cfi ?? ''}`
+    case 'web':
+      return `web|${anchor.url}|${anchor.headingId ?? ''}`
+  }
+}

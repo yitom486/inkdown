@@ -8,7 +8,7 @@ import type { DatabaseSync } from 'node:sqlite'
  * 但 SQLite 表恒有隐式 rowid，marks_fts 挂 content_rowid='rowid' 照样成立。
  */
 
-export const BOOK_DB_SCHEMA_VERSION = 6
+export const BOOK_DB_SCHEMA_VERSION = 7
 
 const MIGRATION_V1 = `
 CREATE TABLE IF NOT EXISTS books (
@@ -178,6 +178,11 @@ CREATE TABLE IF NOT EXISTS review_log (
   reviewed_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_review_log_card_time ON review_log (card_id, reviewed_at);`,
+  // v7：marks.anchor_key（锚点规范键抽取列，"一卡一段、一段多卡"绑定的 DB 体现，
+  // 口径见 contracts canonicalAnchorKey）。存量行回填不在 SQL 做（规范化分支多），
+  // 由 open-book-db 经 marks-anchor-backfill 补（只碰 anchor_key = '' 的行，幂等）。
+  7: `ALTER TABLE marks ADD COLUMN anchor_key TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_marks_anchor_key ON marks (anchor_key);`,
 }
 
 export function getBookDbVersion(db: DatabaseSync): number {

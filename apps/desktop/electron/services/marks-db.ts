@@ -10,6 +10,7 @@ import type {
   ReadingMarkCategory,
   ReadingMarkKind,
 } from '@inkdown/contracts'
+import { canonicalAnchorKey } from '@inkdown/contracts'
 import {
   normalizeMarkFilePath as normalizeMarkFilePathCore,
   type SyncMarksPayload,
@@ -48,6 +49,7 @@ interface MarksRow {
   diagram_id: string | null
   anchor_json: string
   anchor_format: string
+  anchor_key: string
   chapter_key: string
   chapter_json: string | null
   chapter_id: number | null
@@ -109,10 +111,10 @@ export function insertMarkRow(db: DatabaseSync, mark: ReadingMark): void {
     `INSERT INTO marks (
       id, file_fingerprint, file_path, kind, category, title, label, note, excerpt,
       ai_summary, key_points, tags, color, collapsed, diagram_id,
-      anchor_json, anchor_format, chapter_key, chapter_json, chapter_id, page_hint,
+      anchor_json, anchor_format, anchor_key, chapter_key, chapter_json, chapter_id, page_hint,
       created_at, updated_at, deleted_at
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
     )`,
   ).get(
     mark.id,
@@ -132,6 +134,7 @@ export function insertMarkRow(db: DatabaseSync, mark: ReadingMark): void {
     mark.diagramId ?? null,
     JSON.stringify(mark.anchor),
     mark.anchor.format,
+    canonicalAnchorKey(mark.anchor),
     mark.chapter?.key ?? '',
     mark.chapter ? JSON.stringify(mark.chapter) : null,
     // chapter_id opportunistic：chapters 表无 key 列，01 期恒 NULL
@@ -147,7 +150,7 @@ export function updateMarkRow(db: DatabaseSync, mark: ReadingMark): void {
     `UPDATE marks SET
       kind = ?, category = ?, title = ?, label = ?, note = ?, excerpt = ?,
       ai_summary = ?, key_points = ?, tags = ?, color = ?, collapsed = ?, diagram_id = ?,
-      anchor_json = ?, anchor_format = ?, chapter_key = ?, chapter_json = ?, page_hint = ?,
+      anchor_json = ?, anchor_format = ?, anchor_key = ?, chapter_key = ?, chapter_json = ?, page_hint = ?,
       updated_at = ?
     WHERE id = ?`,
   ).get(
@@ -165,6 +168,7 @@ export function updateMarkRow(db: DatabaseSync, mark: ReadingMark): void {
     mark.diagramId ?? null,
     JSON.stringify(mark.anchor),
     mark.anchor.format,
+    canonicalAnchorKey(mark.anchor),
     mark.chapter?.key ?? '',
     mark.chapter ? JSON.stringify(mark.chapter) : null,
     pageHintForAnchor(mark.anchor),
@@ -202,6 +206,22 @@ export function listMarkRowsByChapter(db: DatabaseSync, chapterKeys: string[]): 
        ORDER BY updated_at DESC`,
     )
     .all(...keys) as unknown as MarksRow[]
+}
+
+/**
+ * 按锚查卡（一对多绑定的 DB 入口）：同一段正文的多张卡共享 anchor_key，
+ * 无唯一约束、可共存；走 `idx_marks_anchor_key`。软删除排除。
+ * 空 key 直接返回空（调用方无锚可查）。
+ */
+export function findLiveMarkRowsByAnchorKey(db: DatabaseSync, anchorKey: string): MarksRow[] {
+  if (!anchorKey) return []
+  return db
+    .prepare(
+      `SELECT * FROM marks
+       WHERE deleted_at IS NULL AND anchor_key = ?
+       ORDER BY updated_at DESC`,
+    )
+    .all(anchorKey) as unknown as MarksRow[]
 }
 
 function normalizeFilePath(filePath: string): string {
