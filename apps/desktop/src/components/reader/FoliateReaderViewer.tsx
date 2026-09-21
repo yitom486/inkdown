@@ -38,6 +38,7 @@ import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/adapter/foliate-book-adapter'
 import { parseNoteToCardMeta, resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
+import { findMarkByOverlayerKey, overlayerKeyForMark } from '@/lib/reader/marks/mark-linkage'
 import { toCanonicalChapter } from '@inkdown/reader-core'
 import { parse as parseFoliateCfi, toRange as foliateCfiToRange } from '@foliate/epubcfi.js'
 import type { FoliateViewElement } from '@foliate/view.js'
@@ -99,19 +100,6 @@ interface FoliateReaderViewerProps {
 
 const READING_PROGRESS_SAVE_MS = 400
 const FOLIATE_READER_STYLE_ID = 'foliate-reader-theme'
-
-/** overlay 键：与 apply 侧一致（书签无可视层，不进 overlay） */
-function overlayerKeyForMark(mark: ReadingMark): string | null {
-  if (mark.kind === 'bookmark') return null
-  const anchor = mark.anchor
-  if (anchor.format === 'epub') return anchor.cfiRange ?? anchor.cfi ?? null
-  if (anchor.format === 'mobi') return anchor.cfiRange ?? anchor.cfi ?? null
-  return null
-}
-
-function findMarkByOverlayerKey(marks: ReadingMark[], key: string): ReadingMark | undefined {
-  return marks.find((mark) => overlayerKeyForMark(mark) === key)
-}
 
 /** M2 页边旗标：每渲染文档上限（与 M1 行内着色同 cap，不乱标） */
 const EPUB_MARK_FLAGS_PER_DOC_CAP = 40
@@ -1719,7 +1707,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
         }
       />
 
-      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航在行下通栏 */}
+      {/* 内框行：正文（含卡轨）与 AI 侧栏并列，同属左大块；底导航收进正文列 */}
       <div className="flex min-h-0 flex-1">
         <ReaderContentShell
           filePath={filePath}
@@ -1745,6 +1733,13 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
         }}
         onHoverExcerpt={handleHoverExcerpt}
         readingFraction={globalProgress}
+        footerNav={
+          <ReaderFooterNav
+            ready={ready}
+            onPrevious={() => goToChapter(nav.previous, nav.previousIndex)}
+            onNext={() => goToChapter(nav.next, nav.nextIndex)}
+          />
+        }
       >
         <PaneErrorBoundary name={isEpub ? 'EPUB 阅读' : 'MOBI 阅读'} filePath={filePath}>
           <div
@@ -1765,12 +1760,6 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
           <AgentPanel workspaceRoot={workspaceRoot} className="w-[340px] shrink-0" />
         ) : null}
       </div>
-
-      <ReaderFooterNav
-        ready={ready}
-        onPrevious={() => goToChapter(nav.previous, nav.previousIndex)}
-        onNext={() => goToChapter(nav.next, nav.nextIndex)}
-      />
 
       {markTooltipPos && hoveredMark && !inspector.active ? (
         <EpubMarkTooltip mark={hoveredMark} x={markTooltipPos.x} y={markTooltipPos.y} />
