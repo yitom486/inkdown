@@ -66,9 +66,7 @@ export function AgentHistoryMenu({
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
           <span>
-            {selectedRuntimeId === 'antigravity-acp'
-              ? 'Antigravity 对话历史'
-              : 'Codex 对话历史'}
+            Codex 对话历史
           </span>
           <span className="font-normal">{runtimeThreads.length}</span>
         </DropdownMenuLabel>

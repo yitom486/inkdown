@@ -11,7 +11,6 @@ export const CODEX_ACP_NPM_PACKAGE = '@agentclientprotocol/codex-acp' as const
 export const LEGACY_ZED_CODEX_ACP_NPM_PACKAGE = '@zed-industries/codex-acp' as const
 
 export const DEFAULT_ACP_RUNTIME_ID = 'codex-acp'
-export const ANTIGRAVITY_ACP_RUNTIME_ID = 'antigravity-acp'
 
 /** 内置 Agent 运行时模板；不打包进安装程序，用户自备 bunx / 官方二进制 / Key */
 export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
@@ -23,15 +22,6 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     command: 'bunx',
     args: ['-y', CODEX_ACP_NPM_PACKAGE],
     requiredEnvKeys: ['OPENAI_API_KEY', 'CODEX_API_KEY'],
-  },
-  {
-    id: ANTIGRAVITY_ACP_RUNTIME_ID,
-    name: 'Google Antigravity',
-    description:
-      'Google 官方 Agent Client Protocol 服务端（Gemini 体系）；支持自动探测并复用本机 Google 账号授权',
-    command: 'agy_acp_server',
-    args: [],
-    requiredEnvKeys: ['GEMINI_API_KEY'],
   },
 ] as const
 

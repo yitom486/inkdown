@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ANTIGRAVITY_ACP_RUNTIME_ID, DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import { DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
 import { getAcpRuntimeAdapter } from './index'
 
 describe('runtimes/index', () => {
-  it('正确派发 Antigravity 适配器', () => {
-    const adapter = getAcpRuntimeAdapter(ANTIGRAVITY_ACP_RUNTIME_ID)
-    expect(adapter.id).toBe(ANTIGRAVITY_ACP_RUNTIME_ID)
-    expect(typeof adapter.beforeSpawn).toBe('function')
-    expect(typeof adapter.getSpawnEnv).toBe('function')
-    expect(typeof adapter.canSkipInteractiveAuth).toBe('function')
+  it('Antigravity 已淘汰：走未知运行时回落，不再派发专属适配器', () => {
+    const adapter = getAcpRuntimeAdapter('antigravity-acp')
+    expect(adapter.id).toBe('antigravity-acp')
+    expect(adapter.probeAuth().looksLoggedIn).toBe(false)
   })
 
   it('正确派发 Codex 适配器', () => {

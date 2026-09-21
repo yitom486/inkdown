@@ -153,17 +153,16 @@ describe('runConnectAuthGate (E2E scenarios with mock Agent)', () => {
     expect(authenticate).not.toHaveBeenCalled()
   })
 
-  it('antigravity-acp: preferDirectSession: true + looksLoggedIn: true → directly opens session, never triggers oauth-personal browser popup', async () => {
+  it('preferDirectSession: true + looksLoggedIn: true → directly opens session, never triggers login popup', async () => {
     const authenticate = vi.fn()
     const tryOpenSessionWithoutAuth = vi.fn().mockResolvedValue(true)
-    const antigravityAuthMethods = [
-      { id: 'oauth-personal', name: 'Google 账号（个人）', type: 'oauth' },
-      { id: 'oauth-business', name: 'Google Workspace（企业）', type: 'oauth' },
-      { id: 'gemini-api-key', name: 'Gemini API Key', type: 'api_key' },
+    const codexAuthMethods = [
+      { id: 'chatgpt', name: 'ChatGPT 账号', type: 'chatgpt' },
+      { id: 'apikey', name: 'API Key', type: 'api_key' },
     ]
 
     const result = await runConnectAuthGate(
-      antigravityAuthMethods,
+      codexAuthMethods,
       { looksLoggedIn: true, hasAuthFile: true, hasApiKeyEnv: false },
       {
         authenticate,

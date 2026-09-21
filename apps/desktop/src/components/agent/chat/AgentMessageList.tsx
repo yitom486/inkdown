@@ -30,7 +30,6 @@ interface AgentMessageListProps {
   messagesRef: RefObject<HTMLDivElement | null>
   authHint: string | null
   runtimeName?: string
-  runtimeId?: string
   onChapterPlanSelect?: (payload: ChapterMarkPlanSelectPayload) => void
 }
 
@@ -42,7 +41,6 @@ export const AgentMessageList = memo(function AgentMessageList({
   messagesRef,
   authHint,
   runtimeName,
-  runtimeId,
   onChapterPlanSelect,
 }: AgentMessageListProps) {
   const messages = useAcpActiveMessages()
@@ -222,9 +220,7 @@ export const AgentMessageList = memo(function AgentMessageList({
               开始与 {runtimeName ?? 'Agent'} 对话
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              {runtimeId === 'antigravity-acp'
-                ? '点击右上角连接。自动复用本机 Google 账号授权。'
-                : '点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。'}
+              点击右上角连接。复用本机 Codex 登录或环境变量中的 API Key。
             </p>
             {authHint ? (
               <p

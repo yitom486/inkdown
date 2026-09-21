@@ -26,7 +26,7 @@ export function orderSilentAuthMethodIds(
 
   const score = (method: AcpAuthMethod): number => {
     const id = method.id.toLowerCase()
-    // Google Antigravity：优先个人账号，企业账号排后
+    // OAuth 个人账号优先，企业账号排后
     if (id === 'oauth-personal') return 0
     if (id === 'oauth-business') return 2
     if (id === 'gemini-api-key') return preflight.hasApiKeyEnv ? 1 : 4

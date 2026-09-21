@@ -39,7 +39,6 @@ import { useEditorUiStore } from '@/stores/editor-ui-store'
 import { acpApi } from '@/api/acp-api'
 import { isOk } from '@inkdown/contracts'
 import {
-  ANTIGRAVITY_ACP_RUNTIME_ID,
   BUILTIN_ACP_RUNTIMES,
   DEFAULT_ACP_RUNTIME_ID,
 } from '@inkdown/contracts'
@@ -131,31 +130,13 @@ export const AgentPanel = memo(function AgentPanel({
 
   /** Codex 专属能力：本机登录提示 / 自定义 API 仅 codex-acp 运行时可用 */
   const isCodexRuntime = view.selectedRuntimeId === DEFAULT_ACP_RUNTIME_ID
-  const isAntigravityRuntime = view.selectedRuntimeId === ANTIGRAVITY_ACP_RUNTIME_ID
 
   useEffect(() => {
     let cancelled = false
-    if (!isCodexRuntime && !isAntigravityRuntime) {
+    if (!isCodexRuntime) {
       setProviderStatus(null)
       setAuthHint(null)
       return
-    }
-
-    if (isAntigravityRuntime) {
-      setProviderStatus(null)
-      void (async () => {
-        const result = await acpApi.authPreflight({ runtimeId: view.selectedRuntimeId })
-        if (cancelled || !isOk(result)) return
-        const p = result.value
-        if (p.looksLoggedIn) {
-          setAuthHint('已检测到本机 Google Antigravity 登录（复用本机账号授权）')
-        } else {
-          setAuthHint('未检测到本机 Google 授权，连接时将自动唤起浏览器完成登录')
-        }
-      })()
-      return () => {
-        cancelled = true
-      }
     }
 
     void (async () => {
@@ -188,7 +169,7 @@ export const AgentPanel = memo(function AgentPanel({
     return () => {
       cancelled = true
     }
-  }, [isCodexRuntime, isAntigravityRuntime, view.selectedRuntimeId])
+  }, [isCodexRuntime, view.selectedRuntimeId])
 
   // 代理设置：全局一份，spawn Agent 子进程时注入；保存后需重新连接
   const [proxySettings, setProxySettings] = useState<AcpProxySettings | null>(null)
@@ -418,7 +399,6 @@ export const AgentPanel = memo(function AgentPanel({
         messagesRef={messagesRef}
         authHint={authHint}
         runtimeName={runtimeName}
-        runtimeId={view.selectedRuntimeId}
         onChapterPlanSelect={handleChapterPlanSelect}
       />
 
@@ -535,83 +515,48 @@ export const AgentPanel = memo(function AgentPanel({
 
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[10px] text-muted-foreground">
-                    {isAntigravityRuntime ? 'Antigravity 专享代理端口' : '代理（Agent 子进程）'}
+                    代理（Agent 子进程）
                   </DropdownMenuLabel>
-                  {isAntigravityRuntime ? (
-                    <div className="space-y-1 px-2 py-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">代理服务</span>
-                        <div className="flex items-center gap-1">
-                          <input
-                            className="h-6 w-24 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none"
-                            value={proxySettings?.host ?? '127.0.0.1'}
-                            spellCheck={false}
-                            disabled={view.status === 'connected' || view.status === 'connecting'}
-                            onChange={(e) => updateProxySettings({ host: e.target.value })}
-                          />
-                          <span className="text-[10px] text-muted-foreground">:</span>
-                          <input
-                            className="h-6 w-14 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none"
-                            value={proxySettings?.port ?? 7897}
-                            inputMode="numeric"
-                            disabled={view.status === 'connected' || view.status === 'connecting'}
-                            onChange={(e) => {
-                              const port = Number(e.target.value)
-                              if (Number.isInteger(port) && port >= 1 && port <= 65535) {
-                                updateProxySettings({ port })
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        仅作用于 Antigravity（默认 7897）；重新连接生效
-                      </p>
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <label
+                      className="flex cursor-pointer items-center gap-2 text-xs shrink-0 whitespace-nowrap"
+                      title="连接 Agent 时注入 HTTP(S)_PROXY 环境变量"
+                    >
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-[hsl(var(--primary))]"
+                        checked={proxySettings?.enabled ?? false}
+                        disabled={view.status === 'connected' || view.status === 'connecting' || view.status === 'awaiting_auth'}
+                        onChange={(e) => updateProxySettings({ enabled: e.target.checked })}
+                      />
+                      启用代理
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        className="h-6 w-24 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
+                        value={proxySettings?.host ?? '127.0.0.1'}
+                        disabled={!proxySettings?.enabled}
+                        spellCheck={false}
+                        onChange={(e) => updateProxySettings({ host: e.target.value })}
+                      />
+                      <span className="text-[10px] text-muted-foreground">:</span>
+                      <input
+                        className="h-6 w-14 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
+                        value={proxySettings?.port ?? 7897}
+                        disabled={!proxySettings?.enabled}
+                        inputMode="numeric"
+                        onChange={(e) => {
+                          const port = Number(e.target.value)
+                          if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+                            updateProxySettings({ port })
+                          }
+                        }}
+                      />
                     </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between px-2 py-1">
-                        <label
-                          className="flex cursor-pointer items-center gap-2 text-xs shrink-0 whitespace-nowrap"
-                          title="连接 Agent 时注入 HTTP(S)_PROXY 环境变量"
-                        >
-                          <input
-                            type="checkbox"
-                            className="size-3.5 accent-[hsl(var(--primary))]"
-                            checked={proxySettings?.enabled ?? false}
-                            disabled={view.status === 'connected' || view.status === 'connecting' || view.status === 'awaiting_auth'}
-                            onChange={(e) => updateProxySettings({ enabled: e.target.checked })}
-                          />
-                          启用代理
-                        </label>
-                        <div className="flex items-center gap-1">
-                          <input
-                            className="h-6 w-24 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
-                            value={proxySettings?.host ?? '127.0.0.1'}
-                            disabled={!proxySettings?.enabled}
-                            spellCheck={false}
-                            onChange={(e) => updateProxySettings({ host: e.target.value })}
-                          />
-                          <span className="text-[10px] text-muted-foreground">:</span>
-                          <input
-                            className="h-6 w-14 rounded-md border border-border/70 bg-background px-1.5 text-[11px] outline-none disabled:opacity-50"
-                            value={proxySettings?.port ?? 7897}
-                            disabled={!proxySettings?.enabled}
-                            inputMode="numeric"
-                            onChange={(e) => {
-                              const port = Number(e.target.value)
-                              if (Number.isInteger(port) && port >= 1 && port <= 65535) {
-                                updateProxySettings({ port })
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <p className="px-2 pb-1 text-[10px] text-muted-foreground">
-                        仅对 Agent 进程生效；保存后需重新连接
-                      </p>
-                    </>
-                  )}
+                  </div>
+                  <p className="px-2 pb-1 text-[10px] text-muted-foreground">
+                    仅对 Agent 进程生效；保存后需重新连接
+                  </p>
 
                   {secondary.length > 0 ? (
                     <>
@@ -690,7 +635,6 @@ export const AgentPanel = memo(function AgentPanel({
         busy={authBusy}
         error={authError}
         runtimeName={runtimeName}
-        runtimeId={view.selectedRuntimeId}
         onSelect={(methodId) => void completeAuth(methodId)}
         onCancel={() => void cancelAuth()}
       />

@@ -12,7 +12,6 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  ANTIGRAVITY_ACP_RUNTIME_ID,
   DEFAULT_ACP_RUNTIME_ID,
 } from '@inkdown/contracts'
 import {
@@ -26,7 +25,8 @@ import {
 } from '@/stores/annotation-agent-store'
 
 const CODEX = DEFAULT_ACP_RUNTIME_ID
-const ANTIGRAVITY = ANTIGRAVITY_ACP_RUNTIME_ID
+// 第二运行时（隔离语义的通用占位；Antigravity 已淘汰，不再引用真实运行时 id）
+const ALT = 'alt-acp'
 
 function freshMainThread(): void {
   const threadId = useAcpUiStore.getState().createThread(undefined, CODEX)
@@ -84,7 +84,7 @@ describe('ACP 运行时切换：状态联动语义', () => {
     expect(state.sessionId).toBeNull()
 
     // 换 Agent 后仍干净（不会被旧 Agent 残留污染）
-    useAcpUiStore.getState().setSelectedRuntimeId(ANTIGRAVITY)
+    useAcpUiStore.getState().setSelectedRuntimeId(ALT)
     state = useAcpUiStore.getState()
     expect(state.configOptions).toEqual([])
     expect(state.promptCapabilities).toEqual({})
@@ -106,16 +106,16 @@ describe('ACP 运行时切换：状态联动语义', () => {
     useAcpUiStore.getState().setSession('sess-codex-1', [])
     expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBe('sess-codex-1')
 
-    // 切到 antigravity：新运行时无旧会话 → resume 取不到 codex 的 id（不跨 Agent 串线）
-    useAcpUiStore.getState().setSelectedRuntimeId(ANTIGRAVITY)
+    // 切到第二运行时：新运行时无旧会话 → resume 取不到 codex 的 id（不跨 Agent 串线）
+    useAcpUiStore.getState().setSelectedRuntimeId(ALT)
     useAcpUiStore.getState().setSession(null)
     expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBeUndefined()
 
-    // antigravity 连接 → 记入自己的桶（活动线程为 antigravity 专属线程）
-    useAcpUiStore.getState().setSession('sess-antigravity-1', [])
+    // 第二运行时连接 → 记入自己的桶（活动线程为其专属线程）
+    useAcpUiStore.getState().setSession('sess-alt-1', [])
     const threadId = useAcpUiStore.getState().activeThreadId
     let thread = useAcpUiStore.getState().threads.find((t) => t.id === threadId)
-    expect(thread?.agentSessionIds?.[ANTIGRAVITY]).toBe('sess-antigravity-1')
+    expect(thread?.agentSessionIds?.[ALT]).toBe('sess-alt-1')
 
     // codex 桶仍由 codex 专属线程持有，互不覆盖
     const codexThread = useAcpUiStore
@@ -134,32 +134,32 @@ describe('ACP 运行时切换：状态联动语义', () => {
       .getState()
       .threads.find((t) => t.id === useAcpUiStore.getState().activeThreadId)
     expect(thread?.agentSessionIds?.[CODEX]).toBe('sess-codex-1')
-    const antigravityThread = useAcpUiStore
+    const altThread = useAcpUiStore
       .getState()
-      .threads.find((t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === ANTIGRAVITY)
-    expect(antigravityThread?.agentSessionIds?.[ANTIGRAVITY]).toBe('sess-antigravity-1')
+      .threads.find((t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === ALT)
+    expect(altThread?.agentSessionIds?.[ALT]).toBe('sess-alt-1')
   })
 
   it('模型偏好按运行时隔离，互不污染', () => {
     useAcpUiStore.getState().rememberConfigPreference(CODEX, 'model', 'gpt-5')
-    useAcpUiStore.getState().setSelectedRuntimeId(ANTIGRAVITY)
-    useAcpUiStore.getState().rememberConfigPreference(ANTIGRAVITY, 'model', 'gemini-x')
+    useAcpUiStore.getState().setSelectedRuntimeId(ALT)
+    useAcpUiStore.getState().rememberConfigPreference(ALT, 'model', 'alt-model-x')
     const prefs = useAcpUiStore.getState().preferredConfigByRuntime
     expect(prefs[CODEX]?.model).toBe('gpt-5')
-    expect(prefs[ANTIGRAVITY]?.model).toBe('gemini-x')
-    expect(prefs[ANTIGRAVITY]?.mode).toBeUndefined()
+    expect(prefs[ALT]?.model).toBe('alt-model-x')
+    expect(prefs[ALT]?.mode).toBeUndefined()
   })
 
   it('聊天记录按运行时各线程隔离：换 Agent 不清旧历史，新 Agent 从空白开始', () => {
     useAcpUiStore.getState().appendUserMessage('在 codex 下问的问题')
-    useAcpUiStore.getState().setSelectedRuntimeId(ANTIGRAVITY)
-    // antigravity 使用自己的专属线程，从空白开始
-    const antigravityMessages =
+    useAcpUiStore.getState().setSelectedRuntimeId(ALT)
+    // 第二运行时使用自己的专属线程，从空白开始
+    const altMessages =
       useAcpUiStore
         .getState()
         .threads.find((t) => t.id === useAcpUiStore.getState().activeThreadId)?.messages ??
       []
-    expect(antigravityMessages.some((m) => m.role === 'user')).toBe(false)
+    expect(altMessages.some((m) => m.role === 'user')).toBe(false)
 
     // 切回 codex：旧对话记录仍在
     useAcpUiStore.getState().setSelectedRuntimeId(CODEX)
@@ -211,12 +211,12 @@ describe('ACP 运行时切换：状态联动语义', () => {
     ).toBe(true)
 
     // 换运行时后新建的批注会话记入新桶，旧桶不动
-    useAcpUiStore.getState().setSelectedRuntimeId(ANTIGRAVITY)
-    useAnnotationAgentStore.getState().bindSessionId('ann-antigravity-1', ANTIGRAVITY)
+    useAcpUiStore.getState().setSelectedRuntimeId(ALT)
+    useAnnotationAgentStore.getState().bindSessionId('ann-alt-1', ALT)
     const thread =
       useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!
     expect(thread.agentSessionIds?.[CODEX]).toBe('ann-codex-1')
-    expect(thread.agentSessionIds?.[ANTIGRAVITY]).toBe('ann-antigravity-1')
+    expect(thread.agentSessionIds?.[ALT]).toBe('ann-alt-1')
   })
 
   it('批注旧版持久化自动迁移：单值 agentSessionId 归入 codex 桶', async () => {

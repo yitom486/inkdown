@@ -1,7 +1,5 @@
 import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from 'node:child_process'
 import type { AcpRuntimeInfo } from '@inkdown/contracts'
-import { ANTIGRAVITY_ACP_RUNTIME_ID } from '@inkdown/contracts'
-import { findAntigravityServer } from './antigravity-discovery'
 
 export interface SpawnedAcpProcess {
   runtimeId: string
@@ -47,13 +45,6 @@ function killProcessTree(pid: number): void {
   }
 }
 function resolveCommand(runtime: AcpRuntimeInfo): { file: string; shell: boolean } {
-  if (runtime.id === ANTIGRAVITY_ACP_RUNTIME_ID || runtime.command === 'agy_acp_server') {
-    const discovered = findAntigravityServer()
-    if (discovered) {
-      return { file: discovered.executablePath, shell: false }
-    }
-  }
-
   // Windows 上 bunx 常为 .cmd，需 shell
   if (process.platform === 'win32') {
     return { file: runtime.command, shell: true }

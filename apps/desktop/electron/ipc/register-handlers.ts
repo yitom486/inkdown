@@ -166,8 +166,6 @@ import {
 import { getWindowSessionByWebContents } from '../window/window-session'
 import { setWorkspaceWatch, stopWorkspaceWatch } from '../services/workspace-watcher'
 import { listAcpRuntimes } from '@inkdown/acp'
-import { ANTIGRAVITY_ACP_RUNTIME_ID } from '@inkdown/contracts'
-import { probeAntigravityAuth } from '../services/acp/antigravity-discovery'
 import {
   emptyAcpAuthPreflight,
   isCodexPreflightRuntime,
@@ -356,9 +354,6 @@ export function registerIpcHandlers(): void {
   // --- ACP：连接、认证、session、prompt ---
   ipcMain.handle(IPC.ACP_LIST_RUNTIMES, () => ok(listAcpRuntimes()))
   ipcMain.handle(IPC.ACP_AUTH_PREFLIGHT, (_event, payload?: AcpAuthPreflightPayload) => {
-    if (payload?.runtimeId === ANTIGRAVITY_ACP_RUNTIME_ID) {
-      return ok(probeAntigravityAuth())
-    }
     return ok(isCodexPreflightRuntime(payload?.runtimeId) ? probeCodexAuth() : emptyAcpAuthPreflight())
   })
   ipcMain.handle(IPC.ACP_CONNECT, (event, payload: AcpConnectPayload) => {

@@ -24,11 +24,11 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     }
   })
 
-  it('includes built-in Google Antigravity runtime template', () => {
-    const agy = findBuiltinAcpRuntime('antigravity-acp')
-    expect(agy).toBeDefined()
-    expect(agy!.name).toBe('Google Antigravity')
-    expect(agy!.command).toBe('agy_acp_server')
+  it('Antigravity 已淘汰：模板中无 antigravity-acp', () => {
+    expect(findBuiltinAcpRuntime('antigravity-acp')).toBeUndefined()
+    expect(
+      BUILTIN_ACP_RUNTIMES.some((runtime) => runtime.command === 'agy_acp_server'),
+    ).toBe(false)
   })
 })
 

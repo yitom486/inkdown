@@ -1,6 +1,5 @@
 import { app } from 'electron'
 import {
-  ANTIGRAVITY_ACP_RUNTIME_ID,
   APP_TITLE,
   DEFAULT_ACP_RUNTIME_ID,
 } from '@inkdown/contracts'
@@ -407,8 +406,8 @@ export async function connectAcp(payload: {
     resumeSessionId: payload.resumeSessionId,
   })
 
-  // 常驻复用：同 runtime 有存活温进程时跳过冷启动（省掉 PyInstaller 解压 +
-  // Python 导包，antigravity 一次冷启动可达数十秒）。温进程是否健康由后面的
+  // 常驻复用：同 runtime 有存活温进程时跳过冷启动（省掉解压 + 导包）。
+  // 温进程是否健康由后面的
   // initialize 握手验证；若握手失败，catch 会杀掉毒进程，下次点击走冷启动自愈。
   const warmHandle = getLiveAcpProcess(runtime.id)
   if (warmHandle) {
@@ -430,19 +429,7 @@ export async function connectAcp(payload: {
 
   const adapter = getAcpRuntimeAdapter(runtime.id)
 
-  if (runtime.id === ANTIGRAVITY_ACP_RUNTIME_ID) {
-    const agy = adapter.findServer ? adapter.findServer() : null
-    if (!agy) {
-      setStatus('error', '未检测到 Google Antigravity 服务端')
-      return err({
-        code: 'ACP_SPAWN_ERROR',
-        message:
-          '未检测到 Google Antigravity 服务端（agy_acp_server）。请确保本机已安装 Zed Antigravity 扩展，或设置环境变量 AGY_ACP_SERVER_PATH 指向可执行文件。',
-      })
-    }
-  }
-
-  // 启动前钩子：例如 Antigravity 自动桥接 Windows 凭据管理器，无感同步 refresh_token
+  // 启动前钩子：各 runtime 自理副作用（如凭据桥接同步 refresh_token）
   if (adapter.beforeSpawn) {
     await adapter.beforeSpawn()
   }
@@ -473,8 +460,7 @@ export async function connectAcp(payload: {
   }
 
   try {
-    // 冷启动才做 runtime 级副作用（如 antigravity 清扫 _MEI/.tmp 残留）；
-    // 温进程复用路径跳过，追求毫秒级重连。
+    // 冷启动才做 runtime 级副作用；温进程复用路径跳过，追求毫秒级重连。
     if (!warmHandle) {
       await adapter.onColdStart?.()
     }
@@ -491,11 +477,6 @@ export async function connectAcp(payload: {
         ...proxyResult.env,
       },
       envRemove: proxyResult.envRemove,
-      onStderrLine: (line) => {
-        if (line.includes('https://accounts.google.com/o/oauth2/')) {
-          console.info('[acp] agy_acp_server 正在进行 Google 授权')
-        }
-      },
       onExit: () => {
         if (gen !== connectGeneration) return
         if (
@@ -615,8 +596,7 @@ export async function connectAcp(payload: {
     const preflight = adapter.probeAuth()
     let openedWithoutAuth: Extract<AcpConnectResult, { phase: 'ready' }> | null = null
     const gate = await runConnectAuthGate(authMethods, preflight, {
-      // 本地已有凭据（codex 的 ~/.codex、antigravity 的 settings.json / 桥接 Token 等）
-      // 时，一律优先直接建立会话（session/new）复用已有登录态，杜绝弹出系统浏览器
+      // 本地已有凭据（如 ~/.codex）时，一律优先直接建立会话（session/new）
       preferDirectSession: true,
       authenticate: async (methodId) => {
         await localTransport.request('authenticate', { methodId })
@@ -671,8 +651,7 @@ export async function authenticateAcp(payload: {
   const cwd = resolveAgentCwd(workspaceRoot).cwd
 
   const adapter = getAcpRuntimeAdapter(runtimeId ?? '')
-  // 认证守门员逻辑（docs/antigravity_acp_auth_and_lifecycle.md 第 3.4 节）：
-  // 官方 ACP 收到 authenticate 请求时无脑拉起系统浏览器；
+  // 认证守门员逻辑：官方 ACP 收到 authenticate 请求时无脑拉起系统浏览器；
   // 若本地已持有有效 Token，直接复用已有凭据建立会话，杜绝弹出系统浏览器
   if (adapter.canSkipInteractiveAuth?.(payload.methodId, payload.force)) {
     console.info('[acp] 认证守门员生效：本地凭据已就绪，跳过交互式 authenticate，直接建立会话')

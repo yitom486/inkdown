@@ -1,10 +1,8 @@
 import type { AcpAuthMethod, AcpProxySettings, CodexAuthPreflight } from '@inkdown/contracts'
-import { ANTIGRAVITY_ACP_RUNTIME_ID, DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
-import { antigravityAdapter } from './antigravity'
+import { DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
 import { codexAdapter } from './codex'
 import { emptyAcpAuthPreflight } from './codex/codex-auth-preflight'
 
-export * from './antigravity'
 export * from './codex'
 
 export interface GenericRuntimeAdapter {
@@ -22,14 +20,10 @@ export interface GenericRuntimeAdapter {
 }
 
 export type AcpRuntimeAdapter = GenericRuntimeAdapter & {
-  findServer?: typeof antigravityAdapter.findServer
   getCustomProvider?: typeof codexAdapter.getCustomProvider
 }
 
 export function getAcpRuntimeAdapter(runtimeId: string): AcpRuntimeAdapter {
-  if (runtimeId === ANTIGRAVITY_ACP_RUNTIME_ID) {
-    return antigravityAdapter
-  }
   if (runtimeId === DEFAULT_ACP_RUNTIME_ID) {
     return codexAdapter
   }

@@ -271,8 +271,7 @@ export function useAcpSession(workspaceRoot?: string) {
   }, [appendSystemMessage, bumpConnectionEpoch, finishStreaming, flushBufferedChunks, setSession, setStatus])
 
   /**
-   * 切换 ACP 运行时（如在 codex-acp 与 antigravity-acp 间切换）：
-   * 若当前正处于连接态，会自动断开旧运行时并立即连接新运行时。
+   * 切换 ACP 运行时：若当前正处于连接态，会自动断开旧运行时并立即连接新运行时。
    */
   const switchRuntime = useCallback(
     async (nextRuntimeId: string) => {
