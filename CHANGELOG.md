@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.4.1] - 2026-09-21
+
 - ### 阅读器
 
   - **知识卡片统一文档纵序**：右侧卡片轨、悬浮窗卡片流、导出全部按"先章节后文中位置"排列，同章内不再按创建时间错位
@@ -294,7 +298,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.4.0...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/yitom486/inkdown/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/yitom486/inkdown/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/yitom486/inkdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yitom486/inkdown/compare/v0.2.9...v0.3.0
