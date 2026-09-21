@@ -158,6 +158,8 @@ export const FloatingAIHud = memo(function FloatingAIHud({
   const setHudActiveTab = useReaderHudUiStore((s) => s.setHudActiveTab)
   const floatingPosition = useReaderHudUiStore((s) => s.floatingPosition)
   const setFloatingPosition = useReaderHudUiStore((s) => s.setFloatingPosition)
+  const floatingSize = useReaderHudUiStore((s) => s.floatingSize)
+  const setFloatingSize = useReaderHudUiStore((s) => s.setFloatingSize)
   const setSelectedDiagram = useReaderHudUiStore((s) => s.setSelectedDiagram)
 
   // 真实书籍批注与随堂卡片
@@ -261,6 +263,7 @@ export const FloatingAIHud = memo(function FloatingAIHud({
 
   // 悬浮窗口拖拽监听
   const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('[data-hud-resize]')) return
     if ((e.target as HTMLElement).closest('button, select, input, textarea, a, [role="button"]')) {
       return
     }
@@ -301,6 +304,53 @@ export const FloatingAIHud = memo(function FloatingAIHud({
       document.body.style.userSelect = ''
     }
   }, [isDragging, setFloatingPosition])
+
+  // 右下角拉伸监听（与移动拖拽互斥）：改宽高并持久化，钳制在视口内
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeRef = useRef<{ startX: number; startY: number; width: number; height: number } | null>(
+    null,
+  )
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsResizing(true)
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      width: floatingSize.width,
+      height: floatingSize.height,
+    }
+    document.body.style.userSelect = 'none'
+  }
+
+  useEffect(() => {
+    if (!isResizing) return
+    const handleResizeMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return
+      const nextWidth = Math.max(
+        320,
+        Math.min(window.innerWidth - 32, resizeRef.current.width + (e.clientX - resizeRef.current.startX)),
+      )
+      const nextHeight = Math.max(
+        420,
+        Math.min(window.innerHeight - 72, resizeRef.current.height + (e.clientY - resizeRef.current.startY)),
+      )
+      setFloatingSize({ width: nextWidth, height: nextHeight })
+    }
+    const handleResizeEnd = () => {
+      setIsResizing(false)
+      resizeRef.current = null
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', handleResizeMove, { passive: true })
+    window.addEventListener('mouseup', handleResizeEnd)
+    return () => {
+      window.removeEventListener('mousemove', handleResizeMove)
+      window.removeEventListener('mouseup', handleResizeEnd)
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing, setFloatingSize])
 
   // 如果处于停靠模式或面板完全关闭且不是胶囊态，则不渲染悬浮组件
   if (hudDisplayMode === 'docked' || (!panelOpen && hudDisplayMode !== 'capsule')) {
@@ -388,14 +438,19 @@ export const FloatingAIHud = memo(function FloatingAIHud({
     { id: 'outline', label: '大纲', icon: ListTree },
   ]
 
-  // Floating 悬浮窗体模式：磨砂黑曜石与发丝微光浮岛质感（支持自由拖拽与 4 大 Tab）
+  // Floating 悬浮窗体模式：磨砂黑曜石与发丝微光浮岛质感（支持自由拖拽、拉伸与 4 大 Tab）
   return (
     <div
-      style={{ left: floatingPosition.x, top: floatingPosition.y }}
+      style={{
+        left: floatingPosition.x,
+        top: floatingPosition.y,
+        width: floatingSize.width,
+        height: floatingSize.height,
+      }}
       onMouseDown={handleMouseDown}
       className={cn(
         'fixed z-40 flex flex-col',
-        'w-[450px] max-w-[calc(100vw-2rem)] h-[580px] max-h-[calc(100vh-4.5rem)]',
+        'max-w-[calc(100vw-2rem)] max-h-[calc(100vh-4.5rem)]',
         'overflow-hidden rounded-2xl border border-border/80 dark:border-white/10 bg-card/95 dark:bg-[#0c0c10]/95 shadow-2xl backdrop-blur-2xl ring-1 ring-black/5 dark:ring-white/5',
         isDragging ? 'cursor-grabbing shadow-[0_25px_60px_-15px_rgba(0,0,0,0.4)]' : 'transition-all duration-150',
       )}
@@ -907,6 +962,24 @@ export const FloatingAIHud = memo(function FloatingAIHud({
             </div>
           </div>
         )}
+      </div>
+      {/* 右下角拉伸手柄 */}
+      <div
+        data-hud-resize
+        data-testid="hud-resize-handle"
+        title="拖拽调整大小"
+        onMouseDown={handleResizeStart}
+        className="absolute bottom-1 right-1 z-10 flex size-5 cursor-nwse-resize items-end justify-end rounded text-muted-foreground/50 hover:text-foreground"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+          <path
+            d="M11 1v10H1"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <path d="M11 5v6H5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
       </div>
     </div>
   )

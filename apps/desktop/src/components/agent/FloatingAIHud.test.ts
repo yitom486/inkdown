@@ -222,3 +222,86 @@ describe('deriveTocProposals', () => {
     ).toEqual([])
   })
 })
+
+describe('悬浮窗拉伸', () => {
+  let container: HTMLDivElement
+  let root: Root
+  let queryClient: QueryClient
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    useAcpUiStore.setState({
+      panelOpen: true,
+      hudDisplayMode: 'floating',
+      status: 'connected',
+      selectedRuntimeId: 'codex-acp',
+    })
+    useReaderHudUiStore.setState({
+      hudActiveTab: 'chat',
+      floatingPosition: { x: 100, y: 100 },
+    })
+  })
+
+  afterEach(() => {
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+    queryClient.clear()
+  })
+
+    async function renderFloating() {
+      useReaderHudUiStore.setState({
+        hudDisplayMode: 'floating',
+        panelOpen: true,
+        floatingSize: { width: 450, height: 580 },
+      })
+      await act(async () => {
+        root.render(
+          createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            createElement(FloatingAIHud, { workspaceRoot: '/workspace' }),
+          ),
+        )
+      })
+    }
+
+    function dragHandleBy(dx: number, dy: number) {
+      const handle = container.querySelector('[data-testid="hud-resize-handle"]') as HTMLElement
+      expect(handle).not.toBeNull()
+      act(() => {
+        handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 0, clientY: 0 }))
+      })
+      act(() => {
+        window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: dx, clientY: dy }))
+      })
+      act(() => {
+        window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      })
+    }
+
+    it('右下角手柄拖拽改宽高并写入 store', async () => {
+      await renderFloating()
+      dragHandleBy(60, 40)
+      expect(useReaderHudUiStore.getState().floatingSize).toEqual({ width: 510, height: 620 })
+      const hud = container.querySelector('[data-testid="floating-ai-hud"]') as HTMLElement
+      expect(hud.style.width).toBe('510px')
+      expect(hud.style.height).toBe('620px')
+    })
+
+    it('尺寸钳制在视口内与最小值', async () => {
+      await renderFloating()
+      // 超大拖拽：钳制到视口
+      dragHandleBy(10000, 10000)
+      const size = useReaderHudUiStore.getState().floatingSize
+      expect(size.width).toBeLessThanOrEqual(window.innerWidth - 32)
+      expect(size.height).toBeLessThanOrEqual(window.innerHeight - 72)
+      // 反向拖拽：钳制到最小值
+      dragHandleBy(-10000, -10000)
+      expect(useReaderHudUiStore.getState().floatingSize).toEqual({ width: 320, height: 420 })
+    })
+})

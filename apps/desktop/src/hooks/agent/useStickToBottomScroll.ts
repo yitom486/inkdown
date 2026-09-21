@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import {
   DEFAULT_STICK_TO_BOTTOM_THRESHOLD_PX,
   isNearBottom,
@@ -76,9 +76,11 @@ export function useStickToBottomScroll({
     })
   }, [contentRef])
 
-  // 原位恢复：挂载与线程切换时按记忆定位（瞬间完成，无动画）。
+  // 原位恢复：挂载与线程切换时按记忆定位。
+  // 必须 useLayoutEffect（paint 前）：弹窗出现即沉底。若用 useEffect，
+  // 首帧先按顶部画出再跳底，视觉上就是"每次出现都滚一下"。
   // 注意：同时把消息基线重置为当前，避免切线程被误判为“新消息”而跳底。
-  useEffect(() => {
+  useLayoutEffect(() => {
     prevMessageStateRef.current = messageStateRef.current
     const viewport = resolveScrollViewport(contentRef.current)
     if (!viewport) return
