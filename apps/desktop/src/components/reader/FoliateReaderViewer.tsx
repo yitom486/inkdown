@@ -39,8 +39,10 @@ import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/adapter/foliate-book-adapter'
 import { parseNoteToCardMeta, resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import {
+  buildChapterSectionMap,
   buildMarkFlag,
-  resolveMarkRange,
+  isExcerptDrawAllowed,
+  resolveMarkRangeDetailed,
   type CfiResolverView,
 } from '@/lib/reader/marks/epub-mark-overlay'
 import {
@@ -394,6 +396,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
   const syncMarkHighlights = useCallback(() => {
     const view = viewRef.current
     const cfiView = (view ?? null) as unknown as CfiResolverView | null
+    // 章节门输入：固化章节 key → spine section 集合（excerpt 兜底跨章漏画到此为止）
+    const chapterSections = buildChapterSectionMap(
+      chaptersRef.current,
+      chapterSectionsRef.current,
+    )
     let docs: Array<{ doc: Document; index: number }> = []
     try {
       const renderer = viewRef.current?.renderer as unknown as {
@@ -443,8 +450,17 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
         for (const mark of marksRef.current) {
           // 与 M2 旗标同源：CFI 优先 excerpt 兜底（此前只按 excerpt 首匹配，
           // 同一卡片下划线与圆点可能落在两处）。
-          const range = resolveMarkRange(doc, index, mark, cfiView)
-          if (!range) continue
+          // 章节门：只有 excerpt 兜底才受限（跨章漏画到此为止）；
+          // CFI 精确命中是真位置，永远画。
+          const resolved = resolveMarkRangeDetailed(doc, index, mark, cfiView)
+          if (!resolved) continue
+          if (
+            resolved.via === 'excerpt' &&
+            !isExcerptDrawAllowed(mark.chapter?.key, index, chapterSections)
+          ) {
+            continue
+          }
+          const range = resolved.range
           const cat = (mark.category ?? resolveCardMeta(mark).category) as string
           if (!palette[cat]) continue
           const bucket = buckets.get(cat)
@@ -484,6 +500,11 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     if (contents.length === 0) return
     const rootCS = document.defaultView?.getComputedStyle(document.documentElement)
     const getVar = (name: string) => rootCS?.getPropertyValue(name).trim() || undefined
+    // 章节门输入：固化章节 key → spine section 集合（excerpt 兜底跨章漏画到此为止）
+    const flagChapterSections = buildChapterSectionMap(
+      chaptersRef.current,
+      chapterSectionsRef.current,
+    )
     for (const { doc, index } of contents) {
       try {
         doc.querySelectorAll('[data-inkdown-flag]').forEach((el) => el.remove())
@@ -496,8 +517,15 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
         for (const mark of marksRef.current) {
           if (placed >= EPUB_MARK_FLAGS_PER_DOC_CAP) break
           if (mark.kind === 'bookmark') continue
-          const range = resolveMarkRange(doc, index, mark, cfiView)
-          if (!range) continue
+          const resolved = resolveMarkRangeDetailed(doc, index, mark, cfiView)
+          if (!resolved) continue
+          if (
+            resolved.via === 'excerpt' &&
+            !isExcerptDrawAllowed(mark.chapter?.key, index, flagChapterSections)
+          ) {
+            continue
+          }
+          const range = resolved.range
           const cat = (mark.category ?? resolveCardMeta(mark).category) as string
           const flag = buildMarkFlag(doc, mark.id, range, {
             background: resolveMarkCategorySwatch(cat, getVar, themeRef.current),

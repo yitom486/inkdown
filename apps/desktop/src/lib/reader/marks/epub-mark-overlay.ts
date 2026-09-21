@@ -1,4 +1,5 @@
 import { emitRailFocus } from '../rail-follow'
+import { normalizeLoadKey } from '@inkdown/reader-core'
 import { findTextRangeInRoot } from './excerpt-text-match'
 
 /**
@@ -34,6 +35,22 @@ export function resolveMarkRange(
   mark: { anchor: { format: string; cfiRange?: string; cfi?: string }; excerpt?: string | null },
   view: CfiResolverView | null | undefined,
 ): Range | null {
+  return resolveMarkRangeDetailed(doc, docIndex, mark, view)?.range ?? null
+}
+
+export interface ResolvedMarkRange {
+  range: Range
+  /** 命中来源：调用方据此决定章节门（CFI 精确命中永远画，只有 excerpt 兜底才受限）。 */
+  via: 'cfi' | 'excerpt'
+}
+
+/** 同 resolveMarkRange，附带命中来源（章节门需要区分两者）。 */
+export function resolveMarkRangeDetailed(
+  doc: Document,
+  docIndex: number,
+  mark: { anchor: { format: string; cfiRange?: string; cfi?: string }; excerpt?: string | null },
+  view: CfiResolverView | null | undefined,
+): ResolvedMarkRange | null {
   const anchor = mark.anchor
   const cfi =
     anchor.format === 'epub' || anchor.format === 'mobi'
@@ -44,7 +61,7 @@ export function resolveMarkRange(
       const resolved = view.resolveCFI(cfi)
       if (resolved.index === docIndex) {
         const range = resolved.anchor(doc)
-        if (range) return range
+        if (range) return { range, via: 'cfi' }
       }
     } catch {
       // CFI 失效落到 excerpt 兜底
@@ -53,10 +70,52 @@ export function resolveMarkRange(
   const excerpt = mark.excerpt?.trim()
   if (!excerpt || !doc.body) return null
   try {
-    return findTextRangeInRoot(doc.body, excerpt)
+    const range = findTextRangeInRoot(doc.body, excerpt)
+    return range ? { range, via: 'excerpt' } : null
   } catch {
     return null
   }
+}
+
+/** 固化章节 key → spine section 下标集合（目录扁平表与 section 映射平行数组构造）。 */
+export type ChapterSectionMap = Map<string, Set<number>>
+
+export function buildChapterSectionMap(
+  units: Array<{ href: string }>,
+  sectionOfUnit: Array<number | null>,
+): ChapterSectionMap {
+  const map: ChapterSectionMap = new Map()
+  for (let i = 0; i < units.length; i += 1) {
+    const section = sectionOfUnit[i]
+    if (typeof section !== 'number' || section < 0) continue
+    const key = normalizeLoadKey(units[i]?.href)
+    if (!key) continue
+    let set = map.get(key)
+    if (!set) {
+      set = new Set()
+      map.set(key, set)
+    }
+    set.add(section)
+  }
+  return map
+}
+
+/**
+ * excerpt 兜底绘制的章节门：
+ * - 无固化章节的老卡：保可见，放行（与现状一致）；
+ * - 章节在目录中无映射（目录变了对不上）：fail-open 放行，不丢数据；
+ * - 有映射：只允许画在自己章节的 section 里，跨章漏画到此为止。
+ * CFI 精确命中不受此限（那是真位置，见调用方）。
+ */
+export function isExcerptDrawAllowed(
+  chapterKey: string | null | undefined,
+  sectionIndex: number,
+  chapterSections: ChapterSectionMap,
+): boolean {
+  if (!chapterKey) return true
+  const sections = chapterSections.get(chapterKey)
+  if (!sections || sections.size === 0) return true
+  return sections.has(sectionIndex)
 }
 
 /** 取首行矩形（多行引用的外接矩形中点会落在行缝里，视觉偏上）。 */

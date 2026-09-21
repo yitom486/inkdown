@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import {
+  buildChapterSectionMap,
   buildMarkFlag,
   firstLineRectOfRange,
   flagSpotForRange,
+  isExcerptDrawAllowed,
   resolveMarkRange,
+  resolveMarkRangeDetailed,
   type CfiResolverView,
 } from './epub-mark-overlay'
 import { subscribeRailFocus } from '../rail-follow'
@@ -77,8 +80,7 @@ describe('resolveMarkRange', () => {
   })
 })
 
-describe('flagSpotForRange', () => {
-  it('圆点落首行左侧，含文档滚动偏移（absolute 文档内坐标）', () => {
+describe('flagSpotForRange', () => {  it('圆点落首行左侧，含文档滚动偏移（absolute 文档内坐标）', () => {
     const doc = docWithParagraphs('一行文字内容')
     const range = doc.createRange()
     range.selectNodeContents(doc.body.children[0]!)
@@ -145,5 +147,81 @@ describe('buildMarkFlag', () => {
       height: 0,
     } as unknown as DOMRect)
     expect(buildMarkFlag(doc, 'm', range, { background: 'red' })).toBeNull()
+  })
+})
+
+describe('resolveMarkRangeDetailed', () => {
+  it('区分 cfi 与 excerpt 两种来源', () => {
+    const doc = docWithParagraphs('兜底文本')
+    const cfiRange = doc.createRange()
+    cfiRange.selectNodeContents(doc.body.children[0]!)
+    const mark = {
+      anchor: { format: 'epub', cfiRange: 'epubcfi(/6/2)', cfi: 'epubcfi(/6/2)' },
+      excerpt: '兜底文本',
+    }
+    expect(resolveMarkRangeDetailed(doc, 0, mark, viewWith(() => cfiRange))).toEqual({
+      range: cfiRange,
+      via: 'cfi',
+    })
+    expect(
+      resolveMarkRangeDetailed(doc, 0, mark, viewWith(() => null)),
+    ).toMatchObject({ via: 'excerpt' })
+  })
+
+  it('wrapper 与 detailed 一致', () => {
+    const doc = docWithParagraphs('文本')
+    const mark = { anchor: { format: 'epub', cfi: 'c' }, excerpt: '文本' }
+    expect(resolveMarkRange(doc, 0, mark, viewWith(() => null))).not.toBeNull()
+    expect(resolveMarkRange(doc, 9, { anchor: { format: 'epub' } }, null)).toBeNull()
+  })
+})
+
+describe('章节门（excerpt 兜底绘制范围）', () => {
+  const units = [
+    { href: 'preface.xhtml' },
+    { href: 'Editor-Note.xhtml' },
+    { href: 'Editor-Note.xhtml#sec2' },
+    { href: 'book1.xhtml' },
+  ]
+
+  it('buildChapterSectionMap：归一化合并同文件，跳过 null', () => {
+    const map = buildChapterSectionMap(units, [0, 1, 1, null])
+    expect(map.get('preface.xhtml')).toEqual(new Set([0]))
+    // 大小写/#分片归一后合并
+    expect(map.get('editor-note.xhtml')).toEqual(new Set([1]))
+    expect(map.has('book1.xhtml')).toBe(false)
+  })
+
+  it('isExcerptDrawAllowed：本章放行、别章拦、无归属放行', () => {
+    const map = buildChapterSectionMap(units, [0, 1, 1, 2])
+    // 无固化章节的老卡：保可见
+    expect(isExcerptDrawAllowed(null, 9, map)).toBe(true)
+    expect(isExcerptDrawAllowed(undefined, 9, map)).toBe(true)
+    // 有映射：只许自己章节的 section
+    expect(isExcerptDrawAllowed('editor-note.xhtml', 1, map)).toBe(true)
+    expect(isExcerptDrawAllowed('editor-note.xhtml', 0, map)).toBe(false)
+    expect(isExcerptDrawAllowed('editor-note.xhtml', 2, map)).toBe(false)
+    // 章节在目录中无映射（目录变了）：fail-open 保可见
+    expect(isExcerptDrawAllowed('gone-chapter.xhtml', 0, map)).toBe(true)
+    // 空目录：全放行
+    expect(isExcerptDrawAllowed('editor-note.xhtml', 5, new Map())).toBe(true)
+  })
+
+  it('复现本章（0）全书（4）：别章卡的 excerpt 在本章文档零绘制', () => {
+    // 原编者的话的卡（section 1），在前言文档（section 0）若走 excerpt 兜底必须被拦
+    const map = buildChapterSectionMap(units, [0, 1, 1, 2])
+    const otherChapterCard = {
+      anchor: { format: 'epub', cfiRange: 'stale-cfi', cfi: 'stale-cfi' },
+      excerpt: '前言里恰好也有的句子',
+      chapter: { key: 'editor-note.xhtml' },
+    }
+    const doc = docWithParagraphs('前言里恰好也有的句子')
+    // CFI 失效（旧书）→ 兜底 excerpt 能定位文本…
+    const resolved = resolveMarkRangeDetailed(doc, 0, otherChapterCard, viewWith(() => null))
+    expect(resolved?.via).toBe('excerpt')
+    // …但章节门拦住，不画
+    expect(isExcerptDrawAllowed(otherChapterCard.chapter.key, 0, map)).toBe(false)
+    // 同章则画
+    expect(isExcerptDrawAllowed(otherChapterCard.chapter.key, 1, map)).toBe(true)
   })
 })
