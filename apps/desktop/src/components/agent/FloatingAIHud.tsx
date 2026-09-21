@@ -29,6 +29,7 @@ import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { openChapterForMarkRecovery } from '@/lib/agent/mark-proposal-failure'
 import { getReaderContentProvider } from '@/lib/agent/context/reader-content-registry'
 import { sortCardsByDocumentPosition } from '@/lib/reader/marks/card-order-from-units'
+import { emitRevealMark } from '@/lib/reader/marks/mark-linkage'
 import { toast } from 'sonner'
 import { BUILTIN_ACP_RUNTIMES, type ReadingMarkCategory } from '@inkdown/contracts'
 import { isOk } from '@inkdown/contracts'
@@ -551,6 +552,10 @@ export const FloatingAIHud = memo(function FloatingAIHud({
                         ...mark,
                         collapsed: collapsedMap[mark.id] ?? mark.collapsed,
                       }}
+                      // 与右侧卡片轨同一联动入口：点卡/点出处/点摘录都定位正文
+                      //（此前悬浮窗卡片无任何跳转回调，点击正文区直接被吞掉）
+                      onCardClick={() => emitRevealMark(mark.id)}
+                      onAnchorClick={() => emitRevealMark(mark.id)}
                       onToggleCollapse={() =>
                         setCollapsedMap((prev) => ({
                           ...prev,

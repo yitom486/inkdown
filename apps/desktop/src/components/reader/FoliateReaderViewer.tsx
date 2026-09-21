@@ -38,7 +38,14 @@ import { toast } from 'sonner'
 import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/adapter/foliate-book-adapter'
 import { parseNoteToCardMeta, resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
-import { findMarkByOverlayerKey, overlayerKeyForMark } from '@/lib/reader/marks/mark-linkage'
+import {
+  findMarkByOverlayerKey,
+  locateExcerptInDocuments,
+  overlayerKeyForMark,
+  runRevealPlan,
+  subscribeRevealMark,
+  type RevealAdapter,
+} from '@/lib/reader/marks/mark-linkage'
 import { toCanonicalChapter } from '@inkdown/reader-core'
 import { parse as parseFoliateCfi, toRange as foliateCfiToRange } from '@foliate/epubcfi.js'
 import type { FoliateViewElement } from '@foliate/view.js'
@@ -76,6 +83,7 @@ import {
   tocFromEpubUnits,
 } from '@inkdown/reader-core'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 
 declare global {
   interface Window {
@@ -727,64 +735,90 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     }
   }, [])
 
-  const handleSelectMark = useCallback((mark: ReadingMark) => {
-    const view = viewRef.current
-    if (!view) return
-    const anchor = mark.anchor
-    const cfi =
-      anchor.format === 'epub' || anchor.format === 'mobi'
-        ? (anchor.cfiRange ?? anchor.cfi)
-        : undefined
-    if (cfi) {
-      void view.goTo(cfi).catch(() => undefined)
-      flashJumpRange(cfi)
-      return
+  // 卡片→正文摘录兜底：在已渲染节文档中定位并选中（与统一联动 excerpt 步同语义）。
+  const revealExcerptInFoliateDocs = useCallback((text: string): boolean => {
+    let docs: Array<{ doc: Document }> = []
+    try {
+      const renderer = viewRef.current?.renderer as unknown as {
+        getContents: () => Array<{ doc: Document }>
+      } | null
+      docs = renderer?.getContents() ?? []
+    } catch {
+      docs = []
     }
-    if (anchor.format === 'mobi') {
-      const index = adapterRef.current?.sections.findIndex((s) => s.id === anchor.chapterId) ?? -1
-      if (index >= 0) void view.goTo(index).catch(() => undefined)
+    const hit = locateExcerptInDocuments(docs, text)
+    if (!hit) return false
+    try {
+      const host =
+        hit.range.startContainer instanceof Element
+          ? hit.range.startContainer
+          : hit.range.startContainer.parentElement
+      host?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const selection = hit.doc.defaultView?.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(hit.range.cloneRange())
+    } catch {
+      return false
     }
-    // 原文兜底：无 CFI 时按 excerpt 在已渲染章节中定位、滚动并选中，
-    // 与卡片侧的 BracketConnector 高亮呼应，完成卡片↔原文双向对应。
-    const excerpt = mark.excerpt?.trim()
-    if (excerpt) {
-      void (async () => {
-        let docs: Array<{ doc: Document }> = []
-        try {
-          const renderer = viewRef.current?.renderer as unknown as {
-            getContents: () => Array<{ doc: Document }>
-          } | null
-          docs = renderer?.getContents() ?? []
-        } catch {
-          docs = []
-        }
-        for (const { doc } of docs) {
-          const body = doc.body
-          if (!body) continue
-          let range: Range | null = null
-          try {
-            range = findTextRangeInRoot(body, excerpt)
-          } catch {
-            range = null
-          }
-          if (!range) continue
-          try {
-            const host =
-              range.startContainer instanceof Element
-                ? range.startContainer
-                : range.startContainer.parentElement
-            host?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            const selection = doc.defaultView?.getSelection()
-            selection?.removeAllRanges()
-            selection?.addRange(range.cloneRange())
-          } catch {
-            // 定位失败时静默忽略，保持当前阅读位置
-          }
-          return
-        }
-      })()
-    }
+    return true
   }, [])
+
+  const handleSelectMark = useCallback(
+    (mark: ReadingMark) => {
+      const adapter: RevealAdapter = {
+        tryStep: async (step): Promise<boolean> => {
+          const view = viewRef.current
+          if (!view) return false
+          switch (step.type) {
+            case 'cfi': {
+              try {
+                await view.goTo(step.cfi)
+              } catch {
+                return false
+              }
+              flashJumpRange(step.cfi)
+              return true
+            }
+            case 'mobi-chapter': {
+              const index =
+                adapterRef.current?.sections.findIndex((s) => s.id === step.chapterId) ?? -1
+              if (index < 0) return false
+              try {
+                await view.goTo(index)
+              } catch {
+                return false
+              }
+              return true
+            }
+            case 'excerpt':
+              return revealExcerptInFoliateDocs(step.text)
+            default:
+              return false
+          }
+        },
+      }
+      void runRevealPlan(mark, adapter).then((result) => {
+        if (!result.ok) {
+          reportRuntimeError(new Error(`reveal miss (${result.miss.reason})`), {
+            source: 'mark-linkage',
+            op: 'reveal',
+            silentToast: true,
+            filePath,
+            data: { markId: mark.id, reason: result.miss.reason },
+          })
+        }
+      })
+    },
+    [filePath, flashJumpRange, revealExcerptInFoliateDocs],
+  )
+
+  // 悬浮窗卡片 reveal 请求：同文件 mark 才执行（跨文件请求忽略）。
+  useEffect(() => {
+    return subscribeRevealMark((id) => {
+      const mark = marksRef.current.find((item) => item.id === id)
+      if (mark) handleSelectMark(mark)
+    })
+  }, [handleSelectMark])
 
   const handleDeleteMark = useCallback(
     async (mark: ReadingMark) => {

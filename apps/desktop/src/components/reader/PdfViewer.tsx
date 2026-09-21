@@ -134,6 +134,14 @@ import { resolvePdfAgentSearchBlock } from '@/lib/reader/pdf/pdf-agent-search-ga
 import { rosettaPageMissingError } from '@/lib/reader/rosetta/rosetta-read-guard'
 import { iterateRosettaChapterUnits } from '@/lib/agent/context/rosetta-chapter-units'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
+import {
+  revealExcerptOf,
+  runRevealPlan,
+  scrollElementTextIntoView,
+  subscribeRevealMark,
+  type RevealAdapter,
+} from '@/lib/reader/marks/mark-linkage'
 import {
   resolvePdfChapter,
   resolvePdfChapterByPage,
@@ -241,6 +249,8 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
 
   const { data, isLoading, error } = useReaderBinary(filePath)
   const { marks, createMark, updateMark, deleteMark } = useReadingMarks(filePath)
+  const marksRef = useRef(marks)
+  marksRef.current = marks
   const inspector = useReadingMarkInspector(marks)
   const inspectorRef = useRef(inspector)
   inspectorRef.current = inspector
@@ -1752,12 +1762,72 @@ export function PdfViewer({ filePath, theme, workspaceRoot }: PdfViewerProps) {
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {
-      if (mark.anchor.format === 'pdf') {
-        jumpToPage(mark.anchor.page)
+      const adapter: RevealAdapter = {
+        tryStep: async (step): Promise<boolean> => {
+          switch (step.type) {
+            case 'pdf-page': {
+              if (!Number.isFinite(step.page) || step.page < 1) return false
+              if (step.page !== pageNumRef.current) jumpToPage(step.page)
+              // 页内精确定位：等页 DOM 就绪后按摘录滚动（同页卡片此前只跳页首，视觉无位移）
+              const text = revealExcerptOf(mark)
+              if (text) {
+                const range = await waitForDom(() => {
+                  const el = pageAnchorRefs.current.get(step.page)
+                  return el ? scrollElementTextIntoView(el, text) : null
+                }, { attempts: 10, delayMs: 100 })
+                if (range) {
+                  try {
+                    const selection = window.getSelection()
+                    selection?.removeAllRanges()
+                    selection?.addRange(range.cloneRange())
+                  } catch {
+                    // 选区失败不否定滚动定位
+                  }
+                }
+              }
+              return true
+            }
+            case 'excerpt': {
+              const el = pageAnchorRefs.current.get(pageNumRef.current)
+              if (!el) return false
+              const range = scrollElementTextIntoView(el, step.text)
+              if (!range) return false
+              try {
+                const selection = window.getSelection()
+                selection?.removeAllRanges()
+                selection?.addRange(range.cloneRange())
+              } catch {
+                return false
+              }
+              return true
+            }
+            default:
+              return false
+          }
+        },
       }
+      void runRevealPlan(mark, adapter).then((result) => {
+        if (!result.ok) {
+          reportRuntimeError(new Error(`reveal miss (${result.miss.reason})`), {
+            source: 'mark-linkage',
+            op: 'reveal',
+            silentToast: true,
+            filePath,
+            data: { markId: mark.id, reason: result.miss.reason },
+          })
+        }
+      })
     },
-    [jumpToPage],
+    [filePath, jumpToPage],
   )
+
+  // 悬浮窗卡片 reveal 请求：同文件 mark 才执行（跨文件请求忽略）。
+  useEffect(() => {
+    return subscribeRevealMark((id) => {
+      const mark = marksRef.current.find((item) => item.id === id)
+      if (mark) handleSelectMark(mark)
+    })
+  }, [handleSelectMark])
 
   const handleDeleteMark = useCallback(
     async (mark: ReadingMark) => {

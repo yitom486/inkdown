@@ -27,6 +27,12 @@ import { useReaderSidePanels } from '@/hooks/reader/useReaderSidePanels'
 import { useReadingMarkInspector } from '@/hooks/reader/useReadingMarkInspector'
 import { useReaderSelectionActions } from '@/hooks/reader/useReaderSelectionActions'
 import { parseNoteToCardMeta } from '@/lib/reader/marks/resolve-card-meta'
+import {
+  runRevealPlan,
+  scrollElementTextIntoView,
+  subscribeRevealMark,
+  type RevealAdapter,
+} from '@/lib/reader/marks/mark-linkage'
 import { useReaderExportMenu } from '@/hooks/reader/useReaderExportMenu'
 import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useDeferredReaderLayout } from '@/hooks/reader/useDeferredReaderLayout'
@@ -96,6 +102,7 @@ import {
   tocFromWebUnits,
 } from '@inkdown/reader-core'
 import { reportAppError } from '@/lib/workspace/report-error'
+import { reportRuntimeError } from '@/lib/workspace/error-reporter'
 import { useAppSettingsStore } from '@/stores/app-settings-store'
 import { useReadingProgressStore } from '@/stores/reading-progress-store'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
@@ -986,12 +993,64 @@ export const WebDocViewer = forwardRef<WebDocViewerHandle, WebDocViewerProps>(
 
   const handleSelectMark = useCallback(
     (mark: ReadingMark) => {
-      if (mark.anchor.format === 'web') {
-        navigateToUrl(mark.anchor.url)
+      const adapter: RevealAdapter = {
+        tryStep: (step): boolean => {
+          switch (step.type) {
+            case 'web-url': {
+              // 跨页才导航；同页落到 heading/excerpt  intra 定位（此前同页也整页重载）
+              if (step.url !== pageUrlRef.current) {
+                navigateToUrl(step.url)
+                return true
+              }
+              if (step.headingId) return scrollToWebDocFragment(step.headingId)
+              return false
+            }
+            case 'excerpt': {
+              let doc: Document | null | undefined
+              try {
+                doc = iframeRef.current?.contentDocument
+              } catch {
+                return false
+              }
+              if (!doc?.body) return false
+              const range = scrollElementTextIntoView(doc.body, step.text)
+              if (!range) return false
+              try {
+                const selection = doc.defaultView?.getSelection()
+                selection?.removeAllRanges()
+                selection?.addRange(range.cloneRange())
+              } catch {
+                return false
+              }
+              return true
+            }
+            default:
+              return false
+          }
+        },
       }
+      void runRevealPlan(mark, adapter).then((result) => {
+        if (!result.ok) {
+          reportRuntimeError(new Error(`reveal miss (${result.miss.reason})`), {
+            source: 'mark-linkage',
+            op: 'reveal',
+            silentToast: true,
+            filePath: documentId,
+            data: { markId: mark.id, reason: result.miss.reason },
+          })
+        }
+      })
     },
-    [navigateToUrl],
+    [documentId, navigateToUrl, scrollToWebDocFragment],
   )
+
+  // 悬浮窗卡片 reveal 请求：同文档 mark 才执行（跨文档请求忽略）。
+  useEffect(() => {
+    return subscribeRevealMark((id) => {
+      const mark = marksRef.current.find((item) => item.id === id)
+      if (mark) handleSelectMark(mark)
+    })
+  }, [handleSelectMark])
 
   const handleDeleteMark = useCallback(
     async (mark: ReadingMark) => {
