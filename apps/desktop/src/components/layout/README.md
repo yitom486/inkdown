@@ -6,8 +6,8 @@
 
 | 文件 | 功能 |
 |------|------|
-| `WorkspaceShell` | 顶栏 + ActivityBar + 可折叠侧栏 + 主区 + Agent 面板 |
-| `TitleBar` / `ActivityBar` | 标题栏与左侧活动条 |
+| `WorkspaceShell` | ActivityBar + 可折叠侧栏 + 主区 + Agent 面板（顶栏 TitleBar 已删除，入口收进资源管理器 ⋯ 菜单） |
+| `ActivityBar` | 左侧活动条 |
 | `Sidebar` | 侧栏（装配 panels/ 的内容面板） |
 | `SplitPane` | 通用分栏容器 |
 
@@ -15,7 +15,7 @@
 
 | 文件 | 功能 |
 |------|------|
-| `FileExplorer` | 文件树（新建/重命名/删除/拖拽等树操作见 `hooks/workspace/useFileTreeActions`） |
+| `FileExplorer` | 文件树（新建/重命名/删除/拖拽等树操作见 `hooks/workspace/useFileTreeActions`；header 仅留 ⋯ 溢出菜单，设新建窗口/保存/导出/设置等入口） |
 | `FileBreadcrumb` | 文件面包屑（编辑/阅读主区共用） |
 | `DocumentOutline` | Markdown 大纲（侧栏消费） |
 

@@ -78,12 +78,12 @@ test.describe('WebDAV 同步（本地 stub）', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
 
       // 打开设置
-      await window.getByRole('button', { name: '帮助', exact: true }).click()
+      await window.getByRole('button',   { name: '更多操作', exact: true }).click()
       await window.getByRole('menuitem', { name: /设置/ }).click()
       const dialog = window.getByRole('dialog', { name: '设置' })
       await expect(dialog).toBeVisible({ timeout: 10_000 })

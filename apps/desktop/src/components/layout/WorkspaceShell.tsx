@@ -1,7 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { Minimize2 } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
-import { TitleBar } from '@/components/layout/TitleBar'
 import { ActivityBar } from '@/components/layout/ActivityBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { AgentPanel, useIsDockedAgentVisible } from '@/components/agent/AgentPanel'
@@ -27,7 +26,6 @@ import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import type { AppTheme } from '@/stores/editor-ui-store'
 
 export interface WorkspaceShellProps {
-  theme: AppTheme
   workspaceRoot?: string
   fileTree: FileTreeNode[]
   activeFilePath?: string
@@ -35,23 +33,19 @@ export interface WorkspaceShellProps {
   recentWebUrls?: string[]
   recentFiles: string[]
   treeActions?: ReturnType<typeof useFileTreeActions>
-  /** Markdown 大纲；阅读器模式传空数组即可 */
+  /** Markdown ????????????????????? */
   headings?: MarkdownHeading[]
   activeHeadingId?: string
   onSelectHeading?: (heading: MarkdownHeading) => void
-  /** 阅读器：禁用保存/导出 */
+  /** ????????????/??? */
   readOnly?: boolean
   onOpenFile: () => void
   onOpenFolder: () => void
   onQuickOpen?: () => void
-  onFind?: () => void
-  onReplace?: () => void
   onOpenWebDoc?: (url: string) => void
   onRescanWorkspace?: () => void
   isRescanningWorkspace?: boolean
   onSelectFile: (path: string) => void
-  onOpenRecentFile: (path: string) => void
-  onToggleTheme: () => void
   onSave: () => void
   onSaveAs: () => void
   onExportHtml: () => void
@@ -71,11 +65,10 @@ export interface WorkspaceShellProps {
 }
 
 /**
- * 工作区外壳：TitleBar / ActivityBar / 侧栏 / Agent 常驻。
+ * 工作区外壳：ActivityBar / 侧栏 / Agent 常驻（顶栏 TitleBar 已删除）。
  * 切换 Markdown ↔ PDF 时只替换 children（主区），避免 Agent 面板整树卸载。
  */
 export function WorkspaceShell({
-  theme,
   workspaceRoot,
   fileTree,
   activeFilePath,
@@ -90,14 +83,10 @@ export function WorkspaceShell({
   onOpenFile,
   onOpenFolder,
   onQuickOpen,
-  onFind,
-  onReplace,
   onOpenWebDoc,
   onRescanWorkspace,
   isRescanningWorkspace,
   onSelectFile,
-  onOpenRecentFile,
-  onToggleTheme,
   onSave,
   onSaveAs,
   onExportHtml,
@@ -180,34 +169,6 @@ export function WorkspaceShell({
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      <TitleBar
-        theme={theme}
-        recentFiles={recentFiles}
-        sidebarVisible={sidebarVisible}
-        agentPanelOpen={agentPanelOpen}
-        readOnly={readOnly}
-        onToggleSidebar={handleToggleSidebar}
-        onToggleAgentPanel={handleToggleAgentPanel}
-        onToggleTheme={onToggleTheme}
-        onSetTheme={(t) => useEditorUiStore.getState().setTheme(t)}
-        onOpenFile={onOpenFile}
-        onOpenFolder={onOpenFolder}
-        onQuickOpen={onQuickOpen}
-        onFind={onFind}
-        onReplace={onReplace}
-        onOpenRecentFile={onOpenRecentFile}
-        onSave={onSave}
-        onSaveAs={onSaveAs}
-        onExportHtml={onExportHtml}
-        onExportPdf={onExportPdf}
-        onOpenSettings={onOpenSettings}
-        onOpenErrorLog={onOpenErrorLog}
-        onOpenDevTools={onOpenDevTools}
-        onAbout={onAbout}
-        onNewWindow={onNewWindow}
-        onQuit={onQuit}
-      />
-
       <div className="flex min-h-0 flex-1">
         {!zenMode && (
           <ActivityBar
@@ -255,6 +216,19 @@ export function WorkspaceShell({
               onSelectHeading={onSelectHeading ?? (() => undefined)}
               onHideSidebar={() => handleSetSidebarVisible(false)}
               treeActions={treeActions}
+              readOnly={readOnly}
+              onOpenFile={onOpenFile}
+              onQuickOpen={onQuickOpen}
+              onNewWindow={onNewWindow}
+              onSave={onSave}
+              onSaveAs={onSaveAs}
+              onExportHtml={onExportHtml}
+              onExportPdf={onExportPdf}
+              onOpenSettings={onOpenSettings}
+              onOpenErrorLog={onOpenErrorLog}
+              onOpenDevTools={onOpenDevTools}
+              onAbout={onAbout}
+              onQuit={onQuit}
             />
           </ResizablePanel>
 

@@ -74,8 +74,13 @@ export function ReaderToolbarShell({
   const setPanelOpen = useAcpUiStore((s) => s.setPanelOpen)
   const acpStatus = useAcpUiStore((s) => s.status)
 
-  // 打开 AI 伴读悬浮窗（单一功能：只负责打开；侧栏/胶囊/关闭在 HUD 自身头部切换，对齐原版）
-  const handleOpenHud = () => {
+  // AI 伴读开关：已开则关闭，未开则以悬浮窗打开
+  //（侧栏/胶囊/关闭在 HUD 自身头部切换，对齐原版）
+  const handleToggleHud = () => {
+    if (panelOpen) {
+      setPanelOpen(false)
+      return
+    }
     setPanelOpen(true)
     setHudDisplayMode('floating')
   }
@@ -187,11 +192,11 @@ export function ReaderToolbarShell({
             </Button>
           </ToolbarTip>
 
-          {/* AI 伴读：只负责打开悬浮窗，不兼任模式循环 */}
-          <ToolbarTip label="打开 AI 伴读悬浮窗">
+          {/* AI 伴读开关：开/关悬浮窗 */}
+          <ToolbarTip label={panelOpen ? '关闭 AI 伴读' : '打开 AI 伴读悬浮窗'}>
             <button
               type="button"
-              onClick={handleOpenHud}
+              onClick={handleToggleHud}
               className={cn(
                 'flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-all duration-150 cursor-pointer select-none',
                 panelOpen

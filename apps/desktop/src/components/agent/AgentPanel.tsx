@@ -1,12 +1,7 @@
 import {
   ChevronDown,
-  Columns2,
-  ExternalLink,
   Loader2,
-  Minimize2,
-  Plus,
   Settings2,
-  Trash2,
   Unplug,
   Wifi,
   X,
@@ -18,6 +13,7 @@ import { AgentAuthDialog } from '@/components/agent/AgentAuthDialog'
 import { AgentProviderDialog } from '@/components/agent/AgentProviderDialog'
 import { AgentBunInstallBanner } from '@/components/agent/AgentBunInstallBanner'
 import { AgentHistoryMenu } from '@/components/agent/AgentHistoryMenu'
+import { AgentHeaderOverflowMenu } from '@/components/agent/AgentHeaderOverflowMenu'
 import { CompactConfigMenu } from '@/components/agent/CompactConfigMenu'
 import { AgentMessageList } from '@/components/agent/chat/AgentMessageList'
 import type { ChapterMarkPlanSelectPayload } from '@/components/agent/propose/ChapterMarkPlanCard'
@@ -381,67 +377,20 @@ export const AgentPanel = memo(function AgentPanel({
             workspaceRoot={workspaceRoot}
             onAfterSwitchThread={() => void syncAgentSessionToActiveThread()}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7 rounded-lg"
-            title="新对话"
-            disabled={view.prompting}
-            onClick={() => {
+          <AgentHeaderOverflowMenu
+            floating={floating}
+            actionDisabled={view.prompting}
+            onNewThread={() => {
               createThread(workspaceRoot)
               void syncAgentSessionToActiveThread()
             }}
-          >
-            <Plus className="size-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7 rounded-lg"
-            title="清空当前对话"
-            onClick={clearMessages}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-          {floating ? (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
-                title="最小化为极简胶囊"
-                onClick={onMinimizeToCapsule}
-              >
-                <Minimize2 className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
-                title="停靠回侧栏"
-                onClick={onToggleFloating}
-              >
-                <Columns2 className="size-3.5" />
-              </Button>
-            </>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
-              title="切换为悬浮伴读小窗"
-              onClick={() => {
-                setHudDisplayMode('floating')
-              }}
-            >
-              <ExternalLink className="size-3.5" />
-            </Button>
-          )}
+            onClearMessages={clearMessages}
+            onMinimizeToCapsule={onMinimizeToCapsule}
+            onDockPanel={onToggleFloating}
+            onFloatPanel={() => {
+              setHudDisplayMode('floating')
+            }}
+          />
           <Button
             type="button"
             variant="ghost"

@@ -25,10 +25,10 @@ test.describe('阅读器冒烟（自研最小 fixture）', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
-      await window.getByRole('button', { name: '文件', exact: true }).click()
+      await window.getByRole('button',   { name: '更多操作', exact: true }).click()
       await window.getByRole('menuitem', { name: /打开文件夹/ }).click()
       await expect(window.getByText(mdName).first()).toBeVisible({ timeout: 15_000 })
 
@@ -52,10 +52,10 @@ test.describe('阅读器冒烟（自研最小 fixture）', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
-      await window.getByRole('button', { name: '文件', exact: true }).click()
+      await window.getByRole('button',   { name: '更多操作', exact: true }).click()
       await window.getByRole('menuitem', { name: /打开文件夹/ }).click()
       await expect(window.getByText(pdfName).first()).toBeVisible({ timeout: 15_000 })
 

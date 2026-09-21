@@ -12,7 +12,7 @@ test.describe('Agent 面板壳', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
 

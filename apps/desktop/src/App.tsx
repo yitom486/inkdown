@@ -54,7 +54,6 @@ function App() {
   const webDocMainRef = useRef<WebDocWorkspaceMainHandle>(null)
   const startupRestoreDoneRef = useRef(false)
   const theme = useEditorUiStore((state) => state.theme)
-  const toggleTheme = useEditorUiStore((state) => state.toggleTheme)
   const toggleSidebar = useEditorUiStore((state) => state.toggleSidebar)
   const autoSaveEnabled = useAppSettingsStore((state) => state.autoSaveEnabled)
   const autoSaveIntervalMs = useAppSettingsStore((state) => state.autoSaveIntervalMs)
@@ -365,15 +364,17 @@ function App() {
         return
       }
 
+      // 新建窗口：Ctrl+Shift+N（VS Code 同键位；Ctrl+N 留空，避免误触开窗）
+      if (mod && event.shiftKey && !event.altKey && (key === 'n' || code === 'KeyN')) {
+        event.preventDefault()
+        appApi.newWindow()
+        return
+      }
+
       if (!mod || event.shiftKey || event.altKey) return
       if (key === ',' || code === 'Comma') {
         event.preventDefault()
         setSettingsOpen(true)
-        return
-      }
-      if (key === 'n' || code === 'KeyN') {
-        event.preventDefault()
-        appApi.newWindow()
         return
       }
       if (key === 'p' || code === 'KeyP') {
@@ -460,7 +461,6 @@ function App() {
       <UpdatePromptHost />
 
       <WorkspaceShell
-        theme={theme}
         workspaceRoot={workspaceRoot}
         fileTree={fileTree}
         activeFilePath={filePath}
@@ -475,14 +475,10 @@ function App() {
         onOpenFile={() => void openFile()}
         onOpenFolder={() => void openFolder()}
         onQuickOpen={handleToggleQuickOpen}
-        onFind={handleOpenFind}
-        onReplace={handleOpenReplace}
         onOpenWebDoc={handleOpenWebDoc}
         onRescanWorkspace={() => void rescanWorkspace()}
         isRescanningWorkspace={isFileBusy}
         onSelectFile={(path) => void openFileFromTree(path)}
-        onOpenRecentFile={(path) => void openRecentFile(path)}
-        onToggleTheme={toggleTheme}
         onSave={() => void saveFile()}
         onSaveAs={() => void saveFileAs()}
         onExportHtml={handleExportHtml}

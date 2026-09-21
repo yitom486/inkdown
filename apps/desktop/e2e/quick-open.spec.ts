@@ -16,12 +16,12 @@ test.describe('全局快速打开', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
 
       // 经真实菜单打开文件夹（原生对话框被 E2E_AUTO_OPEN_PATH 短路）
-      await window.getByRole('button', { name: '文件', exact: true }).click()
+      await window.getByRole('button',   { name: '更多操作', exact: true }).click()
       await window.getByRole('menuitem', { name: /打开文件夹/ }).click()
       await expect(window.getByText('vue-guide.md').first()).toBeVisible({ timeout: 15_000 })
 

@@ -28,6 +28,20 @@ interface SidebarProps {
   onSelectHeading: (heading: MarkdownHeading) => void
   onHideSidebar?: () => void
   treeActions?: ReturnType<typeof useFileTreeActions>
+  /** 只读模式：资源管理器 ⋯ 菜单隐藏文档组 */
+  readOnly?: boolean
+  onOpenFile?: () => void
+  onQuickOpen?: () => void
+  onNewWindow?: () => void
+  onSave?: () => void
+  onSaveAs?: () => void
+  onExportHtml?: () => void
+  onExportPdf?: () => void
+  onOpenSettings?: () => void
+  onOpenErrorLog?: () => void
+  onOpenDevTools?: () => void
+  onAbout?: () => void
+  onQuit?: () => void
 }
 
 export function Sidebar({
@@ -48,6 +62,19 @@ export function Sidebar({
   onSelectHeading,
   onHideSidebar,
   treeActions,
+  readOnly,
+  onOpenFile,
+  onQuickOpen,
+  onNewWindow,
+  onSave,
+  onSaveAs,
+  onExportHtml,
+  onExportPdf,
+  onOpenSettings,
+  onOpenErrorLog,
+  onOpenDevTools,
+  onAbout,
+  onQuit,
 }: SidebarProps) {
   const outlineLayout = useDefaultLayout({
     id: 'markdown-editor-explorer-outline',
@@ -78,6 +105,19 @@ export function Sidebar({
               onSelectFile={onSelectFile}
               onHideSidebar={onHideSidebar}
               treeActions={treeActions}
+              readOnly={readOnly}
+              onOpenFile={onOpenFile}
+              onQuickOpen={onQuickOpen}
+              onNewWindow={onNewWindow}
+              onSave={onSave}
+              onSaveAs={onSaveAs}
+              onExportHtml={onExportHtml}
+              onExportPdf={onExportPdf}
+              onOpenSettings={onOpenSettings}
+              onOpenErrorLog={onOpenErrorLog}
+              onOpenDevTools={onOpenDevTools}
+              onAbout={onAbout}
+              onQuit={onQuit}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
@@ -106,6 +146,19 @@ export function Sidebar({
               onSelectFile={onSelectFile}
               onHideSidebar={onHideSidebar}
               treeActions={treeActions}
+              readOnly={readOnly}
+              onOpenFile={onOpenFile}
+              onQuickOpen={onQuickOpen}
+              onNewWindow={onNewWindow}
+              onSave={onSave}
+              onSaveAs={onSaveAs}
+              onExportHtml={onExportHtml}
+              onExportPdf={onExportPdf}
+              onOpenSettings={onOpenSettings}
+              onOpenErrorLog={onOpenErrorLog}
+              onOpenDevTools={onOpenDevTools}
+              onAbout={onAbout}
+              onQuit={onQuit}
             />
           </div>
           <DocumentOutline

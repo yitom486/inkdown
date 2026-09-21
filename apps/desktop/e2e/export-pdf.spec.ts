@@ -15,7 +15,7 @@ test.describe('Markdown 导出 PDF', () => {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
 
-      await window.getByRole('button', { name: '文件', exact: true }).click()
+      await window.getByRole('button',   { name: '更多操作', exact: true }).click()
       await window.getByRole('menuitem', { name: '导出 PDF' }).click()
 
       await expect

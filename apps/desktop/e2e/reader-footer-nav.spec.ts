@@ -13,7 +13,7 @@ import { writeFoliateSectionsWorkspace } from './helpers/ebook-fixture'
  *    故 Part One 的下一单元是 Part Two（flat-index 3），而非 Chapter 1。
  */
 async function openSectionsBook(window: Page): Promise<void> {
-  await window.getByRole('button', { name: '文件', exact: true }).click()
+  await window.getByRole('button',   { name: '更多操作', exact: true }).click()
   await window.getByRole('menuitem', { name: /打开文件夹/ }).click()
   await expect(window.getByText('sections-book.epub').first()).toBeVisible({ timeout: 15_000 })
 
@@ -38,7 +38,7 @@ test.describe('底栏翻页（正文列内聚）', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
       await openSectionsBook(window)
@@ -79,7 +79,7 @@ test.describe('底栏翻页（正文列内聚）', () => {
     try {
       const window = await app.firstWindow()
       await window.waitForLoadState('domcontentloaded')
-      await expect(window.getByRole('button', { name: '文件', exact: true })).toBeVisible({
+      await expect(window.getByRole('button',   { name: '更多操作', exact: true })).toBeVisible({
         timeout: 15_000,
       })
       await openSectionsBook(window)
