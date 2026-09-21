@@ -18,13 +18,14 @@ import { sortCardsByDueOrder } from '@/lib/reader/marks/review-order'
 import type { ReaderUnit } from '@inkdown/reader-core'
 import {
   findCurrentChapterRef,
+  normalizeLoadKey,
   type ReadingNotesChapterRef,
   type ReadingNotesContentKind,
   type ReadingNotesScope,
 } from '@inkdown/reader-core'
 import { passageExcerpt } from '@inkdown/reader-core'
 import type { ReadingMark } from '@inkdown/contracts'
-import { isOk } from '@inkdown/contracts'
+import { isOk, toChapterKey } from '@inkdown/contracts'
 import { readingMarksApi } from '@/api/reading-marks-api'
 import { narrowChapterScopeMarks } from '@/lib/reader/marks/chapter-scope'
 import type { DiagramVisualStep } from '@/components/agent/tools/DiagramViewerCard'
@@ -114,8 +115,13 @@ export function ReaderContentShell({
     collapsed: collapsedMap[m.id] ?? m.collapsed,
   }))
 
-  // 目录键序：卡片按文档位置排序用（纵序对齐正文）
-  const chapterOrder = useMemo(() => marksToc?.map((t) => t.key) ?? [], [marksToc])
+  // 目录键序：卡片按文档位置排序用（纵序对齐正文）。
+  // 必须与 chapterOfMark 返回值同 key 空间（固化 key 恒为 matchKey 形态），
+  // 取 toc.key（带 index 前缀）会导致分组恒 miss——见 sortMarksByDocumentPosition 约定。
+  const chapterOrder = useMemo(
+    () => marksToc?.map((t) => toChapterKey(normalizeLoadKey(t.matchKey || t.key))) ?? [],
+    [marksToc],
+  )
 
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewCards, setReviewCards] = useState<Flashcard[]>([])
@@ -347,12 +353,13 @@ export function ReaderContentShell({
           onMarkClick={onSelectMark}
           onHoverAnchor={onHoverExcerpt}
           chapterOfMark={(m) => {
-            // 优先读写入时固化的章节归属；老数据缺字段时回落运行时解析
+            // 优先读写入时固化的章节归属；老数据缺字段时回落运行时解析。
+            // 回落 key 同样归一化到固化 key 空间（与 currentChapterKey/排序同构）。
             if (m.chapter) return { key: m.chapter.key, label: m.chapter.label }
             if (!(marksToc && marksResolveChapter)) return null
             try {
               const ref = marksResolveChapter(m, marksToc)
-              return { key: ref.matchKey, label: ref.label }
+              return { key: toChapterKey(normalizeLoadKey(ref.matchKey)), label: ref.label }
             } catch {
               return null
             }

@@ -28,6 +28,7 @@ import { useReadingMarks } from '@/hooks/reader/useReadingMarks'
 import { useReaderNavigationStore } from '@/stores/reader-navigation-store'
 import { openChapterForMarkRecovery } from '@/lib/agent/mark-proposal-failure'
 import { getReaderContentProvider } from '@/lib/agent/context/reader-content-registry'
+import { sortCardsByDocumentPosition } from '@/lib/reader/marks/card-order-from-units'
 import { toast } from 'sonner'
 import { BUILTIN_ACP_RUNTIMES, type ReadingMarkCategory } from '@inkdown/contracts'
 import { isOk } from '@inkdown/contracts'
@@ -187,6 +188,13 @@ export const FloatingAIHud = memo(function FloatingAIHud({
   const units = useReaderNavigationStore((s) => s.units)
   const currentNav = useReaderNavigationStore((s) => s.nav)
   const currentFlatIndex = currentNav.flatIndex
+
+  // 卡片流统一文档序：先章节后文中位置，与右侧卡片轨同一函数
+  //（契约见 card-rail-document-order.test.ts；此前按入库裸顺序渲染）
+  const orderedMarks = useMemo(
+    () => sortCardsByDocumentPosition(marks, units),
+    [marks, units],
+  )
 
   // 卷宗与全局审计探针
   const [isProbing, setIsProbing] = useState(false)
@@ -522,7 +530,7 @@ export const FloatingAIHud = memo(function FloatingAIHud({
                   </Button>
                 </div>
               ) : (
-                marks
+                orderedMarks
                   .filter((m) => {
                     if (cardsCategory !== 'all' && (m.category || 'concept') !== cardsCategory) return false
                     if (!trimmedCardsQuery) return true

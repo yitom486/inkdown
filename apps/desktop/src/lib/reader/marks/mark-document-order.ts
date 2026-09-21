@@ -6,10 +6,13 @@ import { highlightSortKey } from '@inkdown/reader-core'
  * 让卡片纵序与正文纵序一致（此前章内是创建时间序，与正文错位）。
  *
  * 位置键即 `highlightSortKey`（与 Anki 导出排序同口径）：
- * PDF 按页（零填充精确），EPUB 按 href/cfi 字符串近似（同章同 spine 内有效，
- * 跨位 CFI 字典序在 10+ 编号时近似， mismatch 时退回创建时间序，不丢稳定性），
- * MOBI/WEB 同章同键（无更细信号，保持创建时间序）。
+ * PDF 按页（零填充精确），EPUB 按 href + cfiRange 字符串近似（同章同 spine 内有效，
+ * 跨位 CFI 字典序在 10+ 编号时近似，不丢稳定性），MOBI 按 chapterId + cfi
+ *（老锚点无 cfi 时退回创建时间序），WEB 按 URL。
  * 无章节归属的沉底；全同则保输入序（sort 稳定 + originalIndex 兜底）。
+ *
+ * 调用方义务：chapterOrder 必须与 chapterKeyOf 返回值同 key 空间
+ *（固化 key 恒为 matchKey 形态，见 toCanonicalChapter），否则章分组恒 miss。
  */
 export function sortMarksByDocumentPosition(
   marks: ReadingMark[],
