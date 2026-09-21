@@ -39,6 +39,11 @@ import { appApi } from '@/api/app-api'
 import { openFoliateBook, type FoliateBookAdapter } from '@/lib/reader/adapter/foliate-book-adapter'
 import { parseNoteToCardMeta, resolveCardMeta } from '@/lib/reader/marks/resolve-card-meta'
 import {
+  buildMarkFlag,
+  resolveMarkRange,
+  type CfiResolverView,
+} from '@/lib/reader/marks/epub-mark-overlay'
+import {
   findMarkByOverlayerKey,
   locateExcerptInDocuments,
   overlayerKeyForMark,
@@ -383,13 +388,16 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
 
   // 卡片常驻标记：CSS Custom Highlight 自绘层（颜色完全可控，不依赖 overlayer 私有 API）。
   // 每渲染文档注入 5 条分类规则（主文档解析 CSS 变量后写字面值，主题切换重注），
-  // 按 excerpt 定位当前已渲染章节的卡片并着色；切章/翻页不同步（由调用方在 relocation 节点触发）。
+  // 按统一 Range 口径（resolveMarkRange：CFI 优先 excerpt 兜底，与 M2 旗标同源）着色；
+  // 切章/翻页不同步（由调用方在 relocation 节点触发）。
   const markHighlightStyleSigRef = useRef<WeakMap<Document, string>>(new WeakMap())
   const syncMarkHighlights = useCallback(() => {
-    let docs: Array<{ doc: Document }> = []
+    const view = viewRef.current
+    const cfiView = (view ?? null) as unknown as CfiResolverView | null
+    let docs: Array<{ doc: Document; index: number }> = []
     try {
       const renderer = viewRef.current?.renderer as unknown as {
-        getContents: () => Array<{ doc: Document }>
+        getContents: () => Array<{ doc: Document; index: number }>
       } | null
       docs = renderer?.getContents() ?? []
     } catch {
@@ -404,7 +412,7 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     }
     const sig = Object.values(palette).join('|')
     const buckets = new Map<string, Range[]>()
-    for (const { doc } of docs) {
+    for (const { doc, index } of docs) {
       try {
         const viewWindow = doc.defaultView as unknown as {
           CSS?: { highlights?: { set: (name: string, h: object) => void; delete: (n: string) => void } }
@@ -428,21 +436,14 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
             .join('\n')
           markHighlightStyleSigRef.current.set(doc, sig)
         }
-        const body = doc.body
-        if (!body) continue
         for (const cat of Object.keys(palette)) {
           registry.delete(`inkdown-mark-${cat}`)
           buckets.set(cat, [])
         }
         for (const mark of marksRef.current) {
-          const excerpt = mark.excerpt?.trim()
-          if (!excerpt) continue
-          let range: Range | null = null
-          try {
-            range = findTextRangeInRoot(body, excerpt)
-          } catch {
-            range = null
-          }
+          // 与 M2 旗标同源：CFI 优先 excerpt 兜底（此前只按 excerpt 首匹配，
+          // 同一卡片下划线与圆点可能落在两处）。
+          const range = resolveMarkRange(doc, index, mark, cfiView)
           if (!range) continue
           const cat = (mark.category ?? resolveCardMeta(mark).category) as string
           if (!palette[cat]) continue
@@ -463,12 +464,14 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
     }
   }, [])
 
-  // M2 页边旗标：每渲染文档内 fixed 圆点（相对 iframe 视口定位，随文档滚动天然跟随，
-  // 只在 relocation/载入/标记变更/主题字号变化时重算）。定位与 M1 同口径
-  //（CFI 优先、excerpt 兜底，无合法坐标不画）；点击直达卡片（rail-follow 通道）。
+  // M2 页边旗标：每渲染文档内 absolute 圆点（文档内坐标，随内容滚动天然跟随，
+  // 只在 relocation/载入/标记变更/主题字号变化时重算）。定位与 M1 同源
+  //（共用 resolveMarkRange：CFI 优先、excerpt 兜底，无合法坐标不画）；
+  // 点击直达卡片（rail-follow 通道）。
   const syncMarkFlags = useCallback(() => {
     const view = viewRef.current
     if (!view) return
+    const cfiView = view as unknown as CfiResolverView
     let contents: Array<{ doc: Document; index: number }> = []
     try {
       const renderer = view.renderer as unknown as {
@@ -493,60 +496,13 @@ export function FoliateReaderViewer({ filePath, documentKind, theme, workspaceRo
         for (const mark of marksRef.current) {
           if (placed >= EPUB_MARK_FLAGS_PER_DOC_CAP) break
           if (mark.kind === 'bookmark') continue
-          let range: Range | null = null
-          const anchor = mark.anchor
-          const cfi =
-            anchor.format === 'epub' || anchor.format === 'mobi'
-              ? (anchor.cfiRange ?? anchor.cfi)
-              : undefined
-          if (cfi) {
-            try {
-              const resolved = view.resolveCFI(cfi)
-              if (resolved.index === index) range = resolved.anchor(doc)
-            } catch {
-              range = null
-            }
-          }
-          if (!range) {
-            const excerpt = mark.excerpt?.trim()
-            if (!excerpt || !doc.body) continue
-            try {
-              range = findTextRangeInRoot(doc.body, excerpt)
-            } catch {
-              range = null
-            }
-          }
+          const range = resolveMarkRange(doc, index, mark, cfiView)
           if (!range) continue
-          // 取首行矩形定圆心（多行引用的外接矩形中点会落在行缝里，视觉偏上）
-          const lineRect = ((): DOMRect | null => {
-            try {
-              const list = range.getClientRects()
-              if (list.length > 0) return list[0] as DOMRect
-              return range.getBoundingClientRect()
-            } catch {
-              return null
-            }
-          })()
-          if (!lineRect) continue
-          const rect = lineRect
-          if (rect.width <= 0 && rect.height <= 0) continue
           const cat = (mark.category ?? resolveCardMeta(mark).category) as string
-          const size = 12
-          const flag = doc.createElement('div')
-          flag.setAttribute('data-inkdown-flag', mark.id)
-          // 关键几何用行内 !important：行内 important 高于样式表 important，
-          // 任何版本/缓存的主题 CSS（body > div 全宽 static 规则）都压不住，
-          // HMR 新旧混搭时也不再躺成条。
-          flag.style.cssText = `border-radius:9999px;background:${resolveMarkCategorySwatch(cat, getVar, themeRef.current)};border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer;z-index:5;padding:0;margin:0;`
-          flag.style.setProperty('position', 'fixed', 'important')
-          flag.style.setProperty('left', `${Math.max(2, rect.left - size - 8)}px`, 'important')
-          flag.style.setProperty('top', `${rect.top + rect.height / 2 - size / 2}px`, 'important')
-          flag.style.setProperty('width', `${size}px`, 'important')
-          flag.style.setProperty('height', `${size}px`, 'important')
-          flag.addEventListener('click', (event) => {
-            event.stopPropagation()
-            emitRailFocus(mark.id)
+          const flag = buildMarkFlag(doc, mark.id, range, {
+            background: resolveMarkCategorySwatch(cat, getVar, themeRef.current),
           })
+          if (!flag) continue
           host.appendChild(flag)
           placed += 1
         }
