@@ -35,6 +35,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     name: 'Codex (codex-acp)',
     description:
       '通过 bunx 启动官方 @agentclientprotocol/codex-acp；可复用本机 ~/.codex（ChatGPT / API Key）',
+    authHint:
+      '复用本机 ~/.codex 登录（auth.json 或 OPENAI_API_KEY / CODEX_API_KEY）；未登录按下方 Agent 认证方式完成登录',
     command: 'bunx',
     args: ['-y', CODEX_ACP_NPM_PACKAGE],
     requiredEnvKeys: ['OPENAI_API_KEY', 'CODEX_API_KEY'],
@@ -44,6 +46,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     name: 'Claude (claude-agent-acp)',
     description:
       '通过 bunx 启动官方 @agentclientprotocol/claude-agent-acp；可复用本机 Claude Code 登录态（~/.claude.json）或 ANTHROPIC_API_KEY',
+    authHint:
+      '复用本机 Claude Code 登录（~/.claude.json / ~/.claude/.credentials.json 或 ANTHROPIC_API_KEY）；未登录先跑 claude login',
     command: 'bunx',
     args: ['-y', CLAUDE_ACP_NPM_PACKAGE],
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
@@ -52,6 +56,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     id: 'gemini',
     name: 'Gemini CLI',
     description: '启动本机 Gemini CLI（--acp）；复用 Gemini CLI 登录态（~/.gemini/）',
+    authHint:
+      '复用本机 Gemini CLI 登录（~/.gemini/oauth_creds.json 或 GEMINI_API_KEY / GOOGLE_API_KEY）；未登录先在本机终端跑 gemini 完成登录',
     command: isWindowsPlatform() ? 'gemini.cmd' : 'gemini',
     args: ['--acp'],
     requiredEnvKeys: [],
@@ -60,6 +66,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     id: 'copilot',
     name: 'Copilot CLI',
     description: '启动本机 Copilot CLI（--acp --stdio）；复用 Copilot CLI 的 GitHub 登录态',
+    authHint:
+      '复用本机 Copilot CLI 的 GitHub 登录（~/.copilot/config.json 或 COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN）；未登录先跑 copilot login',
     command: isWindowsPlatform() ? 'copilot.cmd' : 'copilot',
     args: ['--acp', '--stdio'],
     requiredEnvKeys: [],
@@ -69,6 +77,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     name: 'OpenCode',
     description:
       '启动本机 opencode（acp）；复用 `opencode auth login` 写入 auth.json（~/.local/share/opencode/auth.json）的各 provider 凭证',
+    authHint:
+      '已登录（%LOCALAPPDATA%\\opencode\\auth.json 或 ~/.local/share/opencode/auth.json）则直接连接；否则先跑 opencode auth login',
     command: isWindowsPlatform() ? 'opencode.exe' : 'opencode',
     args: ['acp'],
     requiredEnvKeys: [],
@@ -78,6 +88,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     name: 'Cursor CLI (cursor-agent)',
     description:
       '启动 Cursor 官方 CLI（agent acp）；复用本机 Cursor 登录态（未登录可运行 `agent login`）。安装路径探测（%LOCALAPPDATA%\\cursor-agent / ~/.local/bin/agent）见主进程 cursor 适配器',
+    authHint:
+      '复用本机 Cursor 登录态（或 CURSOR_API_KEY / CURSOR_AUTH_TOKEN）；未登录先跑 agent login',
     command: isWindowsPlatform() ? 'agent.cmd' : 'agent',
     args: ['acp'],
     requiredEnvKeys: [],
@@ -87,6 +99,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     name: 'DeepSeek Harness',
     description:
       '通过 bunx 启动 @deepseek-ai/dsh（--profile acp）；无 ACP 登录，靠 harness 自身凭证（DEEPSEEK_API_KEY / harness 配置）',
+    authHint:
+      '无 ACP 登录，靠 harness 自身凭证（DEEPSEEK_API_KEY / harness 配置）；未配置先导出 DEEPSEEK_API_KEY',
     command: 'bunx',
     args: ['-y', DEEPSEEK_DSH_NPM_PACKAGE, '--profile', 'acp'],
     requiredEnvKeys: ['DEEPSEEK_API_KEY'],

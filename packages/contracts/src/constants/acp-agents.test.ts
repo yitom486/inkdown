@@ -91,5 +91,17 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     expect(runtime!.args).toEqual(['-y', DEEPSEEK_DSH_NPM_PACKAGE, '--profile', 'acp'])
     expect(runtime!.requiredEnvKeys).toContain('DEEPSEEK_API_KEY')
   })
+
+  it('7 项均有认证弹窗用 authHint（凭证位置 + 未登录一步动作）', () => {
+    expect(BUILTIN_ACP_RUNTIMES).toHaveLength(7)
+    for (const runtime of BUILTIN_ACP_RUNTIMES) {
+      expect(runtime.authHint, runtime.id).toBeDefined()
+      expect(typeof runtime.authHint).toBe('string')
+      expect(runtime.authHint!.length).toBeGreaterThan(0)
+    }
+    expect(findBuiltinAcpRuntime('codex-acp')!.authHint).toContain('~/.codex')
+    expect(findBuiltinAcpRuntime('opencode')!.authHint).toContain('opencode auth login')
+    expect(findBuiltinAcpRuntime('cursor-cli')!.authHint).toContain('agent login')
+  })
 })
 

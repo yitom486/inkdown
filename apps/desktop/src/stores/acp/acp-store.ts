@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { pruneBlankThreads } from '@/lib/agent/acp-thread-prune'
 import { createThrottledStorage } from '@/lib/agent/throttled-storage'
+import { DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
 import {
   MAX_THREADS,
   type AcpChatMessage,
@@ -61,6 +62,18 @@ export const useAcpUiStore = create<AcpUiStore>()(
           p.preferredConfigByRuntime && typeof p.preferredConfigByRuntime === 'object'
             ? p.preferredConfigByRuntime
             : current.preferredConfigByRuntime
+        // 旧持久化可能存着错位态（activeThread.runtimeId ≠ selectedRuntimeId，
+        // 即本次修复的串线根因）：以线程归属为真相源，对齐 selected，避免重开
+        // 即把 codex 历史载入 opencode 视图。
+        const activeThread = ensured.find((t) => t.id === activeThreadId)
+        const activeRuntimeId =
+          activeThread?.runtimeId || DEFAULT_ACP_RUNTIME_ID
+        const persistedSelected =
+          typeof p.selectedRuntimeId === 'string' && p.selectedRuntimeId.trim()
+            ? p.selectedRuntimeId
+            : activeRuntimeId
+        const selectedRuntimeId =
+          persistedSelected === activeRuntimeId ? persistedSelected : activeRuntimeId
         return {
           ...current,
           ...p,
@@ -68,6 +81,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           hudDisplayMode: (p.hudDisplayMode as AcpHudDisplayMode) ?? 'floating',
           threads: ensured,
           activeThreadId,
+          selectedRuntimeId,
           preferredConfigByRuntime,
           prompting: false,
           composerFocusNonce: 0,

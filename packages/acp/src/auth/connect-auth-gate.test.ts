@@ -175,6 +175,77 @@ describe('runConnectAuthGate (E2E scenarios with mock Agent)', () => {
     expect(tryOpenSessionWithoutAuth).toHaveBeenCalledTimes(1)
     expect(authenticate).not.toHaveBeenCalled()
   })
+
+  it('tryDirectSessionFirst: true + looksLoggedIn: false + direct open ok → session_without_auth（免弹向导）', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn().mockResolvedValue(true)
+    const result = await runConnectAuthGate(
+      mockAgentAuthMethods,
+      { looksLoggedIn: false, hasAuthFile: false, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+        tryDirectSessionFirst: true,
+      },
+    )
+
+    expect(result).toEqual({ outcome: 'session_without_auth' })
+    expect(tryOpenSessionWithoutAuth).toHaveBeenCalledTimes(1)
+    expect(authenticate).not.toHaveBeenCalled()
+  })
+
+  it('tryDirectSessionFirst: true + looksLoggedIn: false + direct open fail → falls back to needs_auth wizard', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn().mockResolvedValue(false)
+    const result = await runConnectAuthGate(
+      mockAgentAuthMethods,
+      { looksLoggedIn: false, hasAuthFile: false, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+        tryDirectSessionFirst: true,
+      },
+    )
+
+    expect(result).toMatchObject({ outcome: 'needs_auth' })
+    expect(tryOpenSessionWithoutAuth).toHaveBeenCalledTimes(1)
+    expect(authenticate).not.toHaveBeenCalled()
+  })
+
+  it('tryDirectSessionFirst: true + direct open throws → falls back to needs_auth wizard', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn().mockRejectedValue(new Error('session/new failed'))
+    const result = await runConnectAuthGate(
+      mockAgentAuthMethods,
+      { looksLoggedIn: false, hasAuthFile: false, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+        tryDirectSessionFirst: true,
+      },
+    )
+
+    expect(result).toMatchObject({ outcome: 'needs_auth' })
+    expect(tryOpenSessionWithoutAuth).toHaveBeenCalledTimes(1)
+    expect(authenticate).not.toHaveBeenCalled()
+  })
+
+  it('tryDirectSessionFirst 未声明视为 false：looksLoggedIn false 时不试直连、直接弹向导', async () => {
+    const authenticate = vi.fn()
+    const tryOpenSessionWithoutAuth = vi.fn()
+    const result = await runConnectAuthGate(
+      mockAgentAuthMethods,
+      { looksLoggedIn: false, hasAuthFile: false, hasApiKeyEnv: false },
+      {
+        authenticate,
+        tryOpenSessionWithoutAuth,
+      },
+    )
+
+    expect(result).toMatchObject({ outcome: 'needs_auth' })
+    expect(tryOpenSessionWithoutAuth).not.toHaveBeenCalled()
+    expect(authenticate).not.toHaveBeenCalled()
+  })
 })
 
 

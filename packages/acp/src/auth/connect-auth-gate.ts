@@ -17,6 +17,12 @@ export interface ConnectAuthGateDeps {
    * 是否优先尝试直接建立会话复用本机认证（例如 codex-acp 本地已有 auth.json 时 session/new 即可复用，避免 authenticate 唤起浏览器）
    */
   preferDirectSession?: boolean
+  /**
+   * keychain 化兜底（cursor / opencode）：文件探针未命中不断言未登录，
+   * 在 needs_auth 分支前先试一次直接建会话，成功则免弹向导。
+   * 缺省视为 false，其余 runtime 不动。
+   */
+  tryDirectSessionFirst?: boolean
 }
 
 /**
@@ -35,6 +41,18 @@ export async function runConnectAuthGate(
   }
 
   if (decision.action === 'needs_auth') {
+    // keychain 化兜底：探针未命中也先试一次直接建会话（cursor / opencode 置 true），
+    // 成功→免弹向导，失败/抛错→照旧回落 needs_auth。
+    if (deps.tryDirectSessionFirst && deps.tryOpenSessionWithoutAuth) {
+      try {
+        if (await deps.tryOpenSessionWithoutAuth()) {
+          return { outcome: 'session_without_auth' }
+        }
+      } catch {
+        // 直连失败说明本地凭据不可用，回落向导
+      }
+      return { outcome: 'needs_auth', methods: decision.methods }
+    }
     return { outcome: 'needs_auth', methods: decision.methods }
   }
 

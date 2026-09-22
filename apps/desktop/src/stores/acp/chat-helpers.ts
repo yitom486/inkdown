@@ -102,13 +102,43 @@ export function openPanelPreservingThread(
   return { threads: next.threads, activeThreadId, historyOpen: false }
 }
 
+export function ensureActiveThreadForRuntime(
+  state: Pick<AcpUiStore, 'threads' | 'activeThreadId'> & {
+    selectedRuntimeId?: string
+  },
+): { threads: AcpChatThread[]; activeThreadId: string } {
+  const runtimeId = state.selectedRuntimeId || DEFAULT_ACP_RUNTIME_ID
+  const active = state.threads.find((t) => t.id === state.activeThreadId)
+  if (active && (active.runtimeId || DEFAULT_ACP_RUNTIME_ID) === runtimeId) {
+    return { threads: state.threads, activeThreadId: state.activeThreadId }
+  }
+  const candidates = state.threads
+    .filter((t) => (t.runtimeId || DEFAULT_ACP_RUNTIME_ID) === runtimeId)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+  if (candidates.length > 0) {
+    return { threads: state.threads, activeThreadId: candidates[0]!.id }
+  }
+  const fresh = createEmptyThread(undefined, runtimeId)
+  return { threads: [fresh, ...state.threads], activeThreadId: fresh.id }
+}
+
 export function patchActiveThread(
-  state: Pick<AcpUiStore, 'threads' | 'activeThreadId'>,
+  state: Pick<AcpUiStore, 'threads' | 'activeThreadId'> & {
+    selectedRuntimeId?: string
+  },
   patch: (thread: AcpChatThread) => AcpChatThread,
-): { threads: AcpChatThread[] } {
-  const threads = state.threads.map((t) =>
-    t.id === state.activeThreadId ? patch(t) : t,
+): { threads: AcpChatThread[]; activeThreadId?: string } {
+  // 线程↔运行时绑定防线：若 activeThread.runtimeId 与 selectedRuntimeId 不一致，
+  // 说明此前经跨 runtime switchThread（或旧持久化）进入了错位态。此处绝不把
+  // 异 runtime 消息写入当前 thread，而是先纠偏到对的线程（同 runtime 最新；
+  // 无则建专属空线程），再 patch。调用方 spread 返回值即可自动切 active。
+  const ensured = ensureActiveThreadForRuntime(state)
+  const threads = ensured.threads.map((t) =>
+    t.id === ensured.activeThreadId ? patch(t) : t,
   )
+  if (ensured.activeThreadId !== state.activeThreadId) {
+    return { threads, activeThreadId: ensured.activeThreadId }
+  }
   return { threads }
 }
 

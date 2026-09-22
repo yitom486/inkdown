@@ -23,12 +23,28 @@ export interface GenericRuntimeAdapter {
   /** 仅冷启动（无温进程可用、即将 spawn）时调用一次；各 runtime 自理副作用 */
   onColdStart?: () => Promise<void>
   probeAuth: () => CodexAuthPreflight
+  /**
+   * 预 spawn 接线点（冷启动 spawn 前调用一次）：
+   * 返回 `{ command, args }` 则覆盖模板的 spawn 目标（可透传绝对路径）；
+   * 返回 `null` 表示 CLI 未安装，`acp-connection.ts` 直接回带安装指引的
+   * `ACP_SPAWN_ERROR`，不触达 spawn（省掉“不是内部或外部命令”秒退）。
+   * 缺省（undefined）表示无需预检，沿用模板 command/args。
+   * 抛错时按缺省处理（防御性回落），不断连接。
+   */
+  resolveSpawnCommand?: () => { command: string; args: string[] } | null
   getSpawnEnv?: (proxySettings?: Partial<AcpProxySettings>) => {
     env: NodeJS.ProcessEnv
     envRemove: string[]
   }
   orderAuthMethods?: (methods: AcpAuthMethod[]) => AcpAuthMethod[]
   canSkipInteractiveAuth?: (methodId: string, force?: boolean) => boolean
+  /**
+   * keychain 化凭据兜底：文件探针只能当 hint（命中→已登录，未命中不断言），
+   * 置 true 的 runtime 在 gate 判定 needs_auth 前先试一次直接建会话，
+   * 成功则免弹向导（session_without_auth），失败再回落 needs_auth。
+   * 缺省（undefined）视为 false，其余 runtime 不动。
+   */
+  tryDirectSessionFirst?: boolean
 }
 
 export type AcpRuntimeAdapter = GenericRuntimeAdapter & {

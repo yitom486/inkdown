@@ -228,6 +228,7 @@ export const createChatSlice: StateCreator<
 
   createThread: (workspaceRoot, runtimeId) => {
     const rId = runtimeId ?? get().selectedRuntimeId
+    const prevSelected = get().selectedRuntimeId
     const thread = createEmptyThread(workspaceRoot, rId)
     set((s) => {
       const frozen = s.threads.map((t) =>
@@ -238,12 +239,18 @@ export const createChatSlice: StateCreator<
       // 新建时丢掉其它空白草稿（含刚离开的空会话）
       const kept = pruneBlankThreads(frozen)
       const threads = [thread, ...kept].slice(0, MAX_THREADS)
+      // 显式跨 runtime 建线程时同样对齐 selected，避免 active 与 selected 错位
+      const runtimeChanged = rId !== prevSelected
       return {
         threads,
         activeThreadId: thread.id,
+        ...(runtimeChanged ? { selectedRuntimeId: rId } : {}),
         prompting: false,
         historyOpen: false,
         pendingMarkProposalSnapshotContents: [],
+        ...(runtimeChanged
+          ? { configOptions: [], promptCapabilities: {}, pendingPermission: null }
+          : {}),
       }
     })
     return thread.id
@@ -253,7 +260,8 @@ export const createChatSlice: StateCreator<
     const s = get()
     if (threadId === s.activeThreadId) return
     if (s.prompting) return
-    if (!s.threads.some((t) => t.id === threadId)) return
+    const target = s.threads.find((t) => t.id === threadId)
+    if (!target) return
     const frozen = s.threads.map((t) =>
       t.id === s.activeThreadId
         ? { ...t, messages: freezeMessages(t.messages), updatedAt: Date.now() }
@@ -261,12 +269,22 @@ export const createChatSlice: StateCreator<
     )
     // 切走时若原会话空白则删除；目标会话即使空白也保留
     const threads = pruneBlankThreads(frozen, { keepId: threadId })
+    // 线程↔运行时绑定：线程是归属真相源，切到异 runtime 线程时自动对齐
+    // selectedRuntimeId，否则后续 setSession/append 经 patchActiveThread 会把
+    // 新 runtime 消息写进旧 thread（codex 历史混入 opencode 视图之根因）。
+    // 对齐时同步清空旧 runtime 残留的模型选项/能力/审批（同 setSelectedRuntimeId 语义）。
+    const targetRuntimeId = target.runtimeId || DEFAULT_ACP_RUNTIME_ID
+    const runtimeChanged = targetRuntimeId !== s.selectedRuntimeId
     set({
       activeThreadId: threadId,
+      ...(runtimeChanged ? { selectedRuntimeId: targetRuntimeId } : {}),
       prompting: false,
       historyOpen: false,
       threads,
       pendingMarkProposalSnapshotContents: [],
+      ...(runtimeChanged
+        ? { configOptions: [], promptCapabilities: {}, pendingPermission: null }
+        : {}),
     })
   },
 

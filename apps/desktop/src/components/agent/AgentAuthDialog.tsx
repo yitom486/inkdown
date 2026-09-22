@@ -9,7 +9,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { AcpAuthMethod } from '@inkdown/contracts'
+import { findBuiltinAcpRuntime, type AcpAuthMethod } from '@inkdown/contracts'
+
+const FALLBACK_AUTH_HINT =
+  '复用本机登录凭证（如 ~/.codex / 环境变量），或选择 Agent 提供的认证方式。'
 
 interface AgentAuthDialogProps {
   open: boolean
@@ -17,6 +20,7 @@ interface AgentAuthDialogProps {
   busy?: boolean
   error?: string | null
   runtimeName?: string
+  runtimeId?: string
   onSelect: (methodId: string) => void
   onCancel: () => void
 }
@@ -27,10 +31,14 @@ export function AgentAuthDialog({
   busy,
   error,
   runtimeName,
+  runtimeId,
   onSelect,
   onCancel,
 }: AgentAuthDialogProps) {
   const [selected, setSelected] = useState(methods[0]?.id ?? '')
+  const authHint = runtimeId
+    ? (findBuiltinAcpRuntime(runtimeId)?.authHint ?? FALLBACK_AUTH_HINT)
+    : FALLBACK_AUTH_HINT
 
   return (
     <Dialog
@@ -42,9 +50,7 @@ export function AgentAuthDialog({
       <DialogContent className="sm:max-w-md" showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>连接 {runtimeName ?? 'Agent'} 需要认证</DialogTitle>
-          <DialogDescription>
-            复用本机登录凭证（如 ~/.codex / 环境变量），或选择 Agent 提供的认证方式。
-          </DialogDescription>
+          <DialogDescription>{authHint}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2 py-1">

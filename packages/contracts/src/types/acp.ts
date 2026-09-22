@@ -31,6 +31,11 @@ export interface AcpRuntimeInfo {
   args: string[]
   /** 文档用：需要的环境变量名（不包含密钥值） */
   requiredEnvKeys: string[]
+  /**
+   * 认证弹窗副标题用的一句话：凭证复用位置 + 未登录时的一步动作。
+   * 渲染端经 findBuiltinAcpRuntime 取用，取不到回落通用文案。
+   */
+  authHint?: string
 }
 
 /** 渲染进程请求连接；真正 spawn 在主进程 */
