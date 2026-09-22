@@ -30,7 +30,7 @@ files:
   - node_modules/@firecrawl/pdf-inspector/**/*
   - node_modules/@firecrawl/pdf-inspector-*/**/*
   # ACP 官方 SDK（主进程 external 运行时依赖）与其 peer zod
-  - node_modules/@agentclientprotocol/**/*
+  - node_modules/@agentclientprotocol/sdk/**/*
   - node_modules/zod/**/*
   - '!node_modules/{@codemirror,codemirror,@tanstack,@vscode,dompurify,highlight.js,katex,markdown-it,markdown-it-task-lists,mermaid,next-themes,radix-ui,react,react-dom,react-resizable-panels,sonner,zustand,d3,d3-*,cytoscape*,dagre*,cose-base,layout-base,khroma,stylus,pug,coffeescript}/**'
 electronLanguages:
