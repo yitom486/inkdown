@@ -102,7 +102,14 @@ export function resolveAgyNpmInvocation(
     const nodeExe = join(dir, 'node.exe')
     const cliJs = join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js')
     if (existsUnder(overrides, nodeExe) && existsUnder(overrides, cliJs)) {
+      // 自证版本：这行出现即证明运行的是 EINVAL 修复后的新 main
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[acp:agy] npm invocation: node-direct (EINVAL fixed)')
+      }
       return { file: nodeExe, args: [cliJs, ...args], shell: false }
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[acp:agy] npm invocation: shell-fallback (no node runtime beside npm.cmd)')
     }
     return { file: npm, args, shell: true }
   }
