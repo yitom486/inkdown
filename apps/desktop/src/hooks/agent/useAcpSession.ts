@@ -15,6 +15,7 @@ import {
 } from '@/lib/agent/context/session-bootstrap'
 import { resetTurnContextTracker } from '@/lib/agent/context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
+import { selectFastDefaultOffTarget } from '@/lib/agent/acp-config-menu'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
 import { flushAcpStreamBuffer, registerStreamAuthReset } from '@/lib/agent/acp-stream-host'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
@@ -117,6 +118,10 @@ export function useAcpSession(workspaceRoot?: string) {
       setAuthRuntimeId(null)
       setAuthError(null)
       const options = result.configOptions ?? []
+      acpDevLog('session configOptions', {
+        runtimeId: useAcpUiStore.getState().selectedRuntimeId,
+        options,
+      })
       setSession(result.sessionId, options)
       setPromptCapabilities(result.promptCapabilities ?? {})
       appendSystemMessage(formatAcpConnectedMessage(result, prefix))
@@ -126,8 +131,35 @@ export function useAcpSession(workspaceRoot?: string) {
         useAcpUiStore.getState().selectedRuntimeId,
         options,
       )
-      if (applied !== options) {
-        setConfigOptions(applied)
+      let latest = applied
+      // fast 默认关一次：首次连接该运行时若 Agent 默认开且用户从未拨过，关一次并记住；
+      // 有存储偏好后永不强改（用户偏好为准）。失败不抛，静默保留 Agent 原值。
+      const fastTarget = selectFastDefaultOffTarget(
+        applied,
+        useAcpUiStore.getState().preferredConfigByRuntime,
+        useAcpUiStore.getState().selectedRuntimeId,
+      )
+      if (fastTarget) {
+        const offResult = await acpApi.setConfigOption({
+          sessionId: result.sessionId,
+          configId: fastTarget.configId,
+          value: false,
+        })
+        if (isOk(offResult)) {
+          useAcpUiStore.getState().rememberConfigPreference(
+            useAcpUiStore.getState().selectedRuntimeId,
+            fastTarget.configId,
+            false,
+          )
+          if (offResult.value.configOptions.length > 0) {
+            latest = offResult.value.configOptions
+          }
+        } else {
+          console.warn('[acp-ui] fast 默认关闭失败', fastTarget.configId, offResult.error)
+        }
+      }
+      if (latest !== options) {
+        setConfigOptions(latest)
       }
 
       if (
@@ -552,7 +584,7 @@ export function useAcpSession(workspaceRoot?: string) {
   }, [finishStreaming, flushBufferedChunks])
 
   const setModel = useCallback(
-    async (configId: string, value: string) => {
+    async (configId: string, value: string | boolean) => {
       const sid = useAcpUiStore.getState().sessionId
       if (!sid) return
       const runtimeId = useAcpUiStore.getState().selectedRuntimeId

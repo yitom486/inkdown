@@ -20,6 +20,7 @@ import type { ChapterMarkPlanSelectPayload } from '@/components/agent/propose/Ch
 import { Button } from '@/components/ui/button'
 import { appendSelectionChatMarker } from '@/lib/agent/context/selection-chat-marker'
 import { splitConfigOptions } from '@/lib/agent/acp-config-menu'
+import { selectReadonlyModelThinking } from '@/lib/agent/acp-model-thinking'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,10 +120,13 @@ export const AgentPanel = memo(function AgentPanel({
     setDraft((prev) => appendSelectionChatMarker(prev))
   }, [composerInsertNonce])
 
-  const { primary, secondary } = useMemo(
+  const { primary, secondary, fastToggle } = useMemo(
     () => splitConfigOptions(view.configOptions),
     [view.configOptions],
   )
+
+  // 无独立思考档时，模型值尾缀自带档位则显示只读徽标（跟随模型切换，不可单独改）
+  const readonlyThinking = useMemo(() => selectReadonlyModelThinking(primary), [primary])
 
   const runtimeName =
     BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === view.selectedRuntimeId)?.name ??
@@ -572,23 +576,40 @@ export const AgentPanel = memo(function AgentPanel({
                       <DropdownMenuLabel className="text-[10px] text-muted-foreground">
                         其它配置
                       </DropdownMenuLabel>
-                      {secondary.map((opt) => (
-                        <div key={opt.configId} className="px-2 py-1.5">
-                          <p className="mb-1 text-[10px] text-muted-foreground">{opt.name}</p>
-                          <select
-                            className="h-7 w-full rounded-md border border-border/70 bg-background px-2 text-[11px] outline-none disabled:opacity-50"
-                            value={String(opt.currentValue ?? '')}
-                            disabled={configsDisabled}
-                            onChange={(e) => void setModel(opt.configId, e.target.value)}
+                      {secondary.map((opt) =>
+                        opt.type === 'boolean' ? (
+                          <label
+                            key={opt.configId}
+                            className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-xs"
+                            title={opt.description || opt.name}
                           >
-                            {opt.options?.map((item) => (
-                              <option key={item.value} value={item.value}>
-                                {item.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ))}
+                            <input
+                              type="checkbox"
+                              className="size-3.5 accent-[hsl(var(--primary))]"
+                              checked={Boolean(opt.currentValue)}
+                              disabled={configsDisabled}
+                              onChange={(e) => void setModel(opt.configId, e.target.checked)}
+                            />
+                            {opt.name}
+                          </label>
+                        ) : (
+                          <div key={opt.configId} className="px-2 py-1.5">
+                            <p className="mb-1 text-[10px] text-muted-foreground">{opt.name}</p>
+                            <select
+                              className="h-7 w-full rounded-md border border-border/70 bg-background px-2 text-[11px] outline-none disabled:opacity-50"
+                              value={String(opt.currentValue ?? '')}
+                              disabled={configsDisabled}
+                              onChange={(e) => void setModel(opt.configId, e.target.value)}
+                            >
+                              {opt.options?.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                  {item.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ),
+                      )}
                     </>
                   ) : null}
 
@@ -611,6 +632,21 @@ export const AgentPanel = memo(function AgentPanel({
               </DropdownMenu>
 
               <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+                {fastToggle ? (
+                  <label
+                    className="inline-flex max-w-[7.5rem] shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground has-disabled:pointer-events-none has-disabled:opacity-40"
+                    title={fastToggle.description || fastToggle.name}
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-3.5 shrink-0 accent-[hsl(var(--primary))]"
+                      checked={Boolean(fastToggle.currentValue)}
+                      disabled={configsDisabled}
+                      onChange={(e) => void setModel(fastToggle.configId, e.target.checked)}
+                    />
+                    <span className="truncate">{fastToggle.name}</span>
+                  </label>
+                ) : null}
                 {primary.map((opt, index) => (
                   <CompactConfigMenu
                     key={opt.configId}
@@ -620,6 +656,16 @@ export const AgentPanel = memo(function AgentPanel({
                     emphasize={index === 0}
                   />
                 ))}
+                {readonlyThinking ? (
+                  <button
+                    type="button"
+                    disabled
+                    title="当前模型内置思考参数（跟随模型切换）"
+                    className="inline-flex max-w-[7.5rem] items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground disabled:pointer-events-none disabled:opacity-70"
+                  >
+                    <span className="truncate">思考 {readonlyThinking}（只读）</span>
+                  </button>
+                ) : null}
                 {view.status === 'connected' && primary.length === 0 ? (
                   <span className="px-1 text-[10px] text-muted-foreground">无会话配置项</span>
                 ) : null}
@@ -643,6 +689,7 @@ export const AgentPanel = memo(function AgentPanel({
         busy={authBusy}
         error={authError}
         runtimeName={runtimeName}
+        runtimeId={view.selectedRuntimeId}
         onSelect={(methodId) => void completeAuth(methodId)}
         onCancel={() => void cancelAuth()}
       />

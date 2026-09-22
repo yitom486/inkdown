@@ -97,6 +97,8 @@
 | `acp-permission` / `acp-permission-ui` | 权限请求与卡片展示 |
 | `acp-plan` | 计划条目解析与进度摘要 |
 | `acp-config-preferences` | Mode/Model 等配置记忆 |
+| `acp-config-menu` | Agent 配置项下拉分类与 primary/secondary 切分（含 boolean 开关直通 secondary；fast 类 boolean 由 `findFastToggle` 单列 `fastToggle` 并从 secondary 摘出，`selectFastDefaultOffTarget` 给首次连接默认关一次） |
+| `acp-model-thinking` | 模型值尾缀思考档提取与只读徽标条件 |
 | `acp-session-restore` / `acp-thread-prune` / `acp-prune-agent-replies` | 会话恢复与线程修剪 |
 | `acp-dev-log` / `acp-layout-probe` | 开发日志与布局探测 |
 | `agent-markdown` | Agent 气泡 Markdown（与预览同源解析；流式尾部轻渲染跳过未闭合围栏高亮） |
