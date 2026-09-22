@@ -1,10 +1,15 @@
+/**
+ * 教学快照，与正式已分叉，禁止 import。
+ * 冻结自 packages/acp/src/transport/jsonrpc-transport.test.ts（来源 commit 见本目录 README.md）。
+ * 唯一改动：下行 import 指向同目录 `.snapshot` 源文件，保证显式运行时自闭环。
+ */
 import { PassThrough } from 'node:stream' // check-deps:allow node:stream - ACP stdio
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   encodeJsonRpcMessage,
   JsonRpcTransport,
   parseJsonRpcLine,
-} from './jsonrpc-transport'
+} from './jsonrpc-transport.snapshot'
 
 describe('parseJsonRpcLine / encodeJsonRpcMessage', () => {
   it('round-trips request', () => {

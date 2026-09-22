@@ -2,326 +2,216 @@ import {
   INKDOWN_VIRTUAL_RESOURCES,
   isInkdownVirtualDirPath,
   parseInkdownVirtualPath,
+  type AcpPermissionOutcome,
   type InkdownVirtualResource,
 } from '@inkdown/contracts'
-import type { JsonRpcId, JsonRpcRequest, JsonRpcTransport } from '@inkdown/acp'
+import { methods, RequestError, type ClientApp } from '@agentclientprotocol/sdk'
 import { acpReadTextFile, acpWriteTextFile } from './acp-fs'
 import type { AcpTerminalManager } from './acp-terminal'
 
-export type PermissionDecision =
-  | { outcome: 'selected'; optionId: string }
-  | { outcome: 'cancelled' }
-
-export type PermissionRequestHandler = (payload: {
-  requestId: JsonRpcId
-  params: Record<string, unknown>
-}) => Promise<PermissionDecision>
-
-export interface AcpClientHandlerContext {
+export interface AcpClientHandlerDeps {
   getWorkspaceRoot: () => string | null
   terminals: AcpTerminalManager
   /** 读取 Inkdown 虚拟文件：向渲染进程要内存快照，不碰磁盘 */
   readSnapshot: (resource: InkdownVirtualResource) => Promise<string>
+  /**
+   * Agent 审批：直接返回 bridge 结果（直返，无待决 Map）。
+   * 无 bridge 时由 SDK 层直接 cancelled，禁静默 allow。
+   */
+  onPermission: (payload: {
+    sessionId?: string
+    params: Record<string, unknown>
+  }) => Promise<AcpPermissionOutcome>
+  /** session/update 通知透传（回放压制由调用方做） */
+  onSessionUpdate: (params: Record<string, unknown>) => void
 }
 
-function asParams(message: JsonRpcRequest): Record<string, unknown> {
-  return message.params && typeof message.params === 'object'
-    ? (message.params as Record<string, unknown>)
-    : {}
+function toInvalidParams(message: string): RequestError {
+  return RequestError.invalidParams(undefined, message)
 }
 
-function parseEnv(raw: unknown): Array<{ name: string; value: string }> | undefined {
-  if (!Array.isArray(raw)) return undefined
-  const rows: Array<{ name: string; value: string }> = []
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as Record<string, unknown>
-    if (typeof row.name !== 'string' || typeof row.value !== 'string') continue
-    rows.push({ name: row.name, value: row.value })
-  }
-  return rows.length > 0 ? rows : undefined
-}
-
-function parseArgs(raw: unknown): string[] | undefined {
-  if (!Array.isArray(raw)) return undefined
-  return raw.filter((item): item is string => typeof item === 'string')
+function toServerError(error: unknown, fallback: string): RequestError {
+  return new RequestError(-32000, error instanceof Error ? error.message : fallback)
 }
 
 /**
- * 处理 Agent → Client 的请求：permission + fs + terminal（声明能力后才会收到）。
+ * Agent → Client 回调：permission + fs + terminal（声明能力后才会收到）。
+ * SDK 原生签名：onRequest/onNotification 注册；抛 RequestError 即回错误，
+ * 无需手写 transport.respond/respondError。
  */
-export function createAcpClientMethodRouter(
-  transport: JsonRpcTransport,
-  onPermission: PermissionRequestHandler,
-  context: AcpClientHandlerContext,
-): (message: JsonRpcRequest) => Promise<void> {
-  return async (message) => {
-    const params = asParams(message)
-    // 诊断：哪些 Client 方法真正被 Agent 调到（权限是否压根没来）
-    if (
-      message.method === 'session/request_permission' ||
-      message.method.startsWith('fs/') ||
-      message.method.startsWith('terminal/')
-    ) {
-      const toolCall = params.toolCall
-      const toolHint =
-        toolCall && typeof toolCall === 'object'
-          ? {
-              id:
-                typeof (toolCall as { toolCallId?: unknown }).toolCallId === 'string'
-                  ? (toolCall as { toolCallId: string }).toolCallId
-                  : typeof (toolCall as { id?: unknown }).id === 'string'
-                    ? (toolCall as { id: string }).id
-                    : undefined,
-              title:
-                typeof (toolCall as { title?: unknown }).title === 'string'
-                  ? (toolCall as { title: string }).title
-                  : undefined,
-              kind:
-                typeof (toolCall as { kind?: unknown }).kind === 'string'
-                  ? (toolCall as { kind: string }).kind
-                  : undefined,
-            }
-          : undefined
-      console.info('[acp] ← Agent request', {
-        id: message.id,
-        method: message.method,
-        path: typeof params.path === 'string' ? params.path : undefined,
-        toolCall: toolHint,
-        optionCount: Array.isArray(params.options) ? params.options.length : undefined,
-      })
-    }
-
-    if (message.method === 'session/request_permission') {
-      try {
-        console.info('[acp] session/request_permission 开始等待 UI 审批', {
-          requestId: message.id,
-        })
-        const decision = await onPermission({ requestId: message.id, params })
-        console.info('[acp] session/request_permission 已决议', {
-          requestId: message.id,
-          decision,
-        })
-        transport.respond(message.id, { outcome: decision })
-      } catch (error) {
-        transport.respond(message.id, {
-          outcome: { outcome: 'cancelled' },
-        })
-        console.error('[acp] request_permission 失败', error)
-      }
-      return
-    }
-
-    if (message.method === 'fs/read_text_file') {
-      const workspaceRoot = context.getWorkspaceRoot()
-      const filePath = typeof params.path === 'string' ? params.path : ''
-      if (!workspaceRoot || !filePath) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: 'fs/read_text_file 需要 path 与已连接工作区',
-        })
-        return
-      }
-      const virtualResource = parseInkdownVirtualPath(filePath, workspaceRoot)
-      if (virtualResource) {
-        try {
-          const content = await context.readSnapshot(virtualResource)
-          console.info('[acp] fs/read_text_file 虚拟快照 ok', {
-            resource: virtualResource,
-            chars: content.length,
-          })
-          transport.respond(message.id, { content })
-        } catch (error) {
-          transport.respondError(message.id, {
-            code: -32000,
-            message: error instanceof Error ? error.message : '读取 Inkdown 快照失败',
-          })
-        }
-        return
-      }
-
-      if (isInkdownVirtualDirPath(filePath, workspaceRoot)) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: `Inkdown 虚拟目录下可读：${INKDOWN_VIRTUAL_RESOURCES.join('、')}`,
-        })
-        return
-      }
-
-      try {
-        const result = await acpReadTextFile({
-          path: filePath,
-          workspaceRoot,
-          line: typeof params.line === 'number' ? params.line : undefined,
-          limit: typeof params.limit === 'number' ? params.limit : undefined,
-        })
-        console.info('[acp] fs/read_text_file ok', { path: filePath })
-        transport.respond(message.id, result)
-      } catch (error) {
-        transport.respondError(message.id, {
-          code: -32000,
-          message: error instanceof Error ? error.message : '读取文件失败',
-        })
-      }
-      return
-    }
-
-    if (message.method === 'fs/write_text_file') {
-      const workspaceRoot = context.getWorkspaceRoot()
-      const filePath = typeof params.path === 'string' ? params.path : ''
-      const content = typeof params.content === 'string' ? params.content : null
-      if (!workspaceRoot || !filePath || content === null) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: 'fs/write_text_file 需要 path、content 与已连接工作区',
-        })
-        return
-      }
-      try {
-        // 注意：ACP 约定敏感写操作应由 Agent 先 session/request_permission；
-        // 若此处直接写入且从未见 request_permission，说明 Agent 认为工作区内写无需再问。
-        console.info('[acp] fs/write_text_file（无内嵌审批，依赖 Agent 是否先 request_permission）', {
-          path: filePath,
-          bytes: content.length,
-        })
-        const result = await acpWriteTextFile({
-          path: filePath,
-          content,
-          workspaceRoot,
-        })
-        transport.respond(message.id, result)
-      } catch (error) {
-        transport.respondError(message.id, {
-          code: -32000,
-          message: error instanceof Error ? error.message : '写入文件失败',
-        })
-      }
-      return
-    }
-
-    if (message.method === 'terminal/create') {
-      const params = asParams(message)
-      const workspaceRoot = context.getWorkspaceRoot()
-      const sessionId = typeof params.sessionId === 'string' ? params.sessionId : ''
-      const command = typeof params.command === 'string' ? params.command : ''
-      if (!workspaceRoot || !sessionId || !command) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: 'terminal/create 需要 sessionId、command 与已连接工作区',
-        })
-        return
-      }
-      try {
-        const result = context.terminals.create({
-          sessionId,
-          command,
-          args: parseArgs(params.args),
-          env: parseEnv(params.env),
-          cwd: typeof params.cwd === 'string' ? params.cwd : undefined,
-          outputByteLimit:
-            typeof params.outputByteLimit === 'number' ? params.outputByteLimit : undefined,
-          workspaceRoot,
-        })
-        transport.respond(message.id, result)
-      } catch (error) {
-        transport.respondError(message.id, {
-          code: -32000,
-          message: error instanceof Error ? error.message : '创建终端失败',
-        })
-      }
-      return
-    }
-
-    if (message.method === 'terminal/output') {
-      const params = asParams(message)
-      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
-      if (!terminalId) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: 'terminal/output 需要 terminalId',
-        })
-        return
-      }
-      try {
-        transport.respond(message.id, context.terminals.getOutput(terminalId))
-      } catch (error) {
-        transport.respondError(message.id, {
-          code: -32000,
-          message: error instanceof Error ? error.message : '读取终端输出失败',
-        })
-      }
-      return
-    }
-
-    if (message.method === 'terminal/wait_for_exit') {
-      const params = asParams(message)
-      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
-      if (!terminalId) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: 'terminal/wait_for_exit 需要 terminalId',
-        })
-        return
-      }
-      try {
-        const status = await context.terminals.waitForExit(terminalId)
-        transport.respond(message.id, status)
-      } catch (error) {
-        transport.respondError(message.id, {
-          code: -32000,
-          message: error instanceof Error ? error.message : '等待终端退出失败',
-        })
-      }
-      return
-    }
-
-    if (message.method === 'terminal/kill') {
-      const params = asParams(message)
-      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
-      if (!terminalId) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: 'terminal/kill 需要 terminalId',
-        })
-        return
-      }
-      try {
-        transport.respond(message.id, context.terminals.kill(terminalId))
-      } catch (error) {
-        transport.respondError(message.id, {
-          code: -32000,
-          message: error instanceof Error ? error.message : '终止终端失败',
-        })
-      }
-      return
-    }
-
-    if (message.method === 'terminal/release') {
-      const params = asParams(message)
-      const terminalId = typeof params.terminalId === 'string' ? params.terminalId : ''
-      if (!terminalId) {
-        transport.respondError(message.id, {
-          code: -32602,
-          message: 'terminal/release 需要 terminalId',
-        })
-        return
-      }
-      try {
-        transport.respond(message.id, context.terminals.release(terminalId))
-      } catch (error) {
-        transport.respondError(message.id, {
-          code: -32000,
-          message: error instanceof Error ? error.message : '释放终端失败',
-        })
-      }
-      return
-    }
-
-    transport.respondError(message.id, {
-      code: -32601,
-      message: `Client 未实现方法: ${message.method}`,
+export function registerAcpClientHandlers(app: ClientApp, deps: AcpClientHandlerDeps): void {
+  app.onRequest(methods.client.session.requestPermission, async (ctx) => {
+    const params = ctx.params as unknown as Record<string, unknown>
+    const toolCall = params.toolCall
+    const toolHint =
+      toolCall && typeof toolCall === 'object'
+        ? {
+            id:
+              typeof (toolCall as { toolCallId?: unknown }).toolCallId === 'string'
+                ? (toolCall as { toolCallId: string }).toolCallId
+                : undefined,
+            title:
+              typeof (toolCall as { title?: unknown }).title === 'string'
+                ? (toolCall as { title: string }).title
+                : undefined,
+            kind:
+              typeof (toolCall as { kind?: unknown }).kind === 'string'
+                ? (toolCall as { kind: string }).kind
+                : undefined,
+          }
+        : undefined
+    console.info('[acp] ← Agent request', {
+      requestId: ctx.requestId,
+      method: 'session/request_permission',
+      toolCall: toolHint,
+      optionCount: Array.isArray(params.options) ? params.options.length : undefined,
     })
-  }
+    try {
+      const outcome = await deps.onPermission({
+        sessionId: typeof params.sessionId === 'string' ? params.sessionId : undefined,
+        params,
+      })
+      return { outcome }
+    } catch (error) {
+      console.error('[acp] request_permission 失败', error)
+      return { outcome: { outcome: 'cancelled' } as AcpPermissionOutcome }
+    }
+  })
+
+  app.onRequest(methods.client.fs.readTextFile, async (ctx) => {
+    const workspaceRoot = deps.getWorkspaceRoot()
+    const filePath = ctx.params.path
+    if (!workspaceRoot || !filePath) {
+      throw toInvalidParams('fs/read_text_file 需要 path 与已连接工作区')
+    }
+    const virtualResource = parseInkdownVirtualPath(filePath, workspaceRoot)
+    if (virtualResource) {
+      try {
+        const content = await deps.readSnapshot(virtualResource)
+        console.info('[acp] fs/read_text_file 虚拟快照 ok', {
+          resource: virtualResource,
+          chars: content.length,
+        })
+        return { content }
+      } catch (error) {
+        throw toServerError(error, '读取 Inkdown 快照失败')
+      }
+    }
+
+    if (isInkdownVirtualDirPath(filePath, workspaceRoot)) {
+      throw toInvalidParams(`Inkdown 虚拟目录下可读：${INKDOWN_VIRTUAL_RESOURCES.join('、')}`)
+    }
+
+    try {
+      const result = await acpReadTextFile({
+        path: filePath,
+        workspaceRoot,
+        line: ctx.params.line ?? undefined,
+        limit: ctx.params.limit ?? undefined,
+      })
+      console.info('[acp] fs/read_text_file ok', { path: filePath })
+      return result
+    } catch (error) {
+      throw toServerError(error, '读取文件失败')
+    }
+  })
+
+  app.onRequest(methods.client.fs.writeTextFile, async (ctx) => {
+    const workspaceRoot = deps.getWorkspaceRoot()
+    const filePath = ctx.params.path
+    const content = ctx.params.content
+    if (!workspaceRoot || !filePath || typeof content !== 'string') {
+      throw toInvalidParams('fs/write_text_file 需要 path、content 与已连接工作区')
+    }
+    try {
+      // 注意：ACP 约定敏感写操作应由 Agent 先 session/request_permission；
+      // 若此处直接写入且从未见 request_permission，说明 Agent 认为工作区内写无需再问。
+      console.info('[acp] fs/write_text_file（无内嵌审批，依赖 Agent 是否先 request_permission）', {
+        path: filePath,
+        bytes: content.length,
+      })
+      return await acpWriteTextFile({ path: filePath, content, workspaceRoot })
+    } catch (error) {
+      throw toServerError(error, '写入文件失败')
+    }
+  })
+
+  app.onRequest(methods.client.terminal.create, async (ctx) => {
+    const workspaceRoot = deps.getWorkspaceRoot()
+    const sessionId = ctx.params.sessionId
+    const command = ctx.params.command
+    if (!workspaceRoot || !sessionId || !command) {
+      throw toInvalidParams('terminal/create 需要 sessionId、command 与已连接工作区')
+    }
+    try {
+      return deps.terminals.create({
+        sessionId,
+        command,
+        args: ctx.params.args ?? undefined,
+        env: ctx.params.env ?? undefined,
+        cwd: ctx.params.cwd ?? undefined,
+        outputByteLimit: ctx.params.outputByteLimit ?? undefined,
+        workspaceRoot,
+      })
+    } catch (error) {
+      throw toServerError(error, '创建终端失败')
+    }
+  })
+
+  app.onRequest(methods.client.terminal.output, async (ctx) => {
+    const terminalId = ctx.params.terminalId
+    if (!terminalId) {
+      throw toInvalidParams('terminal/output 需要 terminalId')
+    }
+    try {
+      return deps.terminals.getOutput(terminalId)
+    } catch (error) {
+      throw toServerError(error, '读取终端输出失败')
+    }
+  })
+
+  app.onRequest(methods.client.terminal.waitForExit, async (ctx) => {
+    const terminalId = ctx.params.terminalId
+    if (!terminalId) {
+      throw toInvalidParams('terminal/wait_for_exit 需要 terminalId')
+    }
+    try {
+      return await deps.terminals.waitForExit(terminalId)
+    } catch (error) {
+      throw toServerError(error, '等待终端退出失败')
+    }
+  })
+
+  app.onRequest(methods.client.terminal.kill, async (ctx) => {
+    const terminalId = ctx.params.terminalId
+    if (!terminalId) {
+      throw toInvalidParams('terminal/kill 需要 terminalId')
+    }
+    try {
+      return deps.terminals.kill(terminalId)
+    } catch (error) {
+      throw toServerError(error, '终止终端失败')
+    }
+  })
+
+  app.onRequest(methods.client.terminal.release, async (ctx) => {
+    const terminalId = ctx.params.terminalId
+    if (!terminalId) {
+      throw toInvalidParams('terminal/release 需要 terminalId')
+    }
+    try {
+      return deps.terminals.release(terminalId)
+    } catch (error) {
+      throw toServerError(error, '释放终端失败')
+    }
+  })
+
+  app.onNotification(methods.client.session.update, async (ctx) => {
+    deps.onSessionUpdate({
+      sessionId: ctx.params.sessionId,
+      update: ctx.params.update,
+    } as unknown as Record<string, unknown>)
+  })
 }
 
 function permissionOptionId(option: Record<string, unknown>): string | null {

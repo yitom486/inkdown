@@ -1,26 +1,64 @@
-import { PassThrough } from 'node:stream'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { createAcpClientMethodRouter, pickAllowOptionId } from './client-handlers'
-import {
-  encodeJsonRpcMessage,
-  JsonRpcTransport,
-  isJsonRpcRequest,
-} from '@inkdown/acp'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agent, client, methods, RequestError } from '@agentclientprotocol/sdk'
+import type {
+  RequestPermissionRequest,
+  RequestPermissionResponse,
+} from '@agentclientprotocol/sdk'
+import { registerAcpClientHandlers, pickAllowOptionId } from './client-handlers'
 import { AcpTerminalManager } from './acp-terminal'
+import type { AcpPermissionOutcome } from '@inkdown/contracts'
 import type { InkdownVirtualResource } from '@inkdown/contracts'
 
-function testContext(
-  workspaceRoot: string | null = null,
-  readSnapshot: (resource: InkdownVirtualResource) => Promise<string> = async () => {
-    throw new Error('no snapshot in test')
-  },
+const liveConnections: Array<{ close: () => void }> = []
+
+afterEach(() => {
+  while (liveConnections.length > 0) {
+    try {
+      liveConnections.pop()?.close()
+    } catch {
+      // 忽略竞态关闭
+    }
+  }
+})
+
+function testDeps(
+  overrides: Partial<{
+    workspaceRoot: string | null
+    readSnapshot: (resource: InkdownVirtualResource) => Promise<string>
+    onPermission: (payload: {
+      sessionId?: string
+      params: Record<string, unknown>
+    }) => Promise<AcpPermissionOutcome>
+    onSessionUpdate: (params: Record<string, unknown>) => void
+  }> = {},
 ) {
   return {
-    getWorkspaceRoot: () => workspaceRoot,
+    getWorkspaceRoot: () => overrides.workspaceRoot ?? null,
     terminals: new AcpTerminalManager(),
-    readSnapshot,
+    readSnapshot:
+      overrides.readSnapshot ??
+      (async () => {
+        throw new Error('no snapshot in test')
+      }),
+    onPermission:
+      overrides.onPermission ??
+      (async (): Promise<AcpPermissionOutcome> => ({ outcome: 'cancelled' })),
+    onSessionUpdate: overrides.onSessionUpdate ?? (() => undefined),
   }
+}
+
+/**
+ * SDK 内存对接：ClientApp 注册真实 handler，fake Agent 经
+ * agentApp.connect(clientApp) 拿到 AgentConnection 调用客户端方法。
+ */
+function setupPeer(deps: ReturnType<typeof testDeps>) {
+  const appClient = client({ name: 'inkdown-test' })
+  registerAcpClientHandlers(appClient, deps)
+  const appAgent = agent({ name: 'fake' })
+  const agentConn = appAgent.connect(appClient)
+  liveConnections.push(agentConn)
+  return { appClient, appAgent, agentConn }
 }
 
 describe('pickAllowOptionId', () => {
@@ -62,282 +100,283 @@ describe('AcpTerminalManager path guard', () => {
   })
 })
 
-describe('createAcpClientMethodRouter', () => {
-  it('responds to session/request_permission', async () => {
-    const agentOut = new PassThrough()
-    const clientIn = new PassThrough()
-    const transport = new JsonRpcTransport(agentOut, clientIn)
+describe('SDK 握手（initialize 内存对接）', () => {
+  it('negotiates protocol version and agent info', async () => {
+    const appAgent = agent({ name: 'fake' })
+    appAgent.onRequest(methods.agent.initialize, async () => ({
+      protocolVersion: 1,
+      agentCapabilities: {},
+      authMethods: [],
+      agentInfo: { name: 'mock-agent', version: '0.0.1' },
+    }))
+    const appClient = client({ name: 'inkdown-test' })
+    const clientConn = appClient.connect(appAgent)
+    liveConnections.push(clientConn)
 
-    let seenParams: Record<string, unknown> | null = null
-    const router = createAcpClientMethodRouter(
-      transport,
-      async ({ params }) => {
-        seenParams = params as Record<string, unknown>
-        return {
-          outcome: 'selected',
-          optionId: 'allow-once',
-        }
-      },
-      testContext(null),
-    )
-
-    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
-      clientIn.on('data', (chunk) => {
-        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
-      })
+    const init = await clientConn.agent.request(methods.agent.initialize, {
+      protocolVersion: 1,
+      clientCapabilities: {},
     })
-
-    await router({
-      jsonrpc: '2.0',
-      id: 5,
-      method: 'session/request_permission',
-      params: {
-        toolCall: { toolCallId: 'tc-1', title: 'Delete file', kind: 'delete' },
-        options: [{ optionId: 'allow-once', kind: 'allow_once' }],
-      },
-    })
-
-    const response = await responsePromise
-    expect(seenParams).not.toBeNull()
-    expect(seenParams!.toolCall).toMatchObject({ toolCallId: 'tc-1' })
-    expect(response).toMatchObject({
-      id: 5,
-      result: {
-        outcome: {
-          outcome: 'selected',
-          optionId: 'allow-once',
-        },
-      },
-    })
-    transport.dispose()
-  })
-
-  it('permission handler can reject via optionId', async () => {
-    const agentOut = new PassThrough()
-    const clientIn = new PassThrough()
-    const transport = new JsonRpcTransport(agentOut, clientIn)
-
-    const router = createAcpClientMethodRouter(
-      transport,
-      async () => ({
-        outcome: 'selected',
-        optionId: 'reject-once',
-      }),
-      testContext(null),
-    )
-
-    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
-      clientIn.on('data', (chunk) => {
-        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
-      })
-    })
-
-    await router({
-      jsonrpc: '2.0',
-      id: 6,
-      method: 'session/request_permission',
-      params: {
-        options: [
-          { optionId: 'allow-once', kind: 'allow_once' },
-          { optionId: 'reject-once', kind: 'reject_once' },
-        ],
-      },
-    })
-
-    const response = await responsePromise
-    expect(response).toMatchObject({
-      result: { outcome: { outcome: 'selected', optionId: 'reject-once' } },
-    })
-    transport.dispose()
-  })
-
-  it('fs/read_text_file 命中虚拟路径时走快照，不读磁盘', async () => {
-    const agentOut = new PassThrough()
-    const clientIn = new PassThrough()
-    const transport = new JsonRpcTransport(agentOut, clientIn)
-
-    const seen: string[] = []
-    const router = createAcpClientMethodRouter(
-      transport,
-      async () => ({ outcome: 'cancelled' }),
-      testContext('/ws', async (resource) => {
-        seen.push(resource)
-        return '{"entries":[]}'
-      }),
-    )
-
-    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
-      clientIn.on('data', (chunk) => {
-        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
-      })
-    })
-
-    await router({
-      jsonrpc: '2.0',
-      id: 20,
-      method: 'fs/read_text_file',
-      params: { path: '/ws/.inkdown/agent/toc.json' },
-    })
-
-    expect(seen).toEqual(['toc.json'])
-    expect(await responsePromise).toMatchObject({
-      id: 20,
-      result: { content: '{"entries":[]}' },
-    })
-    transport.dispose()
-  })
-
-  it('虚拟目录下的未知资源返回参数错误', async () => {
-    const agentOut = new PassThrough()
-    const clientIn = new PassThrough()
-    const transport = new JsonRpcTransport(agentOut, clientIn)
-
-    const router = createAcpClientMethodRouter(
-      transport,
-      async () => ({ outcome: 'cancelled' }),
-      testContext('/ws'),
-    )
-
-    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
-      clientIn.on('data', (chunk) => {
-        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
-      })
-    })
-
-    await router({
-      jsonrpc: '2.0',
-      id: 21,
-      method: 'fs/read_text_file',
-      params: { path: '/ws/.inkdown/agent/nope.json' },
-    })
-
-    expect(await responsePromise).toMatchObject({ id: 21, error: { code: -32602 } })
-    transport.dispose()
-  })
-
-  it('terminal/create without workspace returns RPC error', async () => {
-    const agentOut = new PassThrough()
-    const clientIn = new PassThrough()
-    const transport = new JsonRpcTransport(agentOut, clientIn)
-
-    const router = createAcpClientMethodRouter(
-      transport,
-      async () => ({ outcome: 'cancelled' }),
-      testContext(null),
-    )
-
-    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
-      clientIn.on('data', (chunk) => {
-        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
-      })
-    })
-
-    await router({
-      jsonrpc: '2.0',
-      id: 12,
-      method: 'terminal/create',
-      params: { sessionId: 'sess_1', command: 'echo' },
-    })
-
-    const response = await responsePromise
-    expect(response).toMatchObject({
-      id: 12,
-      error: { code: -32602 },
-    })
-    transport.dispose()
+    expect(init.protocolVersion).toBe(1)
+    expect(init.agentInfo?.name).toBe('mock-agent')
   })
 })
 
-describe('Acp client message routing (mock duplex)', () => {
-  it('handles Agent request via onMessage router', async () => {
-    const agentOut = new PassThrough()
-    const clientIn = new PassThrough()
+describe('SDK 流式 update（session/update 通知）', () => {
+  it('forwards agent updates to onSessionUpdate', async () => {
+    const seen: Array<Record<string, unknown>> = []
+    const { agentConn } = setupPeer(
+      testDeps({ onSessionUpdate: (params) => seen.push(params) }),
+    )
 
-    const transport = new JsonRpcTransport(agentOut, clientIn, {
-      onMessage: async (message) => {
-        if (!isJsonRpcRequest(message)) return
-        const router = createAcpClientMethodRouter(
-          transport,
-          async () => ({
-            outcome: 'cancelled',
-          }),
-          testContext(null),
-        )
-        await router(message)
+    await agentConn.client.notify(methods.client.session.update, {
+      sessionId: 's1',
+      update: {
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'text', text: 'hello' },
+      },
+    })
+    await agentConn.client.notify(methods.client.session.update, {
+      sessionId: 's1',
+      update: {
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'text', text: ' world' },
       },
     })
 
-    const responsePromise = new Promise<Record<string, unknown>>((resolve) => {
-      clientIn.on('data', (chunk) => {
-        resolve(JSON.parse(chunk.toString('utf8').trim()) as Record<string, unknown>)
-      })
+    await vi.waitFor(() => {
+      expect(seen).toHaveLength(2)
     })
+    expect(seen[0]).toMatchObject({ sessionId: 's1' })
+    expect(seen[1]).toMatchObject({ sessionId: 's1' })
+  })
+})
 
-    agentOut.write(
-      encodeJsonRpcMessage({
-        jsonrpc: '2.0',
-        id: 9,
-        method: 'session/request_permission',
-        params: { options: [] },
+describe('SDK permission（allow / reject 直返）', () => {
+  function permissionParams() {
+    return {
+      sessionId: 's1',
+      toolCall: {
+        toolCallId: 'tc-1',
+        title: 'Delete file',
+        kind: 'delete' as const,
+        status: 'pending' as const,
+      },
+      options: [
+        { optionId: 'allow-once', name: 'Allow', kind: 'allow_once' as const },
+        { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' as const },
+      ],
+    }
+  }
+
+  it('allow: bridge selected 直返 agent', async () => {
+    let seen: Record<string, unknown> | null = null
+    const { agentConn } = setupPeer(
+      testDeps({
+        onPermission: async ({ params }) => {
+          seen = params
+          return { outcome: 'selected', optionId: 'allow-once' }
+        },
       }),
     )
 
-    const response = await responsePromise
-    expect(response).toMatchObject({
-      id: 9,
-      result: { outcome: { outcome: 'cancelled' } },
-    })
-    transport.dispose()
+    const response = await agentConn.client.request<
+      RequestPermissionResponse,
+      RequestPermissionRequest
+    >(
+      methods.client.session.requestPermission,
+      permissionParams(),
+    )
+
+    expect(seen).not.toBeNull()
+    expect(response.outcome).toEqual({ outcome: 'selected', optionId: 'allow-once' })
   })
 
-  it('simulates initialize → session/new handshake', async () => {
-    const agentOut = new PassThrough()
-    const clientIn = new PassThrough()
-    const transport = new JsonRpcTransport(agentOut, clientIn, { requestTimeoutMs: 5_000 })
+  it('reject: bridge selected reject-once 直返 agent', async () => {
+    const { agentConn } = setupPeer(
+      testDeps({
+        onPermission: async () => ({ outcome: 'selected', optionId: 'reject-once' }),
+      }),
+    )
 
-    clientIn.on('data', (chunk) => {
-      const lines = chunk.toString('utf8').split('\n').filter(Boolean)
-      for (const line of lines) {
-        const msg = JSON.parse(line) as { id: number; method: string }
-        if (msg.method === 'initialize') {
-          agentOut.write(
-            encodeJsonRpcMessage({
-              jsonrpc: '2.0',
-              id: msg.id,
-              result: {
-                protocolVersion: 1,
-                agentCapabilities: {},
-                agentInfo: { name: 'mock-agent', version: '0.0.1' },
-                authMethods: [],
-              },
-            }),
-          )
-        }
-        if (msg.method === 'session/new') {
-          agentOut.write(
-            encodeJsonRpcMessage({
-              jsonrpc: '2.0',
-              id: msg.id,
-              result: { sessionId: 'sess_test_1' },
-            }),
-          )
-        }
-      }
+    const response = await agentConn.client.request<
+      RequestPermissionResponse,
+      RequestPermissionRequest
+    >(
+      methods.client.session.requestPermission,
+      permissionParams(),
+    )
+
+    expect(response.outcome).toEqual({ outcome: 'selected', optionId: 'reject-once' })
+  })
+
+  it('bridge 异常时 cancelled，不抛错', async () => {
+    const { agentConn } = setupPeer(
+      testDeps({
+        onPermission: async () => {
+          throw new Error('bridge down')
+        },
+      }),
+    )
+
+    const response = await agentConn.client.request<
+      RequestPermissionResponse,
+      RequestPermissionRequest
+    >(
+      methods.client.session.requestPermission,
+      permissionParams(),
+    )
+
+    expect(response.outcome).toEqual({ outcome: 'cancelled' })
+  })
+})
+
+describe('SDK fs 虚拟快照（±32602）', () => {
+  it('命中虚拟路径时走快照，不读磁盘', async () => {
+    const seen: string[] = []
+    const { agentConn } = setupPeer(
+      testDeps({
+        workspaceRoot: '/ws',
+        readSnapshot: async (resource) => {
+          seen.push(resource)
+          return '{"entries":[]}'
+        },
+      }),
+    )
+
+    const response = await agentConn.client.request(methods.client.fs.readTextFile, {
+      sessionId: 's1',
+      path: '/ws/.inkdown/agent/toc.json',
     })
 
-    const init = (await transport.request('initialize', {
+    expect(seen).toEqual(['toc.json'])
+    expect(response.content).toBe('{"entries":[]}')
+  })
+
+  it('虚拟目录下的未知资源返回 -32602', async () => {
+    const { agentConn } = setupPeer(testDeps({ workspaceRoot: '/ws' }))
+
+    const error = await agentConn.client
+      .request(methods.client.fs.readTextFile, {
+        sessionId: 's1',
+        path: '/ws/.inkdown/agent/nope.json',
+      })
+      .then(
+        () => null,
+        (failure) => failure as RequestError,
+      )
+
+    expect(error).toBeInstanceOf(RequestError)
+    expect(error?.code).toBe(-32602)
+  })
+})
+
+describe('SDK terminal guard', () => {
+  it('terminal/create without workspace 返回 -32602', async () => {
+    const { agentConn } = setupPeer(testDeps({ workspaceRoot: null }))
+
+    const error = await agentConn.client
+      .request(methods.client.terminal.create, {
+        sessionId: 's1',
+        command: 'echo',
+      })
+      .then(
+        () => null,
+        (failure) => failure as RequestError,
+      )
+
+    expect(error).toBeInstanceOf(RequestError)
+    expect(error?.code).toBe(-32602)
+  })
+
+  it('terminal/create cwd 越界由 manager 拦截（映射 -32000，不断言静默放行）', async () => {
+    const { agentConn } = setupPeer(testDeps({ workspaceRoot: process.cwd() }))
+
+    const error = await agentConn.client
+      .request(methods.client.terminal.create, {
+        sessionId: 's1',
+        command: 'echo',
+        cwd: resolve(process.cwd(), '..', `__acp_term_outside_${Date.now()}`),
+      })
+      .then(
+        () => null,
+        (failure) => failure as RequestError,
+      )
+
+    expect(error).toBeInstanceOf(RequestError)
+    expect(error?.code).toBe(-32000)
+    expect(String(error?.message)).toMatch(/工作区/)
+  })
+})
+
+describe('SDK auth 守门（authenticate → session/new）', () => {
+  it('未认证建会话被拒，authenticate 后放行并透传 methodId', async () => {
+    let authed = false
+    const seenMethodIds: string[] = []
+    const appAgent = agent({ name: 'fake-auth' })
+    appAgent.onRequest(methods.agent.authenticate, async (ctx) => {
+      seenMethodIds.push(ctx.params.methodId)
+      authed = true
+      return {}
+    })
+    appAgent.onRequest(methods.agent.session.new, async () => {
+      if (!authed) throw RequestError.authRequired()
+      return { sessionId: 's-auth' }
+    })
+    const appClient = client({ name: 'inkdown-test' })
+    const clientConn = appClient.connect(appAgent)
+    liveConnections.push(clientConn)
+
+    const denied = await clientConn.agent
+      .request(methods.agent.session.new, { cwd: '/ws', mcpServers: [] })
+      .then(
+        () => null,
+        (failure) => failure as RequestError,
+      )
+    expect(denied).toBeInstanceOf(RequestError)
+    expect(denied?.code).toBe(-32000)
+
+    await clientConn.agent.request(methods.agent.authenticate, { methodId: 'chatgpt' })
+    expect(seenMethodIds).toEqual(['chatgpt'])
+
+    const opened = await clientConn.agent.request(methods.agent.session.new, {
+      cwd: '/ws',
+      mcpServers: [],
+    })
+    expect(opened.sessionId).toBe('s-auth')
+  })
+})
+
+describe('SDK disconnect 代际（close 取消在途，新连接不受影响）', () => {
+  it('close rejects pending prompt; fresh connection still works', async () => {
+    const appAgent = agent({ name: 'fake-hang' })
+    appAgent.onRequest(methods.agent.initialize, async () => ({ protocolVersion: 1 }))
+    appAgent.onRequest(
+      methods.agent.session.prompt,
+      async () => new Promise<never>(() => undefined),
+    )
+    const appClient = client({ name: 'inkdown-test' })
+    const clientConn = appClient.connect(appAgent)
+    liveConnections.push(clientConn)
+
+    const pending = clientConn.agent.request(methods.agent.session.prompt, {
+      sessionId: 's1',
+      prompt: [{ type: 'text', text: 'hi' }],
+    })
+    // 让请求先发出去再 close
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    clientConn.close()
+
+    await expect(pending).rejects.toThrow(/closed/i)
+    expect(clientConn.signal.aborted).toBe(true)
+
+    // 新代际连接不受旧 close 影响
+    const freshConn = appClient.connect(appAgent)
+    liveConnections.push(freshConn)
+    const init = await freshConn.agent.request(methods.agent.initialize, {
       protocolVersion: 1,
       clientCapabilities: {},
-    })) as { protocolVersion: number; agentInfo: { name: string } }
+    })
     expect(init.protocolVersion).toBe(1)
-    expect(init.agentInfo.name).toBe('mock-agent')
-
-    const session = (await transport.request('session/new', {
-      cwd: '/tmp',
-      mcpServers: [],
-    })) as { sessionId: string }
-    expect(session.sessionId).toBe('sess_test_1')
-
-    transport.dispose()
   })
 })

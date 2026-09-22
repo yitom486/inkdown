@@ -210,7 +210,7 @@ inkdown/
 ├── apps/desktop/          # 桌面应用（Electron 主进程 + React 渲染进程 + E2E/资源/三配置）
 ├── packages/@inkdown/*    # 私有 workspace 包（纯逻辑与契约，不独立发版）
 ├── scripts/               # 发版 / 文档 lint / 依赖边界 / 打包门禁脚本
-├── third-party/foliate-js # EPUB/MOBI 统一阅读后端（git submodule）
+├── third-party/           # 第三方与教学归档（阅读后端子模块 + 手搓 JSON-RPC 教学快照，三无隔离，不进构建）
 ├── out/ + release/        # 构建与打包产物（根目录，gitignore）
 └── package.json + bun.lock # 单根依赖与 workspace 声明（packages/*）
 ```

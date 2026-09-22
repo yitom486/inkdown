@@ -1,3 +1,8 @@
+/**
+ * 教学快照，与正式已分叉，禁止 import。
+ * 冻结自 packages/acp/src/transport/jsonrpc-transport.ts（来源 commit 见本目录 README.md）。
+ * 正式演进（含 SDK 迁移）不再同步到此；正式代码禁止引用本文件。
+ */
 import type { Readable, Writable } from 'node:stream' // check-deps:allow node:stream - ACP stdio
 
 export type JsonRpcId = number | string

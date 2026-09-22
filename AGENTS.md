@@ -48,7 +48,7 @@ apps/desktop/resources/  # 图标等构建资源（`icon.png`/`icon.ico`）
 apps/desktop/electron.vite.config.ts | electron-builder.yml | playwright.config.ts  # 三配置已搬入 apps/desktop/，根命令经 --config 引用
 shared/          # 已清空：仅剩无文件空目录，阶段 10 删除；新代码禁止引用
 packages/        # `@inkdown/*` 私有 workspace 包：contracts / acp / reader-core / pdf / ocr-core / annotations / web-doc（不独立发版）
-scripts/ | third-party/  # 留守根
+scripts/ | third-party/  # 留守根（含手搓 JSON-RPC 教学归档，三无隔离，禁被正式 import）
 out/             # 留守根：构建输出（main / preload / renderer）；release/ 亦落根
 .plan/           # 本地计划（已 gitignore，不提交）
 .cursor/rules/   # Agent 强制细则

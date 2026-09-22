@@ -15,7 +15,6 @@
  */
 
 // ── 传输 ──
-export * from "./transport/jsonrpc-transport";
 export * from "./transport/terminal-output-buffer";
 
 // ── 认证 ──

@@ -1,8 +1,10 @@
+import { RequestError } from '@agentclientprotocol/sdk'
 import type { AcpSessionRestoreAttempt, AcpSessionRestoreMethod } from '@inkdown/contracts'
 
 export type AcpRpcRequest = (method: string, params?: unknown) => Promise<unknown>
 
 export interface RestoreOrCreateSessionInput {
+  /** SDK 调用源：(method, params) => agent.request(method, params)（超时由 sdk-client 显式透传） */
   request: AcpRpcRequest
   cwd: string
   resumeSessionId: string | null
@@ -30,8 +32,32 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function isTransientAcpTransportError(message: string): boolean {
-  return /传输已销毁|传输已关闭|stdio 已关闭|请求超时/.test(message)
+/**
+ * SDK 瞬时错误判定：连接层故障（关闭/中断/超时/管道）可重试 1 次；
+ * 协议层拒绝（cancelled / method-not-found / invalid-params / 业务 not-found）
+ * 不重试，直接落到下一恢复手段。
+ *
+ * 注意：SDK 会把 Agent 侧抛出的 Error 归一化为 RequestError(-32603)，原文
+ * 藏进 data.details，因此连带 data 一起判定。
+ */
+export function isTransientAcpTransportError(error: unknown): boolean {
+  if (error instanceof RequestError) {
+    // -32800 取消、-32601 未实现、-32602 参数错：重试无意义
+    if (error.code === -32800 || error.code === -32601 || error.code === -32602) return false
+    let detail = ''
+    try {
+      detail = error.data === undefined ? '' : JSON.stringify(error.data)
+    } catch {
+      detail = String(error.data)
+    }
+    return /超时|timeout|timed out|temporar|busy|unavailable|closed|abort|econnreset|epipe/i.test(
+      `${error.message} ${detail}`,
+    )
+  }
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+  return /ACP connection closed|connection closed|closed|abort|超时|timeout|timed out|econnreset|epipe|stdio|stream/i.test(
+    message,
+  )
 }
 
 /**
@@ -84,7 +110,7 @@ export async function restoreOrCreateAcpSession(
           try: tryIndex,
           error: lastError,
         })
-        const canRetry = tryIndex < maxTries && isTransientAcpTransportError(lastError)
+        const canRetry = tryIndex < maxTries && isTransientAcpTransportError(error)
         if (!canRetry) {
           restoreAttempts.push({ method, ok: false, tries: tryIndex, error: lastError })
           return null

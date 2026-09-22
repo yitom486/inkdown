@@ -22,14 +22,17 @@ import type {
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
 } from '@inkdown/contracts'
+import {
+  methods,
+  type ClientApp,
+  type ClientConnection,
+  type ClientContext,
+  type InitializeResponse,
+} from '@agentclientprotocol/sdk'
 import { getAcpRuntime } from '@inkdown/acp'
 import { resolveAgentCwd } from './agent-sandbox-cwd'
 import { parseAcpConfigOptions } from '@inkdown/acp'
-import {
-  createAcpClientMethodRouter,
-  pickAllowOptionId,
-  type PermissionDecision,
-} from './client-handlers'
+import { registerAcpClientHandlers } from './client-handlers'
 import { buildAcpProxySpawnEnv, readAcpProxySettings } from './acp-proxy-service'
 import { getAcpRuntimeAdapter } from './runtimes'
 import { runConnectAuthGate } from '@inkdown/acp'
@@ -47,11 +50,7 @@ import {
   type InkdownMcpServerHandle,
 } from './mcp/inkdown-mcp-server'
 import { restoreOrCreateAcpSession } from './session-open'
-import {
-  isJsonRpcNotification,
-  isJsonRpcRequest,
-  JsonRpcTransport,
-} from '@inkdown/acp'
+import { connectSdkClient, sdkRequest, type SdkStreamHandle } from './sdk-client'
 import { disposeAllAcpProcesses, getLiveAcpProcess, isSpawnedAcpProcessAlive, spawnAcpProcess, type SpawnedAcpProcess } from './process-manager'
 import { ensureBunForCommand, mapSpawnErrorToAppError } from '../bun-runtime'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -82,7 +81,9 @@ export type AcpSnapshotBridge = (payload: {
   args?: InkdownSnapshotArgs
 }) => Promise<string>
 
-let transport: JsonRpcTransport | null = null
+let sdkApp: ClientApp | null = null
+let sdkConn: ClientConnection | null = null
+let sdkStream: SdkStreamHandle | null = null
 let terminalManager = new AcpTerminalManager()
 let processHandle: SpawnedAcpProcess | null = null
 let sessionId: string | null = null
@@ -95,7 +96,7 @@ let cachedPromptCapabilities: AcpPromptCapabilities = {}
 let pendingResumeSessionId: string | null = null
 /** session/load 回放历史时压制转发，避免与本地气泡重复 */
 let suppressSessionUpdates = false
-/** 防止连点「连接」时旧 disconnect 拆掉新 transport */
+/** 防止连点「连接」时旧 disconnect 拆掉新连接 */
 let connectGeneration = 0
 let cachedAgentName: string | undefined
 let cachedAgentVersion: string | undefined
@@ -104,6 +105,8 @@ let status: AcpConnectionStatus = 'disconnected'
 let permissionBridge: AcpPermissionBridge | null = null
 let snapshotBridge: AcpSnapshotBridge | null = null
 let snapshotRequestSeq = 0
+/** 权限请求自增序号（供 UI 回显，无待决 Map，直返 bridge 结果） */
+let permissionSeq = 0
 let inkdownMcp: InkdownMcpServerHandle | null = null
 /** 目录副会话专用端点句柄（懒启动，随 disconnect 关闭） */
 let tocMcp: InkdownMcpServerHandle | null = null
@@ -151,7 +154,6 @@ async function ensureTocMcpServer(): Promise<InkdownMcpServerHandle> {
   return tocMcp
 }
 
-const pendingPermissions = new Map<number, { resolve: (value: PermissionDecision) => void }>()
 const sessionUpdateListeners = new Set<AcpSessionUpdateListener>()
 const statusListeners = new Set<AcpStatusListener>()
 let activePromptSessionId: string | null = null
@@ -177,13 +179,13 @@ function toProtocolError(error: unknown, fallback: string): AppError {
   return mapSpawnErrorToAppError(error, fallback)
 }
 
-function requireTransport(allowAuthPhase = false): Result<JsonRpcTransport, AppError> {
-  if (!transport) {
+function requireAgent(allowAuthPhase = false): Result<ClientContext, AppError> {
+  if (!sdkConn) {
     return err({ code: 'ACP_NOT_CONNECTED', message: 'ACP Agent 未连接' })
   }
-  if (status === 'connected') return ok(transport)
+  if (status === 'connected') return ok(sdkConn.agent)
   if (allowAuthPhase && (status === 'connecting' || status === 'awaiting_auth')) {
-    return ok(transport)
+    return ok(sdkConn.agent)
   }
   return err({ code: 'ACP_NOT_CONNECTED', message: 'ACP Agent 未连接' })
 }
@@ -209,8 +211,8 @@ async function openSessionAfterAuth(
   cwd: string,
   options?: { keepAliveOnFailure?: boolean },
 ): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
-  const t = requireTransport(true)
-  if (!t.ok) return t
+  const a = requireAgent(true)
+  if (!a.ok) return err(a.error)
   if (!runtimeId) {
     return err({ code: 'ACP_NOT_CONNECTED', message: '运行时未知' })
   }
@@ -219,7 +221,7 @@ async function openSessionAfterAuth(
 
   try {
     const opened = await restoreOrCreateAcpSession({
-      request: (method, params) => t.value.request(method, params),
+      request: (method, params) => sdkRequest<unknown, unknown>(a.value, method, params),
       cwd,
       resumeSessionId: resumeId,
       resumeSupported: resumeSessionSupported,
@@ -269,56 +271,31 @@ async function openSessionAfterAuth(
   }
 }
 
-async function resolvePermission(params: Record<string, unknown>): Promise<PermissionDecision> {
-  const allowId = pickAllowOptionId(params)
-  if (allowId) return { outcome: 'selected', optionId: allowId }
-  return { outcome: 'cancelled' }
-}
-
 async function handlePermissionRequest(
-  requestId: number | string,
+  permSessionId: string | undefined,
   params: Record<string, unknown>,
-): Promise<PermissionDecision> {
-  const numericId = typeof requestId === 'number' ? requestId : Number(requestId)
+): Promise<AcpPermissionOutcome> {
   console.info('[acp] handlePermissionRequest', {
-    requestId,
-    numericId,
     hasBridge: Boolean(permissionBridge),
     optionCount: Array.isArray(params.options) ? params.options.length : 0,
   })
-  if (!permissionBridge || !Number.isFinite(numericId)) {
-    const fallback = await resolvePermission(params)
-    console.warn('[acp] permissionBridge 不可用，自动决议（不会弹出审批 UI）', {
-      requestId,
-      fallback,
-    })
-    return fallback
+  if (!permissionBridge) {
+    // 无 bridge 时直接 cancelled，禁静默 allow
+    console.warn('[acp] permissionBridge 不可用，直接 cancelled（禁静默 allow）')
+    return { outcome: 'cancelled' }
   }
 
-  return await new Promise<PermissionDecision>((resolve) => {
-    pendingPermissions.set(numericId, { resolve })
-    const permSessionId =
-      typeof params.sessionId === 'string' && params.sessionId.trim()
-        ? params.sessionId
-        : (sessionId ?? undefined)
-    void permissionBridge!({
-      requestId: numericId,
-      sessionId: permSessionId,
-      params,
-    })
-      .then((outcome) => {
-        if (!pendingPermissions.has(numericId)) return
-        pendingPermissions.delete(numericId)
-        console.info('[acp] permissionBridge 返回', { requestId: numericId, outcome })
-        resolve(outcome)
-      })
-      .catch((error) => {
-        if (!pendingPermissions.has(numericId)) return
-        pendingPermissions.delete(numericId)
-        console.error('[acp] permissionBridge 异常，cancelled', error)
-        resolve({ outcome: 'cancelled' })
-      })
-  })
+  permissionSeq += 1
+  const requestId = permissionSeq
+  const sid = permSessionId?.trim() ? permSessionId : (sessionId ?? undefined)
+  try {
+    const outcome = await permissionBridge({ requestId, sessionId: sid, params })
+    console.info('[acp] permissionBridge 返回', { requestId, outcome })
+    return outcome
+  } catch (error) {
+    console.error('[acp] permissionBridge 异常，cancelled', error)
+    return { outcome: 'cancelled' }
+  }
 }
 
 function emitSessionUpdate(params: Record<string, unknown>): void {
@@ -411,12 +388,12 @@ export async function connectAcp(payload: {
   // initialize 握手验证；若握手失败，catch 会杀掉毒进程，下次点击走冷启动自愈。
   const warmHandle = getLiveAcpProcess(runtime.id)
   if (warmHandle) {
-    // 剥离旧会话状态但保温进程：旧 transport 只摘监听，不关 stdio。
+    // 剥离旧会话状态但保温进程：旧 SDK 连接只关闭，不断 stdio。
     await disconnectAcp()
     processHandle = warmHandle
   } else {
     await disconnectAcp(undefined, { killProcess: true })
-    // 给旧进程/stdio 一点时间收尾，降低「传输已销毁」竞态
+    // 给旧进程/stdio 一点时间收尾，降低连接竞态
     await new Promise((resolve) => setTimeout(resolve, 80))
   }
   if (gen !== connectGeneration) {
@@ -465,7 +442,7 @@ export async function connectAcp(payload: {
       await adapter.onColdStart?.()
     }
     if (warmHandle) {
-      // 温进程复用：跳过 spawn，直接用原 stdio 建新传输并走握手
+      // 温进程复用：跳过 spawn，直接用原子进程 stdio 建新 SDK 连接并走握手
       processHandle = warmHandle
       watchProcessExit(warmHandle, gen)
     } else {
@@ -504,53 +481,41 @@ export async function connectAcp(payload: {
       return err({ code: 'ACP_SPAWN_ERROR', message: '子进程 stdio 不可用' })
     }
 
-    const localTransport = new JsonRpcTransport(child.stdout, child.stdin, {
-      requestTimeoutMs: 120_000,
-      onMessage: async (message) => {
-        if (isJsonRpcRequest(message)) {
-          const router = createAcpClientMethodRouter(
-            localTransport,
-            ({ requestId, params }) => handlePermissionRequest(requestId, params),
-            {
-              getWorkspaceRoot: () => workspaceRoot,
-              terminals: terminalManager,
-              readSnapshot: handleSnapshotRequest,
-            },
-          )
-          await router(message)
-          return
-        }
-
-        if (isJsonRpcNotification(message) && message.method === 'session/update') {
-          const params =
-            message.params && typeof message.params === 'object'
-              ? (message.params as Record<string, unknown>)
-              : {}
-          emitSessionUpdate(params)
-        }
-      },
-      onError: (error) => {
-        console.error('[acp] transport error', error)
-      },
+    // SDK 长驻连接：client({ name: 'inkdown' }).connect()，持有 ClientConnection。
+    // 回调经 onRequest/onNotification 注册；stdio 经 toWeb→ndJsonStream 桥接。
+    const created = connectSdkClient(child, (sdk) => {
+      registerAcpClientHandlers(sdk, {
+        getWorkspaceRoot: () => workspaceRoot,
+        terminals: terminalManager,
+        readSnapshot: handleSnapshotRequest,
+        onPermission: ({ sessionId: permSessionId, params }) =>
+          handlePermissionRequest(permSessionId, params),
+        onSessionUpdate: (params) => emitSessionUpdate(params),
+      })
     })
+    sdkApp = created.app
+    sdkConn = created.connection
+    sdkStream = created.streamHandle
 
-    transport = localTransport
-
-    const initResult = (await localTransport.request('initialize', {
-      protocolVersion: PROTOCOL_VERSION,
-      clientCapabilities: {
-        fs: {
-          readTextFile: true,
-          writeTextFile: true,
+    const initResult = await sdkRequest<InitializeResponse, Record<string, unknown>>(
+      sdkConn.agent,
+      methods.agent.initialize,
+      {
+        protocolVersion: PROTOCOL_VERSION,
+        clientCapabilities: {
+          fs: {
+            readTextFile: true,
+            writeTextFile: true,
+          },
+          terminal: true,
         },
-        terminal: true,
+        clientInfo: {
+          name: 'inkdown',
+          title: APP_TITLE,
+          version: app.getVersion(),
+        },
       },
-      clientInfo: {
-        name: 'inkdown',
-        title: APP_TITLE,
-        version: app.getVersion(),
-      },
-    })) as Record<string, unknown>
+    )
 
     const negotiated =
       typeof initResult.protocolVersion === 'number' ? initResult.protocolVersion : PROTOCOL_VERSION
@@ -565,17 +530,11 @@ export async function connectAcp(payload: {
 
     cachedProtocolVersion = negotiated
 
-    const agentInfo =
-      initResult.agentInfo && typeof initResult.agentInfo === 'object'
-        ? (initResult.agentInfo as Record<string, unknown>)
-        : undefined
+    const agentInfo = initResult.agentInfo ?? undefined
     cachedAgentName = typeof agentInfo?.name === 'string' ? agentInfo.name : undefined
     cachedAgentVersion = typeof agentInfo?.version === 'string' ? agentInfo.version : undefined
 
-    const caps =
-      initResult.agentCapabilities && typeof initResult.agentCapabilities === 'object'
-        ? (initResult.agentCapabilities as Record<string, unknown>)
-        : {}
+    const caps = (initResult.agentCapabilities ?? {}) as unknown as Record<string, unknown>
     loadSessionSupported = parseLoadSessionSupported(caps)
     resumeSessionSupported = parseResumeSessionSupported(caps)
     cachedPromptCapabilities = parsePromptCapabilities(caps)
@@ -599,7 +558,9 @@ export async function connectAcp(payload: {
       // 本地已有凭据（如 ~/.codex）时，一律优先直接建立会话（session/new）
       preferDirectSession: true,
       authenticate: async (methodId) => {
-        await localTransport.request('authenticate', { methodId })
+        await sdkRequest<unknown, Record<string, unknown>>(sdkConn!.agent, methods.agent.authenticate, {
+          methodId,
+        })
       },
       tryOpenSessionWithoutAuth: async () => {
         const direct = await openSessionAfterAuth(cwd, { keepAliveOnFailure: true })
@@ -646,8 +607,8 @@ export async function authenticateAcp(payload: {
   methodId: string
   force?: boolean
 }): Promise<Result<Extract<AcpConnectResult, { phase: 'ready' }>, AppError>> {
-  const t = requireTransport(true)
-  if (!t.ok) return t
+  const a = requireAgent(true)
+  if (!a.ok) return err(a.error)
   const cwd = resolveAgentCwd(workspaceRoot).cwd
 
   const adapter = getAcpRuntimeAdapter(runtimeId ?? '')
@@ -659,7 +620,9 @@ export async function authenticateAcp(payload: {
   }
 
   try {
-    await t.value.request('authenticate', { methodId: payload.methodId })
+    await sdkRequest<unknown, Record<string, unknown>>(a.value, methods.agent.authenticate, {
+      methodId: payload.methodId,
+    })
     return await openSessionAfterAuth(cwd)
   } catch (error) {
     return err(toProtocolError(error, '认证失败'))
@@ -673,8 +636,8 @@ export async function loadAcpSession(payload: {
 }): Promise<
   Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>
 > {
-  const t = requireTransport()
-  if (!t.ok) return t
+  const a = requireAgent()
+  if (!a.ok) return err(a.error)
   if (!loadSessionSupported) {
     return err({
       code: 'ACP_PROTOCOL_ERROR',
@@ -688,20 +651,24 @@ export async function loadAcpSession(payload: {
   if (secondary) suppressSessionUpdates = true
 
   try {
-    const result = (await t.value.request('session/load', {
-      sessionId: payload.sessionId,
-      cwd,
-      mcpServers: inkdownMcp
-        ? [
-            {
-              type: 'http',
-              name: 'inkdown',
-              url: inkdownMcp.url,
-              headers: [{ name: 'Authorization', value: `Bearer ${inkdownMcp.authToken}` }],
-            },
-          ]
-        : [],
-    })) as Record<string, unknown>
+    const result = await sdkRequest<Record<string, unknown>, Record<string, unknown>>(
+      a.value,
+      methods.agent.session.load,
+      {
+        sessionId: payload.sessionId,
+        cwd,
+        mcpServers: inkdownMcp
+          ? [
+              {
+                type: 'http',
+                name: 'inkdown',
+                url: inkdownMcp.url,
+                headers: [{ name: 'Authorization', value: `Bearer ${inkdownMcp.authToken}` }],
+              },
+            ]
+          : [],
+      },
+    )
     const id =
       typeof result.sessionId === 'string' ? result.sessionId : payload.sessionId
     if (!secondary) {
@@ -726,15 +693,24 @@ export async function disconnectAcp(
   reason?: string,
   opts?: { killProcess?: boolean },
 ): Promise<Result<void, AppError>> {
-  for (const [, pending] of pendingPermissions) {
-    pending.resolve({ outcome: 'cancelled' })
-  }
-  pendingPermissions.clear()
-
   terminalManager.releaseAll()
 
-  transport?.dispose()
-  transport = null
+  // SDK 长驻连接关闭：在途请求一并取消（无待决 Map，直返 bridge 结果）
+  try {
+    sdkConn?.close()
+  } catch {
+    // 忽略竞态关闭
+  }
+  sdkConn = null
+  sdkApp = null
+
+  // 摘桥接：只吃掉垫层，保住温进程 stdio 给下次复用
+  try {
+    sdkStream?.dispose()
+  } catch {
+    // 忽略竞态关闭
+  }
+  sdkStream = null
 
   if (processHandle) {
     // 已死句柄一律回收；存活进程默认保温（killProcess=false），下次同 runtime
@@ -777,8 +753,8 @@ export async function createAcpSession(
   cwd?: string,
   toolScope: 'full' | 'toc' = 'full',
 ): Promise<Result<{ sessionId: string; configOptions: ReturnType<typeof parseAcpConfigOptions> }, AppError>> {
-  const t = requireTransport()
-  if (!t.ok) return t
+  const a = requireAgent()
+  if (!a.ok) return err(a.error)
 
   const resolvedCwd = resolveAgentCwd(cwd || workspaceRoot).cwd
 
@@ -789,10 +765,14 @@ export async function createAcpSession(
         : inkdownMcp
           ? mcpServerEntry(inkdownMcp, 'inkdown')
           : []
-    const result = (await t.value.request('session/new', {
-      cwd: resolvedCwd,
-      mcpServers,
-    })) as Record<string, unknown>
+    const result = await sdkRequest<Record<string, unknown>, Record<string, unknown>>(
+      a.value,
+      methods.agent.session.new,
+      {
+        cwd: resolvedCwd,
+        mcpServers,
+      },
+    )
     const id = typeof result.sessionId === 'string' ? result.sessionId : null
     if (!id) {
       return err({ code: 'ACP_PROTOCOL_ERROR', message: 'session/new 未返回 sessionId' })
@@ -812,15 +792,19 @@ export async function setAcpConfigOption(payload: {
   configId: string
   value: string | boolean
 }): Promise<Result<AcpSetConfigOptionResult, AppError>> {
-  const t = requireTransport()
-  if (!t.ok) return t
+  const a = requireAgent()
+  if (!a.ok) return err(a.error)
 
   try {
-    const result = (await t.value.request('session/set_config_option', {
-      sessionId: payload.sessionId,
-      configId: payload.configId,
-      value: payload.value,
-    })) as Record<string, unknown>
+    const result = await sdkRequest<Record<string, unknown>, Record<string, unknown>>(
+      a.value,
+      methods.agent.session.setConfigOption,
+      {
+        sessionId: payload.sessionId,
+        configId: payload.configId,
+        value: payload.value,
+      },
+    )
     const configOptions = parseAcpConfigOptions(
       result.configOptions ?? result,
     )
@@ -839,8 +823,8 @@ export async function promptAcp(payload: {
   sessionId: string
   prompt: AcpContentBlock[]
 }): Promise<Result<AcpPromptResult, AppError>> {
-  const t = requireTransport()
-  if (!t.ok) return t
+  const a = requireAgent()
+  if (!a.ok) return err(a.error)
 
   const prompt = Array.isArray(payload.prompt) ? payload.prompt : []
   if (prompt.length === 0) {
@@ -850,10 +834,14 @@ export async function promptAcp(payload: {
   const prevActiveSessionId = activePromptSessionId
   activePromptSessionId = payload.sessionId
   try {
-    const result = (await t.value.request('session/prompt', {
-      sessionId: payload.sessionId,
-      prompt,
-    })) as Record<string, unknown>
+    const result = await sdkRequest<Record<string, unknown>, Record<string, unknown>>(
+      a.value,
+      methods.agent.session.prompt,
+      {
+        sessionId: payload.sessionId,
+        prompt,
+      },
+    )
     const stopReason = typeof result.stopReason === 'string' ? result.stopReason : 'end_turn'
     return ok({ stopReason })
   } catch (error) {
@@ -864,42 +852,18 @@ export async function promptAcp(payload: {
 }
 
 export function cancelAcp(payload: { sessionId: string }): Result<void, AppError> {
-  const t = requireTransport()
-  if (!t.ok) return t
+  const a = requireAgent()
+  if (!a.ok) return a
   try {
-    t.value.notify('session/cancel', { sessionId: payload.sessionId })
-    for (const [id, pending] of pendingPermissions) {
-      pending.resolve({ outcome: 'cancelled' })
-      pendingPermissions.delete(id)
-    }
+    void a.value.notify(methods.agent.session.cancel, { sessionId: payload.sessionId })
     return ok(undefined)
   } catch (error) {
     return err(toProtocolError(error, '取消失败'))
   }
 }
 
-export function respondAcpPermission(
-  requestId: number,
-  outcome: AcpPermissionOutcome,
-): Result<void, AppError> {
-  const pending = pendingPermissions.get(requestId)
-  if (!pending) {
-    return err({ code: 'ACP_PROTOCOL_ERROR', message: `无待处理权限请求: ${requestId}` })
-  }
-  pendingPermissions.delete(requestId)
-  pending.resolve(outcome)
-  return ok(undefined)
-}
-
 export function disposeAllAcp(): void {
   // App 退出：整树杀干净，不保温
   void disconnectAcp(undefined, { killProcess: true })
   disposeAllAcpProcesses()
-}
-
-/** 测试钩子：注入已构造的 transport（跳过 spawn） */
-export function __setAcpTransportForTests(next: JsonRpcTransport | null, nextSessionId?: string): void {
-  transport = next
-  sessionId = nextSessionId ?? null
-  status = next ? 'connected' : 'disconnected'
 }
