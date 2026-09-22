@@ -3,8 +3,9 @@
  *
  * 用法：
  *   bun run release              # 0.2.5 → 0.2.6，仅本地 commit/tag
- *   bun run release:push         # 同上并 push（触发 GitHub Release）
+ *   bun run release:push         # 只推当前版（HEAD + 当前 version 的 tag），不递增版本
  *   bun run release -- minor
+ *   bun run release -- patch --push   # 递增 patch 并 push（想连发必须点名 bump）
  *   bun run release -- major --push
  *   bun run release -- --dry-run
  *
@@ -30,22 +31,30 @@ export function fail(message: string): never {
   throw new Error(`release: ${message}`)
 }
 
-export function parseArgs(argv: string[]): { bump: BumpKind; push: boolean; dryRun: boolean } {
+export function parseArgs(argv: string[]): {
+  bump: BumpKind
+  bumpExplicit: boolean
+  push: boolean
+  dryRun: boolean
+} {
   let bump: BumpKind = 'patch'
+  let bumpExplicit = false
   let push = false
   let dryRun = false
   for (const arg of argv) {
     if (arg === '--push') push = true
     else if (arg === '--dry-run') dryRun = true
-    else if (arg === 'patch' || arg === 'minor' || arg === 'major') bump = arg
-    else if (arg === '--help' || arg === '-h') {
+    else if (arg === 'patch' || arg === 'minor' || arg === 'major') {
+      bump = arg
+      bumpExplicit = true
+    } else if (arg === '--help' || arg === '-h') {
       console.log(`用法: bun run scripts/release.ts [patch|minor|major] [--push] [--dry-run]`)
       process.exit(0)
     } else {
       fail(`未知参数：${arg}（支持 patch|minor|major、--push、--dry-run）`)
     }
   }
-  return { bump, push, dryRun }
+  return { bump, bumpExplicit, push, dryRun }
 }
 
 export function parseSemver(version: string): [number, number, number] {
@@ -162,11 +171,26 @@ export function updateChangelog(
 }
 
 function main(): void {
-  const { bump, push, dryRun } = parseArgs(process.argv.slice(2))
+  const { bump, bumpExplicit, push, dryRun } = parseArgs(process.argv.slice(2))
   assertCleanTree()
 
   const pkg = JSON.parse(readFileSync(PACKAGE_JSON, 'utf-8')) as { version: string }
   const current = pkg.version
+
+  // 只推不断版：release:push 场景。未点名 bump 时 --push 不再隐式递增版本，
+  // 否则发版后空[未发布]节必拦、白白连发一版。
+  if (push && !bumpExplicit && !dryRun) {
+    const pushTag = `v${current}`
+    const existing = git(['tag', '-l', pushTag])
+    if (existing !== pushTag) {
+      fail(`本地无 tag ${pushTag}，请先 bun run release 发版后再 push`)
+    }
+    git(['push', 'origin', 'HEAD'])
+    git(['push', 'origin', pushTag])
+    console.log(`release: 已推送 ${pushTag}；GitHub Actions 将打包 Release：https://github.com/${REPO}/actions`)
+    return
+  }
+
   const nextVersion = bumpVersion(current, bump)
   const tag = `v${nextVersion}`
   assertTagAbsent(tag)

@@ -19,9 +19,19 @@ describe('release bumpVersion', () => {
 
 describe('release parseArgs', () => {
   it('默认为 patch，可组合 --push', () => {
-    expect(parseArgs([])).toEqual({ bump: 'patch', push: false, dryRun: false })
+    expect(parseArgs([])).toEqual({ bump: 'patch', bumpExplicit: false, push: false, dryRun: false })
     expect(parseArgs(['minor', '--push'])).toEqual({
       bump: 'minor',
+      bumpExplicit: true,
+      push: true,
+      dryRun: false,
+    })
+  })
+
+  it('单 --push 不点名 bump（只推不断版，供 release:push 用）', () => {
+    expect(parseArgs(['--push'])).toEqual({
+      bump: 'patch',
+      bumpExplicit: false,
       push: true,
       dryRun: false,
     })
