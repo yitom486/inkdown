@@ -13,7 +13,7 @@ export const CLAUDE_ACP_NPM_PACKAGE = '@agentclientprotocol/claude-agent-acp' as
 /** DeepSeek Harness ACP 服务 npm 包 */
 export const DEEPSEEK_DSH_NPM_PACKAGE = '@deepseek-ai/dsh' as const
 
-/** agy 桥 npm 包（Antigravity CLI → ACP）：managed 安装到 userData/agents/agy */
+/** agy 桥 npm 包（Antigravity CLI → ACP） */
 export const AGY_ACP_NPM_PACKAGE = '@yitom/agy-acp-map' as const
 
 /** 已弃用：仅作迁移对照 / 测试断言，禁止作为默认 spawn 目标 */
@@ -112,11 +112,10 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     id: 'agy',
     name: 'agy',
     description:
-      '经 managed 安装的 @yitom/agy-acp-map 单文件桥（dist/agy-acp-win-x64.exe）；复用 Antigravity CLI 本地登录态；首次连接需下载约 100MB 桥组件（仅一次），请耐心等待不要重复点击',
+      '经 bunx 直调官方桥 JS 入口（免安装，跨平台；版本跟随 bunx 解析）',
     authHint: '复用 Antigravity CLI 本地登录态；未登录先在本机终端完成 agy 登录后再连接',
-    // 恒被 adapter.resolveSpawnCommand 覆盖：此处仅占位，保证模板 command 非空
-    command: 'agy-managed',
-    args: [],
+    command: 'bunx',
+    args: ['-y', AGY_ACP_NPM_PACKAGE],
     requiredEnvKeys: [],
   },
 ] as const

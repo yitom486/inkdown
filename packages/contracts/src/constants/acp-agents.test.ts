@@ -122,13 +122,13 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     expect(findBuiltinAcpRuntime('cursor-cli')!.authHint).toContain('agent login')
   })
 
-  it('agy 模板占位 command 非空（恒被 adapter.resolveSpawnCommand 覆盖）', () => {
+  it('agy 经 bunx 直调官方桥 JS 入口（免安装，跨平台）', () => {
     expect(AGY_ACP_NPM_PACKAGE).toBe('@yitom/agy-acp-map')
     const runtime = findBuiltinAcpRuntime('agy')
     expect(runtime).toBeDefined()
-    expect(runtime!.command).toBe('agy-managed')
-    expect(runtime!.args).toEqual([])
-    expect(runtime!.description).toContain('Antigravity CLI')
+    expect(runtime!.command).toBe('bunx')
+    expect(runtime!.args).toEqual(['-y', AGY_ACP_NPM_PACKAGE])
+    expect(runtime!.description).toContain('bunx')
     expect(runtime!.authHint).toContain('Antigravity CLI')
   })
 

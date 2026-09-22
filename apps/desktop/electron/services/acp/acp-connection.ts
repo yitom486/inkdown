@@ -212,7 +212,7 @@ export async function connectAcp(payload: {
   // 常驻复用：同 runtime 有存活温进程时跳过冷启动（省掉解压 + 导包）。
   // 温进程是否健康由后面的
   // initialize 握手验证；若握手失败，catch 会杀掉毒进程，下次点击走冷启动自愈。
-  let warmHandle = getLiveAcpProcess(runtime.id)
+  const warmHandle = getLiveAcpProcess(runtime.id)
   if (warmHandle) {
     // 剥离旧会话状态但保温进程：旧 SDK 连接只关闭，不断 stdio。
     await disconnectAcp()
@@ -239,27 +239,15 @@ export async function connectAcp(payload: {
   // 直接回带安装指引的 ACP_SPAWN_ERROR，不触达 spawn。
   // 背景：无 agent.cmd 的用户机上裸 spawn 会让 cmd 报“不是内部或外部命令”，
   // 子进程秒退，UI 只剩一句看不懂的 connection closed。
-  // agy 例外：resolveSpawnCommand 内做 managed 安装/更新（ensureManaged），
-  // 其抛错为安装失败，绝不静默回退，直接回带 ACP_SPAWN_ERROR；
   // 其余 runtime 抛错仍按缺省处理（防御性回落），不断连接。
-  // updated=true（本次发生安装/更新）时先杀同 runtime 温进程再走冷启动：
-  // Windows 运行中 exe 无法覆盖，必须先杀。
   if (adapter.resolveSpawnCommand) {
-    let resolved: { command: string; args: string[]; updated?: boolean } | null | undefined
-    let resolveError: unknown = null
+    let resolved: { command: string; args: string[] } | null | undefined
     try {
       resolved = adapter.resolveSpawnCommand()
     } catch (error) {
-      resolveError = error
-      if (runtime.id === 'agy') {
-        const message = error instanceof Error ? error.message : String(error)
-        setStatus('error', message)
-        return err({ code: 'ACP_SPAWN_ERROR', message })
-      }
       console.warn('[acp] resolveSpawnCommand 异常，沿用模板命令', error)
       resolved = undefined
     }
-    void resolveError
     if (resolved === null) {
       const message =
         runtime.id === 'cursor-cli' || runtime.id === 'cursor'
@@ -267,25 +255,6 @@ export async function connectAcp(payload: {
           : `Agent CLI 未安装（${runtime.id}）：请先安装对应 CLI 后重试`
       setStatus('error', message)
       return err({ code: 'ACP_SPAWN_ERROR', message })
-    }
-    if (resolved && typeof resolved === 'object' && 'updated' in resolved && resolved.updated === true) {
-      // managed 本次装/更新：旧 exe 已被覆盖（或即将被覆盖），温进程句柄失效，
-      // 先杀同 runtime 温进程再走冷启动；用现有 getLiveAcpProcess + kill，
-      // 不动 process-manager 签名。
-      try {
-        warmHandle?.kill()
-      } catch (error) {
-        console.warn('[acp] 更新后杀温进程异常，继续冷启动', error)
-      }
-      warmHandle = undefined
-      if (acpState.processHandle) {
-        try {
-          acpState.processHandle.kill()
-        } catch {
-          // 忽略竞态关闭
-        }
-        acpState.processHandle = null
-      }
     }
     if (resolved?.command) {
       runtime = { ...runtime, command: resolved.command, args: resolved.args }
@@ -310,8 +279,6 @@ export async function connectAcp(payload: {
   }
 
   // 启动前钩子：各 runtime 自理副作用（如凭据桥接同步 refresh_token）。
-  // agy 的 managed 安装/更新不在此钩子，而在上面的 resolveSpawnCommand 内
-  // （需先定 spawn 目标，且 updated=true 时要杀温进程，顺序不可后移）。
   // 防御性：下游 adapter 未就绪/抛错时不阻断连接。
   if (adapter.beforeSpawn) {
     try {

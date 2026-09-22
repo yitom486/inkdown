@@ -32,10 +32,8 @@ export interface GenericRuntimeAdapter {
    * `ACP_SPAWN_ERROR`，不触达 spawn（省掉“不是内部或外部命令”秒退）。
    * 缺省（undefined）表示无需预检，沿用模板 command/args。
    * 抛错时按缺省处理（防御性回落），不断连接。
-   * 可选 `updated`：true 表示本次发生了安装/更新（如 agy managed），
-   * 连接层先杀同 runtime 温进程再走冷启动（Windows 运行中 exe 无法覆盖）。
    */
-  resolveSpawnCommand?: () => { command: string; args: string[]; updated?: boolean } | null
+  resolveSpawnCommand?: () => { command: string; args: string[] } | null
   /**
    * 预检判停（缺 key 等，仿 resolveSpawnCommand 的可选 + 缺省兼容做法）：
    * 返回非空字符串表示直接判停，`acp-connection.ts` 以该文案回带
