@@ -6,8 +6,12 @@
 
 ## [未发布]
 
+---
+
+## [0.4.2] - 2026-09-22
+
 - ### Agent（多运行时）
-  - **一口气支持 8 个 Agent**：ChatGPT、Claude、Gemini、Copilot、OpenCode、Cursor、DeepSeek、agy，面板内一键切换，各自历史与会话隔离，名子不再带技术后缀
+  - **一口气支持 8 个 Agent**：ChatGPT、Claude、Gemini、Copilot、OpenCode、Cursor、DeepSeek、agy，面板内一键切换，各自历史与会话隔离，名字不再带技术后缀
   - **复用本机登录**：直接沿用各家 CLI 自己的登录态（ChatGPT 的 `~/.codex`、Cursor/OpenCode 等同理），登过就直连；没登录弹对应指引
   - **agy 自动安装与更新**：首次连接自动下载桥组件（约 100MB，会提示等待），之后每次连接自动检查 npm 最新版
   - **模型/思考档/Context/快速开关**：输入栏直接切换（能力以各 Agent 下发的为准）；快速模式首次默认关闭并记住偏好
@@ -309,7 +313,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.4.1...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/yitom486/inkdown/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/yitom486/inkdown/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/yitom486/inkdown/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/yitom486/inkdown/compare/v0.3.0...v0.3.1
