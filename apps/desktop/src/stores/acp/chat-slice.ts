@@ -16,6 +16,10 @@ import { pruneIntermediateAgentReplies } from '@/lib/agent/acp-prune-agent-repli
 import { pruneBlankThreads } from '@/lib/agent/acp-thread-prune'
 import { acpDevLog } from '@/lib/agent/acp-dev-log'
 import {
+  hasReplayScaffoldingMarkers,
+  stripReplayScaffolding,
+} from '@/lib/agent/context/strip-replay-scaffolding'
+import {
   resolveMarkProposalOnMessages,
 } from '@/lib/agent/promote-mark-proposals'
 import {
@@ -49,6 +53,12 @@ export interface ChatSlice {
   activeThreadId: string
   historyOpen: boolean
   pendingMarkProposalSnapshotContents: string[]
+  /**
+   * cursor load 回放清洗中的跨 chunk 悬垂缓冲（不持久化）：
+   * user chunk 以未闭合脚手架 opening 结尾时，暂缓渲染、把原文暂存此处，
+   * 与下一 user chunk 拼接后再洗；定居收尾 / 切线程 / 清空时落定或丢弃。
+   */
+  pendingReplayUserText: { threadId: string; raw: string } | null
   /** 各线程的聊天滚动记忆（scrollTop + 是否贴底），悬浮/侧栏共用，关闭重开原位恢复 */
   chatScrollByThread: Record<string, ChatScrollState>
 
@@ -98,6 +108,62 @@ function freezeSettledTurn(t: AcpChatThread): AcpChatThread {
 
 export const initialThread = createEmptyThread()
 
+type ReplayUserOutcome =
+  | { kind: 'defer'; pending: { threadId: string; raw: string } }
+  | { kind: 'drop' }
+  | { kind: 'append'; text: string }
+
+/**
+ * user-chunk 回放清洗门限（cursor load 把发过的内容重播为 user chunks 的第二道网）。
+ *
+ * - 正常用户输入走 `appendUserMessage`，从不到这里；到这里的 user chunk 本就可疑。
+ * - 定居/回放语境（`prompting === false`，load 回放只发生在此）或文本含我方标记时清洗；
+ * - prompt 回合内（`prompting === true`）且无标记的 chunk 原样返回，零影响；
+ * - 有同线程悬垂缓存时一律拼接原文续接再洗（无论 prompting，以保跨 chunk 完整）；
+ * - 用户原文粘贴标记串的极端情况随定居门限走，不单独处理。
+ */
+function consumeReplayUserChunk(
+  state: Pick<AcpUiStore, 'activeThreadId' | 'prompting' | 'pendingReplayUserText'>,
+  chunk: string,
+): ReplayUserOutcome {
+  const activeThreadId = state.activeThreadId
+  const pending = state.pendingReplayUserText
+  const continuing = pending !== null && pending.threadId === activeThreadId
+  if (!continuing && state.prompting && !hasReplayScaffoldingMarkers(chunk)) {
+    return { kind: 'append', text: chunk }
+  }
+  const candidate = continuing && pending ? pending.raw + chunk : chunk
+  const stripped = stripReplayScaffolding(candidate)
+  if (stripped.dangling) {
+    return { kind: 'defer', pending: { threadId: activeThreadId, raw: candidate } }
+  }
+  if (!stripped.text) return { kind: 'drop' }
+  return { kind: 'append', text: stripped.text }
+}
+
+/** 悬垂落定：把缓存原文强制清洗一次后作为 streaming 用户消息追加（保到达顺序） */
+function appendFlushedReplayUserText(t: AcpChatThread, raw: string): AcpChatThread {
+  const cleaned = stripReplayScaffolding(raw).text
+  if (!cleaned) return t
+  const messages: AcpChatMessage[] = [
+    ...t.messages,
+    {
+      id: newId('user'),
+      role: 'user' as const,
+      text: cleaned,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      streaming: true,
+    },
+  ]
+  return {
+    ...t,
+    messages,
+    title: t.title === '新对话' ? titleFromMessages(messages) : t.title,
+    updatedAt: Date.now(),
+  }
+}
+
 export const createChatSlice: StateCreator<
   AcpUiStore,
   [],
@@ -108,6 +174,7 @@ export const createChatSlice: StateCreator<
   activeThreadId: initialThread.id,
   historyOpen: false,
   pendingMarkProposalSnapshotContents: [],
+  pendingReplayUserText: null,
   chatScrollByThread: {},
 
   setChatScroll: (threadId, scroll) =>
@@ -120,6 +187,8 @@ export const createChatSlice: StateCreator<
   appendUserMessage: (text, attachments) =>
     set((s) => ({
       pendingMarkProposalSnapshotContents: [],
+      // 本地新输入 supersede 未落定的回放悬垂（load 半截时用户直接说话）
+      pendingReplayUserText: null,
       ...patchActiveThread(s, (t) => {
         const messages = [
           ...t.messages,
@@ -178,6 +247,7 @@ export const createChatSlice: StateCreator<
   clearMessages: () =>
     set((s) => ({
       pendingMarkProposalSnapshotContents: [],
+      pendingReplayUserText: null,
       ...patchActiveThread(s, (t) => ({
         ...t,
         messages: [],
@@ -263,6 +333,7 @@ export const createChatSlice: StateCreator<
         prompting: false,
         historyOpen: false,
         pendingMarkProposalSnapshotContents: [],
+        pendingReplayUserText: null,
         ...(runtimeChanged
           ? { configOptions: [], promptCapabilities: {}, pendingPermission: null }
           : {}),
@@ -297,6 +368,7 @@ export const createChatSlice: StateCreator<
       historyOpen: false,
       threads,
       pendingMarkProposalSnapshotContents: [],
+      pendingReplayUserText: null,
       ...(runtimeChanged
         ? { configOptions: [], promptCapabilities: {}, pendingPermission: null }
         : {}),
@@ -341,7 +413,18 @@ export const createChatSlice: StateCreator<
       typeof update.sessionUpdate === 'string' ? update.sessionUpdate : ''
 
     if (kind === INKDOWN_SETTLE_COMPLETE_KIND) {
-      // 主进程定居收尾：冻结漏网回放的 streaming 残留，不新增气泡，不碰 prompting
+      // 主进程定居收尾：先把回放清洗悬垂落定（有则成泡、无则丢），再冻结残留，
+      // 不新增空泡，不碰 prompting
+      const st = get()
+      const pending = st.pendingReplayUserText
+      if (pending && pending.threadId === st.activeThreadId && pending.raw) {
+        set((s) => ({
+          pendingReplayUserText: null,
+          ...patchActiveThread(s, (t) => appendFlushedReplayUserText(t, pending.raw)),
+        }))
+      } else if (pending) {
+        set({ pendingReplayUserText: null })
+      }
       get().freezeSettledStreaming()
       return
     }
@@ -505,14 +588,44 @@ export const createChatSlice: StateCreator<
 
     if (!text) return
 
-    set((s) =>
-      patchActiveThread(s, (t) => {
+    // cursor load 回放清洗（第二道网）：仅 user-chunk 分支洗脚手架。
+    // 悬垂（defer）时暂缓渲染、缓存原文等下一 chunk；洗空（drop）即丢弃该消息。
+    let effectiveText = text
+    if (role === 'user') {
+      const outcome = consumeReplayUserChunk(get(), text)
+      if (outcome.kind === 'defer') {
+        set({ pendingReplayUserText: outcome.pending })
+        return
+      }
+      if (outcome.kind === 'drop') {
+        if (get().pendingReplayUserText) set({ pendingReplayUserText: null })
+        return
+      }
+      effectiveText = outcome.text
+    } else {
+      // 非 user chunk 到达时若有同线程悬垂，先落定以保到达顺序
+      //（同消息的撕裂 chunk 总是连续同 role，这是纯防御）
+      const st = get()
+      const pending = st.pendingReplayUserText
+      if (pending && pending.threadId === st.activeThreadId && pending.raw) {
+        set((s) => ({
+          pendingReplayUserText: null,
+          ...patchActiveThread(s, (t) => appendFlushedReplayUserText(t, pending.raw)),
+        }))
+      } else if (pending) {
+        set({ pendingReplayUserText: null })
+      }
+    }
+
+    set((s) => ({
+      ...(role === 'user' ? { pendingReplayUserText: null } : {}),
+      ...patchActiveThread(s, (t) => {
         const messages = [...t.messages]
         const last = messages[messages.length - 1]
         if (last && last.role === role && last.streaming) {
           messages[messages.length - 1] = {
             ...last,
-            text: last.text + text,
+            text: last.text + effectiveText,
             updatedAt: Date.now(),
           }
           return { ...t, messages, updatedAt: Date.now() }
@@ -525,7 +638,7 @@ export const createChatSlice: StateCreator<
         if (role === 'agent' && emptyAgentIdx >= 0) {
           messages[emptyAgentIdx] = {
             ...messages[emptyAgentIdx]!,
-            text,
+            text: effectiveText,
             updatedAt: Date.now(),
             streaming: true,
           }
@@ -535,7 +648,7 @@ export const createChatSlice: StateCreator<
         const nextMsg: AcpChatMessage = {
           id: newId(role),
           role,
-          text,
+          text: effectiveText,
           createdAt: Date.now(),
           updatedAt: Date.now(),
           streaming: true,
@@ -548,6 +661,6 @@ export const createChatSlice: StateCreator<
         }
         return { ...t, messages, updatedAt: Date.now() }
       }),
-    )
+    }))
   },
 })

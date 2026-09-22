@@ -74,6 +74,11 @@ export interface AcpUiStore {
   pendingPermission: AcpPendingPermission | null
   /** MCP 快照先于对应 tool_call 到达时暂存；仅当前回合有效，不持久化。 */
   pendingMarkProposalSnapshotContents: string[]
+  /**
+   * cursor load 回放清洗中的跨 chunk 悬垂缓冲（不持久化）：
+   * 详见 ChatSlice.pendingReplayUserText。
+   */
+  pendingReplayUserText: { threadId: string; raw: string } | null
   /** 递增以触发 AgentComposer 聚焦（不持久化） */
   composerFocusNonce: number
   /** 递增以在输入框追加「选区」短标记（不持久化） */

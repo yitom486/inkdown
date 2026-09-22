@@ -35,8 +35,12 @@ export interface InkdownTurnContext {
   tocTopLevel?: string[]
 }
 
-const OPEN_TAG = '<inkdown-turn-context>'
-const CLOSE_TAG = '</inkdown-turn-context>'
+/** turn-context 块的稳定首尾标记：回放清洗（strip-replay-scaffolding）据此剥离 */
+export const INKDOWN_TURN_CONTEXT_OPEN_TAG = '<inkdown-turn-context>'
+export const INKDOWN_TURN_CONTEXT_CLOSE_TAG = '</inkdown-turn-context>'
+
+const OPEN_TAG = INKDOWN_TURN_CONTEXT_OPEN_TAG
+const CLOSE_TAG = INKDOWN_TURN_CONTEXT_CLOSE_TAG
 
 /** 同一文件同一格式视为同一文档；无打开文件时为 null */
 export function documentKey(doc: InkdownActiveDocument | null): string | null {

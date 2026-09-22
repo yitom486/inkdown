@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { INKDOWN_SETTLE_COMPLETE_KIND } from '@inkdown/contracts'
+import { buildInkdownPromptPrefix } from '@/lib/agent/context/build-prompt-prefix'
+import { formatTurnContextBlock } from '@/lib/agent/context/turn-context'
 import {
   selectActiveThreadHasSubstantiveMessages,
   useAcpUiStore,
@@ -490,5 +492,128 @@ describe('load 定居收尾（freezeSettledStreaming + 空线程例外）', () =
     useAcpUiStore.getState().finishStreaming()
     expect(useAcpUiStore.getState().prompting).toBe(false)
     expect(activeMessages().every((m) => !m.streaming)).toBe(true)
+  })
+})
+
+describe('cursor load 回放清洗（user-chunk 第二道网）', () => {
+  beforeEach(() => {
+    const fresh = useAcpUiStore.getState().createThread()
+    useAcpUiStore.setState({
+      prompting: false,
+      sessionId: null,
+      status: 'disconnected',
+      pendingMarkProposalSnapshotContents: [],
+      pendingReplayUserText: null,
+    })
+    const thread = useAcpUiStore.getState().threads.find((t) => t.id === fresh)
+    useAcpUiStore.setState({
+      threads: thread ? [thread] : useAcpUiStore.getState().threads.slice(0, 1),
+      activeThreadId: fresh,
+    })
+  })
+
+  function activeReplayMessages() {
+    const s = useAcpUiStore.getState()
+    return s.threads.find((t) => t.id === s.activeThreadId)?.messages ?? []
+  }
+
+  function userChunk(text: string) {
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'user_message_chunk',
+      content: { type: 'text', text },
+    })
+  }
+
+  /** 真实发送前缀（bootstrap 已套稳定标记）+ turn-context + 原文 */
+  function replayFixture(userText: string): string {
+    const prefix = buildInkdownPromptPrefix('replay-wash-fixture', {
+      includeBootstrap: true,
+    })
+      .filter((b) => b.type === 'text')
+      .map((b) => (b.type === 'text' ? b.text : ''))
+      .join('\n')
+    const turn = formatTurnContextBlock({
+      documentChanged: false,
+      activeDocument: { path: '/books/dune.epub', kind: 'epub', name: 'dune.epub' },
+      reading: { percent: 42, current: '第七章' },
+    })
+    return `${prefix}\n${turn}\n${userText}`
+  }
+
+  it('脚手架+原文混合回放只剩原文单气泡，定居后冻结', () => {
+    userChunk(replayFixture('你好'))
+    const users = activeReplayMessages().filter((m) => m.role === 'user')
+    expect(users).toHaveLength(1)
+    expect(users[0]?.text).toBe('你好')
+    expect(users[0]?.streaming).toBe(true)
+
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: INKDOWN_SETTLE_COMPLETE_KIND,
+    })
+    const after = activeReplayMessages().filter((m) => m.role === 'user')
+    expect(after.map((m) => m.text)).toEqual(['你好'])
+    expect(after.every((m) => !m.streaming)).toBe(true)
+  })
+
+  it('纯脚手架回放洗空丢弃，不建气泡', () => {
+    const turn = formatTurnContextBlock({
+      documentChanged: true,
+      activeDocument: { path: '/a.md', kind: 'markdown', name: 'a.md' },
+    })
+    userChunk(turn)
+    expect(activeReplayMessages()).toHaveLength(0)
+    expect(useAcpUiStore.getState().pendingReplayUserText).toBeNull()
+  })
+
+  it('跨 chunk 撕裂：悬垂暂缓渲染，续接后合成单气泡', () => {
+    const turn = formatTurnContextBlock({
+      documentChanged: false,
+      activeDocument: { path: '/books/dune.epub', kind: 'epub', name: 'dune.epub' },
+    })
+    const cut = Math.floor(turn.length / 2)
+    userChunk(`第一问\n${turn.slice(0, cut)}`)
+    // 悬垂：未建消息，只缓存原文
+    expect(activeReplayMessages()).toHaveLength(0)
+    expect(useAcpUiStore.getState().pendingReplayUserText).not.toBeNull()
+
+    userChunk(`${turn.slice(cut)}\n第二问`)
+    const users = activeReplayMessages().filter((m) => m.role === 'user')
+    expect(users).toHaveLength(1)
+    expect(users[0]?.text).toBe('第一问\n\n第二问')
+    expect(useAcpUiStore.getState().pendingReplayUserText).toBeNull()
+  })
+
+  it('定居收尾落定悬垂残余（截断未闭合脚手架）', () => {
+    const turn = formatTurnContextBlock({
+      documentChanged: false,
+      activeDocument: { path: '/books/dune.epub', kind: 'epub', name: 'dune.epub' },
+    })
+    userChunk(`半句\n${turn.slice(0, Math.floor(turn.length / 2))}`)
+    expect(activeReplayMessages()).toHaveLength(0)
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: INKDOWN_SETTLE_COMPLETE_KIND,
+    })
+    const users = activeReplayMessages().filter((m) => m.role === 'user')
+    expect(users.map((m) => m.text)).toEqual(['半句'])
+    expect(users.every((m) => !m.streaming)).toBe(true)
+    expect(useAcpUiStore.getState().pendingReplayUserText).toBeNull()
+  })
+
+  it('prompt 回合内无标记 user chunk 原样（零影响）', () => {
+    useAcpUiStore.setState({ prompting: true })
+    userChunk('普通追问  ')
+    const users = activeReplayMessages().filter((m) => m.role === 'user')
+    expect(users).toHaveLength(1)
+    expect(users[0]?.text).toBe('普通追问  ')
+  })
+
+  it('本地输入含标记串原文不动（正常输入走 appendUserMessage，不洗）', () => {
+    const turn = formatTurnContextBlock({
+      documentChanged: false,
+      activeDocument: { path: '/a.md', kind: 'markdown', name: 'a.md' },
+    })
+    const raw = `请解释 ${turn} 这个`
+    useAcpUiStore.getState().appendUserMessage(raw)
+    expect(activeReplayMessages().filter((m) => m.role === 'user')[0]?.text).toBe(raw)
   })
 })

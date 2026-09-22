@@ -1,4 +1,19 @@
 /**
+ * 会话 bootstrap 的稳定首尾标记。
+ *
+ * `IN KD OWN_STATIC_SKILL` 自带 `<inkdown-client>` 内层标记；
+ * `IN KD OWN_TOOL_OVERVIEW` 原是裸文本，`buildInkdownPromptPrefix` 在发送时
+ * 用这组外层标记包裹两者（只加标记，不改指令语义），让 cursor load 回放
+ * 把已发送内容重播为 user chunks 时，渲染端能据标记清洗（strip-replay-scaffolding）。
+ */
+export const INKDOWN_BOOTSTRAP_OPEN_TAG = '<inkdown-bootstrap>'
+export const INKDOWN_BOOTSTRAP_CLOSE_TAG = '</inkdown-bootstrap>'
+
+/** `<inkdown-client>` 内层标记（IN KD OWN_STATIC_SKILL 的首尾，清洗时同样剥离） */
+export const INKDOWN_CLIENT_OPEN_TAG = '<inkdown-client>'
+export const INKDOWN_CLIENT_CLOSE_TAG = '</inkdown-client>'
+
+/**
  * 注入到每次 session/prompt 最前面的静态说明。
  *
  * 必须保持 **完全静态**：任何动态内容（当前文件、进度、时间戳）都会破坏
