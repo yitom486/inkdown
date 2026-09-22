@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync as defaultExistsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { app } from 'electron'
 import { AGY_ACP_NPM_PACKAGE } from '@inkdown/contracts'
 
@@ -14,6 +14,16 @@ export interface AgyInstallOverrides {
   userDataDir?: string
   home?: string
   spawn?: typeof spawnSync
+  /** 测试注入：覆盖文件存在性判定（默认 existsSync） */
+  exists?: (p: string) => boolean
+}
+
+function existsUnder(overrides: AgyInstallOverrides | undefined, p: string): boolean {
+  try {
+    return (overrides?.exists ?? defaultExistsSync)(p)
+  } catch {
+    return false
+  }
 }
 
 /** managed 根：userData/agents/agy（测试可经 userDataDir 覆盖）。 */
@@ -57,7 +67,7 @@ export function resolveAgyNpmBin(overrides?: AgyInstallOverrides): string | null
     if (!trimmed) continue
     const full = join(trimmed, wanted)
     try {
-      if (existsSync(full)) return full
+      if (defaultExistsSync(full)) return full
     } catch {
       continue
     }
@@ -67,6 +77,36 @@ export function resolveAgyNpmBin(overrides?: AgyInstallOverrides): string | null
 
 export function buildAgyMissingNpmMessage(): string {
   return '找不到 npm（不在 PATH 中）：请先安装 Node.js 20+ 后再连接 agy'
+}
+
+export interface AgyNpmInvocation {
+  file: string
+  args: string[]
+  shell: boolean
+}
+
+/**
+ * npm 调用形态（Windows EINVAL 根因修复）：
+ * `npm.cmd` 不能直接 spawn（无 shell 即 EINVAL，尤其路径含空格时），
+ * 优先同目录 `node.exe + npm-cli.js`（免 shell，零引号坑）；
+ * 找不到才回落 `shell: true` 起 npm.cmd。
+ */
+export function resolveAgyNpmInvocation(
+  npm: string,
+  args: string[],
+  overrides?: AgyInstallOverrides,
+): AgyNpmInvocation {
+  const platform = overrides?.platform ?? process.platform
+  if (platform === 'win32' && /npm\.cmd$/i.test(npm)) {
+    const dir = dirname(npm)
+    const nodeExe = join(dir, 'node.exe')
+    const cliJs = join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    if (existsUnder(overrides, nodeExe) && existsUnder(overrides, cliJs)) {
+      return { file: nodeExe, args: [cliJs, ...args], shell: false }
+    }
+    return { file: npm, args, shell: true }
+  }
+  return { file: npm, args, shell: false }
 }
 
 /** 数字比对：1 => a 更新，-1 => b 更新，0 => 相等/未知。 */
@@ -90,11 +130,13 @@ export function latestAgyVersion(
   const npm = resolveAgyNpmBin(overrides)
   if (!npm) return null
   const spawn = overrides?.spawn ?? spawnSync
+  const inv = resolveAgyNpmInvocation(npm, ['view', AGY_ACP_NPM_PACKAGE, 'version'], overrides)
   try {
-    const result = spawn(npm, ['view', AGY_ACP_NPM_PACKAGE, 'version'], {
+    const result = spawn(inv.file, inv.args, {
       encoding: 'utf8',
       timeout: timeoutMs,
       windowsHide: true,
+      shell: inv.shell,
     })
     if (result.error || result.status !== 0) return null
     const version = String(result.stdout ?? '')
@@ -135,15 +177,22 @@ export function ensureAgyManaged(
   const pkgDir = resolveAgyPkgDir(overrides)
   const exePath = resolveAgyExePath(overrides)
 
-  const installedVersion = existsSync(exePath) ? readInstalledAgyVersion(pkgDir) : null
+  const installedVersion = defaultExistsSync(exePath) ? readInstalledAgyVersion(pkgDir) : null
   // 缺失即安装：exe 或版本号任一缺失都走安装
-  if (!existsSync(exePath) || !installedVersion) {
+  if (!defaultExistsSync(exePath) || !installedVersion) {
     mkdirSync(managedDir, { recursive: true })
-    const result = spawn(
+    const inv = resolveAgyNpmInvocation(
       npm,
       ['install', '--prefix', managedDir, '--no-audit', '--no-fund', `${AGY_ACP_NPM_PACKAGE}@latest`],
-      { encoding: 'utf8', timeout: 600_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+      overrides,
     )
+    const result = spawn(inv.file, inv.args, {
+      encoding: 'utf8',
+      timeout: 600_000,
+      maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
+      shell: inv.shell,
+    })
     const logTail = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.slice(-4000)
     if (result.error) {
       throw new Error(`agy 安装失败：${result.error.message}\n${logTail}`)
@@ -151,7 +200,7 @@ export function ensureAgyManaged(
     if (result.status !== 0) {
       throw new Error(`agy 安装失败：npm install 退出码 ${result.status}\n${logTail}`)
     }
-    if (!existsSync(exePath)) {
+    if (!defaultExistsSync(exePath)) {
       throw new Error(`agy 安装完成但找不到入口 ${AGY_MANAGED_EXE_REL}，包内容异常。\n${logTail}`)
     }
     return { exePath, version: readInstalledAgyVersion(pkgDir), updated: true }
@@ -160,11 +209,18 @@ export function ensureAgyManaged(
   // 已安装：比对 registry，出新即更新
   const latest = latestAgyVersion(overrides)
   if (latest && compareAgyVersions(latest, installedVersion) > 0) {
-    const result = spawn(
+    const inv = resolveAgyNpmInvocation(
       npm,
       ['install', '--prefix', managedDir, '--no-audit', '--no-fund', `${AGY_ACP_NPM_PACKAGE}@latest`],
-      { encoding: 'utf8', timeout: 600_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+      overrides,
     )
+    const result = spawn(inv.file, inv.args, {
+      encoding: 'utf8',
+      timeout: 600_000,
+      maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
+      shell: inv.shell,
+    })
     const logTail = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.slice(-4000)
     if (result.error) {
       throw new Error(`agy 更新失败：${result.error.message}\n${logTail}`)

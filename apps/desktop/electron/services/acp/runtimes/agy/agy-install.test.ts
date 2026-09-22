@@ -10,6 +10,7 @@ import {
   latestAgyVersion,
   resolveAgyExePath,
   resolveAgyNpmBin,
+  resolveAgyNpmInvocation,
 } from './agy-install'
 import { AGY_ACP_NPM_PACKAGE } from '@inkdown/contracts'
 
@@ -222,5 +223,38 @@ describe('ensureAgyManaged（每次连接保证最新，失败透错不静默）
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('resolveAgyNpmInvocation（win npm.cmd EINVAL 规避）', () => {
+  const npm = join('C:', 'Program Files', 'nodejs', 'npm.cmd')
+
+  it('node.exe + npm-cli.js 俱在时免 shell 直调', () => {
+    const exists = (p: string) => p.endsWith('node.exe') || p.endsWith('npm-cli.js')
+    const inv = resolveAgyNpmInvocation(npm, ['view', 'x', 'version'], {
+      platform: 'win32',
+      exists,
+    })
+    expect(inv.file.endsWith('node.exe')).toBe(true)
+    expect(inv.args[0]!.endsWith('npm-cli.js')).toBe(true)
+    expect(inv.args.slice(1)).toEqual(['view', 'x', 'version'])
+    expect(inv.shell).toBe(false)
+  })
+
+  it('缺 node 运行时回落 shell 起 npm.cmd', () => {
+    const inv = resolveAgyNpmInvocation(npm, ['view', 'x', 'version'], {
+      platform: 'win32',
+      exists: () => false,
+    })
+    expect(inv.file).toBe(npm)
+    expect(inv.args).toEqual(['view', 'x', 'version'])
+    expect(inv.shell).toBe(true)
+  })
+
+  it('posix 原样直调不套 shell', () => {
+    const inv = resolveAgyNpmInvocation('/usr/bin/npm', ['view', 'x', 'version'], {
+      platform: 'linux',
+    })
+    expect(inv).toEqual({ file: '/usr/bin/npm', args: ['view', 'x', 'version'], shell: false })
   })
 })
