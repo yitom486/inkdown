@@ -12,10 +12,12 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  BUILTIN_ACP_RUNTIMES,
   DEFAULT_ACP_RUNTIME_ID,
 } from '@inkdown/contracts'
 import {
   selectActiveThreadAgentSessionId,
+  selectThreadsForRuntime,
   useAcpUiStore,
 } from '@/stores/acp-ui-store'
 import {
@@ -217,6 +219,80 @@ describe('ACP 运行时切换：状态联动语义', () => {
       useAnnotationAgentStore.getState().byFileKey[key]!.threads[0]!
     expect(thread.agentSessionIds?.[CODEX]).toBe('ann-codex-1')
     expect(thread.agentSessionIds?.[ALT]).toBe('ann-alt-1')
+  })
+
+  it('多运行时连续切换：A→B→C 各自建专属线程，隔离且回切恢复', () => {
+    // 真实模板 id（与 BUILTIN_ACP_RUNTIMES / findBuiltinAcpRuntime 一致）
+    const RUNTIME_B = 'claude'
+    const RUNTIME_C = 'gemini'
+    // codex 起点已由 freshMainThread 建好
+    const codexThreadId = useAcpUiStore.getState().activeThreadId
+    useAcpUiStore.getState().setSession('sess-codex-multi', [])
+
+    // 切 B：无历史则自动建专属空白线程（session-slice.setSelectedRuntimeId 语义）
+    useAcpUiStore.getState().setSelectedRuntimeId(RUNTIME_B)
+    const bThreadId = useAcpUiStore.getState().activeThreadId
+    expect(bThreadId).not.toBe(codexThreadId)
+    expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBeUndefined()
+    useAcpUiStore.getState().setSession('sess-b-1', [])
+    expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBe('sess-b-1')
+
+    // 切 C：同样专属线程，与 A/B 均隔离
+    useAcpUiStore.getState().setSelectedRuntimeId(RUNTIME_C)
+    const cThreadId = useAcpUiStore.getState().activeThreadId
+    expect(cThreadId).not.toBe(codexThreadId)
+    expect(cThreadId).not.toBe(bThreadId)
+    expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBeUndefined()
+    useAcpUiStore.getState().setSession('sess-c-1', [])
+
+    // 回切 B：回到 B 专属线程，原会话可恢复
+    useAcpUiStore.getState().setSelectedRuntimeId(RUNTIME_B)
+    expect(useAcpUiStore.getState().activeThreadId).toBe(bThreadId)
+    expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBe('sess-b-1')
+
+    // 回切 codex：同样恢复
+    useAcpUiStore.getState().setSelectedRuntimeId(CODEX)
+    expect(useAcpUiStore.getState().activeThreadId).toBe(codexThreadId)
+    expect(selectActiveThreadAgentSessionId(useAcpUiStore.getState())).toBe('sess-codex-multi')
+
+    // 历史菜单过滤：各 runtime 只见自己的线程
+    const state = useAcpUiStore.getState()
+    expect(selectThreadsForRuntime(state.threads, CODEX).every((t) => (t.runtimeId || CODEX) === CODEX)).toBe(true)
+    expect(selectThreadsForRuntime(state.threads, RUNTIME_B).map((t) => t.id)).toContain(bThreadId)
+    expect(selectThreadsForRuntime(state.threads, RUNTIME_C).map((t) => t.id)).toContain(cThreadId)
+    expect(selectThreadsForRuntime(state.threads, RUNTIME_B).map((t) => t.id)).not.toContain(cThreadId)
+  })
+
+  it('切换运行时自动建专属线程：同 runtime 二次切换复用，不重复建', () => {
+    const NEXT = 'copilot'
+    useAcpUiStore.getState().setSelectedRuntimeId(NEXT)
+    const first = useAcpUiStore.getState().activeThreadId
+    const countAfterFirst = useAcpUiStore.getState().threads.length
+    // 切走再回来：应回到同一专属线程，不新增
+    useAcpUiStore.getState().setSelectedRuntimeId(CODEX)
+    useAcpUiStore.getState().setSelectedRuntimeId(NEXT)
+    expect(useAcpUiStore.getState().activeThreadId).toBe(first)
+    expect(useAcpUiStore.getState().threads.length).toBe(countAfterFirst)
+  })
+
+  it('BUILTIN 运行时模板契约：7 项可 spawn 的 command/args（含 codex 默认）', () => {
+    // 下游 contracts 已落地 7 模板；接线层按此断言，防回退。
+    expect(BUILTIN_ACP_RUNTIMES.map((rt) => rt.id)).toEqual([
+      'codex-acp',
+      'claude',
+      'gemini',
+      'copilot',
+      'opencode',
+      'cursor-cli',
+      'deepseek',
+    ])
+    const codex = BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === DEFAULT_ACP_RUNTIME_ID)
+    expect(codex).toBeDefined()
+    for (const rt of BUILTIN_ACP_RUNTIMES) {
+      expect(rt.id.trim()).not.toBe('')
+      expect(rt.command.trim()).not.toBe('')
+      expect(Array.isArray(rt.args)).toBe(true)
+    }
   })
 
   it('批注旧版持久化自动迁移：单值 agentSessionId 归入 codex 桶', async () => {

@@ -134,8 +134,12 @@ export const AgentPanel = memo(function AgentPanel({
   useEffect(() => {
     let cancelled = false
     if (!isCodexRuntime) {
+      // 非 codex 运行时：无本机登录探测/自定义供应商，走中性提示；
+      // 具体认证方式由协议 authMethods 弹窗给出（adapter.probeAuth 回落中性）。
+      // TODO(下游 adapter 未就绪): claude/gemini/copilot/opencode/cursor-cli/deepseek
+      // 专属 probeAuth/getSpawnEnv 落地后，此处按需补各家登录痕迹提示。
       setProviderStatus(null)
-      setAuthHint(null)
+      setAuthHint(`当前运行时 ${runtimeName}：连接后按 Agent 指引完成认证`)
       return
     }
 
@@ -169,7 +173,7 @@ export const AgentPanel = memo(function AgentPanel({
     return () => {
       cancelled = true
     }
-  }, [isCodexRuntime, view.selectedRuntimeId])
+  }, [isCodexRuntime, view.selectedRuntimeId, runtimeName])
 
   // 代理设置：全局一份，spawn Agent 子进程时注入；保存后需重新连接
   const [proxySettings, setProxySettings] = useState<AcpProxySettings | null>(null)
@@ -255,10 +259,12 @@ export const AgentPanel = memo(function AgentPanel({
                   value={view.selectedRuntimeId}
                   onValueChange={(val) => void switchRuntime(val)}
                 >
+                  {/* 运行时切换器：全量读 BUILTIN_ACP_RUNTIMES（下游 7 项落地后零改动展示 7 项） */}
                   {BUILTIN_ACP_RUNTIMES.map((rt) => (
                     <DropdownMenuRadioItem
                       key={rt.id}
                       value={rt.id}
+                      title={rt.description}
                       className="text-xs flex items-center justify-between"
                     >
                       <span>{rt.name}</span>
@@ -482,10 +488,12 @@ export const AgentPanel = memo(function AgentPanel({
                     value={view.selectedRuntimeId}
                     onValueChange={(val) => void switchRuntime(val)}
                   >
+                    {/* 底部设置内同源切换器：同样全量读 BUILTIN_ACP_RUNTIMES */}
                     {BUILTIN_ACP_RUNTIMES.map((rt) => (
                       <DropdownMenuRadioItem
                         key={rt.id}
                         value={rt.id}
+                        title={rt.description}
                         className="text-xs"
                       >
                         {rt.name}

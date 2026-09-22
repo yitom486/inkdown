@@ -72,7 +72,12 @@ export function createSdkStreamHandle(child: ChildProcessWithoutNullStreams): Sd
 export function connectSdkClient(
   child: ChildProcessWithoutNullStreams,
   configure: (app: ClientApp) => void,
+  /** 所属运行时 id：仅日志/隔离用，不改变 SDK 建连形态；缺省向后兼容单 codex 路径 */
+  runtimeId?: string,
 ): { app: ClientApp; connection: ClientConnection; streamHandle: SdkStreamHandle } {
+  if (runtimeId && process.env.NODE_ENV !== 'production') {
+    console.info(`[acp:sdk] connect runtime=${runtimeId} pid=${child.pid ?? '?'}`)
+  }
   const app = createSdkClientApp({ name: 'inkdown' })
   configure(app)
   const streamHandle = createSdkStreamHandle(child)

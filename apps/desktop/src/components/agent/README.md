@@ -6,7 +6,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 
 | 文件 | 功能 |
 |------|------|
-| `AgentPanel` | 右侧 Agent 主面板（壳 + 接线；配置项分类纯逻辑已出库 `lib/agent/acp-config-menu`） |
+| `AgentPanel` | 右侧 Agent 主面板（壳 + 接线；配置项分类纯逻辑已出库 `lib/agent/acp-config-menu`；运行时切换器全量读 `BUILTIN_ACP_RUNTIMES`，下游 7 项落地后零改动展示，非 codex 走中性认证提示） |
 | `DockedAgentPane` | 阅读器内停靠态面板壳（左侧拉伸分隔线，宽持久化，三端 viewer 共用） |
 | `AgentHeaderOverflowMenu` | 聊天头部 ⋯ 溢出菜单（新对话/清空/模式切换） |
 | `FloatingAIHud` | 悬浮 AI 伴读浮窗与微型药丸胶囊（支持 docked / floating / capsule 三态切换、四大 Tab 与自由拖拽） |
@@ -15,7 +15,7 @@ ACP Agent 面板（壳自研；消息渲染可复用 Markdown/Mermaid 块）。�
 | `AgentMark` | Agent 徽标（布局/TitleBar 共用） |
 | `AgentAuthDialog` | 认证方式选择（复用本机 Codex / Google 登录，对齐 VS Code / Zed） |
 | `AgentProviderDialog` | 自定义模型供应商配置（base URL + API Key + 模型，Key 只存主进程） |
-| `AgentHistoryMenu` | 历史线程切换 |
+| `AgentHistoryMenu` | 历史线程切换（按 `selectedRuntimeId` 经 `selectThreadsForRuntime` 过滤 + 运行时名动态标题；`session-slice.setSelectedRuntimeId` 切 runtime 自动建/复用专属线程） |
 | `AgentBunInstallBanner` | 缺 Bun 运行时提示与一键安装横幅 |
 | `DiagramModal` | 大图全屏交互检视模态框（缩放、平移、Mermaid 源码查看、SVG 导出） |
 

@@ -52,7 +52,18 @@ function resolveCommand(runtime: AcpRuntimeInfo): { file: string; shell: boolean
   return { file: runtime.command, shell: false }
 }
 
+/**
+ * 多运行时温进程隔离：`active` 按 runtime.id 分键，绝不跨 runtime 串用。
+ * connect 前一律经 `getLiveAcpProcess(runtime.id)` 取同 runtime 温进程；
+ * 不同 runtime 即使 command 相同也各持独立句柄。
+ */
+// TODO(下游 contracts 未就绪): 7 模板落地后各 runtime 独立 command/args 在此自然分键，无需再改。
 export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
+  // 防御性：模板缺 command/args 时早失败，避免 spawn 空命令污染温进程表。
+  if (!options.runtime?.id || !options.runtime.command || !Array.isArray(options.runtime.args)) {
+    throw new Error(`ACP 运行时模板缺失 command/args: ${options.runtime?.id ?? '(empty)'}`)
+  }
+  // 同 runtime 旧句柄先杀（换命令/参数后不复用）；其他 runtime 的温进程不受影响。
   const existing = active.get(options.runtime.id)
   if (existing) {
     existing.kill()
@@ -158,6 +169,15 @@ export function disposeAllAcpProcesses(): void {
 
 export function getActiveAcpProcess(runtimeId: string): SpawnedAcpProcess | undefined {
   return active.get(runtimeId)
+}
+
+/** 当前仍存活的温进程 runtime 清单（调试/测试用，不暴露 child 句柄细节）。 */
+export function listLiveAcpRuntimeIds(): string[] {
+  const ids: string[] = []
+  for (const [runtimeId, handle] of active) {
+    if (isSpawnedAcpProcessAlive(handle)) ids.push(runtimeId)
+  }
+  return ids.sort()
 }
 
 /**

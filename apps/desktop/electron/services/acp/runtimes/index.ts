@@ -2,8 +2,20 @@ import type { AcpAuthMethod, AcpProxySettings, CodexAuthPreflight } from '@inkdo
 import { DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
 import { codexAdapter } from './codex'
 import { emptyAcpAuthPreflight } from './codex/codex-auth-preflight'
+import { claudeAdapter } from './claude'
+import { geminiAdapter } from './gemini'
+import { copilotAdapter } from './copilot'
+import { opencodeAdapter } from './opencode'
+import { cursorAdapter } from './cursor'
+import { deepseekAdapter } from './deepseek'
 
 export * from './codex'
+export * from './claude'
+export * from './gemini'
+export * from './copilot'
+export * from './opencode'
+export * from './cursor'
+export * from './deepseek'
 
 export interface GenericRuntimeAdapter {
   id: string
@@ -27,8 +39,25 @@ export function getAcpRuntimeAdapter(runtimeId: string): AcpRuntimeAdapter {
   if (runtimeId === DEFAULT_ACP_RUNTIME_ID) {
     return codexAdapter
   }
-  return {
-    id: runtimeId,
-    probeAuth: emptyAcpAuthPreflight,
+  switch (runtimeId) {
+    case claudeAdapter.id:
+      return claudeAdapter
+    case geminiAdapter.id:
+      return geminiAdapter
+    case copilotAdapter.id:
+      return copilotAdapter
+    case opencodeAdapter.id:
+      return opencodeAdapter
+    case cursorAdapter.id:
+    case 'cursor':
+      // 目录名别名：模板 id 以 `cursor-cli` 为准（见 acp-client 注释与 contracts 模板）
+      return cursorAdapter
+    case deepseekAdapter.id:
+      return deepseekAdapter
+    default:
+      return {
+        id: runtimeId,
+        probeAuth: emptyAcpAuthPreflight,
+      }
   }
 }

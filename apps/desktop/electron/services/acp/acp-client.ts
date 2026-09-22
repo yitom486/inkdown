@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import {
   APP_TITLE,
-  DEFAULT_ACP_RUNTIME_ID,
+  findBuiltinAcpRuntime,
 } from '@inkdown/contracts'
 import type { AppError } from '@inkdown/contracts'
 import { err, ok, type Result } from '@inkdown/contracts'
@@ -19,6 +19,7 @@ import type {
   AcpStatusChangedEvent,
 } from '@inkdown/contracts'
 import type {
+  AcpRuntimeInfo,
   InkdownSnapshotArgs,
   InkdownSnapshotResource,
 } from '@inkdown/contracts'
@@ -65,6 +66,79 @@ const NEUTRAL_AUTH_PREFLIGHT: AcpAuthPreflightResult = {
   hasAuthFile: false,
   hasApiKeyEnv: false,
   looksLoggedIn: false,
+}
+
+/**
+ * 多运行时模板解析（防御性）：
+ * 约定接口 `findBuiltinAcpRuntime(id) -> { command, args }` 为唯一真相源。
+ * 优先走 `@inkdown/acp` 注册表（其内部同样委托该函数），若其滞后则直读 contracts 回落。
+ * 下游 contracts 展开 7 模板前，未知 id 在此直接判错，不触达 spawn。
+ */
+// TODO(下游 contracts 未就绪): 7 运行时模板
+// （codex+claude+gemini+copilot+opencode+cursor-cli+deepseek）落地后，本函数零改动直接生效。
+function resolveRuntimeTemplate(runtimeId: string): AcpRuntimeInfo | undefined {
+  const normalized = runtimeId?.trim() ?? ''
+  if (!normalized) return undefined
+  try {
+    const viaRegistry = getAcpRuntime(normalized)
+    if (viaRegistry?.command) return viaRegistry
+  } catch {
+    // 注册表滞后时忽略，走 contracts 直读
+  }
+  try {
+    const direct = findBuiltinAcpRuntime(normalized)
+    if (direct?.command) return direct
+  } catch {
+    // contracts 未就绪时返回 undefined，由调用方判错
+  }
+  return undefined
+}
+
+/** 防御性取 adapter：`getAcpRuntimeAdapter(id)` 为准，异常时回落中性空 adapter。 */
+function safeGetAdapter(runtimeId: string) {
+  try {
+    return getAcpRuntimeAdapter(runtimeId)
+  } catch (error) {
+    console.warn('[acp] getAcpRuntimeAdapter 异常，回落中性 adapter', runtimeId, error)
+    return getAcpRuntimeAdapter('__unknown__')
+  }
+}
+
+function safeProbeAuth(adapter: ReturnType<typeof getAcpRuntimeAdapter>): AcpAuthPreflightResult {
+  try {
+    const probed = adapter.probeAuth()
+    if (probed && typeof probed === 'object') return probed
+  } catch (error) {
+    console.warn('[acp] probeAuth 异常，回落中性 preflight', error)
+  }
+  return { ...NEUTRAL_AUTH_PREFLIGHT }
+}
+
+function safeOrderAuthMethods(
+  adapter: ReturnType<typeof getAcpRuntimeAdapter>,
+  methodsList: AcpAuthMethod[],
+): AcpAuthMethod[] {
+  if (!adapter.orderAuthMethods) return methodsList
+  try {
+    return adapter.orderAuthMethods(methodsList)
+  } catch (error) {
+    console.warn('[acp] orderAuthMethods 异常，保持原始顺序', error)
+    return methodsList
+  }
+}
+
+function safeCanSkipInteractiveAuth(
+  adapter: ReturnType<typeof getAcpRuntimeAdapter>,
+  methodId: string,
+  force?: boolean,
+): boolean {
+  if (!adapter.canSkipInteractiveAuth) return false
+  try {
+    return adapter.canSkipInteractiveAuth(methodId, force) === true
+  } catch (error) {
+    console.warn('[acp] canSkipInteractiveAuth 异常，走交互式认证', error)
+    return false
+  }
 }
 
 
@@ -371,8 +445,10 @@ export async function connectAcp(payload: {
   cwd?: string
   resumeSessionId?: string
 }): Promise<Result<AcpConnectResult, AppError>> {
-  const runtime = getAcpRuntime(payload.runtimeId)
-  if (!runtime) {
+  // spawn 模板一律取自 findBuiltinAcpRuntime（经 resolveRuntimeTemplate），
+  // 禁写死 codex bunx；command/args 缺失即判错，不触达 spawn。
+  const runtime = resolveRuntimeTemplate(payload.runtimeId)
+  if (!runtime || !runtime.command || !Array.isArray(runtime.args)) {
     return err({ code: 'ACP_SPAWN_ERROR', message: `未知运行时: ${payload.runtimeId}` })
   }
 
@@ -404,11 +480,16 @@ export async function connectAcp(payload: {
   pendingResumeSessionId = payload.resumeSessionId?.trim() || null
   setStatus('connecting')
 
-  const adapter = getAcpRuntimeAdapter(runtime.id)
+  const adapter = safeGetAdapter(runtime.id)
 
-  // 启动前钩子：各 runtime 自理副作用（如凭据桥接同步 refresh_token）
+  // 启动前钩子：各 runtime 自理副作用（如凭据桥接同步 refresh_token）。
+  // 防御性：下游 adapter 未就绪/抛错时不阻断连接。
   if (adapter.beforeSpawn) {
-    await adapter.beforeSpawn()
+    try {
+      await adapter.beforeSpawn()
+    } catch (error) {
+      console.warn('[acp] beforeSpawn 异常，继续连接', error)
+    }
   }
 
   const bunCheck = await ensureBunForCommand(runtime.command)
@@ -423,23 +504,37 @@ export async function connectAcp(payload: {
   const { cwd } = resolveAgentCwd(payload.cwd)
   workspaceRoot = cwd
 
-  // 代理环境变量：优先委托 adapter，未声明则走通用 acp-proxy
+  // 代理环境变量：优先委托 adapter.getSpawnEnv，未声明/抛错则走通用 acp-proxy
   const proxySettings = await readAcpProxySettings()
-  const proxyResult = adapter.getSpawnEnv
-    ? adapter.getSpawnEnv(proxySettings)
-    : buildAcpProxySpawnEnv(proxySettings)
+  let proxyResult: { env: NodeJS.ProcessEnv; envRemove: string[] }
+  try {
+    proxyResult = adapter.getSpawnEnv
+      ? adapter.getSpawnEnv(proxySettings)
+      : buildAcpProxySpawnEnv(proxySettings)
+  } catch (error) {
+    console.warn('[acp] getSpawnEnv 异常，回落通用代理 env', error)
+    proxyResult = buildAcpProxySpawnEnv(proxySettings)
+  }
 
-  // 自定义供应商模式（Codex 等）：隔离 CODEX_HOME + 注入 Key
+  // 自定义供应商模式（Codex 等）：隔离 CODEX_HOME + 注入 Key；非 codex 走空 env
   let customProviderEnv: NodeJS.ProcessEnv = {}
   if (adapter.getCustomProvider) {
-    const custom = await adapter.getCustomProvider()
-    customProviderEnv = custom.customEnv
+    try {
+      const custom = await adapter.getCustomProvider()
+      customProviderEnv = custom?.customEnv ?? {}
+    } catch (error) {
+      console.warn('[acp] getCustomProvider 异常，忽略自定义供应商', error)
+    }
   }
 
   try {
     // 冷启动才做 runtime 级副作用；温进程复用路径跳过，追求毫秒级重连。
-    if (!warmHandle) {
-      await adapter.onColdStart?.()
+    if (!warmHandle && adapter.onColdStart) {
+      try {
+        await adapter.onColdStart()
+      } catch (error) {
+        console.warn('[acp] onColdStart 异常，继续冷启动', error)
+      }
     }
     if (warmHandle) {
       // 温进程复用：跳过 spawn，直接用原子进程 stdio 建新 SDK 连接并走握手
@@ -483,16 +578,21 @@ export async function connectAcp(payload: {
 
     // SDK 长驻连接：client({ name: 'inkdown' }).connect()，持有 ClientConnection。
     // 回调经 onRequest/onNotification 注册；stdio 经 toWeb→ndJsonStream 桥接。
-    const created = connectSdkClient(child, (sdk) => {
-      registerAcpClientHandlers(sdk, {
-        getWorkspaceRoot: () => workspaceRoot,
-        terminals: terminalManager,
-        readSnapshot: handleSnapshotRequest,
-        onPermission: ({ sessionId: permSessionId, params }) =>
-          handlePermissionRequest(permSessionId, params),
-        onSessionUpdate: (params) => emitSessionUpdate(params),
-      })
-    })
+    // SDK 调用沿用直迁形态，仅增参 runtimeId 供日志/隔离（sdk-client 签名向后兼容）。
+    const created = connectSdkClient(
+      child,
+      (sdk) => {
+        registerAcpClientHandlers(sdk, {
+          getWorkspaceRoot: () => workspaceRoot,
+          terminals: terminalManager,
+          readSnapshot: handleSnapshotRequest,
+          onPermission: ({ sessionId: permSessionId, params }) =>
+            handlePermissionRequest(permSessionId, params),
+          onSessionUpdate: (params) => emitSessionUpdate(params),
+        })
+      },
+      runtime.id,
+    )
     sdkApp = created.app
     sdkConn = created.connection
     sdkStream = created.streamHandle
@@ -547,12 +647,12 @@ export async function connectAcp(payload: {
       console.warn('[acp-mcp] Agent 未声明 mcpCapabilities.http，Inkdown 工具不可用')
     }
 
+    // preflight/auth gate 一律走 adapter.probeAuth（防御性回落中性结果）；
+    // authMethods 排序走 adapter.orderAuthMethods（可选）。
     let authMethods = parseAuthMethods(initResult.authMethods)
-    if (adapter.orderAuthMethods) {
-      authMethods = adapter.orderAuthMethods(authMethods)
-    }
+    authMethods = safeOrderAuthMethods(adapter, authMethods)
 
-    const preflight = adapter.probeAuth()
+    const preflight = safeProbeAuth(adapter)
     let openedWithoutAuth: Extract<AcpConnectResult, { phase: 'ready' }> | null = null
     const gate = await runConnectAuthGate(authMethods, preflight, {
       // 本地已有凭据（如 ~/.codex）时，一律优先直接建立会话（session/new）
@@ -611,10 +711,10 @@ export async function authenticateAcp(payload: {
   if (!a.ok) return err(a.error)
   const cwd = resolveAgentCwd(workspaceRoot).cwd
 
-  const adapter = getAcpRuntimeAdapter(runtimeId ?? '')
+  const adapter = safeGetAdapter(runtimeId ?? '')
   // 认证守门员逻辑：官方 ACP 收到 authenticate 请求时无脑拉起系统浏览器；
   // 若本地已持有有效 Token，直接复用已有凭据建立会话，杜绝弹出系统浏览器
-  if (adapter.canSkipInteractiveAuth?.(payload.methodId, payload.force)) {
+  if (safeCanSkipInteractiveAuth(adapter, payload.methodId, payload.force)) {
     console.info('[acp] 认证守门员生效：本地凭据已就绪，跳过交互式 authenticate，直接建立会话')
     return await openSessionAfterAuth(cwd)
   }

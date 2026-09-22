@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { BUILTIN_ACP_RUNTIMES } from '@inkdown/contracts'
 import {
   useAcpUiStore,
   selectThreadsForRuntime,
@@ -47,7 +48,12 @@ export function AgentHistoryMenu({
   const switchThread = useAcpUiStore((s) => s.switchThread)
   const deleteThread = useAcpUiStore((s) => s.deleteThread)
 
+  // 按 runtime 过滤已验证多线程分桶：threads.runtimeId + agentSessionIds 双维隔离，
+  // 切换运行时只列本 runtime 线程（见 selectThreadsForRuntime + session-slice 专属线程逻辑）。
   const runtimeThreads = selectThreadsForRuntime(threads, selectedRuntimeId)
+  const runtimeName =
+    BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === selectedRuntimeId)?.name ??
+    selectedRuntimeId
 
   return (
     <DropdownMenu>
@@ -66,7 +72,7 @@ export function AgentHistoryMenu({
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
           <span>
-            Codex 对话历史
+            {runtimeName} 对话历史
           </span>
           <span className="font-normal">{runtimeThreads.length}</span>
         </DropdownMenuLabel>
