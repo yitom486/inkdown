@@ -4,9 +4,12 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildCursorMissingCliMessage,
+  clearCursorCatalogCache,
   cursorAdapter,
+  getCursorCatalogIds,
   isHintCursorStorageFile,
   isValidCursorAuthFile,
+  parseCursorCatalogOutput,
   probeCursorAuth,
   resolveCursorAuthCandidates,
   resolveCursorSpawnCommand,
@@ -234,5 +237,79 @@ describe('probeCursorAuth（文件+环境双查）', () => {
 
   it('cursorAdapter 置 tryDirectSessionFirst（keychain 兜底）', () => {
     expect(cursorAdapter.tryDirectSessionFirst).toBe(true)
+  })
+})
+
+describe('parseCursorCatalogOutput（agent models 同源，逐行首 token）', () => {
+  it('横杠 id 逐行提取（含描述列只取首 token）', () => {
+    const stdout = [
+      'grok-4.7-high-fast  Grok 4.7 (High, Fast)',
+      'grok-4.7-high  Grok 4.7 (High)',
+      '',
+      '  claude-sonnet-4-thinking-low   Claude Thinking Low  ',
+    ].join('\n')
+    expect(parseCursorCatalogOutput(stdout)).toEqual([
+      'grok-4.7-high-fast',
+      'grok-4.7-high',
+      'claude-sonnet-4-thinking-low',
+    ])
+  })
+
+  it('默认模型行首 `*` 标记剥掉后取 id；auto 保留原样', () => {
+    expect(parseCursorCatalogOutput('* composer-2.5-fast Fast Composer\nauto Automatic\n')).toEqual([
+      'composer-2.5-fast',
+      'auto',
+    ])
+  })
+
+  it('空输出 / 非字符串一律空数组（调用方判空即 null）', () => {
+    expect(parseCursorCatalogOutput('')).toEqual([])
+    expect(parseCursorCatalogOutput('   \n\t\n')).toEqual([])
+    expect(parseCursorCatalogOutput(undefined)).toEqual([])
+    expect(parseCursorCatalogOutput(null)).toEqual([])
+  })
+})
+
+describe('getCursorCatalogIds（未安装/失败一律 null，不抛）', () => {
+  it('无 CLI（resolve null）返回 null', () => {
+    clearCursorCatalogCache()
+    const emptyDir = mkdtempSync(join(tmpdir(), 'inkdown-cursor-catalog-miss-'))
+    try {
+      expect(
+        getCursorCatalogIds(undefined, {
+          platform: 'win32',
+          env: { LOCALAPPDATA: emptyDir, USERPROFILE: emptyDir, PATH: emptyDir },
+        }),
+      ).toBeNull()
+    } finally {
+      clearCursorCatalogCache()
+      rmSync(emptyDir, { recursive: true, force: true })
+    }
+  })
+
+  it('进程级缓存：首次 null 后不再 spawn（换合法 CLI 仍返回 null）', () => {
+    const emptyDir = mkdtempSync(join(tmpdir(), 'inkdown-cursor-catalog-cache-'))
+    const bin = mkdtempSync(join(tmpdir(), 'inkdown-cursor-catalog-bin-'))
+    const home = mkdtempSync(join(tmpdir(), 'inkdown-cursor-catalog-home-'))
+    try {
+      clearCursorCatalogCache()
+      writeFileSync(join(bin, 'agent'), '#!/bin/sh', 'utf8')
+      // 首次：空环境无 CLI → null 并缓存
+      expect(
+        getCursorCatalogIds(undefined, {
+          platform: 'win32',
+          env: { LOCALAPPDATA: emptyDir, USERPROFILE: emptyDir, PATH: emptyDir },
+        }),
+      ).toBeNull()
+      // 二次：即使换成合法环境，缓存命中仍 null（不断言跨版本新鲜度）
+      expect(
+        getCursorCatalogIds(undefined, { platform: 'linux', env: { PATH: bin }, home }),
+      ).toBeNull()
+    } finally {
+      clearCursorCatalogCache()
+      rmSync(emptyDir, { recursive: true, force: true })
+      rmSync(bin, { recursive: true, force: true })
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 })

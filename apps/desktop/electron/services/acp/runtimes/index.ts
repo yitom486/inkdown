@@ -8,6 +8,7 @@ import { copilotAdapter } from './copilot'
 import { opencodeAdapter } from './opencode'
 import { cursorAdapter } from './cursor'
 import { deepseekAdapter } from './deepseek'
+import { agyAdapter } from './agy'
 
 export * from './codex'
 export * from './claude'
@@ -16,6 +17,7 @@ export * from './copilot'
 export * from './opencode'
 export * from './cursor'
 export * from './deepseek'
+export * from './agy'
 
 export interface GenericRuntimeAdapter {
   id: string
@@ -30,8 +32,18 @@ export interface GenericRuntimeAdapter {
    * `ACP_SPAWN_ERROR`，不触达 spawn（省掉“不是内部或外部命令”秒退）。
    * 缺省（undefined）表示无需预检，沿用模板 command/args。
    * 抛错时按缺省处理（防御性回落），不断连接。
+   * 可选 `updated`：true 表示本次发生了安装/更新（如 agy managed），
+   * 连接层先杀同 runtime 温进程再走冷启动（Windows 运行中 exe 无法覆盖）。
    */
-  resolveSpawnCommand?: () => { command: string; args: string[] } | null
+  resolveSpawnCommand?: () => { command: string; args: string[]; updated?: boolean } | null
+  /**
+   * 预检判停（缺 key 等，仿 resolveSpawnCommand 的可选 + 缺省兼容做法）：
+   * 返回非空字符串表示直接判停，`acp-connection.ts` 以该文案回带
+   * `ACP_SPAWN_ERROR`，不触达 spawn（如 deepseek 缺 DEEPSEEK_API_KEY 时
+   * harness 秒退，stdio 关闭即裸 `ACP connection closed`）。
+   * 缺省（undefined）/返回空表示放行；抛错时按放行处理（防御性回落），不断连接。
+   */
+  resolveSpawnBlocker?: () => string | null | undefined
   getSpawnEnv?: (proxySettings?: Partial<AcpProxySettings>) => {
     env: NodeJS.ProcessEnv
     envRemove: string[]
@@ -70,6 +82,8 @@ export function getAcpRuntimeAdapter(runtimeId: string): AcpRuntimeAdapter {
       return cursorAdapter
     case deepseekAdapter.id:
       return deepseekAdapter
+    case agyAdapter.id:
+      return agyAdapter
     default:
       return {
         id: runtimeId,

@@ -23,6 +23,12 @@ export interface SessionSlice {
   prompting: boolean
   promptCapabilities: AcpPromptCapabilities
   preferredConfigByRuntime: AcpPreferredConfigMap
+  /**
+   * Cursor 横杠 canonical 模型目录（内存态，不持久化）：
+   * connect 成功由渲染端写入，disconnect/切换清空。无目录=现状行为一字不改，
+   * dash 受控尝试仅在有目录时作为 listed 门槛后的最后候补。
+   */
+  modelCatalogByRuntime: Record<string, string[]>
 
   setSelectedRuntimeId: (id: string) => void
   setStatus: (status: AcpConnectionStatus, errorMessage?: string, errorCode?: AppErrorCode) => void
@@ -30,6 +36,7 @@ export interface SessionSlice {
   setConfigOptions: (options: AcpConfigOption[]) => void
   setPromptCapabilities: (caps: AcpPromptCapabilities) => void
   setPrompting: (prompting: boolean) => void
+  setModelCatalog: (runtimeId: string, catalog: string[] | null) => void
   rememberConfigPreference: (
     runtimeId: string,
     configId: string,
@@ -58,6 +65,7 @@ export const createSessionSlice: StateCreator<
   prompting: false,
   promptCapabilities: {},
   preferredConfigByRuntime: {},
+  modelCatalogByRuntime: {},
   connectRequestedAt: 0,
 
   setSelectedRuntimeId: (id) =>
@@ -87,9 +95,10 @@ export const createSessionSlice: StateCreator<
         activeThreadId,
         prompting: false,
         pendingPermission: null,
-        // 切换 Agent 后立即清空旧 Agent 遗留的模型选项与能力缓存
+        // 切换 Agent 后立即清空旧 Agent 遗留的模型选项与能力缓存（含横杠目录）
         configOptions: [],
         promptCapabilities: {},
+        modelCatalogByRuntime: {},
       }
     }),
 
@@ -107,6 +116,7 @@ export const createSessionSlice: StateCreator<
             pendingPermission: null,
             promptCapabilities: {},
             configOptions: [],
+            modelCatalogByRuntime: {},
           }
         : {}),
     }),
@@ -131,6 +141,18 @@ export const createSessionSlice: StateCreator<
   setConfigOptions: (options) => set({ configOptions: options }),
   setPromptCapabilities: (caps) => set({ promptCapabilities: caps }),
   setPrompting: (prompting) => set({ prompting }),
+  setModelCatalog: (runtimeId, catalog) =>
+    set((s) => {
+      const rid = runtimeId.trim()
+      if (!rid) return s
+      if (!catalog || catalog.length === 0) {
+        if (!(rid in s.modelCatalogByRuntime)) return s
+        const next = { ...s.modelCatalogByRuntime }
+        delete next[rid]
+        return { modelCatalogByRuntime: next }
+      }
+      return { modelCatalogByRuntime: { ...s.modelCatalogByRuntime, [rid]: [...catalog] } }
+    }),
   rememberConfigPreference: (runtimeId, configId, value) =>
     set((s) => ({
       preferredConfigByRuntime: rememberPreferredConfig(

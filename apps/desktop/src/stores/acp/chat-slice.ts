@@ -1,5 +1,8 @@
 import type { StateCreator } from 'zustand'
-import { DEFAULT_ACP_RUNTIME_ID } from '@inkdown/contracts'
+import {
+  DEFAULT_ACP_RUNTIME_ID,
+  INKDOWN_SETTLE_COMPLETE_KIND,
+} from '@inkdown/contracts'
 import {
   type AcpChatMessage,
   type AcpChatRole,
@@ -55,6 +58,7 @@ export interface ChatSlice {
   beginAgentReply: () => void
   clearMessages: () => void
   finishStreaming: () => void
+  freezeSettledStreaming: () => void
   attachMarkProposalsFromSnapshot: (content: string) => void
   resolveMarkProposal: (proposalId: string, status: Exclude<MarkProposalStatus, 'pending'>) => void
   selectChapterMarkPlan: (entryId: string) => void
@@ -64,6 +68,32 @@ export interface ChatSlice {
   renameThread: (threadId: string, title: string) => void
   applySessionUpdate: (update: Record<string, unknown>) => void
   setChatScroll: (threadId: string, scroll: ChatScrollState) => void
+}
+
+/**
+ * 回合收尾冻结（finishStreaming / freezeSettledStreaming 共用）：
+ * 残留 streaming 消息一律 streaming=false + updatedAt=now（进行中工具调用同步落盘），
+ * 随后走常规 finalize + 中间态 agent 气泡规整。
+ */
+function freezeSettledTurn(t: AcpChatThread): AcpChatThread {
+  const now = Date.now()
+  const frozen = t.messages.map((m) => {
+    if (!m.streaming) return m
+    if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
+      return {
+        ...m,
+        streaming: false,
+        updatedAt: now,
+        toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
+      }
+    }
+    return { ...m, streaming: false, updatedAt: now }
+  })
+  return {
+    ...t,
+    updatedAt: now,
+    messages: finalizeThreadMessages(pruneIntermediateAgentReplies(frozen)),
+  }
 }
 
 export const initialThread = createEmptyThread()
@@ -159,27 +189,12 @@ export const createChatSlice: StateCreator<
   finishStreaming: () =>
     set((s) => ({
       prompting: false,
-      ...patchActiveThread(s, (t) => {
-        const now = Date.now()
-        const frozen = t.messages.map((m) => {
-          if (!m.streaming) return m
-          if (m.role === 'tool' && isToolActiveStatus(m.toolStatus)) {
-            return {
-              ...m,
-              streaming: false,
-              updatedAt: now,
-              toolStatus: m.toolStatus === 'pending' ? 'cancelled' : 'completed',
-            }
-          }
-          return { ...m, streaming: false, updatedAt: now }
-        })
-        return {
-          ...t,
-          updatedAt: now,
-          messages: finalizeThreadMessages(pruneIntermediateAgentReplies(frozen)),
-        }
-      }),
+      ...patchActiveThread(s, freezeSettledTurn),
     })),
+
+  // 定居收尾：复用 finishStreaming 的冻结语义，但不碰 prompting。
+  // load 恢复时 prompting 本就 false（断言式保持：prompt 回合的收尾仍走 finishStreaming）。
+  freezeSettledStreaming: () => set((s) => ({ ...patchActiveThread(s, freezeSettledTurn) })),
 
   attachMarkProposalsFromSnapshot: (content) =>
     set((s) => {
@@ -324,6 +339,12 @@ export const createChatSlice: StateCreator<
   applySessionUpdate: (update) => {
     const kind =
       typeof update.sessionUpdate === 'string' ? update.sessionUpdate : ''
+
+    if (kind === INKDOWN_SETTLE_COMPLETE_KIND) {
+      // 主进程定居收尾：冻结漏网回放的 streaming 残留，不新增气泡，不碰 prompting
+      get().freezeSettledStreaming()
+      return
+    }
 
     if (kind === 'config_option_update' || kind === 'config_options_update') {
       return

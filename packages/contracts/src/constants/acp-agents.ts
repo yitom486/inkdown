@@ -13,6 +13,9 @@ export const CLAUDE_ACP_NPM_PACKAGE = '@agentclientprotocol/claude-agent-acp' as
 /** DeepSeek Harness ACP 服务 npm 包 */
 export const DEEPSEEK_DSH_NPM_PACKAGE = '@deepseek-ai/dsh' as const
 
+/** agy 桥 npm 包（Antigravity CLI → ACP）：managed 安装到 userData/agents/agy */
+export const AGY_ACP_NPM_PACKAGE = '@yitom/agy-acp-map' as const
+
 /** 已弃用：仅作迁移对照 / 测试断言，禁止作为默认 spawn 目标 */
 export const LEGACY_ZED_CODEX_ACP_NPM_PACKAGE = '@zed-industries/codex-acp' as const
 
@@ -32,7 +35,7 @@ function isWindowsPlatform(): boolean {
 export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
   {
     id: 'codex-acp',
-    name: 'Codex (codex-acp)',
+    name: 'ChatGPT',
     description:
       '通过 bunx 启动官方 @agentclientprotocol/codex-acp；可复用本机 ~/.codex（ChatGPT / API Key）',
     authHint:
@@ -43,7 +46,7 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
   },
   {
     id: 'claude',
-    name: 'Claude (claude-agent-acp)',
+    name: 'Claude',
     description:
       '通过 bunx 启动官方 @agentclientprotocol/claude-agent-acp；可复用本机 Claude Code 登录态（~/.claude.json）或 ANTHROPIC_API_KEY',
     authHint:
@@ -54,7 +57,7 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
   },
   {
     id: 'gemini',
-    name: 'Gemini CLI',
+    name: 'Gemini',
     description: '启动本机 Gemini CLI（--acp）；复用 Gemini CLI 登录态（~/.gemini/）',
     authHint:
       '复用本机 Gemini CLI 登录（~/.gemini/oauth_creds.json 或 GEMINI_API_KEY / GOOGLE_API_KEY）；未登录先在本机终端跑 gemini 完成登录',
@@ -64,7 +67,7 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
   },
   {
     id: 'copilot',
-    name: 'Copilot CLI',
+    name: 'Copilot',
     description: '启动本机 Copilot CLI（--acp --stdio）；复用 Copilot CLI 的 GitHub 登录态',
     authHint:
       '复用本机 Copilot CLI 的 GitHub 登录（~/.copilot/config.json 或 COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN）；未登录先跑 copilot login',
@@ -85,7 +88,7 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
   },
   {
     id: 'cursor-cli',
-    name: 'Cursor CLI (cursor-agent)',
+    name: 'Cursor',
     description:
       '启动 Cursor 官方 CLI（agent acp）；复用本机 Cursor 登录态（未登录可运行 `agent login`）。安装路径探测（%LOCALAPPDATA%\\cursor-agent / ~/.local/bin/agent）见主进程 cursor 适配器',
     authHint:
@@ -96,14 +99,25 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
   },
   {
     id: 'deepseek',
-    name: 'DeepSeek Harness',
+    name: 'DeepSeek',
     description:
-      '通过 bunx 启动 @deepseek-ai/dsh（--profile acp）；无 ACP 登录，靠 harness 自身凭证（DEEPSEEK_API_KEY / harness 配置）',
+      '通过 bunx 启动 @deepseek-ai/dsh（--profile acp）；无 ACP 登录，靠 harness 自身凭证（DEEPSEEK_API_KEY / harness 配置）；模型经 session 到达，无需额外动作',
     authHint:
-      '无 ACP 登录，靠 harness 自身凭证（DEEPSEEK_API_KEY / harness 配置）；未配置先导出 DEEPSEEK_API_KEY',
+      '无 ACP 登录，靠 harness 自身凭证（DEEPSEEK_API_KEY / harness 配置）；未配置先导出 DEEPSEEK_API_KEY；模型经 session 到达，无需额外动作；若官方最新 dsh 存在坏依赖（如 rc.3 缺失），可设 DSH_PACKAGE pin 旧版',
     command: 'bunx',
     args: ['-y', DEEPSEEK_DSH_NPM_PACKAGE, '--profile', 'acp'],
     requiredEnvKeys: ['DEEPSEEK_API_KEY'],
+  },
+  {
+    id: 'agy',
+    name: 'agy',
+    description:
+      '经 managed 安装的 @yitom/agy-acp-map 单文件桥（dist/agy-acp-win-x64.exe）；复用 Antigravity CLI 本地登录态；首次连接需下载约 100MB 桥组件（仅一次），请耐心等待不要重复点击',
+    authHint: '复用 Antigravity CLI 本地登录态；未登录先在本机终端完成 agy 登录后再连接',
+    // 恒被 adapter.resolveSpawnCommand 覆盖：此处仅占位，保证模板 command 非空
+    command: 'agy-managed',
+    args: [],
+    requiredEnvKeys: [],
   },
 ] as const
 

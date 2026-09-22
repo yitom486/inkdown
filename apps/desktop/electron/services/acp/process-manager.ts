@@ -5,9 +5,21 @@ export interface SpawnedAcpProcess {
   runtimeId: string
   child: ChildProcessWithoutNullStreams
   kill: () => void
+  /** spawn 时间戳（保留供诊断/排序，stderr 归因已去窗口化，不再参与判定） */
+  spawnedAt: number
+  /** stderr 最后 N 行活引用（连接失败自诊断用，上限见 ACP_EARLY_EXIT_STDERR_TAIL_LINES） */
+  stderrTail: string[]
 }
 
 const active = new Map<string, SpawnedAcpProcess>()
+
+/**
+ * @deprecated 早退判定窗口已去窗口化（dsh 依赖解析慢退漏归因教训）：
+ * 保留导出仅防旧引用，`getAcpEarlyExitStderrDetail` 不再读取它。
+ */
+export const ACP_EARLY_EXIT_WINDOW_MS = 3_000
+/** 连接失败时拼进错误的 stderr 尾部行数上限。单处常量。 */
+export const ACP_EARLY_EXIT_STDERR_TAIL_LINES = 20
 
 export interface SpawnAcpOptions {
   runtime: AcpRuntimeInfo
@@ -57,7 +69,7 @@ function resolveCommand(runtime: AcpRuntimeInfo): { file: string; shell: boolean
  * connect 前一律经 `getLiveAcpProcess(runtime.id)` 取同 runtime 温进程；
  * 不同 runtime 即使 command 相同也各持独立句柄。
  */
-// TODO(下游 contracts 未就绪): 7 模板落地后各 runtime 独立 command/args 在此自然分键，无需再改。
+// TODO(下游 contracts 未就绪): 8 模板落地后各 runtime 独立 command/args 在此自然分键，无需再改。
 export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
   // 防御性：模板缺 command/args 时早失败，避免 spawn 空命令污染温进程表。
   if (!options.runtime?.id || !options.runtime.command || !Array.isArray(options.runtime.args)) {
@@ -105,6 +117,14 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
   }) as ChildProcessWithoutNullStreams
 
   let stderrBuffer = ''
+  const stderrTail: string[] = []
+  const pushStderrTailLine = (line: string) => {
+    if (!line.trim()) return
+    stderrTail.push(line)
+    if (stderrTail.length > ACP_EARLY_EXIT_STDERR_TAIL_LINES) {
+      stderrTail.splice(0, stderrTail.length - ACP_EARLY_EXIT_STDERR_TAIL_LINES)
+    }
+  }
   child.stderr.setEncoding('utf8')
   child.stderr.on('data', (chunk: string) => {
     stderrBuffer += chunk
@@ -114,6 +134,7 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
       const line = stderrBuffer.slice(0, idx).replace(/\r$/, '')
       stderrBuffer = stderrBuffer.slice(idx + 1)
       if (line.trim()) {
+        pushStderrTailLine(line)
         if (process.env.NODE_ENV !== 'production') {
           console.error(`[acp:${options.runtime.id}]`, line)
         }
@@ -125,6 +146,8 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
   const handle: SpawnedAcpProcess = {
     runtimeId: options.runtime.id,
     child,
+    spawnedAt: Date.now(),
+    stderrTail,
     kill: () => {
       // 已退出的进程不再下手：其 PID 可能已被系统回收复用，误杀后果严重。
       if (isSpawnedAcpProcessAlive(handle)) {
@@ -152,12 +175,45 @@ export function spawnAcpProcess(options: SpawnAcpOptions): SpawnedAcpProcess {
   }
 
   child.on('exit', (code, signal) => {
+    // 无换行结尾的 stderr 残行落尾（harness 缺 key 秒退常为单行无换行输出，不丢）。
+    const rest = stderrBuffer.trim()
+    if (rest) pushStderrTailLine(rest)
+    stderrBuffer = ''
     active.delete(options.runtime.id)
     options.onExit?.(code, signal)
   })
 
   active.set(options.runtime.id, handle)
   return handle
+}
+
+/**
+ * 连接失败自诊断（去窗口化）：进程已死且连接失败时，一律取 stderr 尾部
+ * 供连接层拼进失败错误，替代裸 `ACP connection closed`。
+ * 背景：dsh 自解析依赖耗时远超旧 3s 窗口，慢退漏归因；故不再限早退窗口，
+ * 慢退/长会话失败同样受益；正常成功路径不调用此处，零变化。
+ * 无 stderr 尾返回 null，调用方保持原错误不变；
+ * killProcess/温复用路径不经此处，不受影响。
+ * `now` 参数保留仅防旧调用（已忽略）。
+ */
+export function getAcpEarlyExitStderrDetail(
+  handle: Pick<SpawnedAcpProcess, 'spawnedAt' | 'stderrTail'> | null | undefined,
+  _now: number = Date.now(),
+): string | null {
+  if (!handle) return null
+  void _now
+  const tail = (handle.stderrTail ?? [])
+    .filter((line) => line.trim())
+    .slice(-ACP_EARLY_EXIT_STDERR_TAIL_LINES)
+  if (tail.length === 0) return null
+  return tail.join('\n')
+}
+
+/** 失败尾部拼进连接失败错误（已含尾部时不重复拼）。函数名保留早退字样仅防旧引用。 */
+export function withAcpEarlyExitDetail(message: string, detail: string | null): string {
+  if (!detail) return message
+  if (message.includes(detail)) return message
+  return `${message}\n\n子进程早退 stderr 尾部：\n${detail}`
 }
 
 export function disposeAllAcpProcesses(): void {

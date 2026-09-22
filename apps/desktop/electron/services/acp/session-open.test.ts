@@ -203,4 +203,151 @@ describe('restoreOrCreateAcpSession（SDK 内存对接）', () => {
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({ sessionId: 'old-9', cwd: '/ws' })
   })
+
+  it('session/new 失败时裸调（mcpServers: []）重试一次，成功则继续', async () => {
+    const seen: unknown[] = []
+    let calls = 0
+    const result = await restoreOrCreateAcpSession({
+      request: async (method, params) => {
+        if (method === 'session/new') {
+          calls += 1
+          seen.push(params)
+          if (calls === 1) throw new Error('MCP mount boom')
+          return { sessionId: 'n2' }
+        }
+        throw new Error(`unexpected ${method}`)
+      },
+      cwd: '/ws',
+      resumeSessionId: null,
+      resumeSupported: false,
+      loadSupported: false,
+      mcpServers: [{ type: 'http', name: 'inkdown', url: 'http://x' }],
+      retryDelayMs: 0,
+      log: () => undefined,
+    })
+
+    expect(result.sessionId).toBe('n2')
+    expect(result.restoreMethod).toBe('new')
+    expect(calls).toBe(2)
+    expect(seen[1]).toMatchObject({ mcpServers: [] })
+  })
+
+  it('session/new 裸调仍失败时返回原错（首次错误为准）', async () => {
+    const first = new Error('first boom')
+    let calls = 0
+    await expect(
+      restoreOrCreateAcpSession({
+        request: async (method) => {
+          if (method === 'session/new') {
+            calls += 1
+            if (calls === 1) throw first
+            throw new Error('second boom')
+          }
+          throw new Error(`unexpected ${method}`)
+        },
+        cwd: '/ws',
+        resumeSessionId: null,
+        resumeSupported: false,
+        loadSupported: false,
+        mcpServers: [{ type: 'http', name: 'inkdown', url: 'http://x' }],
+        retryDelayMs: 0,
+        log: () => undefined,
+      }),
+    ).rejects.toBe(first)
+    expect(calls).toBe(2)
+  })
+
+  it('恢复建新同样走 MCP 裸调重试（resume 失败 → new 首次失败 → 裸调成功）', async () => {
+    let newCalls = 0
+    const seenNewParams: unknown[] = []
+    const sdk = setupSdkRequest({
+      onResume: () => {
+        throw new Error('session not found')
+      },
+      onLoad: () => {
+        throw new Error('session not found')
+      },
+      onNew: () => {
+        newCalls += 1
+        if (newCalls === 1) throw new Error('MCP mount boom')
+        return { sessionId: 'recovered' }
+      },
+    })
+
+    const result = await restoreOrCreateAcpSession({
+      request: async (method, params) => {
+        if (method === 'session/new') seenNewParams.push(params)
+        return sdk.request(method, params)
+      },
+      cwd: '/ws',
+      resumeSessionId: 'old-1',
+      resumeSupported: true,
+      loadSupported: true,
+      mcpServers: [{ type: 'http', name: 'inkdown', url: 'http://x' }],
+      retryDelayMs: 0,
+      log: () => undefined,
+    })
+
+    expect(result.sessionId).toBe('recovered')
+    expect(result.restoreMethod).toBe('new')
+    expect(newCalls).toBe(2)
+    expect(seenNewParams[1]).toMatchObject({ mcpServers: [] })
+  })
+
+  it('顶层 models 方言合成 model 选项（恢复建新路径）', async () => {
+    const sdk = setupSdkRequest({
+      onResume: () => {
+        throw new Error('session not found')
+      },
+      onLoad: () => {
+        throw new Error('session not found')
+      },
+      onNew: () => ({ sessionId: 'dsh-1', models: ['d1', 'd2'] }),
+    })
+
+    const result = await restoreOrCreateAcpSession({
+      request: sdk.request,
+      cwd: '/ws',
+      resumeSessionId: 'old-1',
+      resumeSupported: true,
+      loadSupported: true,
+      retryDelayMs: 0,
+      log: () => undefined,
+    })
+
+    expect(result.sessionId).toBe('dsh-1')
+    const { parseAcpConfigOptions } = await import('@inkdown/acp')
+    const parsed = parseAcpConfigOptions(result.configOptions)
+    expect(parsed.find((o) => o.configId === 'model')?.options?.map((o) => o.value)).toEqual([
+      'd1',
+      'd2',
+    ])
+  })
+
+  it('load 返回顶层 models 同样合成（对象形 + currentModelId）', async () => {
+    const sdk = setupSdkRequest({
+      onResume: () => {
+        throw new Error('session not found')
+      },
+      onLoad: () => ({
+        sessionId: 'old-1',
+        models: { availableModels: [{ id: 'a', name: 'A' }], currentModelId: 'a' },
+      }),
+    })
+
+    const result = await restoreOrCreateAcpSession({
+      request: sdk.request,
+      cwd: '/ws',
+      resumeSessionId: 'old-1',
+      resumeSupported: true,
+      loadSupported: true,
+      retryDelayMs: 0,
+      log: () => undefined,
+    })
+
+    expect(result.restoreMethod).toBe('load')
+    const { parseAcpConfigOptions } = await import('@inkdown/acp')
+    const parsed = parseAcpConfigOptions(result.configOptions)
+    expect(parsed.find((o) => o.configId === 'model')?.currentValue).toBe('a')
+  })
 })

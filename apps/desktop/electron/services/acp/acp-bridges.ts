@@ -13,7 +13,14 @@ import type {
 import type { ClientContext } from '@agentclientprotocol/sdk'
 import { getAcpRuntimeAdapter } from './runtimes'
 import { mapSpawnErrorToAppError } from '../bun-runtime'
-import { acpState, type AcpPermissionBridge, type AcpSnapshotBridge } from './acp-state'
+import {
+  acpState,
+  broadcastSettleComplete,
+  disarmSuppressSettle,
+  slideSuppressSettle,
+  type AcpPermissionBridge,
+  type AcpSnapshotBridge,
+} from './acp-state'
 
 /** 非 codex-acp 运行时的中性 preflight：无本地登录痕迹 → gate 走协议 authMethods 弹向导 */
 const NEUTRAL_AUTH_PREFLIGHT: AcpAuthPreflightResult = {
@@ -138,9 +145,45 @@ export async function handlePermissionRequest(
   }
 }
 
+/** DEV 诊断：回放压制去向（验证定居窗口是否生效；生产静默） */
+function devLogSettleDrop(params: Record<string, unknown>, window: string): void {
+  if (process.env.NODE_ENV === 'production') return
+  const update =
+    params.update && typeof params.update === 'object'
+      ? (params.update as Record<string, unknown>)
+      : undefined
+  console.info('[acp:settle] update dropped', {
+    window,
+    kind: typeof update?.sessionUpdate === 'string' ? update.sessionUpdate : '?',
+    sessionId: typeof params.sessionId === 'string' ? params.sessionId.slice(0, 8) : '?',
+  })
+}
+
 export function emitSessionUpdate(params: Record<string, unknown>): void {
-  if (acpState.suppressSessionUpdates) return
-  const sid =
+  const now = Date.now()
+  // 请求期压制：只丢弃不滑动，arm 由连接编排在 load 恢复成功后执行
+  if (acpState.suppressSessionUpdates) {
+    devLogSettleDrop(params, 'request-window')
+    return
+  }
+  if (acpState.suppressSettleUntil > now) {
+    // 定居窗口内命中：顺延窗口；非空线程丢弃回放，空线程（monitorOnly）放行重建
+    slideSuppressSettle(now)
+    if (!acpState.suppressSettleMonitorOnly) {
+      devLogSettleDrop(params, 'settle-window')
+      return
+    }
+  } else if (acpState.suppressSettleUntil !== 0) {
+    // 定居窗口过期：本条真实更新先放行，随后广播收尾（冻结漏网的 streaming 残留，不等 prompt）
+    disarmSuppressSettle()
+    forwardSessionUpdate(params)
+    broadcastSettleComplete()
+    return
+  }
+  forwardSessionUpdate(params)
+}
+
+function forwardSessionUpdate(params: Record<string, unknown>): void {  const sid =
     typeof params.sessionId === 'string' && params.sessionId.trim()
       ? params.sessionId.trim()
       : (acpState.activePromptSessionId ?? acpState.sessionId ?? '')

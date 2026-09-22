@@ -14,7 +14,7 @@ import {
 } from './mcp/inkdown-mcp-server'
 import { sdkRequest } from './sdk-client'
 import { disposeAllAcpProcesses } from './process-manager'
-import { acpState, setStatus } from './acp-state'
+import { acpState, disarmSuppressSettle, setStatus } from './acp-state'
 import {
   handleSnapshotRequest,
   requireAgent,
@@ -147,7 +147,7 @@ export async function createAcpSession(
 export async function setAcpConfigOption(payload: {
   sessionId: string
   configId: string
-  value: string | boolean
+  value: string | boolean | number
 }): Promise<Result<AcpSetConfigOptionResult, AppError>> {
   const a = requireAgent()
   if (!a.ok) return err(a.error)
@@ -190,6 +190,8 @@ export async function promptAcp(payload: {
 
   const prevActiveSessionId = acpState.activePromptSessionId
   acpState.activePromptSessionId = payload.sessionId
+  // 真实用户 prompt 发起前放行：load 重放定居窗口到此结束，后续 updates 均为真实增量
+  disarmSuppressSettle()
   try {
     const result = await sdkRequest<Record<string, unknown>, Record<string, unknown>>(
       a.value,

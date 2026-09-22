@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useAcpUiStore } from '@/stores/acp-ui-store'
+import { INKDOWN_SETTLE_COMPLETE_KIND } from '@inkdown/contracts'
+import {
+  selectActiveThreadHasSubstantiveMessages,
+  useAcpUiStore,
+} from '@/stores/acp-ui-store'
 
 describe('acp-ui-store history + plan', () => {
   beforeEach(() => {
@@ -355,5 +359,136 @@ describe('acp-ui-store history + plan', () => {
     expect(useAcpUiStore.getState().connectRequestedAt).toBe(0)
     useAcpUiStore.getState().requestConnect()
     expect(useAcpUiStore.getState().connectRequestedAt).toBeGreaterThan(0)
+  })
+
+  it('modelCatalogByRuntime 内存态：写入按运行时分桶，断开/切换清空', () => {
+    useAcpUiStore.getState().setModelCatalog('cursor-cli', ['grok-4.7-high', 'grok-4.7-high-fast'])
+    expect(useAcpUiStore.getState().modelCatalogByRuntime['cursor-cli']).toEqual([
+      'grok-4.7-high',
+      'grok-4.7-high-fast',
+    ])
+    // 空值清单 runtime
+    useAcpUiStore.getState().setModelCatalog('cursor-cli', null)
+    expect(useAcpUiStore.getState().modelCatalogByRuntime['cursor-cli']).toBeUndefined()
+    // 断开清空全表（沿用 setStatus 现有清位语义）
+    useAcpUiStore.getState().setModelCatalog('cursor-cli', ['grok-4.7-high'])
+    useAcpUiStore.getState().setStatus('disconnected')
+    expect(useAcpUiStore.getState().modelCatalogByRuntime).toEqual({})
+  })
+})
+
+describe('load 定居收尾（freezeSettledStreaming + 空线程例外）', () => {
+  beforeEach(() => {
+    const fresh = useAcpUiStore.getState().createThread()
+    useAcpUiStore.setState({
+      prompting: false,
+      sessionId: null,
+      status: 'disconnected',
+      pendingMarkProposalSnapshotContents: [],
+    })
+    const thread = useAcpUiStore.getState().threads.find((t) => t.id === fresh)
+    useAcpUiStore.setState({
+      threads: thread ? [thread] : useAcpUiStore.getState().threads.slice(0, 1),
+      activeThreadId: fresh,
+    })
+  })
+
+  function activeMessages() {
+    const s = useAcpUiStore.getState()
+    return s.threads.find((t) => t.id === s.activeThreadId)?.messages ?? []
+  }
+
+  it('空线程判定：空白与纯系统消息无历史，user/agent 即有历史', () => {
+    expect(selectActiveThreadHasSubstantiveMessages(useAcpUiStore.getState())).toBe(false)
+    useAcpUiStore.getState().appendSystemMessage('已连接')
+    expect(selectActiveThreadHasSubstantiveMessages(useAcpUiStore.getState())).toBe(false)
+    useAcpUiStore.getState().appendUserMessage('hello')
+    expect(selectActiveThreadHasSubstantiveMessages(useAcpUiStore.getState())).toBe(true)
+  })
+
+  it('空占位 streaming agent 气泡也算实质消息（回放照常压制）', () => {
+    useAcpUiStore.getState().beginAgentReply()
+    expect(selectActiveThreadHasSubstantiveMessages(useAcpUiStore.getState())).toBe(true)
+  })
+
+  it('freezeSettledStreaming 冻结残留且不碰 prompting（true/false 均保持）', () => {
+    for (const prompting of [false, true] as const) {
+      useAcpUiStore.getState().appendUserMessage('hi')
+      useAcpUiStore.getState().applySessionUpdate({
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'text', text: 'leak' },
+      })
+      useAcpUiStore.getState().applySessionUpdate({
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tc-run',
+        title: 'run',
+        kind: 'execute',
+        status: 'in_progress',
+      })
+      useAcpUiStore.setState({ prompting })
+      useAcpUiStore.getState().freezeSettledStreaming()
+      const messages = activeMessages()
+      // user 等非流式消息本就没有 streaming 字段（undefined），只断言无残留 true
+      expect(messages.every((m) => !m.streaming)).toBe(true)
+      expect(messages.find((m) => m.role === 'tool')?.toolStatus).toBe('completed')
+      expect(useAcpUiStore.getState().prompting).toBe(prompting)
+      // 回合收尾语义：prompting 由调用方（prompt 流程）负责，定居收尾不断言
+      useAcpUiStore.getState().clearMessages()
+    }
+  })
+
+  it('定居完成标记经 applySessionUpdate 冻结，不新增气泡', () => {
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: 'leak' },
+    })
+    const before = activeMessages().length
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: INKDOWN_SETTLE_COMPLETE_KIND,
+    })
+    const messages = activeMessages()
+    expect(messages).toHaveLength(before)
+    expect(messages.every((m) => !m.streaming)).toBe(true)
+    expect(useAcpUiStore.getState().prompting).toBe(false)
+  })
+
+  it('空线程回放重建时间线：chunks 合并为 streaming 消息，收尾一次冻结', () => {
+    // 主进程 monitorOnly 放行回放 → 渲染端直接 append（streaming:true）
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'user_message_chunk',
+      content: { type: 'text', text: '旧问题' },
+    })
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: '旧回答一' },
+    })
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: '旧回答二' },
+    })
+    let messages = activeMessages()
+    expect(messages.map((m) => m.text)).toEqual(['旧问题', '旧回答一旧回答二'])
+    expect(messages.every((m) => m.streaming)).toBe(true)
+    // 现在已有实质消息（重建中），但 prompting 仍 false
+    expect(selectActiveThreadHasSubstantiveMessages(useAcpUiStore.getState())).toBe(true)
+    expect(useAcpUiStore.getState().prompting).toBe(false)
+
+    // 静默超时/过期收尾：一次冻结，多轮历史不丢失
+    useAcpUiStore.getState().applySessionUpdate({
+      sessionUpdate: INKDOWN_SETTLE_COMPLETE_KIND,
+    })
+    messages = activeMessages()
+    expect(messages.map((m) => m.text)).toEqual(['旧问题', '旧回答一旧回答二'])
+    expect(messages.every((m) => !m.streaming)).toBe(true)
+    expect(useAcpUiStore.getState().prompting).toBe(false)
+  })
+
+  it('finishStreaming 仍负责 prompt 回合收尾（prompting 置 false，回归语义不变）', () => {
+    useAcpUiStore.getState().appendUserMessage('hi')
+    useAcpUiStore.getState().beginAgentReply()
+    useAcpUiStore.setState({ prompting: true })
+    useAcpUiStore.getState().finishStreaming()
+    expect(useAcpUiStore.getState().prompting).toBe(false)
+    expect(activeMessages().every((m) => !m.streaming)).toBe(true)
   })
 })

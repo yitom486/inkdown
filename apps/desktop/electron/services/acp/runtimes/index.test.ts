@@ -23,7 +23,7 @@ describe('runtimes/index', () => {
     expect(adapter.probeAuth().looksLoggedIn).toBe(false)
   })
 
-  it('6 新增运行时按 id 派发专属适配器', () => {
+  it('7 新增运行时按 id 派发专属适配器', () => {
     const cases: Array<{ id: string; authMethodsPassthrough: boolean }> = [
       { id: 'claude', authMethodsPassthrough: true },
       { id: 'gemini', authMethodsPassthrough: true },
@@ -31,6 +31,7 @@ describe('runtimes/index', () => {
       { id: 'opencode', authMethodsPassthrough: true },
       { id: 'cursor-cli', authMethodsPassthrough: true },
       { id: 'deepseek', authMethodsPassthrough: true },
+      { id: 'agy', authMethodsPassthrough: true },
     ]
     for (const { id } of cases) {
       const adapter = getAcpRuntimeAdapter(id)

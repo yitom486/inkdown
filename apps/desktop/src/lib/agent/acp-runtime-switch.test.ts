@@ -275,8 +275,8 @@ describe('ACP 运行时切换：状态联动语义', () => {
     expect(useAcpUiStore.getState().threads.length).toBe(countAfterFirst)
   })
 
-  it('BUILTIN 运行时模板契约：7 项可 spawn 的 command/args（含 codex 默认）', () => {
-    // 下游 contracts 已落地 7 模板；接线层按此断言，防回退。
+  it('BUILTIN 运行时模板契约：8 项可 spawn 的 command/args（含 codex 默认）', () => {
+    // 下游 contracts 已落地 8 模板；接线层按此断言，防回退。
     expect(BUILTIN_ACP_RUNTIMES.map((rt) => rt.id)).toEqual([
       'codex-acp',
       'claude',
@@ -285,6 +285,7 @@ describe('ACP 运行时切换：状态联动语义', () => {
       'opencode',
       'cursor-cli',
       'deepseek',
+      'agy',
     ])
     const codex = BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === DEFAULT_ACP_RUNTIME_ID)
     expect(codex).toBeDefined()

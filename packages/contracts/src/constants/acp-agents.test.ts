@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGY_ACP_NPM_PACKAGE,
   BUILTIN_ACP_RUNTIMES,
   CLAUDE_ACP_NPM_PACKAGE,
   CODEX_ACP_NPM_PACKAGE,
@@ -33,7 +34,7 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     ).toBe(false)
   })
 
-  it('内置 7 运行时模板（codex + 6 新增）', () => {
+  it('内置 8 运行时模板（codex + 6 新增 + agy）', () => {
     expect(BUILTIN_ACP_RUNTIMES.map((runtime) => runtime.id)).toEqual([
       'codex-acp',
       'claude',
@@ -42,6 +43,7 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
       'opencode',
       'cursor-cli',
       'deepseek',
+      'agy',
     ])
   })
 
@@ -92,8 +94,24 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     expect(runtime!.requiredEnvKeys).toContain('DEEPSEEK_API_KEY')
   })
 
-  it('7 项均有认证弹窗用 authHint（凭证位置 + 未登录一步动作）', () => {
-    expect(BUILTIN_ACP_RUNTIMES).toHaveLength(7)
+  it('用户可见显示名去技术化（不暴露 acp 名词）', () => {
+    expect(findBuiltinAcpRuntime('codex-acp')!.name).toBe('ChatGPT')
+    expect(findBuiltinAcpRuntime('claude')!.name).toBe('Claude')
+    expect(findBuiltinAcpRuntime('gemini')!.name).toBe('Gemini')
+    expect(findBuiltinAcpRuntime('copilot')!.name).toBe('Copilot')
+    expect(findBuiltinAcpRuntime('opencode')!.name).toBe('OpenCode')
+    expect(findBuiltinAcpRuntime('cursor-cli')!.name).toBe('Cursor')
+    expect(findBuiltinAcpRuntime('deepseek')!.name).toBe('DeepSeek')
+    expect(findBuiltinAcpRuntime('agy')!.name).toBe('agy')
+    for (const runtime of BUILTIN_ACP_RUNTIMES) {
+      expect(runtime.name).not.toMatch(/acp/i)
+      expect(runtime.name).not.toContain('cursor-agent')
+      expect(runtime.name).not.toContain('claude-agent-acp')
+    }
+  })
+
+  it('8 项均有认证弹窗用 authHint（凭证位置 + 未登录一步动作）', () => {
+    expect(BUILTIN_ACP_RUNTIMES).toHaveLength(8)
     for (const runtime of BUILTIN_ACP_RUNTIMES) {
       expect(runtime.authHint, runtime.id).toBeDefined()
       expect(typeof runtime.authHint).toBe('string')
@@ -102,6 +120,22 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     expect(findBuiltinAcpRuntime('codex-acp')!.authHint).toContain('~/.codex')
     expect(findBuiltinAcpRuntime('opencode')!.authHint).toContain('opencode auth login')
     expect(findBuiltinAcpRuntime('cursor-cli')!.authHint).toContain('agent login')
+  })
+
+  it('agy 模板占位 command 非空（恒被 adapter.resolveSpawnCommand 覆盖）', () => {
+    expect(AGY_ACP_NPM_PACKAGE).toBe('@yitom/agy-acp-map')
+    const runtime = findBuiltinAcpRuntime('agy')
+    expect(runtime).toBeDefined()
+    expect(runtime!.command).toBe('agy-managed')
+    expect(runtime!.args).toEqual([])
+    expect(runtime!.description).toContain('Antigravity CLI')
+    expect(runtime!.authHint).toContain('Antigravity CLI')
+  })
+
+  it('deepseek 模型经 session 到达、无需额外动作', () => {
+    const runtime = findBuiltinAcpRuntime('deepseek')
+    expect(runtime!.description).toContain('模型经 session 到达')
+    expect(runtime!.authHint).toContain('模型经 session 到达')
   })
 })
 

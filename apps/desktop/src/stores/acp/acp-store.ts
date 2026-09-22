@@ -90,6 +90,7 @@ export const useAcpUiStore = create<AcpUiStore>()(
           sessionId: null,
           configOptions: [],
           promptCapabilities: {},
+          modelCatalogByRuntime: {},
           pendingPermission: null,
         }
       },

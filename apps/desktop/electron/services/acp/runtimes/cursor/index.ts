@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -257,4 +258,88 @@ export const cursorAdapter: GenericRuntimeAdapter = {
   canSkipInteractiveAuth: () => false,
   // keychain 化凭据文件探针会漏检，未命中时由 gate 直连试一次兜底
   tryDirectSessionFirst: true,
+}
+
+/**
+ * `agent models` 输出纯解析：逐行取首 token 为 id（形如 `grok-4.7-high-fast`）。
+ * - 空行跳过；行首 `*`（默认模型标记，见第三方 `agent models` 解析惯例）剥掉后取首 token。
+ * - `auto` 等保留原样，由调用方决定取舍；方括号 variants 行（含 `[`）同样保留
+ *   （目录本应全是横杠 canonical，混入时由匹配侧按无 `[` 过滤）。
+ * 非字符串输入一律返回空数组（调用方判空即 null）。
+ */
+export function parseCursorCatalogOutput(output: unknown): string[] {
+  if (typeof output !== 'string') return []
+  const out: string[] = []
+  for (const line of output.split(/\r?\n/)) {
+    let trimmed = line.trim()
+    if (!trimmed) continue
+    // 默认模型行首标记：`* id ...` → 剥掉后取 id
+    if (trimmed.startsWith('*')) {
+      trimmed = trimmed.slice(1).trim()
+      if (!trimmed) continue
+    }
+    const first = trimmed.split(/\s+/)[0]?.trim() ?? ''
+    if (!first) continue
+    out.push(first)
+  }
+  return out
+}
+
+// 进程级一次缓存：connect 复用，不重复 spawn。不断言跨版本新鲜度——
+// CLI 升级新增模型需重启应用才可见，可接受（目录缺失时调用方回落现状行为）。
+let cachedCursorCatalogIds: string[] | null | undefined
+
+/** 测试用：清空进程级目录缓存。 */
+export function clearCursorCatalogCache(): void {
+  cachedCursorCatalogIds = undefined
+}
+
+/**
+ * Cursor 横杠 canonical 目录：复用已解析的 agent 命令（`resolveCursorSpawnCommand`，
+ * 无则返回 null 表示未安装），以 `--list-models`（`agent models` 同源）spawnSync 拉取。
+ * 超时 6s；空输出 / 超时 / 非零退出一律 null（调用方吞掉记 dev 日志，不阻断连接）。
+ */
+export function getCursorCatalogIds(
+  execFile?: string,
+  overrides?: CursorPathOverrides,
+): string[] | null {
+  if (cachedCursorCatalogIds !== undefined) return cachedCursorCatalogIds
+  let command = execFile?.trim() || ''
+  if (!command) {
+    let resolved: { command: string; args: string[] } | null = null
+    try {
+      resolved = resolveCursorSpawnCommand(overrides)
+    } catch {
+      resolved = null
+    }
+    if (!resolved?.command) {
+      cachedCursorCatalogIds = null
+      return null
+    }
+    command = resolved.command
+  }
+  try {
+    // Windows 上 .cmd 须经 shell（对齐 process-manager resolveCommand），否则 spawnSync 直接 ENOENT
+    const shell = command.toLowerCase().endsWith('.cmd')
+    const result = spawnSync(command, ['--list-models'], {
+      encoding: 'utf8',
+      timeout: 6000,
+      windowsHide: true,
+      shell,
+    })
+    if (result.error || result.status !== 0) {
+      cachedCursorCatalogIds = null
+      return null
+    }
+    const ids = parseCursorCatalogOutput(result.stdout)
+    if (ids.length === 0) {
+      cachedCursorCatalogIds = null
+      return null
+    }
+    cachedCursorCatalogIds = ids
+    return ids
+  } catch {
+    cachedCursorCatalogIds = null
+    return null
+  }
 }

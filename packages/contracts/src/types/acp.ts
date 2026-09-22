@@ -49,7 +49,20 @@ export interface AcpConnectPayload {
    * 若 Agent 支持 resume/load，连接时优先恢复，避免重连后失忆。
    */
   resumeSessionId?: string
+  /**
+   * 当前激活线程是否有本地实质消息（user/agent 任一即 true，纯系统消息/空线程为 false）。
+   * load 定居窗口用它区分：false → 仅监视不限流，让回放重建时间线；
+   * true/缺省（旧渲染端）→ 照常压制回放，避免与本地气泡重复。
+   */
+  hasLocalHistory?: boolean
 }
+
+/**
+ * load 定居收尾标记（主→渲染，经既有 session/update 通道透传，非 ACP 协议种类）：
+ * 定居窗口过期或静默超时时主进程广播一次，渲染端冻结残留 streaming 消息，不碰 prompting。
+ * 与主进程 `acp-state` / 渲染 `chat-slice` 约定的同一字面量，改动须两边同步。
+ */
+export const INKDOWN_SETTLE_COMPLETE_KIND = 'inkdown_settle_complete'
 
 /** Agent initialize 声明的登录方式；id 交给后续 authenticate */
 export interface AcpAuthMethod {
@@ -124,6 +137,12 @@ export interface AcpConnectReadyResult {
   requestedSessionId?: string
   /** resume/load 尝试明细（便于 UI / 日志） */
   restoreAttempts?: AcpSessionRestoreAttempt[]
+  /**
+   * Cursor 横杠 canonical 模型目录（`agent models` / `--list-models` 同源，主进程
+   * connect 成功后附带拉取，失败缺席）。渲染端仅作受控尝试的候选池：
+   * 有则 listed 未命中时可精确匹配 dash 对应一试，无则保持现状行为一字不改。
+   */
+  modelCatalog?: string[]
 }
 
 /** 进程已起、协议已握手，但必须先 authenticate，还没有可 prompt 的 session */
@@ -173,7 +192,11 @@ export interface AcpConfigOption {
   description?: string
   category?: string
   type: 'select' | 'boolean' | string
-  currentValue?: string | boolean
+  /**
+   * 当前值：string 兼容保留；boolean 原样保留（Boolean() 语义）；
+   * number 允许透传（parse 侧统一转 string，set 侧直传 Agent）。
+   */
+  currentValue?: string | boolean | number
   /** type 为 select 时的候选项 */
   options?: AcpConfigOptionValue[]
 }
@@ -181,7 +204,7 @@ export interface AcpConfigOption {
 export interface AcpSetConfigOptionPayload {
   sessionId: string
   configId: string
-  value: string | boolean
+  value: string | boolean | number
 }
 
 /** 设置成功后回完整列表，避免 UI 自己拼 currentValue */

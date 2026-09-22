@@ -33,10 +33,10 @@ import {
 } from './mcp/inkdown-mcp-server'
 import { restoreOrCreateAcpSession } from './session-open'
 import { connectSdkClient, sdkRequest } from './sdk-client'
-import { getLiveAcpProcess, isSpawnedAcpProcessAlive, spawnAcpProcess, type SpawnedAcpProcess } from './process-manager'
+import { getLiveAcpProcess, getAcpEarlyExitStderrDetail, isSpawnedAcpProcessAlive, spawnAcpProcess, withAcpEarlyExitDetail, type SpawnedAcpProcess } from './process-manager'
 import { ensureBunForCommand } from '../bun-runtime'
-import { buildCursorMissingCliMessage } from './runtimes/cursor'
-import { acpState, PROTOCOL_VERSION, setStatus } from './acp-state'
+import { buildCursorMissingCliMessage, getCursorCatalogIds } from './runtimes/cursor'
+import { acpState, PROTOCOL_VERSION, armSuppressSettle, disarmSuppressSettle, setStatus } from './acp-state'
 import {
   emitSessionUpdate,
   handlePermissionRequest,
@@ -54,10 +54,10 @@ import {
  * 多运行时模板解析（防御性）：
  * 约定接口 `findBuiltinAcpRuntime(id) -> { command, args }` 为唯一真相源。
  * 优先走 `@inkdown/acp` 注册表（其内部同样委托该函数），若其滞后则直读 contracts 回落。
- * 下游 contracts 展开 7 模板前，未知 id 在此直接判错，不触达 spawn。
+ * 下游 contracts 展开 8 模板前，未知 id 在此直接判错，不触达 spawn。
  */
-// TODO(下游 contracts 未就绪): 7 运行时模板
-// （codex+claude+gemini+copilot+opencode+cursor-cli+deepseek）落地后，本函数零改动直接生效。
+// TODO(下游 contracts 未就绪): 8 运行时模板
+// （codex+claude+gemini+copilot+opencode+cursor-cli+deepseek+agy）落地后，本函数零改动直接生效。
 function resolveRuntimeTemplate(runtimeId: string): AcpRuntimeInfo | undefined {
   const normalized = runtimeId?.trim() ?? ''
   if (!normalized) return undefined
@@ -136,7 +136,29 @@ async function openSessionAfterAuth(
     acpState.sessionId = opened.sessionId
     acpState.workspaceRoot = cwd
     acpState.pendingResumeSessionId = null
+    // cursor 在 load 响应返回后异步重放历史 updates（落在请求期压制之外）：
+    // load 恢复成功即 arm 滑动定居窗口（即使请求期已结束），重放由 emitSessionUpdate 丢弃。
+    // 空线程例外：本地无实质消息时仅监视不限流，让回放重建时间线，收尾照常冻结。
+    if (opened.restoreMethod === 'load') {
+      armSuppressSettle(Date.now(), {
+        monitorOnly: acpState.pendingHasLocalHistory === false,
+      })
+    }
+    acpState.pendingHasLocalHistory = null
     setStatus('connected')
+
+    // Cursor 横杠 canonical 目录：成功建会话后附带拉取（`agent models` 同源，超时 6s 上限）。
+    // 失败吞掉记 dev 日志，不阻断连接；耗时计入连接，可接受。经 AcpConnectResult.modelCatalog 带回渲染。
+    let modelCatalog: string[] | undefined
+    try {
+      const rid = acpState.runtimeId ?? ''
+      if (rid === 'cursor-cli' || rid === 'cursor') {
+        const catalog = getCursorCatalogIds()
+        if (catalog && catalog.length > 0) modelCatalog = catalog
+      }
+    } catch (error) {
+      console.debug('[acp] cursor model catalog 拉取失败，继续连接', error)
+    }
 
     return ok({
       phase: 'ready',
@@ -154,6 +176,7 @@ async function openSessionAfterAuth(
       requestedSessionId: opened.requestedSessionId,
       restoreAttempts:
         opened.restoreAttempts.length > 0 ? opened.restoreAttempts : undefined,
+      ...(modelCatalog ? { modelCatalog } : {}),
     })
   } catch (error) {
     if (!options?.keepAliveOnFailure) {
@@ -167,6 +190,8 @@ export async function connectAcp(payload: {
   runtimeId: string
   cwd?: string
   resumeSessionId?: string
+  /** 渲染端激活线程是否有本地实质消息（空线程例外用，缺省按非空处理） */
+  hasLocalHistory?: boolean
 }): Promise<Result<AcpConnectResult, AppError>> {
   // spawn 模板一律取自 findBuiltinAcpRuntime（经 resolveRuntimeTemplate），
   // 禁写死 codex bunx；command/args 缺失即判错，不触达 spawn。
@@ -176,6 +201,8 @@ export async function connectAcp(payload: {
   }
 
   const gen = ++acpState.connectGeneration
+  // 新连接开始即 disarm：旧 load 的定居窗口到此结束，后续 updates 均为新连接的真实增量
+  disarmSuppressSettle()
   console.info('[acp] connect start', {
     gen,
     runtimeId: payload.runtimeId,
@@ -185,7 +212,7 @@ export async function connectAcp(payload: {
   // 常驻复用：同 runtime 有存活温进程时跳过冷启动（省掉解压 + 导包）。
   // 温进程是否健康由后面的
   // initialize 握手验证；若握手失败，catch 会杀掉毒进程，下次点击走冷启动自愈。
-  const warmHandle = getLiveAcpProcess(runtime.id)
+  let warmHandle = getLiveAcpProcess(runtime.id)
   if (warmHandle) {
     // 剥离旧会话状态但保温进程：旧 SDK 连接只关闭，不断 stdio。
     await disconnectAcp()
@@ -201,6 +228,9 @@ export async function connectAcp(payload: {
 
   acpState.runtimeId = runtime.id
   acpState.pendingResumeSessionId = payload.resumeSessionId?.trim() || null
+  // 空线程提示直达 openSessionAfterAuth 的 arm 决策（缺省 null = 未知，按非空照常压制）
+  acpState.pendingHasLocalHistory =
+    typeof payload.hasLocalHistory === 'boolean' ? payload.hasLocalHistory : null
   setStatus('connecting')
 
   const adapter = safeGetAdapter(runtime.id)
@@ -209,14 +239,27 @@ export async function connectAcp(payload: {
   // 直接回带安装指引的 ACP_SPAWN_ERROR，不触达 spawn。
   // 背景：无 agent.cmd 的用户机上裸 spawn 会让 cmd 报“不是内部或外部命令”，
   // 子进程秒退，UI 只剩一句看不懂的 connection closed。
+  // agy 例外：resolveSpawnCommand 内做 managed 安装/更新（ensureManaged），
+  // 其抛错为安装失败，绝不静默回退，直接回带 ACP_SPAWN_ERROR；
+  // 其余 runtime 抛错仍按缺省处理（防御性回落），不断连接。
+  // updated=true（本次发生安装/更新）时先杀同 runtime 温进程再走冷启动：
+  // Windows 运行中 exe 无法覆盖，必须先杀。
   if (adapter.resolveSpawnCommand) {
-    let resolved: { command: string; args: string[] } | null | undefined
+    let resolved: { command: string; args: string[]; updated?: boolean } | null | undefined
+    let resolveError: unknown = null
     try {
       resolved = adapter.resolveSpawnCommand()
     } catch (error) {
+      resolveError = error
+      if (runtime.id === 'agy') {
+        const message = error instanceof Error ? error.message : String(error)
+        setStatus('error', message)
+        return err({ code: 'ACP_SPAWN_ERROR', message })
+      }
       console.warn('[acp] resolveSpawnCommand 异常，沿用模板命令', error)
       resolved = undefined
     }
+    void resolveError
     if (resolved === null) {
       const message =
         runtime.id === 'cursor-cli' || runtime.id === 'cursor'
@@ -225,12 +268,50 @@ export async function connectAcp(payload: {
       setStatus('error', message)
       return err({ code: 'ACP_SPAWN_ERROR', message })
     }
+    if (resolved && typeof resolved === 'object' && 'updated' in resolved && resolved.updated === true) {
+      // managed 本次装/更新：旧 exe 已被覆盖（或即将被覆盖），温进程句柄失效，
+      // 先杀同 runtime 温进程再走冷启动；用现有 getLiveAcpProcess + kill，
+      // 不动 process-manager 签名。
+      try {
+        warmHandle?.kill()
+      } catch (error) {
+        console.warn('[acp] 更新后杀温进程异常，继续冷启动', error)
+      }
+      warmHandle = undefined
+      if (acpState.processHandle) {
+        try {
+          acpState.processHandle.kill()
+        } catch {
+          // 忽略竞态关闭
+        }
+        acpState.processHandle = null
+      }
+    }
     if (resolved?.command) {
       runtime = { ...runtime, command: resolved.command, args: resolved.args }
     }
   }
 
+  // 预检判停（缺 key 等，仿 resolveSpawnCommand 的可选 + 缺省兼容做法）：
+  // adapter 自报阻断文案（resolveSpawnBlocker → 非空字符串）时直接回带
+  // ACP_SPAWN_ERROR，不触达 spawn。抛错按放行处理（防御性回落），不断连接。
+  if (adapter.resolveSpawnBlocker) {
+    let blocker: string | null | undefined
+    try {
+      blocker = adapter.resolveSpawnBlocker()
+    } catch (error) {
+      console.warn('[acp] resolveSpawnBlocker 异常，继续连接', error)
+      blocker = undefined
+    }
+    if (typeof blocker === 'string' && blocker.trim()) {
+      setStatus('error', blocker)
+      return err({ code: 'ACP_SPAWN_ERROR', message: blocker })
+    }
+  }
+
   // 启动前钩子：各 runtime 自理副作用（如凭据桥接同步 refresh_token）。
+  // agy 的 managed 安装/更新不在此钩子，而在上面的 resolveSpawnCommand 内
+  // （需先定 spawn 目标，且 updated=true 时要杀温进程，顺序不可后移）。
   // 防御性：下游 adapter 未就绪/抛错时不阻断连接。
   if (adapter.beforeSpawn) {
     try {
@@ -345,6 +426,12 @@ export async function connectAcp(payload: {
     acpState.sdkConn = created.connection
     acpState.sdkStream = created.streamHandle
 
+    // _meta.parameterizedModelPicker=true（对齐 Zed 1.8.2-pre，根因见 zed-industries/zed#57571）：
+    // cursor-agent 依此标记决定模型下发形状——声明后返回朴素模型值 + 独立 fast/thinking 配置项；
+    // 不声明则只给爆炸开的 variant 串（改写即 Invalid params）。
+    // session.configOptions.boolean 解锁按 boolean 门控下发选项的 Agent
+    // （对齐参考实现；未知字段按标准应被其余 Agent 忽略）。
+    // _meta 是 ACP 标准扩展点，未知字段应被其余 Agent 忽略（codex 等仅多收一个字段）。
     const initResult = await sdkRequest<InitializeResponse, Record<string, unknown>>(
       acpState.sdkConn.agent,
       methods.agent.initialize,
@@ -356,6 +443,8 @@ export async function connectAcp(payload: {
             writeTextFile: true,
           },
           terminal: true,
+          session: { configOptions: { boolean: {} } },
+          _meta: { parameterizedModelPicker: true },
         },
         clientInfo: {
           name: 'inkdown',
@@ -453,10 +542,20 @@ export async function connectAcp(payload: {
     if (gen !== acpState.connectGeneration) {
       return err({ code: 'ACP_PROTOCOL_ERROR', message: '连接已被更新的请求取代' })
     }
+    // 连接失败自诊断（去窗口化）：进程已死且连接失败时，一律把 stderr 尾部
+    // 拼进失败错误供 UI 显示，替代裸 `ACP connection closed`。
+    // dsh 自解析依赖慢退曾因旧 3s 窗口漏归因，故慢退/长会话失败同样带尾；
+    // 先快照再 disconnect（disconnect 会杀毒进程并清空句柄），
+    // killProcess 路径不受影响。
+    const failedHandle = acpState.processHandle
+    const earlyDetail = getAcpEarlyExitStderrDetail(failedHandle)
     // 未知异常：进程状态不可信，杀掉避免下次复用毒进程
     await disconnectAcp(undefined, { killProcess: true })
-    setStatus('error', error instanceof Error ? error.message : String(error))
-    return err(toProtocolError(error, '连接 ACP Agent 失败'))
+    const protoError = toProtocolError(error, '连接 ACP Agent 失败')
+    const messageWithTail = withAcpEarlyExitDetail(protoError.message, earlyDetail)
+    const finalError = { ...protoError, message: messageWithTail }
+    setStatus('error', finalError.message)
+    return err(finalError)
   }
 }
 
@@ -533,7 +632,9 @@ export async function disconnectAcp(
   acpState.resumeSessionSupported = false
   acpState.cachedPromptCapabilities = {}
   acpState.pendingResumeSessionId = null
+  acpState.pendingHasLocalHistory = null
   acpState.suppressSessionUpdates = false
+  disarmSuppressSettle()
   acpState.cachedAgentName = undefined
   acpState.cachedAgentVersion = undefined
   setStatus('disconnected', reason)

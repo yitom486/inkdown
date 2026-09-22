@@ -64,6 +64,17 @@ export function titleFromMessages(messages: AcpChatMessage[]): string {
   return first ? `附件 · ${first}` : '新对话'
 }
 
+/**
+ * 空线程例外判定：线程是否有本地实质消息。
+ * 仅系统消息或空白视为无历史（load 回放应放行重建）；出现任一 user/agent（含
+ * 空占位 streaming 气泡）即视为有历史，回放照常压制。
+ */
+export function threadHasSubstantiveMessages(
+  thread: Pick<AcpChatThread, 'messages'>,
+): boolean {
+  return thread.messages.some((m) => m.role !== 'system')
+}
+
 export function freezeMessages(messages: AcpChatMessage[]): AcpChatMessage[] {
   return messages.slice(-MAX_MESSAGES_PER_THREAD).map((m) => {
     const base = m.streaming ? { ...m, streaming: false } : m

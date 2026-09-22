@@ -1,5 +1,6 @@
 import { RequestError } from '@agentclientprotocol/sdk'
 import type { AcpSessionRestoreAttempt, AcpSessionRestoreMethod } from '@inkdown/contracts'
+import { mergeTopLevelModelsIntoConfigOptions } from '@inkdown/acp'
 
 export type AcpRpcRequest = (method: string, params?: unknown) => Promise<unknown>
 
@@ -128,13 +129,42 @@ export async function restoreOrCreateAcpSession(
     loadSupported: input.loadSupported,
   })
 
+  // session/new 共用 helper：首次失败时裸调（mcpServers: []）重试一次；
+  // 成功则继续，仍失败抛原错（首次错误为准，便于 UI 显示真实原因）。
+  const requestSessionNew = async (): Promise<Record<string, unknown>> => {
+    const baseParams = {
+      cwd: input.cwd,
+      mcpServers: input.mcpServers ?? [],
+    }
+    try {
+      return (await input.request('session/new', baseParams)) as Record<string, unknown>
+    } catch (firstError) {
+      // 已是裸调则无重试意义，直接抛
+      if ((input.mcpServers ?? []).length === 0) throw firstError
+      log('warn', 'session/new failed, retry without mcpServers', {
+        error: errorMessage(firstError),
+      })
+      try {
+        return (await input.request('session/new', {
+          cwd: input.cwd,
+          mcpServers: [],
+        })) as Record<string, unknown>
+      } catch {
+        throw firstError
+      }
+    }
+  }
+
+  const withModelsFallback = (result: Record<string, unknown>): unknown =>
+    mergeTopLevelModelsIntoConfigOptions(result.configOptions, result)
+
   if (resumeId && input.resumeSupported) {
     const resumed = await tryRestoreMethod('resume', 'session/resume')
     if (resumed) {
       const id = typeof resumed.sessionId === 'string' ? resumed.sessionId : resumeId
       return {
         sessionId: id,
-        configOptions: resumed.configOptions,
+        configOptions: withModelsFallback(resumed),
         restoreMethod: 'resume',
         sessionRestored: true,
         requestedSessionId: resumeId,
@@ -153,7 +183,7 @@ export async function restoreOrCreateAcpSession(
         const id = typeof loaded.sessionId === 'string' ? loaded.sessionId : resumeId
         return {
           sessionId: id,
-          configOptions: loaded.configOptions,
+          configOptions: withModelsFallback(loaded),
           restoreMethod: 'load',
           sessionRestored: true,
           requestedSessionId: resumeId,
@@ -168,10 +198,7 @@ export async function restoreOrCreateAcpSession(
   }
 
   log('info', 'falling back to session/new', { resumeId, restoreAttempts })
-  const sessionResult = (await input.request('session/new', {
-    cwd: input.cwd,
-    mcpServers: input.mcpServers ?? [],
-  })) as Record<string, unknown>
+  const sessionResult = await requestSessionNew()
   const newSessionId =
     typeof sessionResult.sessionId === 'string' ? sessionResult.sessionId : null
   if (!newSessionId) {
@@ -180,7 +207,7 @@ export async function restoreOrCreateAcpSession(
 
   return {
     sessionId: newSessionId,
-    configOptions: sessionResult.configOptions,
+    configOptions: withModelsFallback(sessionResult),
     restoreMethod: 'new',
     sessionRestored: false,
     requestedSessionId: resumeId ?? undefined,

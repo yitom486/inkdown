@@ -55,6 +55,11 @@ export interface AcpUiStore {
   prompting: boolean
   /** 当前连接 Agent 的 prompt 能力（不持久化） */
   promptCapabilities: AcpPromptCapabilities
+  /**
+   * Cursor 横杠 canonical 模型目录（内存态，不持久化）：
+   * connect 成功写入，disconnect/切换清空。见 session-slice。
+   */
+  modelCatalogByRuntime: Record<string, string[]>
   threads: AcpChatThread[]
   activeThreadId: string
   historyOpen: boolean
@@ -94,6 +99,7 @@ export interface AcpUiStore {
   setConfigOptions: (options: AcpConfigOption[]) => void
   setPromptCapabilities: (caps: AcpPromptCapabilities) => void
   setPrompting: (prompting: boolean) => void
+  setModelCatalog: (runtimeId: string, catalog: string[] | null) => void
   rememberConfigPreference: (
     runtimeId: string,
     configId: string,
@@ -109,6 +115,12 @@ export interface AcpUiStore {
   clearMessages: () => void
   applySessionUpdate: (update: Record<string, unknown>) => void
   finishStreaming: () => void
+  /**
+   * 定居收尾冻结：与 finishStreaming 同一冻结语义（残留 streaming → false +
+   * updatedAt=now，中间态 agent 气泡规整），但不碰 prompting。
+   * load 恢复回放场景 prompting 本就 false，prompt 回合仍走 finishStreaming。
+   */
+  freezeSettledStreaming: () => void
   /** MCP 结果不会回传到 ACP session/update 时，由快照响应直接补到对应工具消息。 */
   attachMarkProposalsFromSnapshot: (content: string) => void
   resolveMarkProposal: (proposalId: string, status: Exclude<MarkProposalStatus, 'pending'>) => void
@@ -156,6 +168,18 @@ export function selectActiveThreadAgentSessionId(
   const thread = state.threads.find((t) => t.id === state.activeThreadId)
   if (!thread) return undefined
   return threadAgentSessionForRuntime(thread, state.selectedRuntimeId) || undefined
+}
+
+/**
+ * 当前激活线程是否有本地实质消息（空线程例外用）：
+ * 仅系统消息或空白 → false，主进程 load 回放仅监视不限流，由回放重建时间线。
+ */
+export function selectActiveThreadHasSubstantiveMessages(
+  state: Pick<AcpUiStore, 'threads' | 'activeThreadId'>,
+): boolean {
+  const thread = state.threads.find((t) => t.id === state.activeThreadId)
+  if (!thread) return false
+  return thread.messages.some((m) => m.role !== 'system')
 }
 
 /** 仅获取指定 Agent 运行时名下的会话线程列表（按更新时间降序） */
