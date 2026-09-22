@@ -52,7 +52,7 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     const runtime = findBuiltinAcpRuntime('claude')
     expect(runtime).toBeDefined()
     expect(runtime!.command).toBe('bunx')
-    expect(runtime!.args).toEqual(['-y', CLAUDE_ACP_NPM_PACKAGE])
+    expect(runtime!.args).toEqual(['-y', `${CLAUDE_ACP_NPM_PACKAGE}@latest`])
     expect(runtime!.requiredEnvKeys).toContain('ANTHROPIC_API_KEY')
     expect(runtime!.description).toContain('ANTHROPIC_API_KEY')
   })

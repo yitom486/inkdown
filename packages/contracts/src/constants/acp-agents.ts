@@ -52,7 +52,7 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     authHint:
       '复用本机 Claude Code 登录（~/.claude.json / ~/.claude/.credentials.json 或 ANTHROPIC_API_KEY）；未登录先跑 claude login',
     command: 'bunx',
-    args: ['-y', CLAUDE_ACP_NPM_PACKAGE],
+    args: ['-y', `${CLAUDE_ACP_NPM_PACKAGE}@latest`],
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
   },
   {
