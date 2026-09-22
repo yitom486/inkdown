@@ -20,7 +20,12 @@ import type { ChapterMarkPlanSelectPayload } from '@/components/agent/propose/Ch
 import { Button } from '@/components/ui/button'
 import { appendSelectionChatMarker } from '@/lib/agent/context/selection-chat-marker'
 import { splitConfigOptions } from '@/lib/agent/acp-config-menu'
-import { selectReadonlyModelThinking } from '@/lib/agent/acp-model-thinking'
+import {
+  buildModelVariant,
+  selectModelThinkingControl,
+  selectReadonlyModelThinking,
+  selectSuffixFastState,
+} from '@/lib/agent/acp-model-thinking'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +39,7 @@ import {
 import { useAcpSession } from '@/hooks/agent/useAcpSession'
 import { useHighlightTheme } from '@/hooks/preview/useHighlightTheme'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { useAcpChatShell, useAcpUiStore } from '@/stores/acp-ui-store'
 import { useReaderHudUiStore } from '@/stores/acp/reader-hud-store'
 import { useEditorUiStore } from '@/stores/editor-ui-store'
@@ -120,13 +126,28 @@ export const AgentPanel = memo(function AgentPanel({
     setDraft((prev) => appendSelectionChatMarker(prev))
   }, [composerInsertNonce])
 
-  const { primary, secondary, fastToggle } = useMemo(
+  const { primary, secondary, fastToggle: booleanFastToggle } = useMemo(
     () => splitConfigOptions(view.configOptions),
     [view.configOptions],
   )
 
   // 无独立思考档时，模型值尾缀自带档位则显示只读徽标（跟随模型切换，不可单独改）
   const readonlyThinking = useMemo(() => selectReadonlyModelThinking(primary), [primary])
+  // 尾缀含思考类 key 且候选≥2（同 base，不足时同 key 跨模型后备）→ 只读徽标升级为可设下拉
+  const thinkingControl = useMemo(() => selectModelThinkingControl(primary), [primary])
+  // 尾缀含 fast=true|false → 输入栏渲染尾缀版 fast 开关，优先于 boolean 版（两者互斥）
+  const suffixFast = useMemo(() => selectSuffixFastState(primary), [primary])
+  const fastToggle = suffixFast ? null : booleanFastToggle
+
+  // 乐观改写中的回滚位：setModel 失败（Agent 拒收未 listed id）时清掉即回滚到 store 旧值 + toast
+  const [thinkingPending, setThinkingPending] = useState<string | null>(null)
+  const [suffixFastPending, setSuffixFastPending] = useState<boolean | null>(null)
+  useEffect(() => {
+    setThinkingPending(null)
+  }, [thinkingControl?.current])
+  useEffect(() => {
+    setSuffixFastPending(null)
+  }, [suffixFast?.checked])
 
   const runtimeName =
     BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === view.selectedRuntimeId)?.name ??
@@ -221,6 +242,45 @@ export const AgentPanel = memo(function AgentPanel({
             : '未连接'
 
   const configsDisabled = view.status !== 'connected' || view.prompting
+
+  const handleThinkingSelect = useCallback(
+    async (next: string) => {
+      if (!thinkingControl || configsDisabled) return
+      if (next === thinkingControl.current) return
+      const newId = buildModelVariant(thinkingControl.base, {
+        ...thinkingControl.params,
+        [thinkingControl.key]: next,
+      })
+      setThinkingPending(next)
+      const ok = await setModel(thinkingControl.configId, newId)
+      setThinkingPending(null)
+      if (!ok) {
+        toast.error('Agent 拒收该思考档（未 listed id），已回滚')
+      }
+    },
+    [thinkingControl, configsDisabled, setModel],
+  )
+
+  const handleSuffixFastChange = useCallback(
+    async (checked: boolean) => {
+      if (!suffixFast || configsDisabled) return
+      if (checked === suffixFast.checked) return
+      const newId = buildModelVariant(suffixFast.base, {
+        ...suffixFast.params,
+        fast: checked ? 'true' : 'false',
+      })
+      setSuffixFastPending(checked)
+      const ok = await setModel(suffixFast.configId, newId)
+      setSuffixFastPending(null)
+      if (!ok) {
+        toast.error('Agent 拒收该 fast 切换（未 listed id），已回滚')
+      }
+    },
+    [suffixFast, configsDisabled, setModel],
+  )
+
+  const thinkingDisplay = thinkingControl ? (thinkingPending ?? thinkingControl.current) : null
+  const suffixFastChecked = suffixFast ? (suffixFastPending ?? suffixFast.checked) : false
 
   const [providerDialogOpen, setProviderDialogOpen] = useState(false)
   const [providerStatus, setProviderStatus] = useState<AcpProviderStatus | null>(null)
@@ -632,7 +692,21 @@ export const AgentPanel = memo(function AgentPanel({
               </DropdownMenu>
 
               <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-                {fastToggle ? (
+                {suffixFast ? (
+                  <label
+                    className="inline-flex max-w-[7.5rem] shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground has-disabled:pointer-events-none has-disabled:opacity-40"
+                    title="快速模式（模型尾缀 fast，优先于 boolean 配置）"
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-3.5 shrink-0 accent-[hsl(var(--primary))]"
+                      checked={suffixFastChecked}
+                      disabled={configsDisabled}
+                      onChange={(e) => void handleSuffixFastChange(e.target.checked)}
+                    />
+                    <span className="truncate">快速</span>
+                  </label>
+                ) : fastToggle ? (
                   <label
                     className="inline-flex max-w-[7.5rem] shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground has-disabled:pointer-events-none has-disabled:opacity-40"
                     title={fastToggle.description || fastToggle.name}
@@ -656,7 +730,36 @@ export const AgentPanel = memo(function AgentPanel({
                     emphasize={index === 0}
                   />
                 ))}
-                {readonlyThinking ? (
+                {thinkingControl && thinkingDisplay ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={configsDisabled}
+                        title={`思考档（改写模型尾缀 ${thinkingControl.key}）`}
+                        className="inline-flex max-w-[7.5rem] items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        <span className="truncate">思考 {thinkingDisplay}</span>
+                        <ChevronDown className="size-3 shrink-0 opacity-60" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-40">
+                      <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                        思考档
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={thinkingDisplay}
+                        onValueChange={(v) => void handleThinkingSelect(v)}
+                      >
+                        {thinkingControl.candidates.map((c) => (
+                          <DropdownMenuRadioItem key={c} value={c} className="text-xs">
+                            {c}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : readonlyThinking ? (
                   <button
                     type="button"
                     disabled

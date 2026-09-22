@@ -16,6 +16,7 @@ import {
 import { resetTurnContextTracker } from '@/lib/agent/context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { selectFastDefaultOffTarget } from '@/lib/agent/acp-config-menu'
+import { selectFastSuffixDefaultOffTarget } from '@/lib/agent/acp-model-thinking'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
 import { flushAcpStreamBuffer, registerStreamAuthReset } from '@/lib/agent/acp-stream-host'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
@@ -156,6 +157,32 @@ export function useAcpSession(workspaceRoot?: string) {
           }
         } else {
           console.warn('[acp-ui] fast 默认关闭失败', fastTarget.configId, offResult.error)
+        }
+      }
+      // fast 尾缀默认关一次：当前模型 fast=true 且无该 runtime model 偏好时改写 fast=false；
+      // 有偏好/已 false/无 fast 参数不动。失败 warn 不抛。
+      const suffixTarget = selectFastSuffixDefaultOffTarget(
+        latest,
+        useAcpUiStore.getState().preferredConfigByRuntime,
+        useAcpUiStore.getState().selectedRuntimeId,
+      )
+      if (suffixTarget) {
+        const suffixResult = await acpApi.setConfigOption({
+          sessionId: result.sessionId,
+          configId: suffixTarget.configId,
+          value: suffixTarget.value,
+        })
+        if (isOk(suffixResult)) {
+          useAcpUiStore.getState().rememberConfigPreference(
+            useAcpUiStore.getState().selectedRuntimeId,
+            suffixTarget.configId,
+            suffixTarget.value,
+          )
+          if (suffixResult.value.configOptions.length > 0) {
+            latest = suffixResult.value.configOptions
+          }
+        } else {
+          console.warn('[acp-ui] fast 尾缀默认关闭失败', suffixTarget.configId, suffixResult.error)
         }
       }
       if (latest !== options) {
@@ -584,20 +611,21 @@ export function useAcpSession(workspaceRoot?: string) {
   }, [finishStreaming, flushBufferedChunks])
 
   const setModel = useCallback(
-    async (configId: string, value: string | boolean) => {
+    async (configId: string, value: string | boolean): Promise<boolean> => {
       const sid = useAcpUiStore.getState().sessionId
-      if (!sid) return
+      if (!sid) return false
       const runtimeId = useAcpUiStore.getState().selectedRuntimeId
       const result = await acpApi.setConfigOption({ sessionId: sid, configId, value })
       if (!isOk(result)) {
         reportAppError(result.error)
         appendSystemMessage(`切换配置失败：${result.error.message}`)
-        return
+        return false
       }
       rememberConfigPreference(runtimeId, configId, value)
       if (result.value.configOptions.length > 0) {
         setConfigOptions(result.value.configOptions)
       }
+      return true
     },
     [appendSystemMessage, rememberConfigPreference, setConfigOptions],
   )
