@@ -6,6 +6,10 @@
 
 ## [未发布]
 
+---
+
+## [0.4.3] - 2026-09-23
+
 - ### Agent
   - **agy 改走 bunx 直调**：删掉自建 managed 安装器（顺带解除仅 Windows 限制），与 codex 同构；装不上的 EINVAL 根因已修
   - **bunx 三家锁定最新**：agy / codex / deepseek / claude 模板统一加 `@latest`，每次冷启动直取 registry 最新（24 小时缓存坑已避开）
@@ -321,7 +325,8 @@
 
 ---
 
-[未发布]: https://github.com/yitom486/inkdown/compare/v0.4.2...HEAD
+[未发布]: https://github.com/yitom486/inkdown/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/yitom486/inkdown/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/yitom486/inkdown/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/yitom486/inkdown/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/yitom486/inkdown/compare/v0.3.1...v0.4.0
