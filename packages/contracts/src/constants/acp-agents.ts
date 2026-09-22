@@ -41,7 +41,7 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     authHint:
       '复用本机 ~/.codex 登录（auth.json 或 OPENAI_API_KEY / CODEX_API_KEY）；未登录按下方 Agent 认证方式完成登录',
     command: 'bunx',
-    args: ['-y', CODEX_ACP_NPM_PACKAGE],
+    args: ['-y', `${CODEX_ACP_NPM_PACKAGE}@latest`],
     requiredEnvKeys: ['OPENAI_API_KEY', 'CODEX_API_KEY'],
   },
   {
@@ -105,7 +105,7 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
     authHint:
       '无 ACP 登录，靠 harness 自身凭证（DEEPSEEK_API_KEY / harness 配置）；未配置先导出 DEEPSEEK_API_KEY；模型经 session 到达，无需额外动作；若官方最新 dsh 存在坏依赖（如 rc.3 缺失），可设 DSH_PACKAGE pin 旧版',
     command: 'bunx',
-    args: ['-y', DEEPSEEK_DSH_NPM_PACKAGE, '--profile', 'acp'],
+    args: ['-y', `${DEEPSEEK_DSH_NPM_PACKAGE}@latest`, '--profile', 'acp'],
     requiredEnvKeys: ['DEEPSEEK_API_KEY'],
   },
   {
@@ -115,7 +115,8 @@ export const BUILTIN_ACP_RUNTIMES: readonly AcpRuntimeInfo[] = [
       '经 bunx 直调官方桥 JS 入口（免安装，跨平台；版本跟随 bunx 解析）',
     authHint: '复用 Antigravity CLI 本地登录态；未登录先在本机终端完成 agy 登录后再连接',
     command: 'bunx',
-    args: ['-y', AGY_ACP_NPM_PACKAGE],
+    // @latest 后缀：bunx 对裸包名只按 24h 新鲜度复用缓存，显式 @latest 才每次直取 registry 最新
+    args: ['-y', `${AGY_ACP_NPM_PACKAGE}@latest`],
     requiredEnvKeys: [],
   },
 ] as const

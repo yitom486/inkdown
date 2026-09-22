@@ -53,7 +53,9 @@ export function resolveDeepseekSpawnCommand(env?: NodeJS.ProcessEnv): {
   args: string[]
 } {
   const pkg = resolveDeepseekPackage(env)
-  return { command: 'bunx', args: ['-y', pkg, '--profile', 'acp'] }
+  // 缺省包跟模板一样带 @latest（每次冷启动直取 registry 最新）；用户覆盖值原样使用
+  const spec = pkg === DEEPSEEK_DSH_NPM_PACKAGE ? `${pkg}@latest` : pkg
+  return { command: 'bunx', args: ['-y', spec, '--profile', 'acp'] }
 }
 export function probeDeepseekAuth(): CodexAuthPreflight {
   const hasApiKeyEnv = Boolean(process.env.DEEPSEEK_API_KEY?.trim())

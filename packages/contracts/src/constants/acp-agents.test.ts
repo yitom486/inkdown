@@ -18,7 +18,7 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     const runtime = findBuiltinAcpRuntime(DEFAULT_ACP_RUNTIME_ID)
     expect(runtime).toBeDefined()
     expect(runtime!.command).toBe('bunx')
-    expect(runtime!.args).toEqual(['-y', CODEX_ACP_NPM_PACKAGE])
+    expect(runtime!.args).toEqual(['-y', `${CODEX_ACP_NPM_PACKAGE}@latest`])
   })
 
   it('does not spawn archived @zed-industries/codex-acp', () => {
@@ -90,7 +90,7 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     const runtime = findBuiltinAcpRuntime('deepseek')
     expect(runtime).toBeDefined()
     expect(runtime!.command).toBe('bunx')
-    expect(runtime!.args).toEqual(['-y', DEEPSEEK_DSH_NPM_PACKAGE, '--profile', 'acp'])
+    expect(runtime!.args).toEqual(['-y', `${DEEPSEEK_DSH_NPM_PACKAGE}@latest`, '--profile', 'acp'])
     expect(runtime!.requiredEnvKeys).toContain('DEEPSEEK_API_KEY')
   })
 
@@ -127,7 +127,7 @@ describe('BUILTIN_ACP_RUNTIMES package selection', () => {
     const runtime = findBuiltinAcpRuntime('agy')
     expect(runtime).toBeDefined()
     expect(runtime!.command).toBe('bunx')
-    expect(runtime!.args).toEqual(['-y', AGY_ACP_NPM_PACKAGE])
+    expect(runtime!.args).toEqual(['-y', `${AGY_ACP_NPM_PACKAGE}@latest`])
     expect(runtime!.description).toContain('bunx')
     expect(runtime!.authHint).toContain('Antigravity CLI')
   })

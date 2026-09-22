@@ -45,11 +45,11 @@ describe('deepseek 缺 key 预检判停', () => {
 })
 
 describe('deepseek DSH_PACKAGE 包定位符覆盖', () => {
-  it('缺省走 contracts 常量（bunx -y @deepseek-ai/dsh --profile acp）', () => {
+  it('缺省走 contracts 常量并带 @latest（每次冷启动直取最新）', () => {
     expect(DEEPSEEK_DSH_NPM_PACKAGE).toBe('@deepseek-ai/dsh')
     expect(resolveDeepseekSpawnCommand({})).toEqual({
       command: 'bunx',
-      args: ['-y', DEEPSEEK_DSH_NPM_PACKAGE, '--profile', 'acp'],
+      args: ['-y', `${DEEPSEEK_DSH_NPM_PACKAGE}@latest`, '--profile', 'acp'],
     })
   })
 
@@ -62,11 +62,11 @@ describe('deepseek DSH_PACKAGE 包定位符覆盖', () => {
     })
   })
 
-  it('非法值回落缺省（空格/shell 元字符）', () => {
+  it('非法值回落缺省（空格/shell 元字符，回落同样带 @latest）', () => {
     for (const bad of ['', '   ', 'pkg with-space', 'pkg;rm -rf', 'pkg$(id)', 'pkg|tee', 'pkg`id`']) {
       expect(resolveDeepseekSpawnCommand({ DSH_PACKAGE: bad })).toEqual({
         command: 'bunx',
-        args: ['-y', DEEPSEEK_DSH_NPM_PACKAGE, '--profile', 'acp'],
+        args: ['-y', `${DEEPSEEK_DSH_NPM_PACKAGE}@latest`, '--profile', 'acp'],
       })
     }
   })
