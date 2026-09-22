@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { AcpConfigOption } from '@inkdown/contracts'
+import { rankPrimary, splitConfigOptions } from './acp-config-menu'
 import {
-  buildModelVariant,
   collectThinkingCandidates,
-  collectThinkingCandidatesAcrossKeys,
   extractModelSuffixThinking,
+  findListedVariantId,
   findVariantThinkingKey,
   parseModelVariant,
-  selectFastSuffixDefaultOffTarget,
+  pickDashCounterpart,
   selectModelThinkingControl,
   selectReadonlyModelThinking,
   selectSuffixFastState,
@@ -105,7 +105,7 @@ function cursorPrimary(current: string): AcpConfigOption[] {
   ]
 }
 
-describe('parseModelVariant / buildModelVariant', () => {
+describe('parseModelVariant', () => {
   it('多 param 解析 + key 顺序保持', () => {
     const parsed = parseModelVariant('grok-4.7[context=256k,reasoning_effort=high,fast=true]')
     expect(parsed.base).toBe('grok-4.7')
@@ -121,16 +121,6 @@ describe('parseModelVariant / buildModelVariant', () => {
     expect(parseModelVariant('plain')).toEqual({ base: 'plain', params: {} })
     expect(parseModelVariant('m[high]')).toEqual({ base: 'm', params: {} })
     expect(parseModelVariant(undefined)).toEqual({ base: '', params: {} })
-  })
-  it('build 往返：空 params 输出 base[]，顺序保持，新 key 追加', () => {
-    expect(buildModelVariant('default', {})).toBe('default[]')
-    const grok = 'grok-4.7[context=256k,reasoning_effort=high,fast=true]'
-    const parsed = parseModelVariant(grok)
-    expect(buildModelVariant(parsed.base, parsed.params)).toBe(grok)
-    expect(buildModelVariant('default', parseModelVariant('default[]').params)).toBe(
-      'default[]',
-    )
-    expect(buildModelVariant('a', { b: '1', c: '2' })).toBe('a[b=1,c=2]')
   })
 })
 
@@ -151,47 +141,56 @@ describe('collectThinkingCandidates', () => {
   })
 })
 
-describe('collectThinkingCandidatesAcrossKeys', () => {
-  it('同 key 跨模型后备（reasoning_effort→low/high）', () => {
+describe('findListedVariantId', () => {
+  it('listed 命中：同 base 改思考档返回 listed 原值', () => {
+    const listed = [...CURSOR_MODEL_VALUES]
+    const current = parseModelVariant('claude-sonnet-4[reasoning_effort=low]')
     expect(
-      collectThinkingCandidatesAcrossKeys('reasoning_effort', [...CURSOR_MODEL_VALUES]),
-    ).toEqual(['low', 'high'])
+      findListedVariantId(listed, current, { key: 'reasoning_effort', value: 'high' }),
+    ).toBe('claude-sonnet-4[reasoning_effort=high]')
   })
-  it('thinking 布尔仅 1 个（后备仍不足）', () => {
-    expect(collectThinkingCandidatesAcrossKeys('thinking', [...CURSOR_MODEL_VALUES])).toEqual([
-      'false',
-    ])
+  it('多 param 全等才命中：其余 param 有一个不等即 null', () => {
+    const listed = [
+      'm[a=1,b=1,think=low]',
+      'm[a=1,b=1,think=high]',
+      'm[a=2,b=1,think=high]',
+    ]
+    const current = parseModelVariant('m[a=1,b=1,think=low]')
+    // 其余 param 全等 → 命中同组 high，不取 a=2 那条
+    expect(findListedVariantId(listed, current, { key: 'think', value: 'high' })).toBe(
+      'm[a=1,b=1,think=high]',
+    )
+    // 当前 a=9 与任何 listed 的其余 param 都不等 → null（手搓会出未 listed id）
+    const orphan = parseModelVariant('m[a=9,b=1,think=low]')
+    expect(findListedVariantId(listed, orphan, { key: 'think', value: 'high' })).toBeNull()
+    // listed 多带一个 key 也算不等 → null
+    const listedExtra = ['m[a=1,think=high,extra=1]']
+    expect(findListedVariantId(listedExtra, current, { key: 'think', value: 'high' })).toBeNull()
   })
-  it('非思考 key 直接返回空', () => {
-    expect(collectThinkingCandidatesAcrossKeys('fast', [...CURSOR_MODEL_VALUES])).toEqual([])
-    expect(collectThinkingCandidatesAcrossKeys('context', [...CURSOR_MODEL_VALUES])).toEqual([])
-    expect(collectThinkingCandidatesAcrossKeys('', [...CURSOR_MODEL_VALUES])).toEqual([])
-  })
-})
-
-describe('尾缀改写只动目标 key', () => {
-  it('思考档改写其余不动（含顺序）', () => {
-    const parsed = parseModelVariant('grok-4.7[context=256k,reasoning_effort=high,fast=true]')
+  it('找不到返回 null：单 variant / 异 base / 空入参', () => {
+    const listed = [...CURSOR_MODEL_VALUES]
+    const grok = parseModelVariant('grok-4.7[context=256k,reasoning_effort=high,fast=true]')
+    // grok 仅单 variant：fast=false 无 listed 目标
+    expect(findListedVariantId(listed, grok, { key: 'fast', value: 'false' })).toBeNull()
+    // grok 思考 low 无 listed（仅 high 单值）
     expect(
-      buildModelVariant(parsed.base, { ...parsed.params, reasoning_effort: 'low' }),
-    ).toBe('grok-4.7[context=256k,reasoning_effort=low,fast=true]')
-  })
-  it('fast 改写其余不动', () => {
-    const parsed = parseModelVariant('grok-4.7[context=256k,reasoning_effort=high,fast=true]')
-    expect(buildModelVariant(parsed.base, { ...parsed.params, fast: 'false' })).toBe(
-      'grok-4.7[context=256k,reasoning_effort=high,fast=false]',
+      findListedVariantId(listed, grok, { key: 'reasoning_effort', value: 'low' }),
+    ).toBeNull()
+    // 异 base 不串
+    const claude = parseModelVariant('claude-sonnet-4[reasoning_effort=low]')
+    expect(findListedVariantId(listed, claude, { key: 'reasoning_effort', value: 'low' })).toBe(
+      'claude-sonnet-4[reasoning_effort=low]',
     )
-  })
-  it('thinking 布尔改写', () => {
-    const parsed = parseModelVariant('mini[thinking=false]')
-    expect(buildModelVariant(parsed.base, { ...parsed.params, thinking: 'true' })).toBe(
-      'mini[thinking=true]',
-    )
+    expect(findListedVariantId([], claude, { key: 'reasoning_effort', value: 'high' })).toBeNull()
+    expect(findListedVariantId(listed, { base: '', params: {} }, { key: 'fast', value: 'false' })).toBeNull()
+    expect(findListedVariantId(listed, grok, { key: '', value: 'false' })).toBeNull()
+    expect(findListedVariantId(listed, grok, { key: 'fast', value: '' })).toBeNull()
+    expect(findListedVariantId(['a', 1, null], grok, { key: 'fast', value: 'false' })).toBeNull()
   })
 })
 
 describe('selectModelThinkingControl', () => {
-  it('同 base≥2 直接可用（claude）', () => {
+  it('同 base≥2 且 listed 可达直接可用（claude）', () => {
     const control = selectModelThinkingControl(
       cursorPrimary('claude-sonnet-4[reasoning_effort=low]'),
     )
@@ -199,13 +198,17 @@ describe('selectModelThinkingControl', () => {
     expect(control?.current).toBe('low')
     expect(control?.candidates).toEqual(['low', 'high'])
   })
-  it('单 variant 经跨 key 后备可用（grok→low/high）', () => {
-    const control = selectModelThinkingControl(
-      cursorPrimary('grok-4.7[context=256k,reasoning_effort=high,fast=true]'),
-    )
-    expect(control?.key).toBe('reasoning_effort')
-    expect(control?.candidates).toEqual(['low', 'high'])
-    expect(findVariantThinkingKey(control?.params ?? {})).toBe('reasoning_effort')
+  it('单 variant 无 listed 可切 → null，保持只读徽标（grok）', () => {
+    const primary = cursorPrimary('grok-4.7[context=256k,reasoning_effort=high,fast=true]')
+    expect(selectModelThinkingControl(primary)).toBeNull()
+    // 只读徽标仍跟随当前值
+    expect(selectReadonlyModelThinking(primary)).toBe('high')
+    // fast 反向目标同样无 listed（面板应 disabled 开关）
+    const grok = parseModelVariant('grok-4.7[context=256k,reasoning_effort=high,fast=true]')
+    expect(
+      findListedVariantId([...CURSOR_MODEL_VALUES], grok, { key: 'fast', value: 'false' }),
+    ).toBeNull()
+    expect(findVariantThinkingKey(grok.params)).toBe('reasoning_effort')
   })
   it('候选不足返回 null（空尾缀 / thinking 单值）', () => {
     expect(selectModelThinkingControl(cursorPrimary('default[]'))).toBeNull()
@@ -243,37 +246,192 @@ describe('selectSuffixFastState', () => {
   })
 })
 
-describe('selectFastSuffixDefaultOffTarget', () => {
-  const RUNTIME = 'cursor-cli'
-  it('fast=true 无偏好 → 改写 fast=false', () => {
-    const target = selectFastSuffixDefaultOffTarget(
-      cursorPrimary('grok-4.7[context=256k,reasoning_effort=high,fast=true]'),
-      {},
-      RUNTIME,
-    )
-    expect(target?.configId).toBe('model')
-    expect(target?.value).toBe('grok-4.7[context=256k,reasoning_effort=high,fast=false]')
+describe('parameterizedModelPicker 声明后的 cursor 形状：独立思考项取代只读徽标', () => {
+  // 声明后模型为朴素值（无尾缀）+ 独立 thinking 项（parse 后形状，parse 兼容见
+  // packages/acp/src/session/config-options.test.ts）：rank2 下拉出现，只读徽标退场。
+  function cursorOptions(): AcpConfigOption[] {
+    return [
+      selectOpt({
+        configId: 'model',
+        name: 'Model',
+        category: 'model',
+        currentValue: 'grok-4.7',
+        options: [
+          { value: 'grok-4.7', name: 'grok-4.7' },
+          { value: 'claude-sonnet-4', name: 'claude-sonnet-4' },
+        ],
+      }),
+      selectOpt({
+        configId: 'reasoning-effort',
+        name: 'Reasoning effort',
+        currentValue: 'high',
+        options: [
+          { value: 'low', name: 'Low' },
+          { value: 'high', name: 'High' },
+        ],
+      }),
+    ]
+  }
+
+  it('独立思考项进 primary rank2，只读徽标返回 null', () => {
+    const { primary } = splitConfigOptions(cursorOptions())
+    expect(primary.some((o) => rankPrimary(o) === 2)).toBe(true)
+    expect(primary.find((o) => rankPrimary(o) === 2)?.configId).toBe('reasoning-effort')
+    // 朴素模型值无尾缀 + 已有 rank2 → 无只读徽标（下拉取代展示）
+    expect(selectReadonlyModelThinking(primary)).toBeNull()
   })
-  it('有偏好 / 已 false / 无 fast → 不动', () => {
-    const current = cursorPrimary('grok-4.7[context=256k,reasoning_effort=high,fast=true]')
+})
+
+/**
+ * 用户实测 `agent models` 输出 fixture（逐行首 token 为横杠 canonical id，
+ * 主进程 `parseCursorCatalogOutput` 同口径；`auto` 保留原样）。
+ * 覆盖：grok 高档 fast 对子、claude thinking 中缀系列、多词档位（Extra High）。
+ */
+const CURSOR_AGENT_MODELS_STDOUT = [
+  '* grok-4.7-high-fast  Grok 4.7 High Fast (default)',
+  'grok-4.7-high  Grok 4.7 High',
+  'grok-4.7-medium-fast  Grok 4.7 Medium Fast',
+  'grok-4.7-medium  Grok 4.7 Medium',
+  'claude-sonnet-4-thinking-low  Claude Sonnet 4 Thinking Low',
+  'claude-sonnet-4-thinking-high  Claude Sonnet 4 Thinking High',
+  'claude-opus-4-thinking-low  Claude Opus 4 Thinking Low',
+  'claude-opus-4-thinking-max  Claude Opus 4 Thinking Max',
+  'gpt-5.6-sol-extra-high-fast  GPT-5.6 Sol Extra High Fast',
+  'composer-2.5-fast  Fast Composer',
+  'composer-2.5  Composer',
+  'auto  Automatic',
+].join('\n')
+
+/** 与主进程同口径的首 token 提取（渲染端单测本地复刻，不跨层 import 主进程）。 */
+const DASH_CATALOG: string[] = CURSOR_AGENT_MODELS_STDOUT.split('\n')
+  .map((line) => line.trim().replace(/^\*\s*/, '').split(/\s+/)[0] ?? '')
+  .filter((id) => id.length > 0)
+
+describe('pickDashCounterpart（横杠受控尝试，精确匹配才试）', () => {
+  it('grok fast 对子命中：开→关去 `-fast`，关→开加 `-fast`', () => {
     expect(
-      selectFastSuffixDefaultOffTarget(current, { [RUNTIME]: { model: 'x' } }, RUNTIME),
+      pickDashCounterpart(DASH_CATALOG, 'grok-4.7[context=256k,reasoning_effort=high,fast=true]', {
+        key: 'fast',
+        value: 'false',
+      }),
+    ).toBe('grok-4.7-high')
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'grok-4.7[context=256k,reasoning_effort=high,fast=false]', {
+        key: 'fast',
+        value: 'true',
+      }),
+    ).toBe('grok-4.7-high-fast')
+  })
+
+  it('fast 取值接受 on/off 别名', () => {
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'grok-4.7[context=256k,reasoning_effort=high,fast=true]', {
+        key: 'fast',
+        value: 'off',
+      }),
+    ).toBe('grok-4.7-high')
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'grok-4.7[context=256k,reasoning_effort=medium,fast=false]', {
+        key: 'fast',
+        value: 'on',
+      }),
+    ).toBe('grok-4.7-medium-fast')
+  })
+
+  it('claude thinking 中缀系列命中（effort 替换，fast 与当前一致）', () => {
+    // 当前无 fast 视为关 → 目标须为非 -fast 版
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'claude-sonnet-4[reasoning_effort=low]', {
+        key: 'reasoning_effort',
+        value: 'high',
+      }),
+    ).toBe('claude-sonnet-4-thinking-high')
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'claude-opus-4[reasoning_effort=low]', {
+        key: 'reasoning_effort',
+        value: 'max',
+      }),
+    ).toBe('claude-opus-4-thinking-max')
+  })
+
+  it('多词档位归一化：`Extra High` ≡ `extra-high`', () => {
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'gpt-5.6-sol[reasoning_effort=Extra High,fast=false]', {
+        key: 'fast',
+        value: 'true',
+      }),
+    ).toBe('gpt-5.6-sol-extra-high-fast')
+  })
+
+  it('多命中取字典序首个', () => {
+    const catalog = ['grok-4.7-xhigh', 'grok-4.7-x-high', 'grok-4.7-high']
+    // x-high 与 xhigh 归一同值，并列时 `-`（45）< `h`（104），x-high 居首
+    expect(
+      pickDashCounterpart(catalog, 'grok-4.7[reasoning_effort=xhigh,fast=false]', {
+        key: 'fast',
+        value: 'false',
+      }),
+    ).toBe('grok-4.7-x-high')
+  })
+
+  it('无对应一律 null：档位无对子 / fast 单边 / 异 base / 空目录', () => {
+    // grok 无 low 档
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'grok-4.7[context=256k,reasoning_effort=low,fast=true]', {
+        key: 'fast',
+        value: 'false',
+      }),
+    ).toBeNull()
+    // gpt extra-high 只有 fast 版，关无对应
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'gpt-5.6-sol[reasoning_effort=Extra High,fast=true]', {
+        key: 'fast',
+        value: 'false',
+      }),
+    ).toBeNull()
+    // 前缀边界：`composer-2.5` 不得命中 `composer-2.50`（须 `base-` 边界）
+    expect(
+      pickDashCounterpart(['composer-2.50'], 'composer-2.5[fast=true]', {
+        key: 'fast',
+        value: 'false',
+      }),
     ).toBeNull()
     expect(
-      selectFastSuffixDefaultOffTarget(
-        cursorPrimary('claude-sonnet-4[reasoning_effort=low]'),
-        {},
-        RUNTIME,
+      pickDashCounterpart(DASH_CATALOG, 'missing-model[reasoning_effort=high,fast=true]', {
+        key: 'fast',
+        value: 'false',
+      }),
+    ).toBeNull()
+    expect(
+      pickDashCounterpart([], 'grok-4.7[reasoning_effort=high,fast=true]', {
+        key: 'fast',
+        value: 'false',
+      }),
+    ).toBeNull()
+  })
+
+  it('暧昧即 null：未知 fast/档位词、非 fast/思考 key、空入参、方括号行跳过', () => {
+    const bracket = 'grok-4.7[context=256k,reasoning_effort=high,fast=true]'
+    expect(pickDashCounterpart(DASH_CATALOG, bracket, { key: 'fast', value: 'maybe' })).toBeNull()
+    expect(
+      pickDashCounterpart(DASH_CATALOG, 'claude-sonnet-4[reasoning_effort=low]', {
+        key: 'reasoning_effort',
+        value: 'ultra',
+      }),
+    ).toBeNull()
+    expect(
+      pickDashCounterpart(DASH_CATALOG, bracket, { key: 'context', value: '500k' }),
+    ).toBeNull()
+    expect(pickDashCounterpart(DASH_CATALOG, '', { key: 'fast', value: 'false' })).toBeNull()
+    expect(pickDashCounterpart(DASH_CATALOG, bracket, { key: '', value: 'false' })).toBeNull()
+    expect(pickDashCounterpart([1, null, undefined], bracket, { key: 'fast', value: 'false' })).toBeNull()
+    // 目录混入方括号行时跳过（只认横杠 canonical）
+    expect(
+      pickDashCounterpart(
+        ['grok-4.7[context=256k,reasoning_effort=high,fast=false]', ...DASH_CATALOG],
+        bracket,
+        { key: 'fast', value: 'false' },
       ),
-    ).toBeNull()
-    const offOpt = selectOpt({
-      configId: 'model',
-      name: 'Model',
-      category: 'model',
-      currentValue: 'm[fast=false]',
-      options: [{ value: 'm[fast=false]', name: 'M' }],
-    })
-    expect(selectFastSuffixDefaultOffTarget([offOpt], {}, RUNTIME)).toBeNull()
-    expect(selectFastSuffixDefaultOffTarget([], {}, RUNTIME)).toBeNull()
+    ).toBe('grok-4.7-high')
   })
 })

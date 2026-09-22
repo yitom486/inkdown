@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { BUILTIN_ACP_RUNTIMES } from '@inkdown/contracts'
+import { findBuiltinAcpRuntime } from '@inkdown/contracts'
 import {
   useAcpUiStore,
   selectThreadsForRuntime,
@@ -51,9 +51,7 @@ export function AgentHistoryMenu({
   // 按 runtime 过滤已验证多线程分桶：threads.runtimeId + agentSessionIds 双维隔离，
   // 切换运行时只列本 runtime 线程（见 selectThreadsForRuntime + session-slice 专属线程逻辑）。
   const runtimeThreads = selectThreadsForRuntime(threads, selectedRuntimeId)
-  const runtimeName =
-    BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === selectedRuntimeId)?.name ??
-    selectedRuntimeId
+  const runtimeName = findBuiltinAcpRuntime(selectedRuntimeId)?.name ?? selectedRuntimeId
 
   return (
     <DropdownMenu>

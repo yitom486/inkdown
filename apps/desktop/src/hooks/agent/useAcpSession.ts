@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isOk } from '@inkdown/contracts'
+import { findBuiltinAcpRuntime, isOk } from '@inkdown/contracts'
 import type {
   AcpAuthMethod,
   AcpConfigOption,
@@ -16,16 +16,35 @@ import {
 import { resetTurnContextTracker } from '@/lib/agent/context/should-attach-turn-context'
 import { listPreferredConfigPatches } from '@/lib/agent/acp-config-preferences'
 import { selectFastDefaultOffTarget } from '@/lib/agent/acp-config-menu'
-import { selectFastSuffixDefaultOffTarget } from '@/lib/agent/acp-model-thinking'
+import {
+  pickDashCounterpart,
+  selectSuffixFastState,
+} from '@/lib/agent/acp-model-thinking'
 import { acpDevLog, acpDevWarn } from '@/lib/agent/acp-dev-log'
 import { flushAcpStreamBuffer, registerStreamAuthReset } from '@/lib/agent/acp-stream-host'
 import { formatAcpConnectedMessage } from '@/lib/agent/acp-session-restore'
-import { selectActiveThreadAgentSessionId } from '@/stores/acp-ui-store'
+import {
+  selectActiveThreadAgentSessionId,
+  selectActiveThreadHasSubstantiveMessages,
+} from '@/stores/acp-ui-store'
 import { reportAppError } from '@/lib/workspace/report-error'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
 
 function activeThreadAgentSessionId(): string | undefined {
   return selectActiveThreadAgentSessionId(useAcpUiStore.getState())
+}
+
+/**
+ * 用户可见系统消息用运行时显示名（去技术化，不暴露 acp 名词）。
+ * dev 日志与 bridge 日志保持 id 不变以便排障。
+ */
+function resolveAcpRuntimeDisplayName(runtimeId: string): string {
+  return findBuiltinAcpRuntime(runtimeId)?.name ?? runtimeId
+}
+
+/** 空线程例外提示：当前激活线程是否有本地实质消息，供主进程决定 load 回放压制与否 */
+function activeThreadHasLocalHistory(): boolean {
+  return selectActiveThreadHasSubstantiveMessages(useAcpUiStore.getState())
 }
 
 /** 连接就绪后：把 Zustand 里记住的 Mode/Model 等写回当前 ACP session */
@@ -125,6 +144,14 @@ export function useAcpSession(workspaceRoot?: string) {
       })
       setSession(result.sessionId, options)
       setPromptCapabilities(result.promptCapabilities ?? {})
+      // 横杠目录写入内存态（无目录=后续逻辑一律跳过，行为与现状一致）
+      try {
+        const ridForCatalog =
+          result.runtimeId?.trim() || useAcpUiStore.getState().selectedRuntimeId
+        useAcpUiStore.getState().setModelCatalog(ridForCatalog, result.modelCatalog ?? null)
+      } catch {
+        // 目录写入失败不阻断连接
+      }
       appendSystemMessage(formatAcpConnectedMessage(result, prefix))
 
       const applied = await applyStoredConfigPreferences(
@@ -156,33 +183,51 @@ export function useAcpSession(workspaceRoot?: string) {
             latest = offResult.value.configOptions
           }
         } else {
-          console.warn('[acp-ui] fast 默认关闭失败', fastTarget.configId, offResult.error)
+          acpDevWarn('fast 默认关闭失败', { configId: fastTarget.configId, error: offResult.error })
         }
       }
-      // fast 尾缀默认关一次：当前模型 fast=true 且无该 runtime model 偏好时改写 fast=false；
-      // 有偏好/已 false/无 fast 参数不动。失败 warn 不抛。
-      const suffixTarget = selectFastSuffixDefaultOffTarget(
-        latest,
-        useAcpUiStore.getState().preferredConfigByRuntime,
-        useAcpUiStore.getState().selectedRuntimeId,
-      )
-      if (suffixTarget) {
-        const suffixResult = await acpApi.setConfigOption({
-          sessionId: result.sessionId,
-          configId: suffixTarget.configId,
-          value: suffixTarget.value,
-        })
-        if (isOk(suffixResult)) {
-          useAcpUiStore.getState().rememberConfigPreference(
-            useAcpUiStore.getState().selectedRuntimeId,
-            suffixTarget.configId,
-            suffixTarget.value,
-          )
-          if (suffixResult.value.configOptions.length > 0) {
-            latest = suffixResult.value.configOptions
+      // 尾缀 fast 默认关一次（dash 受控尝试，最后候补）：boolean 版无目标、当前尾缀
+      // fast=true、用户从未拨过该模型项、目录有精确 dash off 对应时，静默试一次。
+      // 尾缀 listed 版默认关已删除（见 parameterized-model-picker.md §6），此处只试 dash；
+      // 成功即记住（“一次”语义），失败静默保留 Agent 原值，不打扰用户。
+      if (!fastTarget) {
+        try {
+          const suffix = selectSuffixFastState(latest)
+          const rid = useAcpUiStore.getState().selectedRuntimeId
+          const cid = suffix?.configId.trim() ?? ''
+          const stored = cid ? (useAcpUiStore.getState().preferredConfigByRuntime[rid]?.[cid] ?? null) : '__skip__'
+          if (suffix?.checked && cid && (stored == null || stored === '')) {
+            const modelOpt = latest.find((o) => o.configId === suffix.configId)
+            const currentValue =
+              typeof modelOpt?.currentValue === 'string' ? modelOpt.currentValue : null
+            const dashOff =
+              currentValue && result.modelCatalog && result.modelCatalog.length > 0
+                ? pickDashCounterpart(result.modelCatalog, currentValue, {
+                    key: 'fast',
+                    value: 'false',
+                  })
+                : null
+            if (dashOff) {
+              const dashResult = await acpApi.setConfigOption({
+                sessionId: result.sessionId,
+                configId: suffix.configId,
+                value: dashOff,
+              })
+              if (isOk(dashResult)) {
+                useAcpUiStore.getState().rememberConfigPreference(rid, suffix.configId, dashOff)
+                if (dashResult.value.configOptions.length > 0) {
+                  latest = dashResult.value.configOptions
+                }
+              } else {
+                acpDevWarn('fast 默认关闭失败（dash 候补）', {
+                  configId: suffix.configId,
+                  error: dashResult.error,
+                })
+              }
+            }
           }
-        } else {
-          console.warn('[acp-ui] fast 尾缀默认关闭失败', suffixTarget.configId, suffixResult.error)
+        } catch (error) {
+          acpDevWarn('fast 默认关闭异常（dash 候补）', error)
         }
       }
       if (latest !== options) {
@@ -223,15 +268,17 @@ export function useAcpSession(workspaceRoot?: string) {
     setStatus('connecting')
     setAuthError(null)
     const resumeSessionId = activeThreadAgentSessionId()
+    const displayName = resolveAcpRuntimeDisplayName(selectedRuntimeId)
     appendSystemMessage(
       resumeSessionId
-        ? `正在连接 ${selectedRuntimeId}（尝试恢复会话 ${resumeSessionId.slice(0, 8)}…）…`
-        : `正在连接 ${selectedRuntimeId}${cwd ? '' : '（网页会话）'}…`,
+        ? `正在连接 ${displayName}（尝试恢复会话 ${resumeSessionId.slice(0, 8)}…）…`
+        : `正在连接 ${displayName}${cwd ? '' : '（网页会话）'}…`,
     )
     const result = await acpApi.connect({
       runtimeId: selectedRuntimeId,
       cwd,
       resumeSessionId,
+      hasLocalHistory: activeThreadHasLocalHistory(),
     })
     // 滞后响应：连接期间用户已切走（新流程 bump 了 epoch），一律丢弃
     if (epoch !== connectionEpochRef.current) return
@@ -350,15 +397,17 @@ export function useAcpSession(workspaceRoot?: string) {
         setStatus('connecting')
         setAuthError(null)
         const resumeSessionId = activeThreadAgentSessionId()
+        const nextDisplayName = resolveAcpRuntimeDisplayName(nextRuntimeId)
         appendSystemMessage(
           resumeSessionId
-            ? `正在切换至 ${nextRuntimeId}（尝试恢复会话 ${resumeSessionId.slice(0, 8)}…）…`
-            : `正在切换至 ${nextRuntimeId}${cwd ? '' : '（网页会话）'}…`,
+            ? `正在切换至 ${nextDisplayName}（尝试恢复会话 ${resumeSessionId.slice(0, 8)}…）…`
+            : `正在切换至 ${nextDisplayName}${cwd ? '' : '（网页会话）'}…`,
         )
         const result = await acpApi.connect({
           runtimeId: nextRuntimeId,
           cwd,
           resumeSessionId,
+          hasLocalHistory: activeThreadHasLocalHistory(),
         })
         if (epoch !== connectionEpochRef.current) return
         if (!isOk(result)) {
@@ -379,7 +428,7 @@ export function useAcpSession(workspaceRoot?: string) {
           return
         }
 
-        await finalizeConnected(result.value, `已连接至 ${nextRuntimeId}`)
+        await finalizeConnected(result.value, `已连接至 ${resolveAcpRuntimeDisplayName(nextRuntimeId)}`)
       }
     },
     [appendSystemMessage, bumpConnectionEpoch, disconnect, finalizeConnected, setStatus, workspaceRoot],
@@ -440,7 +489,7 @@ export function useAcpSession(workspaceRoot?: string) {
           : `正在连接并恢复历史会话 ${resumeSessionId.slice(0, 8)}…`
         : wasOnline
           ? '正在为当前对话创建新的 Agent 会话…'
-          : `正在连接 ${selectedRuntimeId}${cwd ? '' : '（网页会话）'}…`,
+          : `正在连接 ${resolveAcpRuntimeDisplayName(selectedRuntimeId)}${cwd ? '' : '（网页会话）'}…`,
     )
 
     if (wasOnline) {
@@ -462,6 +511,7 @@ export function useAcpSession(workspaceRoot?: string) {
       runtimeId: selectedRuntimeId,
       cwd,
       resumeSessionId,
+      hasLocalHistory: activeThreadHasLocalHistory(),
     })
     if (epoch !== connectionEpochRef.current) return false
     if (!isOk(result)) {
@@ -616,9 +666,8 @@ export function useAcpSession(workspaceRoot?: string) {
       if (!sid) return false
       const runtimeId = useAcpUiStore.getState().selectedRuntimeId
       const result = await acpApi.setConfigOption({ sessionId: sid, configId, value })
+      // 报错收敛：失败只返回 false，由面板调用方弹一个 toast；此处不写全局 toast、不写时间线
       if (!isOk(result)) {
-        reportAppError(result.error)
-        appendSystemMessage(`切换配置失败：${result.error.message}`)
         return false
       }
       rememberConfigPreference(runtimeId, configId, value)
@@ -627,7 +676,7 @@ export function useAcpSession(workspaceRoot?: string) {
       }
       return true
     },
-    [appendSystemMessage, rememberConfigPreference, setConfigOptions],
+    [rememberConfigPreference, setConfigOptions],
   )
 
   return {

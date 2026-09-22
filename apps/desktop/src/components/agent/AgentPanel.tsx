@@ -19,9 +19,11 @@ import { AgentMessageList } from '@/components/agent/chat/AgentMessageList'
 import type { ChapterMarkPlanSelectPayload } from '@/components/agent/propose/ChapterMarkPlanCard'
 import { Button } from '@/components/ui/button'
 import { appendSelectionChatMarker } from '@/lib/agent/context/selection-chat-marker'
-import { splitConfigOptions } from '@/lib/agent/acp-config-menu'
+import { splitConfigOptions, rankPrimary } from '@/lib/agent/acp-config-menu'
 import {
-  buildModelVariant,
+  findListedVariantId,
+  listedModelOptionValues,
+  pickDashCounterpart,
   selectModelThinkingControl,
   selectReadonlyModelThinking,
   selectSuffixFastState,
@@ -48,6 +50,7 @@ import { isOk } from '@inkdown/contracts'
 import {
   BUILTIN_ACP_RUNTIMES,
   DEFAULT_ACP_RUNTIME_ID,
+  findBuiltinAcpRuntime,
 } from '@inkdown/contracts'
 import type { AcpConfigOption, AcpProviderStatus, AcpProxySettings } from '@inkdown/contracts'
 
@@ -133,25 +136,48 @@ export const AgentPanel = memo(function AgentPanel({
 
   // 无独立思考档时，模型值尾缀自带档位则显示只读徽标（跟随模型切换，不可单独改）
   const readonlyThinking = useMemo(() => selectReadonlyModelThinking(primary), [primary])
-  // 尾缀含思考类 key 且候选≥2（同 base，不足时同 key 跨模型后备）→ 只读徽标升级为可设下拉
+  // 尾缀含思考类 key 且同 base listed 候选过滤后≥2 → 只读徽标升级为可设下拉；否则保持只读
   const thinkingControl = useMemo(() => selectModelThinkingControl(primary), [primary])
   // 尾缀含 fast=true|false → 输入栏渲染尾缀版 fast 开关，优先于 boolean 版（两者互斥）
   const suffixFast = useMemo(() => selectSuffixFastState(primary), [primary])
   const fastToggle = suffixFast ? null : booleanFastToggle
+  // 保守门槛：尾缀切换只发 listed id。listed 原值取自 Agent 下发的 model options。
+  const modelListedValues = useMemo(() => {
+    const model = primary.find((o) => rankPrimary(o) === 1)
+    return model ? listedModelOptionValues(model) : []
+  }, [primary])
+  // 横杠 canonical 目录（connect 成功后主进程附带，无则 null=跳过，行为与现状一致）
+  const modelCatalog = useAcpUiStore((s) => s.modelCatalogByRuntime[s.selectedRuntimeId] ?? null)
+  // dash 匹配用当前模型方括号原值（非字符串即跳过 dash）
+  const modelCurrentValue = useMemo(() => {
+    const model = primary.find((o) => rankPrimary(o) === 1)
+    return typeof model?.currentValue === 'string' ? model.currentValue : null
+  }, [primary])
+  // fast 开关可用条件：listed 命中即用；未命中时 dash 为最后候补（需目录，否则禁用）
+  const suffixFastTarget = suffixFast ? (suffixFast.checked ? 'false' : 'true') : null
+  const suffixFastAvailable = useMemo(() => {
+    if (!suffixFast || !suffixFastTarget) return false
+    if (
+      findListedVariantId(
+        modelListedValues,
+        { base: suffixFast.base, params: suffixFast.params },
+        { key: 'fast', value: suffixFastTarget },
+      ) != null
+    ) {
+      return true
+    }
+    if (!modelCurrentValue || !modelCatalog || modelCatalog.length === 0) return false
+    return (
+      pickDashCounterpart(modelCatalog, modelCurrentValue, {
+        key: 'fast',
+        value: suffixFastTarget,
+      }) != null
+    )
+  }, [suffixFast, suffixFastTarget, modelListedValues, modelCurrentValue, modelCatalog])
 
-  // 乐观改写中的回滚位：setModel 失败（Agent 拒收未 listed id）时清掉即回滚到 store 旧值 + toast
-  const [thinkingPending, setThinkingPending] = useState<string | null>(null)
-  const [suffixFastPending, setSuffixFastPending] = useState<boolean | null>(null)
-  useEffect(() => {
-    setThinkingPending(null)
-  }, [thinkingControl?.current])
-  useEffect(() => {
-    setSuffixFastPending(null)
-  }, [suffixFast?.checked])
-
+  // 思考档与 fast 切换只发 listed id：无目标即不发起
   const runtimeName =
-    BUILTIN_ACP_RUNTIMES.find((rt) => rt.id === view.selectedRuntimeId)?.name ??
-    view.selectedRuntimeId
+    findBuiltinAcpRuntime(view.selectedRuntimeId)?.name ?? view.selectedRuntimeId
 
   /** Codex 专属能力：本机登录提示 / 自定义 API 仅 codex-acp 运行时可用 */
   const isCodexRuntime = view.selectedRuntimeId === DEFAULT_ACP_RUNTIME_ID
@@ -161,7 +187,7 @@ export const AgentPanel = memo(function AgentPanel({
     if (!isCodexRuntime) {
       // 非 codex 运行时：无本机登录探测/自定义供应商，走中性提示；
       // 具体认证方式由协议 authMethods 弹窗给出（adapter.probeAuth 回落中性）。
-      // TODO(下游 adapter 未就绪): claude/gemini/copilot/opencode/cursor-cli/deepseek
+      // TODO(下游 adapter 未就绪): claude/gemini/copilot/opencode/cursor-cli/deepseek/agy
       // 专属 probeAuth/getSpawnEnv 落地后，此处按需补各家登录痕迹提示。
       setProviderStatus(null)
       setAuthHint(`当前运行时 ${runtimeName}：连接后按 Agent 指引完成认证`)
@@ -247,40 +273,73 @@ export const AgentPanel = memo(function AgentPanel({
     async (next: string) => {
       if (!thinkingControl || configsDisabled) return
       if (next === thinkingControl.current) return
-      const newId = buildModelVariant(thinkingControl.base, {
-        ...thinkingControl.params,
-        [thinkingControl.key]: next,
-      })
-      setThinkingPending(next)
+      // 先走 listed 门槛；未命中时再查 dash 对应（需目录，否则跳过）
+      let newId = findListedVariantId(
+        modelListedValues,
+        { base: thinkingControl.base, params: thinkingControl.params },
+        { key: thinkingControl.key, value: next },
+      )
+      if (!newId && modelCurrentValue && modelCatalog && modelCatalog.length > 0) {
+        newId = pickDashCounterpart(modelCatalog, modelCurrentValue, {
+          key: thinkingControl.key,
+          value: next,
+        })
+      }
+      if (!newId) {
+        toast.error('切换配置失败')
+        return
+      }
+      // 同一 setModel 链路：Agent 仍可能拒收 dash id，由单 toast 兜底（旧值保持即回滚）
       const ok = await setModel(thinkingControl.configId, newId)
-      setThinkingPending(null)
       if (!ok) {
-        toast.error('Agent 拒收该思考档（未 listed id），已回滚')
+        toast.error('切换配置失败')
       }
     },
-    [thinkingControl, configsDisabled, setModel],
+    [thinkingControl, configsDisabled, setModel, modelListedValues, modelCurrentValue, modelCatalog],
   )
 
   const handleSuffixFastChange = useCallback(
     async (checked: boolean) => {
       if (!suffixFast || configsDisabled) return
       if (checked === suffixFast.checked) return
-      const newId = buildModelVariant(suffixFast.base, {
-        ...suffixFast.params,
-        fast: checked ? 'true' : 'false',
-      })
-      setSuffixFastPending(checked)
+      // 先走 listed 门槛；未命中时再查 dash 对应（需目录，否则跳过）
+      let newId = findListedVariantId(
+        modelListedValues,
+        { base: suffixFast.base, params: suffixFast.params },
+        { key: 'fast', value: checked ? 'true' : 'false' },
+      )
+      if (!newId && modelCurrentValue && modelCatalog && modelCatalog.length > 0) {
+        newId = pickDashCounterpart(modelCatalog, modelCurrentValue, {
+          key: 'fast',
+          value: checked ? 'true' : 'false',
+        })
+      }
+      if (!newId) {
+        toast.error('切换配置失败')
+        return
+      }
+      // 同一 setModel 链路：Agent 仍可能拒收 dash id，由单 toast 兜底（旧值保持即回滚）
       const ok = await setModel(suffixFast.configId, newId)
-      setSuffixFastPending(null)
       if (!ok) {
-        toast.error('Agent 拒收该 fast 切换（未 listed id），已回滚')
+        toast.error('切换配置失败')
       }
     },
-    [suffixFast, configsDisabled, setModel],
+    [suffixFast, configsDisabled, setModel, modelListedValues, modelCurrentValue, modelCatalog],
   )
 
-  const thinkingDisplay = thinkingControl ? (thinkingPending ?? thinkingControl.current) : null
-  const suffixFastChecked = suffixFast ? (suffixFastPending ?? suffixFast.checked) : false
+  // 通用配置切换：setModel 失败只弹一个 toast，不写时间线（收敛三报为一处）
+  const handleConfigChange = useCallback(
+    async (configId: string, value: string | boolean) => {
+      const ok = await setModel(configId, value)
+      if (!ok) {
+        toast.error('切换配置失败')
+      }
+    },
+    [setModel],
+  )
+
+  const thinkingDisplay = thinkingControl ? thinkingControl.current : null
+  const suffixFastChecked = suffixFast ? suffixFast.checked : false
 
   const [providerDialogOpen, setProviderDialogOpen] = useState(false)
   const [providerStatus, setProviderStatus] = useState<AcpProviderStatus | null>(null)
@@ -323,7 +382,7 @@ export const AgentPanel = memo(function AgentPanel({
                   value={view.selectedRuntimeId}
                   onValueChange={(val) => void switchRuntime(val)}
                 >
-                  {/* 运行时切换器：全量读 BUILTIN_ACP_RUNTIMES（下游 7 项落地后零改动展示 7 项） */}
+                  {/* 运行时切换器：全量读 BUILTIN_ACP_RUNTIMES（下游 8 项落地后零改动展示 8 项） */}
                   {BUILTIN_ACP_RUNTIMES.map((rt) => (
                     <DropdownMenuRadioItem
                       key={rt.id}
@@ -388,6 +447,11 @@ export const AgentPanel = memo(function AgentPanel({
               )}
               {statusLabel}
             </span>
+            {view.status === 'connecting' && view.selectedRuntimeId === 'agy' ? (
+              <p className="truncate text-[10px] text-muted-foreground">
+                首次连接需下载约 100MB 桥组件（仅一次），请耐心等待不要重复点击
+              </p>
+            ) : null}
           </div>
           {view.activeTitle ? (
             <p className="truncate text-[10px] text-muted-foreground" title={view.activeTitle}>
@@ -648,7 +712,7 @@ export const AgentPanel = memo(function AgentPanel({
                               className="size-3.5 accent-[hsl(var(--primary))]"
                               checked={Boolean(opt.currentValue)}
                               disabled={configsDisabled}
-                              onChange={(e) => void setModel(opt.configId, e.target.checked)}
+                              onChange={(e) => void handleConfigChange(opt.configId, e.target.checked)}
                             />
                             {opt.name}
                           </label>
@@ -659,7 +723,7 @@ export const AgentPanel = memo(function AgentPanel({
                               className="h-7 w-full rounded-md border border-border/70 bg-background px-2 text-[11px] outline-none disabled:opacity-50"
                               value={String(opt.currentValue ?? '')}
                               disabled={configsDisabled}
-                              onChange={(e) => void setModel(opt.configId, e.target.value)}
+                              onChange={(e) => void handleConfigChange(opt.configId, e.target.value)}
                             >
                               {opt.options?.map((item) => (
                                 <option key={item.value} value={item.value}>
@@ -695,13 +759,17 @@ export const AgentPanel = memo(function AgentPanel({
                 {suffixFast ? (
                   <label
                     className="inline-flex max-w-[7.5rem] shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground has-disabled:pointer-events-none has-disabled:opacity-40"
-                    title="快速模式（模型尾缀 fast，优先于 boolean 配置）"
+                    title={
+                      suffixFastAvailable
+                        ? '快速模式（模型尾缀 fast，优先于 boolean 配置）'
+                        : `当前模型无 fast=${suffixFastTarget} 可选版本`
+                    }
                   >
                     <input
                       type="checkbox"
                       className="size-3.5 shrink-0 accent-[hsl(var(--primary))]"
                       checked={suffixFastChecked}
-                      disabled={configsDisabled}
+                      disabled={configsDisabled || !suffixFastAvailable}
                       onChange={(e) => void handleSuffixFastChange(e.target.checked)}
                     />
                     <span className="truncate">快速</span>
@@ -716,7 +784,7 @@ export const AgentPanel = memo(function AgentPanel({
                       className="size-3.5 shrink-0 accent-[hsl(var(--primary))]"
                       checked={Boolean(fastToggle.currentValue)}
                       disabled={configsDisabled}
-                      onChange={(e) => void setModel(fastToggle.configId, e.target.checked)}
+                      onChange={(e) => void handleConfigChange(fastToggle.configId, e.target.checked)}
                     />
                     <span className="truncate">{fastToggle.name}</span>
                   </label>
@@ -726,7 +794,7 @@ export const AgentPanel = memo(function AgentPanel({
                     key={opt.configId}
                     option={opt}
                     disabled={configsDisabled}
-                    onChange={(configId, value) => void setModel(configId, value)}
+                    onChange={(configId, value) => void handleConfigChange(configId, value)}
                     emphasize={index === 0}
                   />
                 ))}

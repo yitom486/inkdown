@@ -1,3 +1,4 @@
+import { INKDOWN_SETTLE_COMPLETE_KIND } from '@inkdown/contracts'
 import { acpApi } from '@/api/acp-api'
 import { STREAM_FLUSH_MS, StreamCoalescer, isCoalescableAgentChunk } from '@/lib/agent/stream-coalescer'
 import { useAcpUiStore } from '@/stores/acp-ui-store'
@@ -85,6 +86,15 @@ export function startAcpStreamHost(): () => void {
     }
   })
   const offUpdate = acpApi.onSessionUpdate((event) => {
+    // load 定居收尾直达主时间线：先冲刷合并器残留（避免尾部 chunk 在冻结后另起 streaming 气泡），
+    // 再冻结；不进批注/副会话分流，不碰 prompting
+    const updateKind =
+      typeof event.update?.sessionUpdate === 'string' ? event.update.sessionUpdate : ''
+    if (updateKind === INKDOWN_SETTLE_COMPLETE_KIND) {
+      flushAcpStreamBuffer()
+      useAcpUiStore.getState().freezeSettledStreaming()
+      return
+    }
     const ann = useAnnotationAgentStore.getState()
     // 按 sessionId 分流：批注副会话绝不进右侧时间线
     if (annotationOwnsSessionId(ann, event.sessionId)) {

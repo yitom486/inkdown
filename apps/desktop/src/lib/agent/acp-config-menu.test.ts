@@ -67,6 +67,30 @@ describe('rankPrimary / splitConfigOptions', () => {
     expect(rankPrimary(opt({ configId: 'reasoning-effort', name: '推理档' }))).toBe(2)
   })
 
+  it('rankPrimary：context 命中 rank3（id / category / 大小写）', () => {
+    expect(rankPrimary(opt({ configId: 'context', name: 'Context' }))).toBe(3)
+    expect(rankPrimary(opt({ configId: 'CONTEXT', name: '上下文' }))).toBe(3)
+    expect(rankPrimary(opt({ configId: 'ctx-window', name: 'Ctx' }))).toBe(3)
+    expect(rankPrimary(opt({ configId: 'whatever', name: 'Whatever', category: 'context' }))).toBe(3)
+  })
+
+  it('primary 四位定序：mode0/model1/thought2/context3', () => {
+    const { primary, secondary } = splitConfigOptions([
+      opt({ configId: 'context', name: 'Context', category: 'context' }),
+      opt({ configId: 'thought_level', name: '思考档', category: 'thought_level' }),
+      opt({ configId: 'model', name: '模型', category: 'model' }),
+      opt({ configId: 'session-mode', name: '模式', category: 'mode' }),
+    ])
+    expect(primary.map((o) => o.configId)).toEqual(['session-mode', 'model', 'thought_level', 'context'])
+    expect(secondary).toHaveLength(0)
+  })
+
+  it('isSelectOption：context 下拉可进菜单（category 与 id 正则双路）', () => {
+    expect(isSelectOption(opt({ configId: 'whatever', name: 'Whatever', category: 'context' }))).toBe(true)
+    expect(isSelectOption(opt({ configId: 'context', name: 'Context' }))).toBe(true)
+    expect(isSelectOption(opt({ configId: 'CTX', name: '上下文' }))).toBe(true)
+  })
+
   it('splitConfigOptions：boolean 开关不进 primary，直接跟进 secondary', () => {
     const fast = {
       type: 'boolean',
@@ -122,6 +146,121 @@ describe('findFastToggle', () => {
     const second = bool({ configId: 'fast-two', name: 'Fast Two' })
     expect(findFastToggle([first, second])).toBe(first)
     expect(findFastToggle([bool({ configId: 'verbose', name: '详细' })])).toBeNull()
+  })
+})
+
+describe('parameterizedModelPicker 声明后的 cursor 形状', () => {
+  // cursor-agent 在 clientCapabilities._meta.parameterizedModelPicker=true 后下发
+  // 朴素模型值 + 独立 fast 项 + 独立 thinking 项；以下为 parseAcpConfigOptions 之后形状
+  // （parse 兼容见 packages/acp/src/session/config-options.test.ts：布尔选项值转 string，
+  // boolean currentValue 原样保留）。
+  function cursorOptions(): AcpConfigOption[] {
+    return [
+      opt({
+        configId: 'model',
+        name: 'Model',
+        category: 'model',
+        currentValue: 'grok-4.7',
+        options: [
+          { value: 'grok-4.7', name: 'grok-4.7' },
+          { value: 'claude-sonnet-4', name: 'claude-sonnet-4' },
+        ],
+      }),
+      bool({ configId: 'fast', name: 'Fast', currentValue: false }),
+      opt({
+        configId: 'reasoning-effort',
+        name: 'Reasoning effort',
+        currentValue: 'high',
+        options: [
+          { value: 'low', name: 'Low' },
+          { value: 'high', name: 'High' },
+        ],
+      }),
+    ]
+  }
+
+  it('独立 fast 项点亮输入栏开关（不进 secondary）', () => {
+    const options = cursorOptions()
+    const fast = findFastToggle(options)
+    expect(fast?.configId).toBe('fast')
+    const { fastToggle, secondary } = splitConfigOptions(options)
+    expect(fastToggle?.configId).toBe('fast')
+    expect(secondary.some((o) => o.configId === 'fast')).toBe(false)
+  })
+
+  it('select 型 fast（含 fast 字样，布尔值已转 string）同样可进菜单', () => {
+    const selectFast = opt({
+      configId: 'fast',
+      name: 'Fast',
+      currentValue: 'false',
+      options: [
+        { value: 'false', name: 'Off' },
+        { value: 'true', name: 'Fast' },
+      ],
+    })
+    expect(isSelectOption(selectFast)).toBe(true)
+  })
+
+  // Cursor 原生五个独立维度 → 参数化五件套：mode + 朴素 model + 独立 thinking + 独立 fast + 独立 context
+  function cursorFivePiece(): AcpConfigOption[] {
+    return [
+      opt({
+        configId: 'session-mode',
+        name: 'Agent 模式',
+        category: 'mode',
+        currentValue: 'agent',
+        options: [
+          { value: 'agent', name: 'Agent' },
+          { value: 'plan', name: 'Plan' },
+        ],
+      }),
+      opt({
+        configId: 'model',
+        name: 'Model',
+        category: 'model',
+        currentValue: 'grok-4.7',
+        options: [
+          { value: 'grok-4.7', name: 'grok-4.7' },
+          { value: 'claude-sonnet-4', name: 'claude-sonnet-4' },
+        ],
+      }),
+      opt({
+        configId: 'reasoning-effort',
+        name: 'Reasoning effort',
+        currentValue: 'high',
+        options: [
+          { value: 'low', name: 'Low' },
+          { value: 'medium', name: 'Medium' },
+          { value: 'high', name: 'High' },
+        ],
+      }),
+      bool({ configId: 'fast', name: 'Fast', currentValue: true }),
+      opt({
+        configId: 'context',
+        name: 'Context',
+        category: 'context',
+        currentValue: '256k',
+        options: [
+          { value: '256k', name: '256K' },
+          { value: '500k', name: '500K' },
+        ],
+      }),
+    ]
+  }
+
+  it('cursor 参数化五件套全点亮：primary 四下拉 + fast 独立开关', () => {
+    const { primary, secondary, fastToggle } = splitConfigOptions(cursorFivePiece())
+    expect(primary.map((o) => o.configId)).toEqual(['session-mode', 'model', 'reasoning-effort', 'context'])
+    expect(fastToggle?.configId).toBe('fast')
+    expect(secondary.some((o) => o.configId === 'fast')).toBe(false)
+  })
+
+  it('缺 fast 时其余正常且无报错：primary 四下拉照旧，fastToggle 为 null', () => {
+    const options = cursorFivePiece().filter((o) => o.configId !== 'fast')
+    const { primary, secondary, fastToggle } = splitConfigOptions(options)
+    expect(fastToggle).toBeNull()
+    expect(primary.map((o) => o.configId)).toEqual(['session-mode', 'model', 'reasoning-effort', 'context'])
+    expect(secondary).toHaveLength(0)
   })
 })
 
